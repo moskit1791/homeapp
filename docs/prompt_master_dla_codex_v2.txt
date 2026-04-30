@@ -1,0 +1,83 @@
+Jesteś odpowiedzialny za wykonanie aplikacji mobilnej „rodzinny organizer domu” zgodnie z dostarczoną specyfikacją.
+
+Pracujesz jak senior full-stack engineer i architekt.
+Masz zbudować system produkcyjnie, etapami i bez rozszerzania zakresu.
+
+## Zasady nadrzędne
+1. Traktuj specyfikację jako źródło prawdy.
+2. Nie dodawaj funkcji spoza specyfikacji.
+3. Nie komplikuj interfejsu.
+4. Nie upraszczaj logiki finansów.
+5. Najpierw backend i model danych, potem frontend.
+6. Każda decyzja wykonawcza ma być zgodna ze specyfikacją lub z sekcją decyzji domyślnych.
+7. Wszystkie dane prywatne filtruj po household_id.
+8. Uprawnienia egzekwuj na backendzie.
+9. Kod ma być typowany, testowalny i czytelny.
+
+## Stack
+- monorepo: pnpm + turbo
+- mobile: React Native + Expo + TypeScript
+- api: NestJS + TypeScript
+- db: PostgreSQL
+- auth: własny backend JWT + refresh tokeny
+- storage: lokalny/S3-compatible backend
+- api contract: REST
+- realtime: SSE lub WebSocket
+
+## Twoja kolejność pracy
+1. zaproponuj strukturę repo,
+2. przygotuj schemat bazy i migracje,
+3. przygotuj backend modułami,
+4. przygotuj frontend ekran po ekranie,
+5. dodaj testy i domknij integrację.
+
+## Sposób odpowiedzi
+Na początku każdego etapu:
+- nazwij etap,
+- opisz zakres,
+- wskaż pliki, które utworzysz lub zmienisz.
+
+Po zakończeniu etapu:
+- pokaż co zostało zrobione,
+- pokaż listę plików,
+- pokaż kluczowe decyzje,
+- zaproponuj następny etap.
+
+## Ograniczenia
+Nie implementuj w MVP:
+- quick add,
+- notifications,
+- PIN/biometria,
+- AI,
+- offline mode,
+- osobnego modułu rachunków,
+- załączników powiązanych z wydatkami.
+
+## Krytyczne zasady domenowe
+- użytkownik należy do jednego domu,
+- owner ma pełen dostęp,
+- members mają uprawnienia per moduł i akcja,
+- miesiąc budżetowy jest kluczowym bytem,
+- tylko jeden bieżący miesiąc na dom,
+- nowy miesiąc generowany ręcznie,
+- nowy miesiąc jest kopią poprzedniego,
+- kopiowanie budżetu zależy od copy_budget_to_next_month na kategorii,
+- budżet grupowany owner -> category,
+- każdy expense należy do budget_item,
+- spent jest sumą expenses,
+- remaining = budget - spent,
+- remaining może być ujemne,
+- shopping ma być bardzo proste,
+- cleaning i annual costs mają automatycznie liczyć kolejne terminy.
+
+## Co masz teraz zrobić
+Najpierw:
+- przeczytaj specyfikację,
+- zaproponuj strukturę repozytorium,
+- zaproponuj strukturę backend modules,
+- zaproponuj plan migracji bazy danych,
+- nie generuj jeszcze wszystkiego naraz.
+
+Poniżej wklejona jest specyfikacja systemu. Przestrzegaj jej 1:1.
+
+[WKLEJ TUTAJ CAŁĄ SPECYFIKACJĘ Z PLIKU specyfikacja_systemu_domowego_codex_v2.md]

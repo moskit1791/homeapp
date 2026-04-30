@@ -1,0 +1,618 @@
+import type {
+  AccountStatus,
+  HouseholdMemberRole,
+  ModuleKey,
+  PermissionSet,
+  RealtimeEvent as SharedRealtimeEvent,
+  ScopeType,
+  ShoppingListType
+} from '@homeapp/shared-types';
+
+export type RealtimeEvent = SharedRealtimeEvent;
+
+export type EffectivePermission = PermissionSet;
+
+export type { ModuleKey, ShoppingListType };
+
+export interface ApiUser {
+  accountStatus: AccountStatus;
+  authProviderUserId: string;
+  displayName: string;
+  email: string;
+  id: string;
+}
+
+export interface RegisterRequest {
+  displayName: string;
+  email: string;
+  password: string;
+}
+
+export type RegisterInput = RegisterRequest;
+
+export interface RegisterResponse {
+  devVerificationToken?: string;
+  user: ApiUser;
+}
+
+export interface VerifyEmailRequest {
+  email: string;
+  token: string;
+}
+
+export interface OkResponse {
+  ok: true;
+}
+
+export type VerifyEmailResponse = OkResponse;
+
+export interface ResendVerificationRequest {
+  email: string;
+}
+
+export interface ResendVerificationResponse extends OkResponse {
+  devVerificationToken?: string;
+}
+
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+export interface ForgotPasswordResponse extends OkResponse {
+  devResetToken?: string;
+}
+
+export interface ResetPasswordRequest {
+  password: string;
+  token: string;
+}
+
+export type ResetPasswordResponse = OkResponse;
+
+export interface GoogleLoginRequest {
+  idToken: string;
+}
+
+export interface RefreshTokenRequest {
+  refreshToken: string;
+}
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export type LoginInput = LoginRequest;
+
+export interface LoginResponse {
+  accessToken: string;
+  expiresIn: number;
+  refreshToken: string;
+  refreshTokenExpiresAt: string;
+}
+
+export interface CreateHouseholdRequest {
+  currencyCode?: string;
+  mealSlotsPerDay?: number;
+  name: string;
+}
+
+export type CreateHouseholdInput = CreateHouseholdRequest;
+
+export interface Household {
+  currencyCode: string;
+  id: string;
+  mealSlotsPerDay: number;
+  name: string;
+  weekStartsOn: number;
+}
+
+export interface HouseholdMembership {
+  householdId: string;
+  memberId: string;
+  role: HouseholdMemberRole;
+}
+
+export interface CreateHouseholdResponse {
+  household: Household;
+  membership: HouseholdMembership;
+}
+
+export interface StartDashboard {
+  finance: StartFinanceSummary | null;
+  mealPlan: StartMealPlan | null;
+  todoPreview: StartTodoItem[];
+  upcomingEvents: StartCalendarEvent[];
+}
+
+export interface StartFinanceSummary {
+  incomeAmount: string;
+  month: StartFinanceMonth;
+  totalBudgetAmount: string;
+  totalRemainingAmount: string;
+  totalSpentAmount: string;
+}
+
+export interface StartFinanceMonth {
+  id: string;
+  month: number;
+  year: number;
+}
+
+export interface StartCalendarEvent {
+  eventDate: string;
+  eventTime: string | null;
+  id: string;
+  ownerMemberId: string | null;
+  scopeType: ScopeType;
+  title: string;
+}
+
+export interface StartMealPlan {
+  entries: StartMealEntry[];
+  id: string;
+  weekStartDate: string;
+}
+
+export interface StartMealEntry {
+  id: string;
+  mealName: string;
+  slotIndex: number;
+  weekday: number;
+}
+
+export interface StartTodoItem {
+  createdAt: string;
+  id: string;
+  ownerMemberId: string | null;
+  scopeType: ScopeType;
+  title: string;
+}
+
+export interface ShoppingList {
+  createdAt: string;
+  householdId: string;
+  id: string;
+  name: string;
+  type: ShoppingListType;
+  updatedAt: string;
+}
+
+export interface ShoppingItem {
+  checkedAt: string | null;
+  createdAt: string;
+  displayOrder: number;
+  householdId: string;
+  id: string;
+  isChecked: boolean;
+  name: string;
+  quantity: string;
+  shoppingListId: string;
+  type: ShoppingListType;
+  updatedAt: string;
+}
+
+export interface CreateShoppingItemRequest {
+  displayOrder?: number;
+  name: string;
+  quantity?: string;
+}
+
+export interface UpdateShoppingItemRequest {
+  displayOrder?: number;
+  name?: string;
+  quantity?: string;
+}
+
+export interface BudgetMonth {
+  archivedAt: string | null;
+  createdAt: string;
+  generatedAt: string;
+  householdId: string;
+  id: string;
+  isCurrent: boolean;
+  month: number;
+  sourceBudgetMonthId: string | null;
+  updatedAt: string;
+  year: number;
+}
+
+export interface FinanceTotalSummary {
+  incomeAmount: string;
+  totalBudgetAmount: string;
+  totalRemainingAmount: string;
+  totalSpentAmount: string;
+}
+
+export interface BudgetItemOwner {
+  displayName: string;
+  email: string;
+  memberId: string;
+}
+
+export interface BudgetItemSummary {
+  budgetAmount: string | null;
+  budgetMonthId: string;
+  categoryId: string;
+  createdAt: string;
+  displayOrder: number;
+  id: string;
+  name: string;
+  owner: BudgetItemOwner;
+  remainingAmount: string | null;
+  spentAmount: string;
+  updatedAt: string;
+}
+
+export interface BudgetCategoryWithItems {
+  copyBudgetToNextMonth: boolean;
+  displayOrder: number;
+  householdId: string;
+  id: string;
+  isActive: boolean;
+  items: BudgetItemSummary[];
+  name: string;
+}
+
+export interface BudgetCategory {
+  copyBudgetToNextMonth: boolean;
+  createdAt: string;
+  displayOrder: number;
+  householdId: string;
+  id: string;
+  isActive: boolean;
+  name: string;
+  updatedAt: string;
+}
+
+export interface BudgetItem {
+  budgetAmount: string | null;
+  budgetMonthId: string;
+  categoryId: string;
+  createdAt: string;
+  displayOrder: number;
+  id: string;
+  isDeleted: boolean;
+  name: string;
+  ownerMemberId: string;
+  updatedAt: string;
+}
+
+export interface IncomeSummary {
+  amount: string;
+  displayName: string;
+  email: string;
+  ownerMemberId: string;
+}
+
+export interface PersonFinanceSummary {
+  budgetMonthId: string;
+  displayName: string;
+  email: string;
+  incomeAmount: string;
+  ownerMemberId: string;
+  totalBudgetAmount: string;
+  totalRemainingAmount: string;
+  totalSpentAmount: string;
+}
+
+export interface BudgetMonthDetail {
+  categories: BudgetCategoryWithItems[];
+  incomes: IncomeSummary[];
+  month: BudgetMonth;
+  personSummary: PersonFinanceSummary[];
+  summary: FinanceTotalSummary;
+}
+
+export interface CreateBudgetCategoryRequest {
+  copyBudgetToNextMonth?: boolean;
+  displayOrder?: number;
+  name: string;
+}
+
+export interface CreateBudgetItemRequest {
+  budgetAmount?: number | null;
+  budgetMonthId: string;
+  categoryId: string;
+  displayOrder?: number;
+  name: string;
+  ownerMemberId: string;
+}
+
+export interface CreateExpenseRequest {
+  amount: number;
+  budgetItemId: string;
+}
+
+export interface Expense {
+  amount: string;
+  budgetItemId: string;
+  createdAt: string;
+  id: string;
+  updatedAt: string;
+}
+
+export interface UpsertIncomeRequest {
+  amount: number;
+}
+
+export interface Income {
+  amount: string;
+  budgetMonthId: string;
+  createdAt: string;
+  id: string;
+  ownerMemberId: string;
+  updatedAt: string;
+}
+
+export interface MealPlanWeek {
+  createdAt: string;
+  householdId: string;
+  id: string;
+  updatedAt: string;
+  weekStartDate: string;
+}
+
+export interface MealPlanEntry {
+  createdAt: string;
+  id: string;
+  linkUrl: string | null;
+  mealName: string;
+  mealPlanWeekId: string;
+  note: string | null;
+  slotIndex: number;
+  updatedAt: string;
+  weekday: number;
+}
+
+export interface MealPlanDetail {
+  entries: MealPlanEntry[];
+  week: MealPlanWeek;
+}
+
+export interface MealPlanSummary extends MealPlanWeek {
+  entriesCount: number;
+}
+
+export interface CreateMealPlanRequest {
+  weekStartDate: string;
+}
+
+export interface MealPlanEntryRequest {
+  linkUrl?: string | null;
+  mealName: string;
+  note?: string | null;
+  slotIndex: number;
+  weekday: number;
+}
+
+export interface UpdateMealPlanRequest {
+  entries: MealPlanEntryRequest[];
+}
+
+export interface CopyMealPlanRequest {
+  targetWeekStartDate: string;
+}
+
+export interface MealIdea {
+  createdAt: string;
+  householdId: string;
+  id: string;
+  linkUrl: string | null;
+  note: string | null;
+  title: string;
+  updatedAt: string;
+}
+
+export interface CreateMealIdeaRequest {
+  linkUrl?: string | null;
+  note?: string | null;
+  title: string;
+}
+
+export interface MealRandomizeRequest {
+  slotIndex?: number;
+  targetWeekStartDate?: string;
+  weekday?: number;
+}
+
+export interface MealRandomizeSuggestion {
+  linkUrl: string | null;
+  mealName: string;
+  note: string | null;
+  slotIndex: number;
+  sourceWeekStartDate: string;
+  weekday: number;
+}
+
+export interface MealRandomizeResult {
+  excludedRecentWeeks: number;
+  suggestions: MealRandomizeSuggestion[];
+  targetWeekStartDate: string;
+}
+
+export interface CalendarEvent {
+  eventDate: string;
+  eventTime: string | null;
+  id: string;
+  note: string | null;
+  ownerMemberId: string | null;
+  recurrenceRule: string | null;
+  scopeType: ScopeType;
+  title: string;
+}
+
+export interface CreateCalendarEventRequest {
+  eventDate: string;
+  eventTime?: string | null;
+  note?: string | null;
+  ownerMemberId?: string | null;
+  recurrenceRule?: string | null;
+  scopeType: ScopeType;
+  title: string;
+}
+
+export type UpdateCalendarEventRequest = Partial<CreateCalendarEventRequest>;
+
+export interface TodoItem {
+  createdAt: string;
+  description: string | null;
+  doneAt: string | null;
+  householdId: string;
+  id: string;
+  ownerMemberId: string | null;
+  scopeType: ScopeType;
+  status: 'todo' | 'done';
+  title: string;
+  updatedAt: string;
+}
+
+export interface CreateTodoItemRequest {
+  description?: string;
+  ownerMemberId?: string;
+  scopeType: ScopeType;
+  title: string;
+}
+
+export interface UpdateTodoItemRequest {
+  description?: string;
+  ownerMemberId?: string;
+  scopeType?: ScopeType;
+  status?: 'todo' | 'done';
+  title?: string;
+}
+
+export interface Note {
+  createdAt: string;
+  description: string | null;
+  householdId: string;
+  id: string;
+  title: string;
+  updatedAt: string;
+}
+
+export interface CreateNoteRequest {
+  description?: string;
+  title: string;
+}
+
+export type UpdateNoteRequest = Partial<CreateNoteRequest>;
+
+export interface CleaningTask {
+  completionWindowDays: number;
+  createdAt: string;
+  frequencyDays: number;
+  frequencyMode: 'preset' | 'custom_days';
+  householdId: string;
+  id: string;
+  isOverdue: boolean;
+  name: string;
+  nextDueAt: string;
+  updatedAt: string;
+}
+
+export interface CreateCleaningTaskRequest {
+  completionWindowDays?: number;
+  frequencyDays: number;
+  frequencyMode: 'preset' | 'custom_days';
+  name: string;
+  nextDueAt: string;
+}
+
+export interface CompleteCleaningTaskRequest {
+  completedAt?: string;
+}
+
+export interface AnnualCost {
+  createdAt: string;
+  defaultAmount: string | null;
+  householdId: string;
+  id: string;
+  name: string;
+  nextDueDate: string;
+  updatedAt: string;
+}
+
+export interface CreateAnnualCostRequest {
+  defaultAmount?: number | null;
+  name: string;
+  nextDueDate: string;
+}
+
+export interface CompleteAnnualCostRequest {
+  amount?: number | null;
+  executedAt: string;
+}
+
+export interface AnnualCostHistory {
+  amount: string | null;
+  annualCostId: string;
+  annualCostName: string;
+  createdAt: string;
+  executedAt: string;
+  id: string;
+}
+
+export interface AnnualCostCompletion {
+  cost: AnnualCost;
+  history: AnnualCostHistory;
+}
+
+export interface DataEntry {
+  createdAt: string;
+  householdId: string;
+  id: string;
+  title: string;
+  updatedAt: string;
+  value: string;
+}
+
+export interface CreateDataEntryRequest {
+  title: string;
+  value: string;
+}
+
+export interface Attachment {
+  caption: string;
+  createdAt: string;
+  createdByMemberId: string | null;
+  fileName: string;
+  householdId: string;
+  id: string;
+  mimeType: 'image/jpeg' | 'image/png' | 'image/webp' | 'application/pdf';
+  storagePath: string;
+  updatedAt: string;
+}
+
+export interface CreateAttachmentRequest {
+  caption?: string;
+  fileName: string;
+  mimeType: Attachment['mimeType'];
+  storagePath: string;
+}
+
+export interface HouseholdMember {
+  displayName: string;
+  email: string;
+  householdId: string;
+  id: string;
+  isActive: boolean;
+  joinedAt: string;
+  role: HouseholdMemberRole;
+  userId: string;
+}
+
+export interface CreateInvitationRequest {
+  email: string;
+}
+
+export interface HouseholdInvitation {
+  email: string;
+  expiresAt: string;
+  id: string;
+  token: string;
+}
+
+export interface PatchMemberPermissionsRequest {
+  permissions: EffectivePermission[];
+}

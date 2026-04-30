@@ -1,0 +1,30 @@
+{
+  "name": "@homeapp/shared-validation",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "lint": "eslint .",
+    "test": "node --test",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@homeapp/eslint-config": "workspace:*",
+    "@homeapp/shared-types": "workspace:*",
+    "@homeapp/tsconfig": "workspace:*",
+    "typescript": "^5.7.2"
+  }
+}

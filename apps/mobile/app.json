@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "HomeApp",
+    "slug": "homeapp",
+    "scheme": "homeapp",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": false,
+    "android": {
+      "package": "com.homeapp.mobile",
+      "versionCode": 2
+    },
+    "plugins": ["expo-router", "expo-secure-store"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
