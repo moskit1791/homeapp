@@ -1822,3 +1822,69 @@
 ### Nastepny krok
 
 - Kontynuowac przebudowe UX modulow: widoki maja pokazywac zapisane dane, a dodawanie/edycja powinny otwierac modal z przyciskow akcji w naglowkach.
+
+## 2026-05-01 - Pelne smoke QA backend + APK na telefonie
+
+### Zakres
+
+- Dodano powtarzalny smoke test backendu po prawdziwym HTTP API i lokalnej bazie PostgreSQL.
+- Potwierdzono po ostatniej poprawce Metro, ze release bundle nie wraca do bledu `main has not been registered` ani `Cannot read property 'useRef' of null`.
+- Zbudowano i wgrano aktualny release APK na telefon `EHT7N19507003187`.
+- Przejscie na telefonie:
+  - start APK i ekran logowania,
+  - logowanie kontem `moskit17@gmail.com`,
+  - ekran Start,
+  - zakladki `Finanse`, `Plan`, `Zakupy`, `Dom`, `Start`,
+  - `Menu` -> przewiniecie do ustawien konta -> `Wyloguj`,
+  - powrot do ekranu `Witaj ponownie` bez bialego ekranu.
+
+### Pliki
+
+- `scripts/api-functional-smoke.ps1`
+- `apps/mobile/metro.config.js`
+- `builds/homeapp-release.apk`
+- `docs/progress.md`
+- `docs/qa-mobile-notes.md`
+
+### Testy
+
+- `pnpm.cmd typecheck` - OK.
+- `pnpm.cmd lint` - OK.
+- `pnpm.cmd test` - OK, backend 20 testow, mobile brak testow automatycznych.
+- `pnpm.cmd build` - OK, Expo export Android/iOS po poprawce Metro.
+- `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\api-functional-smoke.ps1 -BaseUrl 'http://localhost:3000/api'` - OK, 29 krokow smoke.
+- `.\scripts\check-lan-dev.cmd` - OK, API LAN `http://192.168.100.109:3000/api`, Metro `http://192.168.100.109:8081`.
+- `.\scripts\build-mobile-release-apk.cmd -ApiUrl 'http://192.168.100.109:3000/api'` - OK.
+- `adb install -r .\builds\homeapp-release.apk` - OK.
+- ADB smoke UI: wszystkie glowne zakladki renderuja oczekiwane teksty i nie pokazuja crash screenu.
+- `adb logcat -d -t 1000` po smoke - brak krytycznych `ReactNativeJS`, `Invariant Violation`, `Cannot read property`, `TypeError`, `ReferenceError` zwiazanych z aplikacja.
+
+### Backend smoke coverage
+
+- Healthcheck, 401 bez tokena, rejestracja, weryfikacja e-mail, logowanie, bledne logowanie 401, wylogowanie.
+- Dom, czlonkowie, zaproszenia, uprawnienia i utrata dostepu po usunieciu czlonka.
+- Dashboard Start.
+- Finanse: miesiac, kategoria, pozycja budzetowa, wydatek, dochod, summary, walidacja ujemnego scenariusza 400.
+- Zakupy, plan posilkow, kalendarz, todo, notatki, sprzatanie, koszty roczne, dane i zalaczniki.
+- Cleanup rekordow domenowych po smoke. Konta QA i dom QA zostaja w dev DB, bo nie ma jeszcze publicznego endpointu kasowania uzytkownika/domu.
+
+### Artefakty
+
+- Aktualny APK: `builds/homeapp-release.apk`.
+- Stemplowany APK: `builds/homeapp-release-20260501-1547.apk`.
+
+### Checklist items
+
+- Nie zamknieto nowych checkboxow w `docs/checklista_mvp_i_akceptacji_v2.md`.
+- Realtime multi-user pozostaje otwarty, bo nie wykonano jeszcze testu dwoch rownoleglych sesji.
+
+### Ryzyka
+
+- Google OAuth nadal wymaga prawdziwych client ID i testu end-to-end.
+- SMTP/deep link verify/reset wymagaja realnego provider smoke poza dev tokenami.
+- APK jest lokalnym release buildem do testow, nadal bez finalnego sklepowego podpisu.
+- Mobile nadal nie ma automatycznych testow UI, obecny smoke jest ADB/manualny.
+
+### Nastepny krok
+
+- Kontynuowac przebudowe UX modulow w kierunku: widok danych jako domyslny ekran, akcje `+ Dodaj` w naglowku, formularze w modalach/sheetach.

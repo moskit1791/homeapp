@@ -304,3 +304,37 @@ Sprawdzenia:
 Uwagi:
 - Build `homeapp-release-20260430-2312.apk` byl buildem posrednim z niepoprawnym runtime entry i nie powinien byc uzywany.
 - Do testow instalowac tylko `builds/homeapp-release.apk` albo `builds/homeapp-release-20260430-2314.apk`.
+
+## 2026-05-01 QA - smoke release APK po poprawce Metro
+
+Stan:
+- Aktualny folder pracy: `C:\Users\moski\Desktop\homeapp`.
+- Telefon ADB: `EHT7N19507003187`.
+- API health przez LAN: `http://192.168.100.109:3000/api/health` - OK.
+- Zbudowano aktualny release APK z `EXPO_PUBLIC_API_URL=http://192.168.100.109:3000/api`.
+- Poprawka `apps/mobile/metro.config.js` utrzymuje `disableHierarchicalLookup = true` i dodaje realne sciezki `node_modules` z pnpm, zeby Metro nie mieszal kilku kopii React/React Native.
+
+Sprawdzenia:
+- `pnpm.cmd typecheck` - OK.
+- `pnpm.cmd lint` - OK.
+- `pnpm.cmd test` - OK.
+- `pnpm.cmd build` - OK.
+- `scripts/api-functional-smoke.ps1` - OK, 29 krokow po realnym HTTP API i dev DB.
+- `scripts/check-lan-dev.cmd` - OK.
+- `scripts/build-mobile-release-apk.cmd -ApiUrl 'http://192.168.100.109:3000/api'` - OK.
+- `adb install -r builds\homeapp-release.apk` - OK.
+- Start APK -> ekran logowania - OK.
+- Logowanie `moskit17@gmail.com` -> ekran `Dzisiaj` - OK.
+- Zakladki `Start`, `Finanse`, `Plan`, `Zakupy`, `Dom` - OK, kazda renderuje oczekiwane tresci.
+- `Menu` -> `Wyloguj` - OK, powrot do ekranu logowania bez bialego ekranu.
+- `adb logcat -d -t 1000` po smoke - brak krytycznych bledow JS/native aplikacji.
+
+Artefakty:
+- Aktualny APK: `builds/homeapp-release.apk`.
+- Stemplowany APK: `builds/homeapp-release-20260501-1547.apk`.
+
+Ryzyka:
+- To nadal nie jest finalny release sklepowy: brak produkcyjnego keystore/signingu sklepowego.
+- Google OAuth jest przygotowany koncepcyjnie, ale wymaga realnych client ID i testu end-to-end.
+- Brak automatycznych testow UI mobile; obecny test byl ADB/manualny.
+- Realtime wymaga testu dwoch jednoczesnych sesji.
