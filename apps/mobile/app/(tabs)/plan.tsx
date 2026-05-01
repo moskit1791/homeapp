@@ -50,6 +50,7 @@ import { useAppTheme, type AppPalette } from "../../src/theme/use-app-theme";
 import {
   ActionButton,
   AppScreen,
+  FormModal,
   IconButton,
   InlineAlert,
   QueryState,
@@ -215,6 +216,7 @@ function FoodSegment({
   const [slotIndex, setSlotIndex] = useState(0);
   const [mealName, setMealName] = useState("");
   const [note, setNote] = useState("");
+  const [mealModalVisible, setMealModalVisible] = useState(false);
 
   const currentQuery = useQuery({
     enabled: Boolean(accessToken),
@@ -270,6 +272,7 @@ function FoodSegment({
     onSuccess: async () => {
       setMealName("");
       setNote("");
+      setMealModalVisible(false);
       await queryClient.invalidateQueries({ queryKey: queryKeys.meal });
     },
   });
@@ -300,7 +303,19 @@ function FoodSegment({
 
   return (
     <>
-      <Toolbar onRefresh={() => currentQuery.refetch()} title="Plan posiłków" />
+      <Toolbar
+        action={
+          canUpdate ? (
+            <ActionButton
+              onPress={() => setMealModalVisible(true)}
+              size="small"
+              title="+ Dodaj"
+            />
+          ) : undefined
+        }
+        onRefresh={() => currentQuery.refetch()}
+        title="Plan posiłków"
+      />
       <SectionCard
         icon={<Utensils color={theme.colors.food} size={18} />}
         subtitle={
@@ -336,62 +351,74 @@ function FoodSegment({
         </View>
       </SectionCard>
 
-      {canUpdate ? (
-        <SectionCard title="Ustaw posiłek">
-          <View style={styles.chips}>
-            {[1, 2, 3, 4, 5, 6, 7].map((day) => (
-              <Chip
-                active={weekday === day}
-                key={day}
-                onPress={() => setWeekday(day)}
-                title={weekdayShort(day)}
-              />
-            ))}
-          </View>
-          <View style={styles.chips}>
-            {[0, 1, 2, 3].map((slot) => (
-              <Chip
-                active={slotIndex === slot}
-                key={slot}
-                onPress={() => setSlotIndex(slot)}
-                title={`Slot ${slot + 1}`}
-              />
-            ))}
-          </View>
-          <TextInput
-            onChangeText={setMealName}
-            placeholder="Nazwa posiłku"
-            placeholderTextColor={theme.colors.textSubtle}
-            style={styles.input}
-            value={mealName}
-          />
-          <TextInput
-            multiline
-            onChangeText={setNote}
-            placeholder="Notatka lub link"
-            placeholderTextColor={theme.colors.textSubtle}
-            style={[styles.input, styles.textArea]}
-            value={note}
-          />
-          <View style={styles.formRow}>
+      <FormModal
+        footer={
+          <View style={styles.modalFooter}>
+            <ActionButton
+              onPress={() => setMealModalVisible(false)}
+              style={styles.modalFooterButton}
+              title="Anuluj"
+              variant="secondary"
+            />
             <ActionButton
               disabled={!canSave}
               loading={upsertMutation.isPending}
               onPress={() => upsertMutation.mutate()}
+              style={styles.modalFooterButton}
               title="Zapisz"
             />
-            <ActionButton
-              disabled={inspirationQuery.isFetching}
-              onPress={() => inspirationQuery.refetch()}
-              title="Inspiracje"
-              variant="secondary"
-            />
           </View>
-          {upsertMutation.error ? (
-            <InlineAlert text="Nie udało się zapisać posiłku." tone="error" />
-          ) : null}
-        </SectionCard>
-      ) : null}
+        }
+        onClose={() => setMealModalVisible(false)}
+        subtitle="Wybierz dzień, slot i wpisz posiłek do planu."
+        title="Ustaw posiłek"
+        visible={mealModalVisible}
+      >
+        <View style={styles.chips}>
+          {[1, 2, 3, 4, 5, 6, 7].map((day) => (
+            <Chip
+              active={weekday === day}
+              key={day}
+              onPress={() => setWeekday(day)}
+              title={weekdayShort(day)}
+            />
+          ))}
+        </View>
+        <View style={styles.chips}>
+          {[0, 1, 2, 3].map((slot) => (
+            <Chip
+              active={slotIndex === slot}
+              key={slot}
+              onPress={() => setSlotIndex(slot)}
+              title={`Slot ${slot + 1}`}
+            />
+          ))}
+        </View>
+        <TextInput
+          onChangeText={setMealName}
+          placeholder="Nazwa posiłku"
+          placeholderTextColor={theme.colors.textSubtle}
+          style={styles.input}
+          value={mealName}
+        />
+        <TextInput
+          multiline
+          onChangeText={setNote}
+          placeholder="Notatka lub link"
+          placeholderTextColor={theme.colors.textSubtle}
+          style={[styles.input, styles.textArea]}
+          value={note}
+        />
+        <ActionButton
+          disabled={inspirationQuery.isFetching}
+          onPress={() => inspirationQuery.refetch()}
+          title="Losuj inspiracje"
+          variant="secondary"
+        />
+        {upsertMutation.error ? (
+          <InlineAlert text="Nie udało się zapisać posiłku." tone="error" />
+        ) : null}
+      </FormModal>
 
       {suggestions.length ? (
         <SectionCard
@@ -455,6 +482,7 @@ function CalendarSegment({
   const [eventDate, setEventDate] = useState(todayDate());
   const [eventTime, setEventTime] = useState("");
   const [note, setNote] = useState("");
+  const [eventModalVisible, setEventModalVisible] = useState(false);
   const range = useMemo(() => currentWeekRange(), []);
 
   const upcomingQuery = useQuery({
@@ -483,6 +511,7 @@ function CalendarSegment({
       setTitle("");
       setEventTime("");
       setNote("");
+      setEventModalVisible(false);
       await queryClient.invalidateQueries({ queryKey: queryKeys.calendar });
     },
   });
@@ -492,54 +521,19 @@ function CalendarSegment({
 
   return (
     <>
-      <Toolbar onRefresh={() => upcomingQuery.refetch()} title="Kalendarz" />
-      {canCreate ? (
-        <SectionCard
-          icon={<CalendarDays color={theme.colors.calendar} size={18} />}
-          title="Dodaj wydarzenie"
-        >
-          <TextInput
-            onChangeText={setTitle}
-            placeholder="Tytuł"
-            placeholderTextColor={theme.colors.textSubtle}
-            style={styles.input}
-            value={title}
-          />
-          <View style={styles.formRow}>
-            <TextInput
-              onChangeText={setEventDate}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={theme.colors.textSubtle}
-              style={[styles.input, styles.flex]}
-              value={eventDate}
+      <Toolbar
+        action={
+          canCreate ? (
+            <ActionButton
+              onPress={() => setEventModalVisible(true)}
+              size="small"
+              title="+ Dodaj"
             />
-            <TextInput
-              onChangeText={setEventTime}
-              placeholder="HH:MM"
-              placeholderTextColor={theme.colors.textSubtle}
-              style={[styles.input, styles.timeInput]}
-              value={eventTime}
-            />
-          </View>
-          <TextInput
-            multiline
-            onChangeText={setNote}
-            placeholder="Notatka"
-            placeholderTextColor={theme.colors.textSubtle}
-            style={[styles.input, styles.textArea]}
-            value={note}
-          />
-          <ActionButton
-            disabled={!canSave}
-            loading={createMutation.isPending}
-            onPress={() => createMutation.mutate()}
-            title="Dodaj"
-          />
-          {createMutation.error ? (
-            <InlineAlert text="Nie udało się dodać wydarzenia." tone="error" />
-          ) : null}
-        </SectionCard>
-      ) : null}
+          ) : undefined
+        }
+        onRefresh={() => upcomingQuery.refetch()}
+        title="Kalendarz"
+      />
 
       <EventList
         emptyText="Brak najbliższych wydarzeń."
@@ -555,6 +549,64 @@ function CalendarSegment({
         query={weekQuery}
         title={`Ten tydzień: ${formatDate(range.from)}-${formatDate(range.to)}`}
       />
+      <FormModal
+        footer={
+          <View style={styles.modalFooter}>
+            <ActionButton
+              onPress={() => setEventModalVisible(false)}
+              style={styles.modalFooterButton}
+              title="Anuluj"
+              variant="secondary"
+            />
+            <ActionButton
+              disabled={!canSave}
+              loading={createMutation.isPending}
+              onPress={() => createMutation.mutate()}
+              style={styles.modalFooterButton}
+              title="Dodaj"
+            />
+          </View>
+        }
+        onClose={() => setEventModalVisible(false)}
+        subtitle="Wpis trafi do kalendarza domowego."
+        title="Dodaj wydarzenie"
+        visible={eventModalVisible}
+      >
+        <TextInput
+          onChangeText={setTitle}
+          placeholder="Tytuł"
+          placeholderTextColor={theme.colors.textSubtle}
+          style={styles.input}
+          value={title}
+        />
+        <View style={styles.formRow}>
+          <TextInput
+            onChangeText={setEventDate}
+            placeholder="YYYY-MM-DD"
+            placeholderTextColor={theme.colors.textSubtle}
+            style={[styles.input, styles.flex]}
+            value={eventDate}
+          />
+          <TextInput
+            onChangeText={setEventTime}
+            placeholder="HH:MM"
+            placeholderTextColor={theme.colors.textSubtle}
+            style={[styles.input, styles.timeInput]}
+            value={eventTime}
+          />
+        </View>
+        <TextInput
+          multiline
+          onChangeText={setNote}
+          placeholder="Notatka"
+          placeholderTextColor={theme.colors.textSubtle}
+          style={[styles.input, styles.textArea]}
+          value={note}
+        />
+        {createMutation.error ? (
+          <InlineAlert text="Nie udało się dodać wydarzenia." tone="error" />
+        ) : null}
+      </FormModal>
     </>
   );
 }
@@ -575,6 +627,7 @@ function TodoSegment({
   const styles = useMemo(() => createStyles(theme.colors), [theme.colors]);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [todoModalVisible, setTodoModalVisible] = useState(false);
   const todoQuery = useQuery({
     enabled: Boolean(accessToken),
     queryFn: () => listTodoItems(undefined, { accessToken }),
@@ -593,6 +646,7 @@ function TodoSegment({
     onSuccess: async () => {
       setTitle("");
       setDescription("");
+      setTodoModalVisible(false);
       await queryClient.invalidateQueries({ queryKey: queryKeys.todo });
     },
   });
@@ -616,38 +670,19 @@ function TodoSegment({
 
   return (
     <>
-      <Toolbar onRefresh={() => todoQuery.refetch()} title="Zadania" />
-      {canCreate ? (
-        <SectionCard
-          icon={<CheckCircle2 color={theme.colors.primary} size={18} />}
-          title="Nowe zadanie"
-        >
-          <TextInput
-            onChangeText={setTitle}
-            placeholder="Tytuł"
-            placeholderTextColor={theme.colors.textSubtle}
-            style={styles.input}
-            value={title}
-          />
-          <TextInput
-            multiline
-            onChangeText={setDescription}
-            placeholder="Opis"
-            placeholderTextColor={theme.colors.textSubtle}
-            style={[styles.input, styles.textArea]}
-            value={description}
-          />
-          <ActionButton
-            disabled={!title.trim()}
-            loading={createMutation.isPending}
-            onPress={() => createMutation.mutate()}
-            title="Dodaj"
-          />
-          {createMutation.error ? (
-            <InlineAlert text="Nie udało się dodać zadania." tone="error" />
-          ) : null}
-        </SectionCard>
-      ) : null}
+      <Toolbar
+        action={
+          canCreate ? (
+            <ActionButton
+              onPress={() => setTodoModalVisible(true)}
+              size="small"
+              title="+ Dodaj"
+            />
+          ) : undefined
+        }
+        onRefresh={() => todoQuery.refetch()}
+        title="Zadania"
+      />
       <SectionCard
         icon={<CheckCircle2 color={theme.colors.primary} size={18} />}
         title="Do zrobienia"
@@ -673,6 +708,48 @@ function TodoSegment({
           ))}
         </View>
       </SectionCard>
+      <FormModal
+        footer={
+          <View style={styles.modalFooter}>
+            <ActionButton
+              onPress={() => setTodoModalVisible(false)}
+              style={styles.modalFooterButton}
+              title="Anuluj"
+              variant="secondary"
+            />
+            <ActionButton
+              disabled={!title.trim()}
+              loading={createMutation.isPending}
+              onPress={() => createMutation.mutate()}
+              style={styles.modalFooterButton}
+              title="Dodaj"
+            />
+          </View>
+        }
+        onClose={() => setTodoModalVisible(false)}
+        subtitle="Zadanie pojawi się na wspólnej liście domowej."
+        title="Nowe zadanie"
+        visible={todoModalVisible}
+      >
+        <TextInput
+          onChangeText={setTitle}
+          placeholder="Tytuł"
+          placeholderTextColor={theme.colors.textSubtle}
+          style={styles.input}
+          value={title}
+        />
+        <TextInput
+          multiline
+          onChangeText={setDescription}
+          placeholder="Opis"
+          placeholderTextColor={theme.colors.textSubtle}
+          style={[styles.input, styles.textArea]}
+          value={description}
+        />
+        {createMutation.error ? (
+          <InlineAlert text="Nie udało się dodać zadania." tone="error" />
+        ) : null}
+      </FormModal>
     </>
   );
 }
@@ -694,6 +771,7 @@ function NotesSegment({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [noteModalVisible, setNoteModalVisible] = useState(false);
   const notesQuery = useQuery({
     enabled: Boolean(accessToken),
     queryFn: () => listNotes({ accessToken }),
@@ -707,6 +785,7 @@ function NotesSegment({
       ),
     onSuccess: async () => {
       resetNoteForm();
+      setNoteModalVisible(false);
       await queryClient.invalidateQueries({ queryKey: queryKeys.notes });
     },
   });
@@ -719,6 +798,7 @@ function NotesSegment({
       ),
     onSuccess: async () => {
       resetNoteForm();
+      setNoteModalVisible(false);
       await queryClient.invalidateQueries({ queryKey: queryKeys.notes });
     },
   });
@@ -741,53 +821,29 @@ function NotesSegment({
     setDescription(note.description ?? "");
     setEditingId(note.id);
     setTitle(note.title);
+    setNoteModalVisible(true);
+  }
+
+  function closeNoteModal() {
+    resetNoteForm();
+    setNoteModalVisible(false);
   }
 
   return (
     <>
-      <Toolbar onRefresh={() => notesQuery.refetch()} title="Notatki" />
-      {canCreate || (canUpdate && isEditing) ? (
-        <SectionCard
-          icon={<NotebookText color={theme.colors.shopping} size={18} />}
-          title={isEditing ? "Edytuj notatkę" : "Nowa notatka"}
-        >
-          <TextInput
-            onChangeText={setTitle}
-            placeholder="Tytuł"
-            placeholderTextColor={theme.colors.textSubtle}
-            style={styles.input}
-            value={title}
-          />
-          <TextInput
-            multiline
-            onChangeText={setDescription}
-            placeholder="Treść"
-            placeholderTextColor={theme.colors.textSubtle}
-            style={[styles.input, styles.largeTextArea]}
-            value={description}
-          />
-          <View style={styles.formRow}>
+      <Toolbar
+        action={
+          canCreate ? (
             <ActionButton
-              disabled={!title.trim()}
-              loading={createMutation.isPending || updateMutation.isPending}
-              onPress={() =>
-                isEditing ? updateMutation.mutate() : createMutation.mutate()
-              }
-              title={isEditing ? "Zapisz" : "Dodaj"}
+              onPress={() => setNoteModalVisible(true)}
+              size="small"
+              title="+ Dodaj"
             />
-            {isEditing ? (
-              <ActionButton
-                onPress={resetNoteForm}
-                title="Anuluj"
-                variant="secondary"
-              />
-            ) : null}
-          </View>
-          {createMutation.error || updateMutation.error ? (
-            <InlineAlert text="Nie udało się zapisać notatki." tone="error" />
-          ) : null}
-        </SectionCard>
-      ) : null}
+          ) : undefined
+        }
+        onRefresh={() => notesQuery.refetch()}
+        title="Notatki"
+      />
       <SectionCard
         icon={<NotebookText color={theme.colors.shopping} size={18} />}
         title="Lista notatek"
@@ -812,6 +868,54 @@ function NotesSegment({
           ))}
         </View>
       </SectionCard>
+      <FormModal
+        footer={
+          <View style={styles.modalFooter}>
+            <ActionButton
+              onPress={closeNoteModal}
+              style={styles.modalFooterButton}
+              title="Anuluj"
+              variant="secondary"
+            />
+            <ActionButton
+              disabled={!title.trim() || (isEditing && !canUpdate)}
+              loading={createMutation.isPending || updateMutation.isPending}
+              onPress={() =>
+                isEditing ? updateMutation.mutate() : createMutation.mutate()
+              }
+              style={styles.modalFooterButton}
+              title={isEditing ? "Zapisz" : "Dodaj"}
+            />
+          </View>
+        }
+        onClose={closeNoteModal}
+        subtitle={
+          isEditing
+            ? "Zmieniasz istniejącą notatkę."
+            : "Nowa notatka trafi do listy domowej."
+        }
+        title={isEditing ? "Edytuj notatkę" : "Nowa notatka"}
+        visible={noteModalVisible}
+      >
+        <TextInput
+          onChangeText={setTitle}
+          placeholder="Tytuł"
+          placeholderTextColor={theme.colors.textSubtle}
+          style={styles.input}
+          value={title}
+        />
+        <TextInput
+          multiline
+          onChangeText={setDescription}
+          placeholder="Treść"
+          placeholderTextColor={theme.colors.textSubtle}
+          style={[styles.input, styles.largeTextArea]}
+          value={description}
+        />
+        {createMutation.error || updateMutation.error ? (
+          <InlineAlert text="Nie udało się zapisać notatki." tone="error" />
+        ) : null}
+      </FormModal>
     </>
   );
 }
@@ -954,9 +1058,11 @@ function NoteRow({
 }
 
 function Toolbar({
+  action,
   onRefresh,
   title,
 }: {
+  action?: ReactNode;
   onRefresh: () => void;
   title: string;
 }) {
@@ -966,9 +1072,12 @@ function Toolbar({
   return (
     <View style={styles.toolbar}>
       <Text style={styles.sectionTitle}>{title}</Text>
-      <IconButton onPress={onRefresh}>
-        <RefreshCcw color={theme.colors.textMuted} size={18} />
-      </IconButton>
+      <View style={styles.toolbarActions}>
+        {action}
+        <IconButton onPress={onRefresh}>
+          <RefreshCcw color={theme.colors.textMuted} size={18} />
+        </IconButton>
+      </View>
     </View>
   );
 }
@@ -1272,6 +1381,13 @@ function createStyles(colors: AppPalette) {
     moduleLabelActive: {
       color: colors.text,
     },
+    modalFooter: {
+      flexDirection: "row",
+      gap: spacing.sm,
+    },
+    modalFooterButton: {
+      flex: 1,
+    },
     moduleStrip: {
       flexDirection: "row",
       gap: spacing.sm,
@@ -1311,6 +1427,11 @@ function createStyles(colors: AppPalette) {
       alignItems: "center",
       flexDirection: "row",
       justifyContent: "space-between",
+    },
+    toolbarActions: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.xs,
     },
   });
 }

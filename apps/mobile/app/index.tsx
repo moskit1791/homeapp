@@ -1,6 +1,4 @@
-import * as GoogleAuth from 'expo-auth-session/providers/google';
 import { Redirect } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
 import { ReactNode, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -25,12 +23,6 @@ import { ActionButton } from '../src/ui/action-button';
 import { AuthTextField } from '../src/ui/auth-text-field';
 import { Apple, Check, Eye, EyeOff, Google, Home, LogIn, UserPlus } from '../src/ui/icon';
 import { SegmentedControl } from '../src/ui/segmented-control';
-
-WebBrowser.maybeCompleteAuthSession();
-
-const googleAndroidClientId = envValue(process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID);
-const googleIosClientId = envValue(process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID);
-const googleWebClientId = envValue(process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID);
 
 const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email('Podaj poprawny e-mail'),
@@ -70,13 +62,7 @@ type LegalDocument = 'privacy' | 'terms';
 export default function Index() {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
-  const { createFirstHousehold, registerAndSignIn, signIn, signInWithGoogle, status } = useSession();
-  const [googleRequest, googleResponse, promptGoogleAsync] = GoogleAuth.useIdTokenAuthRequest({
-    androidClientId: googleAndroidClientId,
-    iosClientId: googleIosClientId,
-    selectAccount: true,
-    webClientId: googleWebClientId
-  });
+  const { createFirstHousehold, registerAndSignIn, signIn, status } = useSession();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -127,6 +113,7 @@ export default function Index() {
     };
   }, []);
 
+  /*
   useEffect(() => {
     if (googleResponse?.type !== 'success') {
       return;
@@ -146,6 +133,7 @@ export default function Index() {
       .catch((submitError) => setError(getMessage(submitError)))
       .finally(() => setLoading(false));
   }, [googleResponse, rememberMe, signInWithGoogle]);
+  */
 
   useEffect(() => {
     let active = true;
@@ -415,6 +403,8 @@ export default function Index() {
       return;
     }
 
+    setNotice('Przycisk Google jest przygotowany w UI. PeĹ‚ne logowanie OAuth dopniemy po konfiguracji klienta Google.');
+    /*
     if (!googleAndroidClientId && !googleIosClientId && !googleWebClientId) {
       setNotice('Google OAuth wymaga EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID lub EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID.');
       return;
@@ -426,6 +416,7 @@ export default function Index() {
     }
 
     void promptGoogleAsync();
+    */
   }
 
   return (
@@ -945,12 +936,6 @@ type AuthDeepLinkAction =
       token: string;
       type: 'verify-email';
     };
-
-function envValue(value: string | undefined): string | undefined {
-  const trimmed = value?.trim();
-
-  return trimmed ? trimmed : undefined;
-}
 
 function getPasswordStrength(value: string) {
   const checks = [

@@ -1,6 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import {
   checkShoppingItem,
   createShoppingItem,
@@ -9,18 +9,26 @@ import {
   listShoppingLists,
   queryKeys,
   type ShoppingItem,
-  type ShoppingListType
-} from '../../src/api';
-import { useModulePermission } from '../../src/permissions/use-permissions';
-import { useSession } from '../../src/session/session-context';
-import { useAppTheme, type AppPalette } from '../../src/theme/use-app-theme';
-import { radii, spacing } from '../../src/theme/tokens';
-import { ActionButton, AppScreen, EmptyState, IconButton, InlineAlert, QueryState } from '../../src/ui';
-import { Check, Plus, RefreshCcw, ShoppingCart, Trash2 } from '../../src/ui/icon';
+  type ShoppingListType,
+} from "../../src/api";
+import { useModulePermission } from "../../src/permissions/use-permissions";
+import { useSession } from "../../src/session/session-context";
+import { useAppTheme, type AppPalette } from "../../src/theme/use-app-theme";
+import { radii, spacing } from "../../src/theme/tokens";
+import {
+  ActionButton,
+  AppScreen,
+  EmptyState,
+  FormModal,
+  IconButton,
+  InlineAlert,
+  QueryState,
+} from "../../src/ui";
+import { Check, RefreshCcw, ShoppingCart, Trash2 } from "../../src/ui/icon";
 
 const listTypes: Array<{ label: string; value: ShoppingListType }> = [
-  { label: 'Dzisiaj', value: 'daily' },
-  { label: 'Na później', value: 'long_term' }
+  { label: "Dzisiaj", value: "daily" },
+  { label: "Na później", value: "long_term" },
 ];
 
 export default function ZakupyScreen() {
@@ -29,22 +37,23 @@ export default function ZakupyScreen() {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
   const { canCreate, canDelete, canRead, canUpdate, permissionsQuery } =
-    useModulePermission('shopping');
-  const [activeType, setActiveType] = useState<ShoppingListType>('daily');
-  const [name, setName] = useState('');
-  const [quantity, setQuantity] = useState('');
+    useModulePermission("shopping");
+  const [activeType, setActiveType] = useState<ShoppingListType>("daily");
+  const [name, setName] = useState("");
+  const [quantity, setQuantity] = useState("");
+  const [isCreateVisible, setCreateVisible] = useState(false);
   const accessToken = session?.accessToken;
 
   const listsQuery = useQuery({
     enabled: canRead && Boolean(accessToken),
     queryFn: () => listShoppingLists({ accessToken }),
-    queryKey: [...queryKeys.shopping, 'lists']
+    queryKey: [...queryKeys.shopping, "lists"],
   });
 
   const itemsQuery = useQuery({
     enabled: canRead && Boolean(accessToken),
     queryFn: () => listShoppingItems(activeType, { accessToken }),
-    queryKey: [...queryKeys.shopping, activeType, 'items']
+    queryKey: [...queryKeys.shopping, activeType, "items"],
   });
 
   const createMutation = useMutation({
@@ -53,33 +62,43 @@ export default function ZakupyScreen() {
         activeType,
         {
           name: name.trim(),
-          quantity: quantity.trim() || undefined
+          quantity: quantity.trim() || undefined,
         },
-        { accessToken }
+        { accessToken },
       ),
     onSuccess: async () => {
-      setName('');
-      setQuantity('');
+      setName("");
+      setQuantity("");
+      setCreateVisible(false);
       await queryClient.invalidateQueries({ queryKey: queryKeys.shopping });
-    }
+    },
   });
 
   const checkMutation = useMutation({
     mutationFn: (id: string) => checkShoppingItem(id, { accessToken }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.shopping })
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.shopping }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteShoppingItem(id, { accessToken }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.shopping })
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.shopping }),
   });
 
   const items = itemsQuery.data ?? [];
-  const uncheckedItems = useMemo(() => items.filter((item) => !item.isChecked), [items]);
-  const checkedItems = useMemo(() => items.filter((item) => item.isChecked), [items]);
+  const uncheckedItems = useMemo(
+    () => items.filter((item) => !item.isChecked),
+    [items],
+  );
+  const checkedItems = useMemo(
+    () => items.filter((item) => item.isChecked),
+    [items],
+  );
   const currentList = listsQuery.data?.find((list) => list.type === activeType);
   const currentListName =
-    currentList?.name ?? (activeType === 'daily' ? 'Zakupy na dziś' : 'Rzeczy na później');
+    currentList?.name ??
+    (activeType === "daily" ? "Zakupy na dziś" : "Rzeczy na później");
   const canAdd = canCreate && Boolean(name.trim()) && !createMutation.isPending;
 
   function handleAdd() {
@@ -99,7 +118,10 @@ export default function ZakupyScreen() {
   if (!canRead) {
     return (
       <AppScreen title="Zakupy">
-        <InlineAlert tone="info" text="Nie masz uprawnienia do czytania list zakupów." />
+        <InlineAlert
+          tone="info"
+          text="Nie masz uprawnienia do czytania list zakupów."
+        />
       </AppScreen>
     );
   }
@@ -107,9 +129,21 @@ export default function ZakupyScreen() {
   return (
     <AppScreen
       actions={
-        <IconButton disabled={itemsQuery.isFetching} onPress={() => itemsQuery.refetch()}>
-          <RefreshCcw color={theme.colors.textMuted} size={18} />
-        </IconButton>
+        <View style={styles.topActions}>
+          {canCreate ? (
+            <ActionButton
+              onPress={() => setCreateVisible(true)}
+              size="small"
+              title="+ Dodaj"
+            />
+          ) : null}
+          <IconButton
+            disabled={itemsQuery.isFetching}
+            onPress={() => itemsQuery.refetch()}
+          >
+            <RefreshCcw color={theme.colors.textMuted} size={18} />
+          </IconButton>
+        </View>
       }
       subtitle="Szybka lista domowa, bez przeklikiwania formularzy."
       title="Zakupy"
@@ -121,7 +155,8 @@ export default function ZakupyScreen() {
         <View style={styles.heroText}>
           <Text style={styles.heroTitle}>{currentListName}</Text>
           <Text style={styles.heroMeta}>
-            {uncheckedItems.length} do kupienia / {checkedItems.length} odhaczone
+            {uncheckedItems.length} do kupienia / {checkedItems.length}{" "}
+            odhaczone
           </Text>
         </View>
       </View>
@@ -136,58 +171,27 @@ export default function ZakupyScreen() {
               onPress={() => setActiveType(item.value)}
               style={[styles.switchButton, active && styles.switchButtonActive]}
             >
-              <Text style={[styles.switchLabel, active && styles.switchLabelActive]}>{item.label}</Text>
+              <Text
+                style={[styles.switchLabel, active && styles.switchLabelActive]}
+              >
+                {item.label}
+              </Text>
             </Pressable>
           );
         })}
       </View>
 
-      {canCreate ? (
-        <View style={styles.composer}>
-          <View style={styles.composerFields}>
-            <TextInput
-              onChangeText={setName}
-              onSubmitEditing={handleAdd}
-              placeholder="Co kupić?"
-              placeholderTextColor={theme.colors.textSubtle}
-              returnKeyType="done"
-              style={styles.nameInput}
-              value={name}
-            />
-            <TextInput
-              onChangeText={setQuantity}
-              placeholder="Ilość"
-              placeholderTextColor={theme.colors.textSubtle}
-              style={styles.quantityInput}
-              value={quantity}
-            />
-          </View>
-          <Pressable
-            disabled={!canAdd}
-            onPress={handleAdd}
-            style={({ pressed }) => [
-              styles.addFab,
-              !canAdd && styles.addFabDisabled,
-              pressed && canAdd && styles.pressed
-            ]}
-          >
-            <Plus color={theme.colors.inverseText} size={20} />
-          </Pressable>
-        </View>
-      ) : null}
-
-      {createMutation.error ? <InlineAlert tone="error" text="Nie udało się dodać produktu." /> : null}
-
-      <QueryState
-        error={itemsQuery.error}
-        isLoading={itemsQuery.isLoading}
-      />
+      <QueryState error={itemsQuery.error} isLoading={itemsQuery.isLoading} />
 
       {!itemsQuery.isLoading && !itemsQuery.error && items.length === 0 ? (
         <EmptyState
           action={
             canCreate ? (
-              <ActionButton disabled={!name.trim()} onPress={handleAdd} size="small" title="Dodaj pierwszy produkt" />
+              <ActionButton
+                onPress={() => setCreateVisible(true)}
+                size="small"
+                title="Dodaj pierwszy produkt"
+              />
             ) : undefined
           }
           icon={<ShoppingCart color={theme.colors.shopping} size={22} />}
@@ -233,6 +237,55 @@ export default function ZakupyScreen() {
           ))}
         </View>
       ) : null}
+
+      <FormModal
+        footer={
+          <View style={styles.modalFooter}>
+            <ActionButton
+              onPress={() => setCreateVisible(false)}
+              style={styles.modalFooterButton}
+              title="Anuluj"
+              variant="secondary"
+            />
+            <ActionButton
+              disabled={!canAdd}
+              loading={createMutation.isPending}
+              onPress={handleAdd}
+              style={styles.modalFooterButton}
+              title="Dodaj"
+            />
+          </View>
+        }
+        onClose={() => setCreateVisible(false)}
+        subtitle={
+          activeType === "daily"
+            ? "Dodajesz produkt do listy na dzisiaj."
+            : "Dodajesz produkt do listy długoterminowej."
+        }
+        title="Dodaj produkt"
+        visible={isCreateVisible}
+      >
+        <TextInput
+          autoFocus
+          onChangeText={setName}
+          onSubmitEditing={handleAdd}
+          placeholder="Co kupić?"
+          placeholderTextColor={theme.colors.textSubtle}
+          returnKeyType="done"
+          style={styles.nameInput}
+          value={name}
+        />
+        <TextInput
+          onChangeText={setQuantity}
+          placeholder="Ilość, opakowanie lub notatka"
+          placeholderTextColor={theme.colors.textSubtle}
+          style={styles.quantityInput}
+          value={quantity}
+        />
+        {createMutation.error ? (
+          <InlineAlert tone="error" text="Nie udało się dodać produktu." />
+        ) : null}
+      </FormModal>
     </AppScreen>
   );
 }
@@ -245,7 +298,7 @@ function ShoppingRow({
   item,
   onCheck,
   onDelete,
-  updating
+  updating,
 }: {
   canDelete: boolean;
   canUpdate: boolean;
@@ -268,8 +321,14 @@ function ShoppingRow({
         {item.isChecked ? <Check color={colors.inverseText} size={15} /> : null}
       </Pressable>
       <View style={styles.itemContent}>
-        <Text style={[styles.itemName, item.isChecked && styles.itemNameChecked]}>{item.name}</Text>
-        {item.quantity ? <Text style={styles.itemQuantity}>{item.quantity}</Text> : null}
+        <Text
+          style={[styles.itemName, item.isChecked && styles.itemNameChecked]}
+        >
+          {item.name}
+        </Text>
+        {item.quantity ? (
+          <Text style={styles.itemQuantity}>{item.quantity}</Text>
+        ) : null}
       </View>
       {canDelete ? (
         <IconButton disabled={deleting} onPress={onDelete}>
@@ -283,168 +342,187 @@ function ShoppingRow({
 function createStyles(colors: AppPalette) {
   return StyleSheet.create({
     addFab: {
-      alignItems: 'center',
+      alignItems: "center",
       backgroundColor: colors.primary,
       borderRadius: radii.control,
       height: 50,
-      justifyContent: 'center',
-      width: 50
+      justifyContent: "center",
+      width: 50,
     },
     addFabDisabled: {
-      opacity: 0.42
+      opacity: 0.42,
     },
     checkBox: {
-      alignItems: 'center',
+      alignItems: "center",
       backgroundColor: colors.card,
       borderColor: colors.border,
       borderRadius: 999,
       borderWidth: 1,
       height: 26,
-      justifyContent: 'center',
-      width: 26
+      justifyContent: "center",
+      width: 26,
     },
     checkBoxDone: {
       backgroundColor: colors.primary,
-      borderColor: colors.primary
+      borderColor: colors.primary,
     },
     composer: {
-      alignItems: 'center',
+      alignItems: "center",
       backgroundColor: colors.card,
       borderColor: colors.border,
       borderRadius: radii.card,
       borderWidth: 1,
-      flexDirection: 'row',
+      flexDirection: "row",
       gap: spacing.sm,
-      padding: spacing.sm
+      padding: spacing.sm,
     },
     composerFields: {
       flex: 1,
-      gap: spacing.xs
+      gap: spacing.xs,
     },
     group: {
-      gap: spacing.sm
+      gap: spacing.sm,
     },
     groupTitle: {
       color: colors.text,
       fontSize: 13,
-      fontWeight: '900',
+      fontWeight: "900",
       letterSpacing: 0,
-      textTransform: 'uppercase'
+      textTransform: "uppercase",
     },
     hero: {
-      alignItems: 'center',
+      alignItems: "center",
       backgroundColor: colors.shoppingSoft,
       borderColor: colors.border,
       borderRadius: radii.card,
       borderWidth: 1,
-      flexDirection: 'row',
+      flexDirection: "row",
       gap: spacing.md,
-      padding: spacing.lg
+      padding: spacing.lg,
     },
     heroIcon: {
-      alignItems: 'center',
+      alignItems: "center",
       backgroundColor: colors.card,
       borderRadius: radii.control,
       height: 48,
-      justifyContent: 'center',
-      width: 48
+      justifyContent: "center",
+      width: 48,
     },
     heroMeta: {
       color: colors.textMuted,
       fontSize: 13,
       letterSpacing: 0,
-      lineHeight: 19
+      lineHeight: 19,
     },
     heroText: {
       flex: 1,
-      gap: spacing.xs
+      gap: spacing.xs,
     },
     heroTitle: {
       color: colors.text,
       fontSize: 20,
-      fontWeight: '900',
-      letterSpacing: 0
+      fontWeight: "900",
+      letterSpacing: 0,
     },
     itemContent: {
       flex: 1,
       gap: spacing.xs,
-      paddingRight: spacing.sm
+      paddingRight: spacing.sm,
     },
     itemName: {
       color: colors.text,
       fontSize: 15,
-      fontWeight: '800',
+      fontWeight: "800",
       letterSpacing: 0,
-      lineHeight: 20
+      lineHeight: 20,
     },
     itemNameChecked: {
       color: colors.textMuted,
-      textDecorationLine: 'line-through'
+      textDecorationLine: "line-through",
     },
     itemQuantity: {
       color: colors.textMuted,
       fontSize: 13,
-      letterSpacing: 0
+      letterSpacing: 0,
     },
     itemRow: {
-      alignItems: 'center',
+      alignItems: "center",
       backgroundColor: colors.card,
       borderColor: colors.border,
       borderRadius: radii.control,
       borderWidth: 1,
-      flexDirection: 'row',
+      flexDirection: "row",
       gap: spacing.sm,
       minHeight: 58,
       paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm
+      paddingVertical: spacing.sm,
     },
     itemRowChecked: {
       backgroundColor: colors.surfaceMuted,
-      opacity: 0.72
+      opacity: 0.72,
+    },
+    modalFooter: {
+      flexDirection: "row",
+      gap: spacing.sm,
+    },
+    modalFooterButton: {
+      flex: 1,
     },
     nameInput: {
+      backgroundColor: colors.field,
+      borderColor: colors.border,
+      borderRadius: radii.control,
+      borderWidth: 1,
       color: colors.text,
       fontSize: 16,
-      fontWeight: '700',
+      fontWeight: "700",
       letterSpacing: 0,
-      minHeight: 30,
-      paddingHorizontal: spacing.sm
+      minHeight: 48,
+      paddingHorizontal: spacing.md,
     },
     pressed: {
-      opacity: 0.82
+      opacity: 0.82,
     },
     quantityInput: {
+      backgroundColor: colors.field,
+      borderColor: colors.border,
+      borderRadius: radii.control,
+      borderWidth: 1,
       color: colors.textMuted,
       fontSize: 13,
       letterSpacing: 0,
-      minHeight: 28,
-      paddingHorizontal: spacing.sm
+      minHeight: 46,
+      paddingHorizontal: spacing.md,
     },
     switchButton: {
-      alignItems: 'center',
+      alignItems: "center",
       borderRadius: radii.control,
       flex: 1,
       minHeight: 40,
-      justifyContent: 'center'
+      justifyContent: "center",
     },
     switchButtonActive: {
-      backgroundColor: colors.card
+      backgroundColor: colors.card,
     },
     switchLabel: {
       color: colors.textMuted,
       fontSize: 13,
-      fontWeight: '900',
-      letterSpacing: 0
+      fontWeight: "900",
+      letterSpacing: 0,
     },
     switchLabelActive: {
-      color: colors.text
+      color: colors.text,
     },
     switcher: {
       backgroundColor: colors.surfaceMuted,
       borderRadius: radii.control,
-      flexDirection: 'row',
+      flexDirection: "row",
       gap: spacing.xs,
-      padding: spacing.xs
-    }
+      padding: spacing.xs,
+    },
+    topActions: {
+      flexDirection: "row",
+      gap: spacing.xs,
+    },
   });
 }

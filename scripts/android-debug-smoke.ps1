@@ -16,7 +16,7 @@ $logcatPath = Join-Path $repoRoot.Path "adb-homeapp-smoke-$stamp.log"
 $uiDumpPath = Join-Path $repoRoot.Path "adb-homeapp-smoke-$stamp.xml"
 
 function Invoke-Adb {
-  param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments)
+  param([string[]]$Arguments)
 
   & adb @Arguments
 
@@ -50,7 +50,7 @@ function Get-AdbDevice {
 $device = Get-AdbDevice
 Write-Host "Using ADB device: $device"
 
-Invoke-Adb -s $device logcat -c
+Invoke-Adb -Arguments @('-s', $device, 'logcat', '-c')
 
 if ($ClearData) {
   & adb -s $device shell pm clear $PackageName | Out-Null
@@ -64,19 +64,19 @@ if ($LASTEXITCODE -ne 0) {
   if ($AllowUninstallOnSignatureMismatch -and $installText -match 'INSTALL_FAILED_UPDATE_INCOMPATIBLE|INSTALL_FAILED_VERSION_DOWNGRADE') {
     Write-Host 'Install failed because an older/incompatible app exists. Uninstalling package and reinstalling.'
     & adb -s $device uninstall $PackageName | Out-Null
-    Invoke-Adb -s $device install $resolvedApk.Path
+    Invoke-Adb -Arguments @('-s', $device, 'install', $resolvedApk.Path)
   } else {
     throw "adb install failed: $installText"
   }
 }
 
-Invoke-Adb -s $device shell input keyevent KEYCODE_WAKEUP
-Invoke-Adb -s $device shell monkey -p $PackageName -c android.intent.category.LAUNCHER 1
+Invoke-Adb -Arguments @('-s', $device, 'shell', 'input', 'keyevent', 'KEYCODE_WAKEUP')
+Invoke-Adb -Arguments @('-s', $device, 'shell', 'monkey', '-p', $PackageName, '-c', 'android.intent.category.LAUNCHER', '1')
 Start-Sleep -Seconds 8
 
-Invoke-Adb -s $device shell screencap -p /sdcard/homeapp-smoke.png
-Invoke-Adb -s $device pull /sdcard/homeapp-smoke.png $screenshotPath
-Invoke-Adb -s $device shell rm /sdcard/homeapp-smoke.png
+Invoke-Adb -Arguments @('-s', $device, 'shell', 'screencap', '-p', '/sdcard/homeapp-smoke.png')
+Invoke-Adb -Arguments @('-s', $device, 'pull', '/sdcard/homeapp-smoke.png', $screenshotPath)
+Invoke-Adb -Arguments @('-s', $device, 'shell', 'rm', '/sdcard/homeapp-smoke.png')
 
 & adb -s $device shell uiautomator dump /sdcard/homeapp-window.xml | Out-Null
 & adb -s $device pull /sdcard/homeapp-window.xml $uiDumpPath | Out-Null

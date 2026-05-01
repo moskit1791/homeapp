@@ -269,3 +269,38 @@ Do wykonania na telefonie:
 - Na Huawei sprawdzic opcje zwiazane z `ADB/HDB` i debugowaniem w trybie ladowania.
 - Zaakceptowac prompt RSA/debugowania USB na ekranie telefonu.
 - Po tym ponownie uruchomic `adb devices -l`; wymagany status to `device`.
+
+## 2026-04-30 QA - reklamacyjna naprawa startu APK na telefonie
+
+Stan:
+- Telefon `EHT7N19507003187` jest widoczny przez ADB jako `device`.
+- Poprzednie release APK wracaly do problemu `Invariant Violation: "main" has not been registered` albo `Cannot read property 'useRef' of null`.
+- Przyczyna po analizie sourcemapy: release bundle w monorepo pakowal czesc React Native z `apps/mobile/node_modules`, a czesc z glownego `node_modules`.
+- W `apps/mobile/metro.config.js` wymuszono singletony dla krytycznych paczek i wlaczono `resolver.disableHierarchicalLookup = true`.
+- `apps/mobile/index.js` zostaje jako jawny entrypoint z `AppRegistry.registerComponent('main', ...)`.
+
+Wynik:
+- Nowy release APK startuje na fizycznym Huawei P30 Pro i pokazuje ekran logowania HomeApp.
+- Sourcemapa aktualnego builda ma `root react-native count = 0`, `app react-native count = 407`.
+- Logcat smoke nie zawiera `E/ReactNativeJS`, `Invariant Violation`, `JavascriptException`, `TypeError`, `ReferenceError` ani `Text strings must be rendered within a <Text>`.
+- Test wpisywania w pole e-mail przez ADB potwierdzil, ze wpisana wartosc zostaje w kontrolowanym polu i nie jest natychmiast kasowana.
+- Test rejestracji przez ADB potwierdzil, ze pole `Imie` przyjmuje wpis `Jan` i go nie usuwa. Pelny test rejestracji nadal wymaga recznego przejscia calego formularza na telefonie.
+
+Artefakty:
+- Aktualny dobry APK: `builds/homeapp-release.apk`.
+- Stemplowany dobry APK: `builds/homeapp-release-20260430-2314.apk`.
+- Screenshot startu: `adb-homeapp-smoke-20260430-231750.png`.
+- Logcat smoke: `adb-homeapp-smoke-20260430-231750.log`.
+- UI dump: `adb-homeapp-smoke-20260430-231750.xml`.
+- Screenshot pola rejestracji: `adb-homeapp-register-name.png`.
+
+Sprawdzenia:
+- `pnpm.cmd --filter @homeapp/mobile lint` - OK.
+- `pnpm.cmd --filter @homeapp/mobile typecheck` - OK.
+- `gradlew assembleRelease` w krotkim workdir `C:\h-apk-0430-224852` - OK.
+- `adb install -r builds\homeapp-release.apk` - OK.
+- `scripts/android-debug-smoke.cmd -AllowUninstallOnSignatureMismatch -ClearData` - OK po poprawce przekazywania argumentow ADB.
+
+Uwagi:
+- Build `homeapp-release-20260430-2312.apk` byl buildem posrednim z niepoprawnym runtime entry i nie powinien byc uzywany.
+- Do testow instalowac tylko `builds/homeapp-release.apk` albo `builds/homeapp-release-20260430-2314.apk`.

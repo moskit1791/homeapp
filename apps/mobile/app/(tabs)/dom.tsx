@@ -1,7 +1,7 @@
-import type { ModuleKey } from '@homeapp/shared-types';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ReactNode, useEffect, useMemo, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import type { ModuleKey } from "@homeapp/shared-types";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ReactNode, useEffect, useMemo, useState } from "react";
+import { StyleSheet, Text, TextInput, View } from "react-native";
 import {
   CalendarClock,
   Check,
@@ -9,8 +9,8 @@ import {
   RefreshCcw,
   Search,
   Sparkles,
-  Trash2
-} from '../../src/ui/icon';
+  Trash2,
+} from "../../src/ui/icon";
 import {
   queryKeys,
   createAnnualCost,
@@ -28,23 +28,24 @@ import {
   type AnnualCost,
   type Attachment,
   type CleaningTask,
-  type DataEntry
-} from '../../src/api';
-import { usePermissions } from '../../src/permissions/use-permissions';
-import { useSession } from '../../src/session/session-context';
-import { radii, spacing } from '../../src/theme/tokens';
-import { useAppTheme, type AppPalette } from '../../src/theme/use-app-theme';
+  type DataEntry,
+} from "../../src/api";
+import { usePermissions } from "../../src/permissions/use-permissions";
+import { useSession } from "../../src/session/session-context";
+import { radii, spacing } from "../../src/theme/tokens";
+import { useAppTheme, type AppPalette } from "../../src/theme/use-app-theme";
 import {
   ActionButton,
   AppScreen,
+  FormModal,
   IconButton,
   InlineAlert,
   QueryState,
   SectionCard,
-  SegmentedControl
-} from '../../src/ui';
+  SegmentedControl,
+} from "../../src/ui";
 
-type HomeSegment = 'cleaning' | 'annual_costs' | 'data_entries' | 'attachments';
+type HomeSegment = "cleaning" | "annual_costs" | "data_entries" | "attachments";
 
 type Accent = {
   color: string;
@@ -52,10 +53,10 @@ type Accent = {
 };
 
 const segments: Array<{ label: string; value: HomeSegment }> = [
-  { label: 'Sprzątanie', value: 'cleaning' },
-  { label: 'Koszty', value: 'annual_costs' },
-  { label: 'Dane', value: 'data_entries' },
-  { label: 'Pliki', value: 'attachments' }
+  { label: "Sprzątanie", value: "cleaning" },
+  { label: "Koszty", value: "annual_costs" },
+  { label: "Dane", value: "data_entries" },
+  { label: "Pliki", value: "attachments" },
 ];
 
 export default function DomScreen() {
@@ -63,13 +64,15 @@ export default function DomScreen() {
   const permissionsQuery = usePermissions();
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
-  const [activeSegment, setActiveSegment] = useState<HomeSegment>('cleaning');
+  const [activeSegment, setActiveSegment] = useState<HomeSegment>("cleaning");
   const accessToken = session?.accessToken;
 
   const availableSegments = useMemo(
     () =>
-      segments.filter((segment) => hasReadPermission(permissionsQuery.data, segment.value)),
-    [permissionsQuery.data]
+      segments.filter((segment) =>
+        hasReadPermission(permissionsQuery.data, segment.value),
+      ),
+    [permissionsQuery.data],
   );
 
   useEffect(() => {
@@ -97,7 +100,10 @@ export default function DomScreen() {
   if (permissionsQuery.isSuccess && availableSegments.length === 0) {
     return (
       <AppScreen title="Dom">
-        <InlineAlert tone="info" text="Nie masz uprawnienia do żadnego modułu domowego." />
+        <InlineAlert
+          tone="info"
+          text="Nie masz uprawnienia do żadnego modułu domowego."
+        />
       </AppScreen>
     );
   }
@@ -113,17 +119,21 @@ export default function DomScreen() {
         </View>
         <View style={styles.heroContent}>
           <Text style={styles.heroKicker}>Centrum domu</Text>
-          <Text style={styles.heroTitle}>Wybierz obszar i dopisz to, co ma nie zginąć.</Text>
+          <Text style={styles.heroTitle}>
+            Wybierz obszar i dopisz to, co ma nie zginąć.
+          </Text>
           <View style={styles.moduleGrid}>
-            {(availableSegments.length ? availableSegments : segments).map((segment) => (
-              <ModulePill
-                active={segment.value === activeSegment}
-                colors={theme.colors}
-                key={segment.value}
-                segment={segment.value}
-                text={segment.label}
-              />
-            ))}
+            {(availableSegments.length ? availableSegments : segments).map(
+              (segment) => (
+                <ModulePill
+                  active={segment.value === activeSegment}
+                  colors={theme.colors}
+                  key={segment.value}
+                  segment={segment.value}
+                  text={segment.label}
+                />
+              ),
+            )}
           </View>
         </View>
       </View>
@@ -134,28 +144,37 @@ export default function DomScreen() {
         value={activeSegment}
       />
 
-      {activeSegment === 'cleaning' ? <CleaningPanel accessToken={accessToken} /> : null}
-      {activeSegment === 'annual_costs' ? <AnnualCostsPanel accessToken={accessToken} /> : null}
-      {activeSegment === 'data_entries' ? <DataEntriesPanel accessToken={accessToken} /> : null}
-      {activeSegment === 'attachments' ? <AttachmentsPanel accessToken={accessToken} /> : null}
+      {activeSegment === "cleaning" ? (
+        <CleaningPanel accessToken={accessToken} />
+      ) : null}
+      {activeSegment === "annual_costs" ? (
+        <AnnualCostsPanel accessToken={accessToken} />
+      ) : null}
+      {activeSegment === "data_entries" ? (
+        <DataEntriesPanel accessToken={accessToken} />
+      ) : null}
+      {activeSegment === "attachments" ? (
+        <AttachmentsPanel accessToken={accessToken} />
+      ) : null}
     </AppScreen>
   );
 }
 
 function CleaningPanel({ accessToken }: { accessToken?: string }) {
   const queryClient = useQueryClient();
-  const permission = useModuleAccess('cleaning');
+  const permission = useModuleAccess("cleaning");
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
-  const accent = getSegmentAccent(theme.colors, 'cleaning');
-  const [name, setName] = useState('');
-  const [frequencyDays, setFrequencyDays] = useState('7');
+  const accent = getSegmentAccent(theme.colors, "cleaning");
+  const [name, setName] = useState("");
+  const [frequencyDays, setFrequencyDays] = useState("7");
   const [nextDueAt, setNextDueAt] = useState(todayIso());
+  const [createVisible, setCreateVisible] = useState(false);
 
   const tasksQuery = useQuery({
     enabled: permission.canRead && Boolean(accessToken),
     queryFn: () => listCleaningTasks({ accessToken }),
-    queryKey: [...queryKeys.cleaning, 'tasks']
+    queryKey: [...queryKeys.cleaning, "tasks"],
   });
 
   const createMutation = useMutation({
@@ -164,70 +183,54 @@ function CleaningPanel({ accessToken }: { accessToken?: string }) {
         {
           completionWindowDays: 0,
           frequencyDays: Number(frequencyDays) || 1,
-          frequencyMode: 'preset',
+          frequencyMode: "preset",
           name: name.trim(),
-          nextDueAt
+          nextDueAt,
         },
-        { accessToken }
+        { accessToken },
       ),
     onSuccess: async () => {
-      setName('');
+      setName("");
+      setCreateVisible(false);
       await queryClient.invalidateQueries({ queryKey: queryKeys.cleaning });
-    }
+    },
   });
 
   const completeMutation = useMutation({
-    mutationFn: (id: string) => completeCleaningTask(id, { completedAt: todayIso() }, { accessToken }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.cleaning })
+    mutationFn: (id: string) =>
+      completeCleaningTask(id, { completedAt: todayIso() }, { accessToken }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.cleaning }),
   });
 
   const tasks = tasksQuery.data ?? [];
   const overdueCount = tasks.filter((task) => task.isOverdue).length;
-  const canAdd = permission.canCreate && Boolean(name.trim()) && !createMutation.isPending;
+  const canAdd =
+    permission.canCreate && Boolean(name.trim()) && !createMutation.isPending;
 
   return (
     <Panel
+      action={
+        permission.canCreate ? (
+          <ActionButton
+            onPress={() => setCreateVisible(true)}
+            size="small"
+            title="+ Dodaj"
+          />
+        ) : undefined
+      }
       accent={accent}
       icon={<Sparkles color={accent.color} size={18} />}
       onRefresh={() => tasksQuery.refetch()}
       subtitle={`${tasks.length} zadań / ${overdueCount} po terminie`}
       title="Sprzątanie"
     >
-      {permission.canCreate ? (
-        <FormBlock accent={accent} title="Nowe zadanie">
-          <TextInput
-            onChangeText={setName}
-            placeholder="Nazwa zadania"
-            placeholderTextColor={theme.colors.textSubtle}
-            style={styles.input}
-            value={name}
-          />
-          <View style={styles.formRow}>
-            <TextInput
-              keyboardType="number-pad"
-              onChangeText={setFrequencyDays}
-              placeholder="Co ile dni"
-              placeholderTextColor={theme.colors.textSubtle}
-              style={[styles.input, styles.flexInput]}
-              value={frequencyDays}
-            />
-            <TextInput
-              onChangeText={setNextDueAt}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={theme.colors.textSubtle}
-              style={[styles.input, styles.dateInput]}
-              value={nextDueAt}
-            />
-          </View>
-          <InlineButton disabled={!canAdd} onPress={() => createMutation.mutate()} title="Dodaj" />
-          {createMutation.error ? <InlineAlert tone="error" text="Nie udało się dodać zadania." /> : null}
-        </FormBlock>
-      ) : null}
-
       <QueryState
         emptyText="Brak zadań sprzątania."
         error={tasksQuery.error}
-        isEmpty={!tasksQuery.isLoading && !tasksQuery.error && tasks.length === 0}
+        isEmpty={
+          !tasksQuery.isLoading && !tasksQuery.error && tasks.length === 0
+        }
         isLoading={tasksQuery.isLoading}
       />
       <View style={styles.itemList}>
@@ -242,31 +245,83 @@ function CleaningPanel({ accessToken }: { accessToken?: string }) {
           />
         ))}
       </View>
+      <FormModal
+        footer={
+          <View style={styles.modalFooter}>
+            <ActionButton
+              onPress={() => setCreateVisible(false)}
+              style={styles.modalFooterButton}
+              title="Anuluj"
+              variant="secondary"
+            />
+            <ActionButton
+              disabled={!canAdd}
+              loading={createMutation.isPending}
+              onPress={() => createMutation.mutate()}
+              style={styles.modalFooterButton}
+              title="Dodaj"
+            />
+          </View>
+        }
+        onClose={() => setCreateVisible(false)}
+        subtitle="Dodajesz cykliczne zadanie domowe z następnym terminem."
+        title="Nowe zadanie sprzątania"
+        visible={createVisible}
+      >
+        <TextInput
+          onChangeText={setName}
+          placeholder="Nazwa zadania"
+          placeholderTextColor={theme.colors.textSubtle}
+          style={styles.input}
+          value={name}
+        />
+        <View style={styles.formRow}>
+          <TextInput
+            keyboardType="number-pad"
+            onChangeText={setFrequencyDays}
+            placeholder="Co ile dni"
+            placeholderTextColor={theme.colors.textSubtle}
+            style={[styles.input, styles.flexInput]}
+            value={frequencyDays}
+          />
+          <TextInput
+            onChangeText={setNextDueAt}
+            placeholder="YYYY-MM-DD"
+            placeholderTextColor={theme.colors.textSubtle}
+            style={[styles.input, styles.dateInput]}
+            value={nextDueAt}
+          />
+        </View>
+        {createMutation.error ? (
+          <InlineAlert tone="error" text="Nie udało się dodać zadania." />
+        ) : null}
+      </FormModal>
     </Panel>
   );
 }
 
 function AnnualCostsPanel({ accessToken }: { accessToken?: string }) {
   const queryClient = useQueryClient();
-  const permission = useModuleAccess('annual_costs');
+  const permission = useModuleAccess("annual_costs");
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
-  const accent = getSegmentAccent(theme.colors, 'annual_costs');
-  const [name, setName] = useState('');
-  const [amount, setAmount] = useState('');
+  const accent = getSegmentAccent(theme.colors, "annual_costs");
+  const [name, setName] = useState("");
+  const [amount, setAmount] = useState("");
   const [nextDueDate, setNextDueDate] = useState(todayIso());
+  const [createVisible, setCreateVisible] = useState(false);
   const year = new Date().getFullYear();
 
   const costsQuery = useQuery({
     enabled: permission.canRead && Boolean(accessToken),
     queryFn: () => listAnnualCosts({ accessToken }),
-    queryKey: [...queryKeys.annualCosts, 'items']
+    queryKey: [...queryKeys.annualCosts, "items"],
   });
 
   const historyQuery = useQuery({
     enabled: permission.canRead && Boolean(accessToken),
     queryFn: () => listAnnualCostHistory(year, { accessToken }),
-    queryKey: [...queryKeys.annualCosts, 'history', year]
+    queryKey: [...queryKeys.annualCosts, "history", year],
   });
 
   const createMutation = useMutation({
@@ -275,15 +330,16 @@ function AnnualCostsPanel({ accessToken }: { accessToken?: string }) {
         {
           defaultAmount: parseOptionalNumber(amount),
           name: name.trim(),
-          nextDueDate
+          nextDueDate,
         },
-        { accessToken }
+        { accessToken },
       ),
     onSuccess: async () => {
-      setName('');
-      setAmount('');
+      setName("");
+      setAmount("");
+      setCreateVisible(false);
       await queryClient.invalidateQueries({ queryKey: queryKeys.annualCosts });
-    }
+    },
   });
 
   const completeMutation = useMutation({
@@ -291,20 +347,31 @@ function AnnualCostsPanel({ accessToken }: { accessToken?: string }) {
       completeAnnualCost(
         cost.id,
         {
-          amount: parseOptionalNumber(String(cost.defaultAmount ?? '')),
-          executedAt: todayIso()
+          amount: parseOptionalNumber(String(cost.defaultAmount ?? "")),
+          executedAt: todayIso(),
         },
-        { accessToken }
+        { accessToken },
       ),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.annualCosts })
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.annualCosts }),
   });
 
   const costs = costsQuery.data ?? [];
   const history = historyQuery.data ?? [];
-  const canAdd = permission.canCreate && Boolean(name.trim()) && !createMutation.isPending;
+  const canAdd =
+    permission.canCreate && Boolean(name.trim()) && !createMutation.isPending;
 
   return (
     <Panel
+      action={
+        permission.canCreate ? (
+          <ActionButton
+            onPress={() => setCreateVisible(true)}
+            size="small"
+            title="+ Dodaj"
+          />
+        ) : undefined
+      }
       accent={accent}
       icon={<CalendarClock color={accent.color} size={18} />}
       onRefresh={() => {
@@ -314,41 +381,12 @@ function AnnualCostsPanel({ accessToken }: { accessToken?: string }) {
       subtitle={`${costs.length} cyklicznych pozycji / ${history.length} wpisów w ${year}`}
       title="Koszty roczne"
     >
-      {permission.canCreate ? (
-        <FormBlock accent={accent} title="Nowy koszt">
-          <TextInput
-            onChangeText={setName}
-            placeholder="Nazwa kosztu"
-            placeholderTextColor={theme.colors.textSubtle}
-            style={styles.input}
-            value={name}
-          />
-          <View style={styles.formRow}>
-            <TextInput
-              keyboardType="decimal-pad"
-              onChangeText={setAmount}
-              placeholder="Kwota"
-              placeholderTextColor={theme.colors.textSubtle}
-              style={[styles.input, styles.flexInput]}
-              value={amount}
-            />
-            <TextInput
-              onChangeText={setNextDueDate}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={theme.colors.textSubtle}
-              style={[styles.input, styles.dateInput]}
-              value={nextDueDate}
-            />
-          </View>
-          <InlineButton disabled={!canAdd} onPress={() => createMutation.mutate()} title="Dodaj" />
-          {createMutation.error ? <InlineAlert tone="error" text="Nie udało się dodać kosztu." /> : null}
-        </FormBlock>
-      ) : null}
-
       <QueryState
         emptyText="Brak kosztów rocznych."
         error={costsQuery.error}
-        isEmpty={!costsQuery.isLoading && !costsQuery.error && costs.length === 0}
+        isEmpty={
+          !costsQuery.isLoading && !costsQuery.error && costs.length === 0
+        }
         isLoading={costsQuery.isLoading}
       />
       <View style={styles.itemList}>
@@ -376,45 +414,113 @@ function AnnualCostsPanel({ accessToken }: { accessToken?: string }) {
           ))}
         </View>
       ) : null}
+      <FormModal
+        footer={
+          <View style={styles.modalFooter}>
+            <ActionButton
+              onPress={() => setCreateVisible(false)}
+              style={styles.modalFooterButton}
+              title="Anuluj"
+              variant="secondary"
+            />
+            <ActionButton
+              disabled={!canAdd}
+              loading={createMutation.isPending}
+              onPress={() => createMutation.mutate()}
+              style={styles.modalFooterButton}
+              title="Dodaj"
+            />
+          </View>
+        }
+        onClose={() => setCreateVisible(false)}
+        subtitle="Dodajesz koszt cykliczny wraz z następnym terminem."
+        title="Nowy koszt roczny"
+        visible={createVisible}
+      >
+        <TextInput
+          onChangeText={setName}
+          placeholder="Nazwa kosztu"
+          placeholderTextColor={theme.colors.textSubtle}
+          style={styles.input}
+          value={name}
+        />
+        <View style={styles.formRow}>
+          <TextInput
+            keyboardType="decimal-pad"
+            onChangeText={setAmount}
+            placeholder="Kwota"
+            placeholderTextColor={theme.colors.textSubtle}
+            style={[styles.input, styles.flexInput]}
+            value={amount}
+          />
+          <TextInput
+            onChangeText={setNextDueDate}
+            placeholder="YYYY-MM-DD"
+            placeholderTextColor={theme.colors.textSubtle}
+            style={[styles.input, styles.dateInput]}
+            value={nextDueDate}
+          />
+        </View>
+        {createMutation.error ? (
+          <InlineAlert tone="error" text="Nie udało się dodać kosztu." />
+        ) : null}
+      </FormModal>
     </Panel>
   );
 }
 
 function DataEntriesPanel({ accessToken }: { accessToken?: string }) {
   const queryClient = useQueryClient();
-  const permission = useModuleAccess('data_entries');
+  const permission = useModuleAccess("data_entries");
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
-  const accent = getSegmentAccent(theme.colors, 'data_entries');
-  const [search, setSearch] = useState('');
-  const [title, setTitle] = useState('');
-  const [value, setValue] = useState('');
+  const accent = getSegmentAccent(theme.colors, "data_entries");
+  const [search, setSearch] = useState("");
+  const [title, setTitle] = useState("");
+  const [value, setValue] = useState("");
+  const [createVisible, setCreateVisible] = useState(false);
 
   const entriesQuery = useQuery({
     enabled: permission.canRead && Boolean(accessToken),
     queryFn: () => listDataEntries(search.trim() || undefined, { accessToken }),
-    queryKey: [...queryKeys.dataEntries, search.trim()]
+    queryKey: [...queryKeys.dataEntries, search.trim()],
   });
 
   const createMutation = useMutation({
-    mutationFn: () => createDataEntry({ title: title.trim(), value: value.trim() }, { accessToken }),
+    mutationFn: () =>
+      createDataEntry(
+        { title: title.trim(), value: value.trim() },
+        { accessToken },
+      ),
     onSuccess: async () => {
-      setTitle('');
-      setValue('');
+      setTitle("");
+      setValue("");
+      setCreateVisible(false);
       await queryClient.invalidateQueries({ queryKey: queryKeys.dataEntries });
-    }
+    },
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteDataEntry(id, { accessToken }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.dataEntries })
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.dataEntries }),
   });
 
   const entries = entriesQuery.data ?? [];
-  const canAdd = permission.canCreate && Boolean(title.trim()) && !createMutation.isPending;
+  const canAdd =
+    permission.canCreate && Boolean(title.trim()) && !createMutation.isPending;
 
   return (
     <Panel
+      action={
+        permission.canCreate ? (
+          <ActionButton
+            onPress={() => setCreateVisible(true)}
+            size="small"
+            title="+ Dodaj"
+          />
+        ) : undefined
+      }
       accent={accent}
       icon={<Search color={accent.color} size={18} />}
       onRefresh={() => entriesQuery.refetch()}
@@ -431,32 +537,12 @@ function DataEntriesPanel({ accessToken }: { accessToken?: string }) {
         />
       </SearchBlock>
 
-      {permission.canCreate ? (
-        <FormBlock accent={accent} title="Nowy wpis">
-          <TextInput
-            onChangeText={setTitle}
-            placeholder="Tytuł"
-            placeholderTextColor={theme.colors.textSubtle}
-            style={styles.input}
-            value={title}
-          />
-          <TextInput
-            multiline
-            onChangeText={setValue}
-            placeholder="Wartość"
-            placeholderTextColor={theme.colors.textSubtle}
-            style={[styles.input, styles.multilineInput]}
-            value={value}
-          />
-          <InlineButton disabled={!canAdd} onPress={() => createMutation.mutate()} title="Dodaj" />
-          {createMutation.error ? <InlineAlert tone="error" text="Nie udało się dodać wpisu." /> : null}
-        </FormBlock>
-      ) : null}
-
       <QueryState
         emptyText="Brak zapisanych danych."
         error={entriesQuery.error}
-        isEmpty={!entriesQuery.isLoading && !entriesQuery.error && entries.length === 0}
+        isEmpty={
+          !entriesQuery.isLoading && !entriesQuery.error && entries.length === 0
+        }
         isLoading={entriesQuery.isLoading}
       />
       <View style={styles.itemList}>
@@ -471,26 +557,70 @@ function DataEntriesPanel({ accessToken }: { accessToken?: string }) {
           />
         ))}
       </View>
+      <FormModal
+        footer={
+          <View style={styles.modalFooter}>
+            <ActionButton
+              onPress={() => setCreateVisible(false)}
+              style={styles.modalFooterButton}
+              title="Anuluj"
+              variant="secondary"
+            />
+            <ActionButton
+              disabled={!canAdd}
+              loading={createMutation.isPending}
+              onPress={() => createMutation.mutate()}
+              style={styles.modalFooterButton}
+              title="Dodaj"
+            />
+          </View>
+        }
+        onClose={() => setCreateVisible(false)}
+        subtitle="Wpis pojawi się w domowym sejfie danych."
+        title="Nowy wpis"
+        visible={createVisible}
+      >
+        <TextInput
+          onChangeText={setTitle}
+          placeholder="Tytuł"
+          placeholderTextColor={theme.colors.textSubtle}
+          style={styles.input}
+          value={title}
+        />
+        <TextInput
+          multiline
+          onChangeText={setValue}
+          placeholder="Wartość"
+          placeholderTextColor={theme.colors.textSubtle}
+          style={[styles.input, styles.multilineInput]}
+          value={value}
+        />
+        {createMutation.error ? (
+          <InlineAlert tone="error" text="Nie udało się dodać wpisu." />
+        ) : null}
+      </FormModal>
     </Panel>
   );
 }
 
 function AttachmentsPanel({ accessToken }: { accessToken?: string }) {
   const queryClient = useQueryClient();
-  const permission = useModuleAccess('attachments');
+  const permission = useModuleAccess("attachments");
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
-  const accent = getSegmentAccent(theme.colors, 'attachments');
-  const [search, setSearch] = useState('');
-  const [fileName, setFileName] = useState('');
-  const [storagePath, setStoragePath] = useState('');
-  const [caption, setCaption] = useState('');
-  const [mimeType, setMimeType] = useState<Attachment['mimeType']>('application/pdf');
+  const accent = getSegmentAccent(theme.colors, "attachments");
+  const [search, setSearch] = useState("");
+  const [fileName, setFileName] = useState("");
+  const [storagePath, setStoragePath] = useState("");
+  const [caption, setCaption] = useState("");
+  const [mimeType, setMimeType] =
+    useState<Attachment["mimeType"]>("application/pdf");
+  const [createVisible, setCreateVisible] = useState(false);
 
   const attachmentsQuery = useQuery({
     enabled: permission.canRead && Boolean(accessToken),
     queryFn: () => listAttachments(search.trim() || undefined, { accessToken }),
-    queryKey: [...queryKeys.attachments, search.trim()]
+    queryKey: [...queryKeys.attachments, search.trim()],
   });
 
   const createMutation = useMutation({
@@ -500,16 +630,17 @@ function AttachmentsPanel({ accessToken }: { accessToken?: string }) {
           caption: caption.trim() || undefined,
           fileName: fileName.trim(),
           mimeType,
-          storagePath: storagePath.trim()
+          storagePath: storagePath.trim(),
         },
-        { accessToken }
+        { accessToken },
       ),
     onSuccess: async () => {
-      setFileName('');
-      setStoragePath('');
-      setCaption('');
+      setFileName("");
+      setStoragePath("");
+      setCaption("");
+      setCreateVisible(false);
       await queryClient.invalidateQueries({ queryKey: queryKeys.attachments });
-    }
+    },
   });
 
   const attachments = attachmentsQuery.data ?? [];
@@ -521,6 +652,15 @@ function AttachmentsPanel({ accessToken }: { accessToken?: string }) {
 
   return (
     <Panel
+      action={
+        permission.canCreate ? (
+          <ActionButton
+            onPress={() => setCreateVisible(true)}
+            size="small"
+            title="+ Dodaj"
+          />
+        ) : undefined
+      }
       accent={accent}
       icon={<FileText color={accent.color} size={18} />}
       onRefresh={() => attachmentsQuery.refetch()}
@@ -537,53 +677,90 @@ function AttachmentsPanel({ accessToken }: { accessToken?: string }) {
         />
       </SearchBlock>
 
-      {permission.canCreate ? (
-        <FormBlock accent={accent} title="Nowy załącznik">
-          <TextInput
-            onChangeText={setFileName}
-            placeholder="Nazwa pliku"
-            placeholderTextColor={theme.colors.textSubtle}
-            style={styles.input}
-            value={fileName}
-          />
-          <TextInput
-            onChangeText={setStoragePath}
-            placeholder="Ścieżka storage"
-            placeholderTextColor={theme.colors.textSubtle}
-            style={styles.input}
-            value={storagePath}
-          />
-          <TextInput
-            onChangeText={setCaption}
-            placeholder="Opis"
-            placeholderTextColor={theme.colors.textSubtle}
-            style={styles.input}
-            value={caption}
-          />
-          <SegmentedControl
-            onChange={setMimeType}
-            options={(['application/pdf', 'image/jpeg', 'image/png'] as Attachment['mimeType'][]).map((type) => ({
-              label: type === 'application/pdf' ? 'PDF' : type.replace('image/', '').toUpperCase(),
-              value: type
-            }))}
-            value={mimeType}
-          />
-          <InlineButton disabled={!canAdd} onPress={() => createMutation.mutate()} title="Dodaj rekord" />
-          {createMutation.error ? <InlineAlert tone="error" text="Nie udało się dodać załącznika." /> : null}
-        </FormBlock>
-      ) : null}
-
       <QueryState
         emptyText="Brak załączników."
         error={attachmentsQuery.error}
-        isEmpty={!attachmentsQuery.isLoading && !attachmentsQuery.error && attachments.length === 0}
+        isEmpty={
+          !attachmentsQuery.isLoading &&
+          !attachmentsQuery.error &&
+          attachments.length === 0
+        }
         isLoading={attachmentsQuery.isLoading}
       />
       <View style={styles.itemList}>
         {attachments.map((attachment) => (
-          <AttachmentRow accent={accent} attachment={attachment} key={attachment.id} />
+          <AttachmentRow
+            accent={accent}
+            attachment={attachment}
+            key={attachment.id}
+          />
         ))}
       </View>
+      <FormModal
+        footer={
+          <View style={styles.modalFooter}>
+            <ActionButton
+              onPress={() => setCreateVisible(false)}
+              style={styles.modalFooterButton}
+              title="Anuluj"
+              variant="secondary"
+            />
+            <ActionButton
+              disabled={!canAdd}
+              loading={createMutation.isPending}
+              onPress={() => createMutation.mutate()}
+              style={styles.modalFooterButton}
+              title="Dodaj"
+            />
+          </View>
+        }
+        onClose={() => setCreateVisible(false)}
+        subtitle="Na razie zapisujemy rekord pliku; sam upload podepniemy w kolejnym kroku."
+        title="Nowy załącznik"
+        visible={createVisible}
+      >
+        <TextInput
+          onChangeText={setFileName}
+          placeholder="Nazwa pliku"
+          placeholderTextColor={theme.colors.textSubtle}
+          style={styles.input}
+          value={fileName}
+        />
+        <TextInput
+          onChangeText={setStoragePath}
+          placeholder="Ścieżka storage"
+          placeholderTextColor={theme.colors.textSubtle}
+          style={styles.input}
+          value={storagePath}
+        />
+        <TextInput
+          onChangeText={setCaption}
+          placeholder="Opis"
+          placeholderTextColor={theme.colors.textSubtle}
+          style={styles.input}
+          value={caption}
+        />
+        <SegmentedControl
+          onChange={setMimeType}
+          options={(
+            [
+              "application/pdf",
+              "image/jpeg",
+              "image/png",
+            ] as Attachment["mimeType"][]
+          ).map((type) => ({
+            label:
+              type === "application/pdf"
+                ? "PDF"
+                : type.replace("image/", "").toUpperCase(),
+            value: type,
+          }))}
+          value={mimeType}
+        />
+        {createMutation.error ? (
+          <InlineAlert tone="error" text="Nie udało się dodać załącznika." />
+        ) : null}
+      </FormModal>
     </Panel>
   );
 }
@@ -593,7 +770,7 @@ function CleaningRow({
   canUpdate,
   completing,
   onComplete,
-  task
+  task,
 }: {
   accent: Accent;
   canUpdate: boolean;
@@ -605,10 +782,20 @@ function CleaningRow({
   const styles = createStyles(theme.colors);
 
   return (
-    <View style={[styles.itemRow, { borderLeftColor: task.isOverdue ? theme.colors.warning : accent.color }, task.isOverdue && styles.warningRow]}>
+    <View
+      style={[
+        styles.itemRow,
+        {
+          borderLeftColor: task.isOverdue ? theme.colors.warning : accent.color,
+        },
+        task.isOverdue && styles.warningRow,
+      ]}
+    >
       <View style={styles.itemContent}>
         <Text style={styles.itemName}>{task.name}</Text>
-        <Text style={styles.itemMeta}>Termin: {task.nextDueAt} / co {task.frequencyDays} dni</Text>
+        <Text style={styles.itemMeta}>
+          Termin: {task.nextDueAt} / co {task.frequencyDays} dni
+        </Text>
       </View>
       <IconButton disabled={!canUpdate || completing} onPress={onComplete}>
         <Check color={accent.color} size={17} />
@@ -622,7 +809,7 @@ function CostRow({
   canUpdate,
   completing,
   cost,
-  onComplete
+  onComplete,
 }: {
   accent: Accent;
   canUpdate: boolean;
@@ -653,7 +840,7 @@ function DataRow({
   canDelete,
   deleting,
   entry,
-  onDelete
+  onDelete,
 }: {
   accent: Accent;
   canDelete: boolean;
@@ -668,7 +855,9 @@ function DataRow({
     <View style={[styles.itemRow, { borderLeftColor: accent.color }]}>
       <View style={styles.itemContent}>
         <Text style={styles.itemName}>{entry.title}</Text>
-        <Text numberOfLines={2} style={styles.itemMeta}>{entry.value}</Text>
+        <Text numberOfLines={2} style={styles.itemMeta}>
+          {entry.value}
+        </Text>
       </View>
       {canDelete ? (
         <IconButton disabled={deleting} onPress={onDelete}>
@@ -679,7 +868,13 @@ function DataRow({
   );
 }
 
-function AttachmentRow({ accent, attachment }: { accent: Accent; attachment: Attachment }) {
+function AttachmentRow({
+  accent,
+  attachment,
+}: {
+  accent: Accent;
+  attachment: Attachment;
+}) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
 
@@ -697,13 +892,15 @@ function AttachmentRow({ accent, attachment }: { accent: Accent; attachment: Att
 
 function Panel({
   accent,
+  action,
   children,
   icon,
   onRefresh,
   subtitle,
-  title
+  title,
 }: {
   accent: Accent;
+  action?: ReactNode;
   children: ReactNode;
   icon: ReactNode;
   onRefresh: () => void;
@@ -716,9 +913,12 @@ function Panel({
   return (
     <SectionCard
       action={
-        <IconButton onPress={onRefresh}>
-          <RefreshCcw color={theme.colors.textMuted} size={18} />
-        </IconButton>
+        <View style={styles.panelActions}>
+          {action}
+          <IconButton onPress={onRefresh}>
+            <RefreshCcw color={theme.colors.textMuted} size={18} />
+          </IconButton>
+        </View>
       }
       icon={icon}
       subtitle={subtitle}
@@ -730,19 +930,13 @@ function Panel({
   );
 }
 
-function FormBlock({ accent, children, title }: { accent: Accent; children: ReactNode; title: string }) {
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
-
-  return (
-    <View style={[styles.formCard, { borderColor: accent.soft }]}>
-      <Text style={[styles.formTitle, { color: accent.color }]}>{title}</Text>
-      {children}
-    </View>
-  );
-}
-
-function SearchBlock({ accent, children }: { accent: Accent; children: ReactNode }) {
+function SearchBlock({
+  accent,
+  children,
+}: {
+  accent: Accent;
+  children: ReactNode;
+}) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
 
@@ -758,7 +952,7 @@ function ModulePill({
   active,
   colors,
   segment,
-  text
+  text,
 }: {
   active: boolean;
   colors: AppPalette;
@@ -769,8 +963,20 @@ function ModulePill({
   const accent = getSegmentAccent(colors, segment);
 
   return (
-    <View style={[styles.modulePill, { backgroundColor: active ? accent.color : accent.soft }]}>
-      <Text style={[styles.modulePillText, { color: active ? colors.inverseText : accent.color }]}>{text}</Text>
+    <View
+      style={[
+        styles.modulePill,
+        { backgroundColor: active ? accent.color : accent.soft },
+      ]}
+    >
+      <Text
+        style={[
+          styles.modulePillText,
+          { color: active ? colors.inverseText : accent.color },
+        ]}
+      >
+        {text}
+      </Text>
     </View>
   );
 }
@@ -787,42 +993,28 @@ function SmallRow({ meta, title }: { meta: string; title: string }) {
   );
 }
 
-function InlineButton({
-  disabled,
-  onPress,
-  title
-}: {
-  disabled?: boolean;
-  onPress: () => void;
-  title: string;
-}) {
-  return (
-    <ActionButton
-      disabled={disabled}
-      onPress={onPress}
-      style={staticStyles.inlineButton}
-      title={title}
-    />
-  );
-}
-
 function useModuleAccess(moduleKey: ModuleKey) {
   const permissionsQuery = usePermissions();
-  const permission = permissionsQuery.data?.find((item) => item.moduleKey === moduleKey);
+  const permission = permissionsQuery.data?.find(
+    (item) => item.moduleKey === moduleKey,
+  );
 
   return {
     canCreate: Boolean(permission?.canCreate),
     canDelete: Boolean(permission?.canDelete),
     canRead: Boolean(permission?.canRead),
-    canUpdate: Boolean(permission?.canUpdate)
+    canUpdate: Boolean(permission?.canUpdate),
   };
 }
 
 function hasReadPermission(
   permissions: Array<{ canRead: boolean; moduleKey: ModuleKey }> | undefined,
-  moduleKey: ModuleKey
+  moduleKey: ModuleKey,
 ) {
-  return Boolean(permissions?.find((permission) => permission.moduleKey === moduleKey)?.canRead);
+  return Boolean(
+    permissions?.find((permission) => permission.moduleKey === moduleKey)
+      ?.canRead,
+  );
 }
 
 function getSegmentAccent(colors: AppPalette, segment: HomeSegment): Accent {
@@ -830,7 +1022,7 @@ function getSegmentAccent(colors: AppPalette, segment: HomeSegment): Accent {
     annual_costs: { color: colors.finance, soft: colors.softGreen },
     attachments: { color: colors.shopping, soft: colors.softPurple },
     cleaning: { color: colors.primary, soft: colors.primarySoft },
-    data_entries: { color: colors.calendar, soft: colors.softBlue }
+    data_entries: { color: colors.calendar, soft: colors.softBlue },
   };
 
   return accents[segment];
@@ -841,7 +1033,7 @@ function todayIso() {
 }
 
 function parseOptionalNumber(value: string): number | null {
-  const normalized = value.replace(',', '.').trim();
+  const normalized = value.replace(",", ".").trim();
 
   if (!normalized) {
     return null;
@@ -853,75 +1045,75 @@ function parseOptionalNumber(value: string): number | null {
 }
 
 function formatMoney(value: string | number | null | undefined): string {
-  if (value === null || value === undefined || value === '') {
-    return 'bez kwoty';
+  if (value === null || value === undefined || value === "") {
+    return "bez kwoty";
   }
 
-  return `${Number(value).toLocaleString('pl-PL', {
+  return `${Number(value).toLocaleString("pl-PL", {
     maximumFractionDigits: 2,
-    minimumFractionDigits: 2
+    minimumFractionDigits: 2,
   })} zł`;
 }
 
 function createStyles(colors: AppPalette) {
   return StyleSheet.create({
     dateInput: {
-      minWidth: 132
+      minWidth: 132,
     },
     flexInput: {
-      flex: 1
+      flex: 1,
     },
     formCard: {
       backgroundColor: colors.cardMuted,
       borderRadius: radii.control,
       borderWidth: 1,
       gap: spacing.sm,
-      padding: spacing.md
+      padding: spacing.md,
     },
     formRow: {
-      flexDirection: 'row',
-      gap: spacing.sm
+      flexDirection: "row",
+      gap: spacing.sm,
     },
     formTitle: {
       fontSize: 12,
-      fontWeight: '900',
+      fontWeight: "900",
       letterSpacing: 0,
-      textTransform: 'uppercase'
+      textTransform: "uppercase",
     },
     hero: {
       backgroundColor: colors.card,
       borderColor: colors.border,
       borderRadius: radii.card,
       borderWidth: 1,
-      flexDirection: 'row',
+      flexDirection: "row",
       gap: spacing.md,
-      padding: spacing.lg
+      padding: spacing.lg,
     },
     heroContent: {
       flex: 1,
-      gap: spacing.sm
+      gap: spacing.sm,
     },
     heroIcon: {
-      alignItems: 'center',
+      alignItems: "center",
       backgroundColor: colors.primarySoft,
       borderRadius: radii.control,
       height: 48,
-      justifyContent: 'center',
-      width: 48
+      justifyContent: "center",
+      width: 48,
     },
     heroKicker: {
       color: colors.primaryDark,
       fontSize: 12,
-      fontWeight: '900',
+      fontWeight: "900",
       letterSpacing: 0,
-      textTransform: 'uppercase'
+      textTransform: "uppercase",
     },
     heroTitle: {
       color: colors.text,
       fontSize: 20,
-      fontWeight: '900',
+      fontWeight: "900",
       letterSpacing: 0,
-      lineHeight: 25
+      lineHeight: 25,
     },
     input: {
       backgroundColor: colors.field,
@@ -932,74 +1124,86 @@ function createStyles(colors: AppPalette) {
       fontSize: 15,
       letterSpacing: 0,
       minHeight: 46,
-      paddingHorizontal: spacing.md
+      paddingHorizontal: spacing.md,
     },
     itemContent: {
       flex: 1,
       gap: spacing.xs,
-      paddingRight: spacing.sm
+      paddingRight: spacing.sm,
     },
     itemList: {
-      gap: spacing.sm
+      gap: spacing.sm,
     },
     itemMeta: {
       color: colors.textMuted,
       fontSize: 12,
       letterSpacing: 0,
-      lineHeight: 17
+      lineHeight: 17,
     },
     itemName: {
       color: colors.text,
       fontSize: 14,
-      fontWeight: '800',
+      fontWeight: "800",
       letterSpacing: 0,
-      lineHeight: 19
+      lineHeight: 19,
     },
     itemRow: {
-      alignItems: 'center',
+      alignItems: "center",
       backgroundColor: colors.card,
       borderColor: colors.border,
       borderRadius: radii.control,
       borderWidth: 1,
       borderLeftWidth: 4,
-      flexDirection: 'row',
+      flexDirection: "row",
       gap: spacing.sm,
       minHeight: 60,
       paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm
+      paddingVertical: spacing.sm,
     },
     moduleGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: spacing.sm
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: spacing.sm,
     },
     modulePill: {
       borderRadius: 999,
-      overflow: 'hidden',
+      overflow: "hidden",
       paddingHorizontal: spacing.sm,
-      paddingVertical: 6
+      paddingVertical: 6,
     },
     modulePillText: {
       fontSize: 11,
-      fontWeight: '900',
-      letterSpacing: 0
+      fontWeight: "900",
+      letterSpacing: 0,
     },
     multilineInput: {
       minHeight: 92,
       paddingTop: spacing.sm,
-      textAlignVertical: 'top'
+      textAlignVertical: "top",
+    },
+    modalFooter: {
+      flexDirection: "row",
+      gap: spacing.sm,
+    },
+    modalFooterButton: {
+      flex: 1,
     },
     panelAccent: {
       borderRadius: 999,
-      height: 6
+      height: 6,
+    },
+    panelActions: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.xs,
     },
     searchBlock: {
-      alignItems: 'center',
+      alignItems: "center",
       borderRadius: radii.control,
-      flexDirection: 'row',
+      flexDirection: "row",
       gap: spacing.sm,
       paddingHorizontal: spacing.sm,
-      paddingVertical: spacing.xs
+      paddingVertical: spacing.xs,
     },
     searchInput: {
       color: colors.text,
@@ -1007,32 +1211,26 @@ function createStyles(colors: AppPalette) {
       fontSize: 15,
       letterSpacing: 0,
       minHeight: 40,
-      paddingHorizontal: spacing.xs
+      paddingHorizontal: spacing.xs,
     },
     sectionTitle: {
       color: colors.text,
       fontSize: 15,
-      fontWeight: '900',
-      letterSpacing: 0
+      fontWeight: "900",
+      letterSpacing: 0,
     },
     smallRow: {
       backgroundColor: colors.cardMuted,
       borderRadius: radii.control,
       gap: spacing.xs,
-      padding: spacing.md
+      padding: spacing.md,
     },
     subSection: {
       gap: spacing.sm,
-      marginTop: spacing.sm
+      marginTop: spacing.sm,
     },
     warningRow: {
-      backgroundColor: colors.warningSoft
-    }
+      backgroundColor: colors.warningSoft,
+    },
   });
 }
-
-const staticStyles = StyleSheet.create({
-  inlineButton: {
-    alignSelf: 'flex-start'
-  }
-});
