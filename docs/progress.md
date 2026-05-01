@@ -1785,3 +1785,40 @@
 ### Nastepny krok
 
 - Po ponownym podlaczeniu telefonu wgrac APK/dev build i sprawdzic: `Menu` -> `Wyloguj` -> ekran logowania bez bialego ekranu.
+
+## 2026-05-01 - Potwierdzona naprawa wylogowania na telefonie
+
+### Zakres
+
+- Usunieto konflikt routingu Expo Router:
+  - ekran logowania zostal przeniesiony na osobna trase `app/login.tsx`,
+  - `app/index.tsx` jest teraz lekka bramka startowa kierujaca do `/login` albo `/(tabs)`,
+  - po wylogowaniu zakladki kieruja do jednoznacznego `/login`, a nie do konfliktowego `/`.
+- Potwierdzono, ze poprzedni bialy ekran/spinner po wylogowaniu wynikaly z konfliktu `app/index.tsx` oraz `app/(tabs)/index.tsx`, bo obie trasy mapowaly sie do `/`.
+
+### Pliki
+
+- `apps/mobile/app/index.tsx`
+- `apps/mobile/app/login.tsx`
+- `apps/mobile/app/(tabs)/_layout.tsx`
+- `apps/mobile/app/(tabs)/wiecej.tsx`
+- `docs/progress.md`
+
+### Testy
+
+- `pnpm.cmd --filter @homeapp/mobile typecheck` - OK.
+- `pnpm.cmd --filter @homeapp/mobile lint` - OK.
+- `scripts/build-mobile-release-apk.cmd -ApiUrl 'http://192.168.100.109:3000/api'` - OK.
+- `adb install -r builds\homeapp-release.apk` - OK.
+- Telefon `EHT7N19507003187`: logowanie `moskit17@gmail.com` - OK, ekran `Dzisiaj` widoczny.
+- Telefon `EHT7N19507003187`: `Menu` -> `Wyloguj` - OK, aplikacja wraca do ekranu `Witaj ponownie` bez bialego ekranu i bez `Wracam do logowania...`.
+- `adb logcat` po wylogowaniu - brak fatalnego bledu React Native / AndroidRuntime zwiazanego z aplikacja.
+
+### Artefakty
+
+- Aktualny APK: `builds/homeapp-release.apk`.
+- Stemplowany APK: `builds/homeapp-release-20260501-1510.apk`.
+
+### Nastepny krok
+
+- Kontynuowac przebudowe UX modulow: widoki maja pokazywac zapisane dane, a dodawanie/edycja powinny otwierac modal z przyciskow akcji w naglowkach.
