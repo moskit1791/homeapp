@@ -1,11 +1,14 @@
-import { BadRequestException } from '@nestjs/common';
-import { ValidationError } from 'class-validator';
+import { BadRequestException } from "@nestjs/common";
+import { ValidationError } from "class-validator";
+import { translateValidationMessage } from "./api-error-messages";
 
-export function createValidationException(errors: ValidationError[]): BadRequestException {
+export function createValidationException(
+  errors: ValidationError[],
+): BadRequestException {
   return new BadRequestException({
-    code: 'VALIDATION_ERROR',
+    code: "VALIDATION_ERROR",
     details: flattenValidationErrors(errors),
-    message: 'Validation failed'
+    message: "Dane sa nieprawidlowe.",
   });
 }
 
@@ -16,13 +19,17 @@ export interface ValidationErrorDetail {
 
 function flattenValidationErrors(
   errors: ValidationError[],
-  parentPath = ''
+  parentPath = "",
 ): ValidationErrorDetail[] {
   const details: ValidationErrorDetail[] = [];
 
   for (const error of errors) {
-    const field = parentPath ? `${parentPath}.${error.property}` : error.property;
-    const messages = Object.values(error.constraints ?? {});
+    const field = parentPath
+      ? `${parentPath}.${error.property}`
+      : error.property;
+    const messages = Object.values(error.constraints ?? {}).map((message) =>
+      translateValidationMessage(message, field),
+    );
 
     if (messages.length > 0) {
       details.push({ field, messages });

@@ -1,4 +1,11 @@
-import { PropsWithChildren, createContext, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  PropsWithChildren,
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import {
   ApiError,
   CreateHouseholdRequest,
@@ -11,15 +18,15 @@ import {
   loginWithGoogle,
   register,
   refreshSession,
-  verifyEmail
-} from '../api';
+  verifyEmail,
+} from "../api";
 import {
   clearRememberedEmail,
   clearStoredSession,
   loadStoredSession,
   saveRememberedEmail,
-  saveStoredSession
-} from './secure-session-store';
+  saveStoredSession,
+} from "./secure-session-store";
 
 interface Session {
   accessToken: string;
@@ -28,7 +35,7 @@ interface Session {
   refreshTokenExpiresAt: string;
 }
 
-type SessionStatus = 'checking' | 'signed-out' | 'needs-household' | 'ready';
+type SessionStatus = "checking" | "signed-out" | "needs-household" | "ready";
 
 interface SignInOptions {
   remember?: boolean;
@@ -37,21 +44,26 @@ interface SignInOptions {
 interface SessionContextValue {
   createFirstHousehold: (input: CreateHouseholdRequest) => Promise<void>;
   isAuthenticated: boolean;
-  logout: () => void;
-  registerAndSignIn: (input: RegisterRequest, options?: SignInOptions) => Promise<void>;
+  logout: () => Promise<void>;
+  registerAndSignIn: (
+    input: RegisterRequest,
+    options?: SignInOptions,
+  ) => Promise<void>;
   session: Session | null;
   signIn: (input: LoginRequest, options?: SignInOptions) => Promise<void>;
   signInWithGoogle: (idToken: string, options?: SignInOptions) => Promise<void>;
   status: SessionStatus;
 }
 
-const SessionContext = createContext<SessionContextValue | undefined>(undefined);
+const SessionContext = createContext<SessionContextValue | undefined>(
+  undefined,
+);
 const accessTokenRefreshLeadMs = 60_000;
 
 export function SessionProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<Session | null>(null);
   const [rememberSession, setRememberSession] = useState(false);
-  const [status, setStatus] = useState<SessionStatus>('checking');
+  const [status, setStatus] = useState<SessionStatus>("checking");
 
   useEffect(() => {
     let active = true;
@@ -64,7 +76,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       }
 
       if (!storedSession) {
-        setStatus('signed-out');
+        setStatus("signed-out");
         return;
       }
 
@@ -73,12 +85,14 @@ export function SessionProvider({ children }: PropsWithChildren) {
 
         if (isRefreshTokenExpired(nextSession)) {
           await clearStoredSession();
-          setStatus('signed-out');
+          setStatus("signed-out");
           return;
         }
 
         if (shouldRefreshAccessToken(nextSession)) {
-          nextSession = toSession(await refreshSession({ refreshToken: nextSession.refreshToken }));
+          nextSession = toSession(
+            await refreshSession({ refreshToken: nextSession.refreshToken }),
+          );
           await saveStoredSession(nextSession);
         }
 
@@ -87,12 +101,12 @@ export function SessionProvider({ children }: PropsWithChildren) {
         await getStartDashboard({ accessToken: nextSession.accessToken });
 
         if (active) {
-          setStatus('ready');
+          setStatus("ready");
         }
       } catch (error) {
         if (error instanceof ApiError && error.status === 403) {
           if (active) {
-            setStatus('needs-household');
+            setStatus("needs-household");
           }
           return;
         }
@@ -101,7 +115,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
 
         if (active) {
           setSession(null);
-          setStatus('signed-out');
+          setStatus("signed-out");
         }
       }
     }
@@ -119,13 +133,16 @@ export function SessionProvider({ children }: PropsWithChildren) {
     }
 
     let active = true;
-    const refreshAt = Date.parse(session.accessTokenExpiresAt) - accessTokenRefreshLeadMs;
+    const refreshAt =
+      Date.parse(session.accessTokenExpiresAt) - accessTokenRefreshLeadMs;
     const delay = Math.max(refreshAt - Date.now(), 1_000);
 
     const timeout = setTimeout(() => {
       void (async () => {
         try {
-          const nextSession = toSession(await refreshSession({ refreshToken: session.refreshToken }));
+          const nextSession = toSession(
+            await refreshSession({ refreshToken: session.refreshToken }),
+          );
 
           if (!active) {
             return;
@@ -142,7 +159,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
           if (active) {
             setSession(null);
             setRememberSession(false);
-            setStatus('signed-out');
+            setStatus("signed-out");
           }
         }
       })();
@@ -158,36 +175,39 @@ export function SessionProvider({ children }: PropsWithChildren) {
     () => ({
       createFirstHousehold: async (input) => {
         if (!session) {
-          throw new Error('Brak aktywnej sesji');
+          throw new Error("Brak aktywnej sesji");
         }
 
         await createHousehold(input, { accessToken: session.accessToken });
-        setStatus('ready');
+        setStatus("ready");
       },
       isAuthenticated: Boolean(session),
-      logout: () => {
-        void clearStoredSession();
-        setSession(null);
-        setRememberSession(false);
-        setStatus('signed-out');
+      logout: async () => {
+        try {
+          await clearStoredSession();
+        } finally {
+          setSession(null);
+          setRememberSession(false);
+          setStatus("signed-out");
+        }
       },
       registerAndSignIn: async (input, options) => {
         const registration = await register(input);
 
         if (registration.devVerificationToken) {
-          await verifyEmail(
-            {
-              email: input.email,
-              token: registration.devVerificationToken
-            }
-          );
+          await verifyEmail({
+            email: input.email,
+            token: registration.devVerificationToken,
+          });
         } else {
-          throw new Error('Konto utworzone. Sprawdź e-mail, aby zweryfikować adres przed logowaniem.');
+          throw new Error(
+            "Konto utworzone. Sprawdź e-mail, aby zweryfikować adres przed logowaniem.",
+          );
         }
 
         const nextSession = await login({
           email: input.email,
-          password: input.password
+          password: input.password,
         });
         const authSession = toSession(nextSession);
         setSession(authSession);
@@ -201,7 +221,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
           await clearRememberedEmail();
         }
 
-        setStatus('needs-household');
+        setStatus("needs-household");
       },
       session,
       signIn: async (input, options) => {
@@ -221,10 +241,10 @@ export function SessionProvider({ children }: PropsWithChildren) {
 
         try {
           await getStartDashboard({ accessToken: authSession.accessToken });
-          setStatus('ready');
+          setStatus("ready");
         } catch (error) {
           if (error instanceof ApiError && error.status === 403) {
-            setStatus('needs-household');
+            setStatus("needs-household");
             return;
           }
 
@@ -247,30 +267,34 @@ export function SessionProvider({ children }: PropsWithChildren) {
 
         try {
           await getStartDashboard({ accessToken: authSession.accessToken });
-          setStatus('ready');
+          setStatus("ready");
         } catch (error) {
           if (error instanceof ApiError && error.status === 403) {
-            setStatus('needs-household');
+            setStatus("needs-household");
             return;
           }
 
           throw error;
         }
       },
-      status
+      status,
     }),
-    [session, status]
+    [session, status],
   );
 
-  return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
+  return (
+    <SessionContext.Provider value={value}>{children}</SessionContext.Provider>
+  );
 }
 
 function toSession(response: LoginResponse): Session {
   return {
     accessToken: response.accessToken,
-    accessTokenExpiresAt: new Date(Date.now() + response.expiresIn * 1000).toISOString(),
+    accessTokenExpiresAt: new Date(
+      Date.now() + response.expiresIn * 1000,
+    ).toISOString(),
     refreshToken: response.refreshToken,
-    refreshTokenExpiresAt: response.refreshTokenExpiresAt
+    refreshTokenExpiresAt: response.refreshTokenExpiresAt,
   };
 }
 
@@ -282,14 +306,20 @@ function normalizeStoredSession(session: {
 }): Session {
   return {
     accessToken: session.accessToken,
-    accessTokenExpiresAt: session.accessTokenExpiresAt ?? new Date(0).toISOString(),
+    accessTokenExpiresAt:
+      session.accessTokenExpiresAt ?? new Date(0).toISOString(),
     refreshToken: session.refreshToken,
-    refreshTokenExpiresAt: session.refreshTokenExpiresAt ?? new Date(Date.now() + 2_592_000_000).toISOString()
+    refreshTokenExpiresAt:
+      session.refreshTokenExpiresAt ??
+      new Date(Date.now() + 2_592_000_000).toISOString(),
   };
 }
 
 function shouldRefreshAccessToken(session: Session): boolean {
-  return Date.parse(session.accessTokenExpiresAt) - Date.now() <= accessTokenRefreshLeadMs;
+  return (
+    Date.parse(session.accessTokenExpiresAt) - Date.now() <=
+    accessTokenRefreshLeadMs
+  );
 }
 
 function isRefreshTokenExpired(session: Session): boolean {
@@ -300,7 +330,7 @@ export function useSession() {
   const context = useContext(SessionContext);
 
   if (!context) {
-    throw new Error('useSession must be used inside SessionProvider');
+    throw new Error("useSession must be used inside SessionProvider");
   }
 
   return context;

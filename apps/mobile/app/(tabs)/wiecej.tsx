@@ -1,5 +1,6 @@
 import type { ModuleKey } from "@homeapp/shared-types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "expo-router";
 import { ReactNode, useState } from "react";
 import { StyleSheet, Text, TextInput, View } from "react-native";
 import {
@@ -60,12 +61,23 @@ const visibleModules: ModuleKey[] = [
 
 export default function WiecejScreen() {
   const { logout, session } = useSession();
+  const queryClient = useQueryClient();
+  const router = useRouter();
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
   const accessToken = session?.accessToken;
   const permissionsQuery = usePermissions();
   const householdPermission = useModulePermission("household_members");
   const permissionsPermission = useModulePermission("permissions");
+
+  async function handleLogout() {
+    try {
+      queryClient.clear();
+      await logout();
+    } finally {
+      router.replace("/" as never);
+    }
+  }
 
   return (
     <AppScreen
@@ -102,7 +114,7 @@ export default function WiecejScreen() {
         permissions={permissionsQuery.data}
       />
 
-      <TechPanel accessToken={accessToken} onLogout={logout} />
+      <TechPanel accessToken={accessToken} onLogout={handleLogout} />
     </AppScreen>
   );
 }

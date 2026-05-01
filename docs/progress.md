@@ -1746,3 +1746,42 @@
 
 - Zaprojektowac i wdrozyc wspolny `QuickAddSheet` oraz przebudowac Start na centrum pracy zamiast kolekcji duzych kart.
 - Po ponownym pojawieniu sie telefonu w ADB wgrac `builds/homeapp-release.apk` i sprawdzic dolna nawigacje oraz przycisk `Menu`.
+
+## 2026-05-01 - Naprawa wylogowania i polskie bledy API
+
+### Zakres
+
+- Naprawiono wylogowanie z ekranu `Wiecej/Menu`:
+  - `logout` jest teraz asynchroniczny i ustawia stan `signed-out` nawet jesli czyszczenie storage rzuci blad,
+  - akcja wylogowania czysci cache TanStack Query,
+  - po wylogowaniu aplikacja jawnie robi `router.replace('/')`, zeby nie zostac na ukrytej trasie `/(tabs)/wiecej`.
+- Dodano centralne tlumaczenie odpowiedzi bledow backendu:
+  - globalny filtr wyjatkow tlumaczy `message`,
+  - detale walidacji sa tlumaczone na polski,
+  - kody techniczne (`code`, `statusCode`) zostaja stabilne.
+
+### Pliki
+
+- `apps/mobile/src/session/session-context.tsx`
+- `apps/mobile/app/(tabs)/wiecej.tsx`
+- `apps/api/src/shared/http/api-error-messages.ts`
+- `apps/api/src/shared/http/api-exception.filter.ts`
+- `apps/api/src/shared/http/validation-exception.factory.ts`
+- `apps/api/src/shared/http/api-exception.filter.spec.ts`
+- `docs/progress.md`
+
+### Testy
+
+- `pnpm.cmd --filter @homeapp/mobile typecheck` - OK.
+- `pnpm.cmd --filter @homeapp/mobile lint` - OK.
+- `pnpm.cmd --filter @homeapp/api typecheck` - OK.
+- `pnpm.cmd --filter @homeapp/api lint` - OK.
+- `pnpm.cmd --filter @homeapp/api test` - OK, 20 testow.
+
+### Blokery
+
+- Telefon nie jest aktualnie widoczny w ADB (`adb devices` zwraca pusta liste), wiec nie potwierdzono jeszcze klikniecia `Wyloguj` na fizycznym urzadzeniu.
+
+### Nastepny krok
+
+- Po ponownym podlaczeniu telefonu wgrac APK/dev build i sprawdzic: `Menu` -> `Wyloguj` -> ekran logowania bez bialego ekranu.
