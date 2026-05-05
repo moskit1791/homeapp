@@ -13,6 +13,7 @@ import { HouseholdsModule } from './modules/households/households.module';
 import { InvitationsModule } from './modules/invitations/invitations.module';
 import { MealPlannerModule } from './modules/meal-planner/meal-planner.module';
 import { NotesModule } from './modules/notes/notes.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { PermissionsModule } from './modules/permissions/permissions.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 import { ShoppingModule } from './modules/shopping/shopping.module';
@@ -34,6 +35,7 @@ import { UsersModule } from './modules/users/users.module';
     CalendarModule,
     TodoModule,
     NotesModule,
+    NotificationsModule,
     ShoppingModule,
     CleaningModule,
     AnnualCostsModule,

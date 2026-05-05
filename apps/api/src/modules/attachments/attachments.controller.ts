@@ -9,19 +9,27 @@ import {
   Post,
   Query,
   UnauthorizedException,
+  UploadedFile,
+  UseInterceptors,
   UseGuards
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentHousehold } from '../../shared/decorators/current-household.decorator';
 import { HouseholdContext } from '../../shared/request-context';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { HouseholdContextGuard } from '../households/guards/household-context.guard';
 import { RequirePermission } from '../permissions/decorators/require-permission.decorator';
 import { PermissionGuard } from '../permissions/guards/permission.guard';
-import { AttachmentsService } from './attachments.service';
+import {
+  AttachmentsService,
+  MAX_ATTACHMENT_UPLOAD_BYTES,
+  type UploadedAttachmentFile
+} from './attachments.service';
 import {
   AttachmentIdParamDto,
   CreateAttachmentDto,
   CreateAttachmentUploadUrlDto,
+  LocalAttachmentUploadDto,
   ListAttachmentsDto,
   UpdateAttachmentDto
 } from './dto/attachments.dto';
@@ -52,6 +60,25 @@ export class AttachmentsController {
     return this.attachmentsService.createUploadContract(
       this.requireHousehold(household).householdId,
       dto
+    );
+  }
+
+  @Post('local-upload')
+  @RequirePermission('attachments', 'create')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: MAX_ATTACHMENT_UPLOAD_BYTES }
+    })
+  )
+  uploadLocalAttachment(
+    @CurrentHousehold() household: HouseholdContext | undefined,
+    @Body() dto: LocalAttachmentUploadDto,
+    @UploadedFile() file: UploadedAttachmentFile | undefined
+  ) {
+    return this.attachmentsService.storeLocalUpload(
+      this.requireHousehold(household).householdId,
+      dto,
+      file
     );
   }
 

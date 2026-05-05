@@ -48,6 +48,15 @@ export class CreateAttachmentDto {
   caption?: string;
 }
 
+export class LocalAttachmentUploadDto {
+  @IsString()
+  @Length(1, 1000)
+  storagePath!: string;
+
+  @IsIn([...ATTACHMENT_MIME_TYPES])
+  mimeType!: AttachmentMimeType;
+}
+
 export class UpdateAttachmentDto {
   @IsOptional()
   @IsString()

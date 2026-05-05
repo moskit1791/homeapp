@@ -5,7 +5,8 @@ import { Component, PropsWithChildren, ReactNode, useEffect, useState } from 're
 import { StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { SessionProvider } from '../src/session/session-context';
+import { registerForPushNotifications } from '../src/notifications/register-push-notifications';
+import { SessionProvider, useSession } from '../src/session/session-context';
 import { spacing } from '../src/theme/tokens';
 import { useAppTheme, type AppPalette } from '../src/theme/use-app-theme';
 
@@ -22,6 +23,7 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <RootErrorBoundary>
           <SessionProvider>
+            <PushNotificationBootstrap />
             <StatusBar style={theme.isDark ? 'light' : 'dark'} />
             <Stack screenOptions={{ headerShown: false }} />
           </SessionProvider>
@@ -29,6 +31,22 @@ export default function RootLayout() {
       </SafeAreaProvider>
     </QueryClientProvider>
   );
+}
+
+function PushNotificationBootstrap() {
+  const { session, status } = useSession();
+
+  useEffect(() => {
+    if (status !== 'ready' || !session?.accessToken) {
+      return;
+    }
+
+    registerForPushNotifications(session.accessToken).catch((error: unknown) => {
+      console.warn('Push notification registration failed', error);
+    });
+  }, [session?.accessToken, status]);
+
+  return null;
 }
 
 interface RootErrorBoundaryState {

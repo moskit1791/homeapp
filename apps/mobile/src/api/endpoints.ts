@@ -1,9 +1,12 @@
+import { buildApiUrl, getApiBaseUrl } from './config';
+import { createApiErrorFromResponse } from './errors';
 import { apiRequest } from './request';
 import type {
   AnnualCost,
   AnnualCostCompletion,
   AnnualCostHistory,
   Attachment,
+  AttachmentUploadContract,
   BudgetCategory,
   BudgetItem,
   BudgetItemSummary,
@@ -15,6 +18,7 @@ import type {
   CompleteCleaningTaskRequest,
   CopyMealPlanRequest,
   CreateAnnualCostRequest,
+  CreateAttachmentUploadUrlRequest,
   CreateAttachmentRequest,
   CreateBudgetCategoryRequest,
   CreateBudgetItemRequest,
@@ -41,6 +45,7 @@ import type {
   GoogleLoginRequest,
   Income,
   IncomeSummary,
+  LocalAttachmentUploadResponse,
   LoginRequest,
   LoginResponse,
   MealIdea,
@@ -52,13 +57,17 @@ import type {
   Note,
   OkResponse,
   PatchMemberPermissionsRequest,
+  PushSendResult,
+  PushToken,
   RegisterRequest,
+  RegisterPushTokenRequest,
   RegisterResponse,
   RefreshTokenRequest,
   ResendVerificationRequest,
   ResendVerificationResponse,
   ResetPasswordRequest,
   ResetPasswordResponse,
+  SendTestPushRequest,
   ShoppingItem,
   ShoppingList,
   ShoppingListType,
@@ -69,6 +78,7 @@ import type {
   UpdateNoteRequest,
   UpdateShoppingItemRequest,
   UpdateTodoItemRequest,
+  UploadAttachmentFileRequest,
   UpsertIncomeRequest,
   VerifyEmailRequest,
   VerifyEmailResponse
@@ -213,6 +223,34 @@ export function getMyPermissions(options?: ApiCallOptionsInput): Promise<Effecti
 
   return apiRequest<EffectivePermission[]>('/households/me/permissions', {
     accessToken: requestOptions.accessToken,
+    signal: requestOptions.signal
+  });
+}
+
+export function registerPushToken(
+  input: RegisterPushTokenRequest,
+  options?: ApiCallOptionsInput
+): Promise<PushToken> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<PushToken, RegisterPushTokenRequest>('/notifications/push-tokens', {
+    accessToken: requestOptions.accessToken,
+    body: input,
+    method: 'POST',
+    signal: requestOptions.signal
+  });
+}
+
+export function sendTestPush(
+  input: SendTestPushRequest = {},
+  options?: ApiCallOptionsInput
+): Promise<PushSendResult> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<PushSendResult, SendTestPushRequest>('/notifications/test-push', {
+    accessToken: requestOptions.accessToken,
+    body: input,
+    method: 'POST',
     signal: requestOptions.signal
   });
 }
@@ -835,6 +873,60 @@ export function listAttachments(
   });
 }
 
+export function createAttachmentUploadUrl(
+  input: CreateAttachmentUploadUrlRequest,
+  options?: ApiCallOptionsInput
+): Promise<AttachmentUploadContract> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<AttachmentUploadContract, CreateAttachmentUploadUrlRequest>(
+    '/attachments/upload-url',
+    {
+      accessToken: requestOptions.accessToken,
+      body: input,
+      method: 'POST',
+      signal: requestOptions.signal
+    }
+  );
+}
+
+export async function uploadAttachmentFile(
+  input: UploadAttachmentFileRequest,
+  options?: ApiCallOptionsInput
+): Promise<LocalAttachmentUploadResponse> {
+  const requestOptions = normalizeApiCallOptions(options);
+  const formData = new FormData();
+
+  formData.append('storagePath', input.storagePath);
+  formData.append('mimeType', input.mimeType);
+  formData.append('file', {
+    name: input.fileName,
+    type: input.mimeType,
+    uri: input.fileUri
+  } as unknown as Blob);
+
+  const headers: Record<string, string> = {
+    Accept: 'application/json'
+  };
+
+  if (requestOptions.accessToken) {
+    headers.Authorization = `Bearer ${requestOptions.accessToken}`;
+  }
+
+  const response = await fetch(buildAttachmentUploadUrl(input.uploadUrl), {
+    body: formData,
+    headers,
+    method: 'POST',
+    signal: requestOptions.signal
+  });
+
+  if (!response.ok) {
+    throw await createApiErrorFromResponse(response);
+  }
+
+  return readJsonResponse<LocalAttachmentUploadResponse>(response);
+}
+
 export function createAttachmentRecord(
   input: CreateAttachmentRequest,
   options?: ApiCallOptionsInput
@@ -921,6 +1013,28 @@ export function deleteShoppingItem(id: string, options?: ApiCallOptionsInput): P
     method: 'DELETE',
     signal: requestOptions.signal
   });
+}
+
+function buildAttachmentUploadUrl(uploadUrl: string): string {
+  if (/^https?:\/\//i.test(uploadUrl)) {
+    return uploadUrl;
+  }
+
+  if (uploadUrl.startsWith('/api/')) {
+    return `${getApiBaseUrl().replace(/\/api$/, '')}${uploadUrl}`;
+  }
+
+  return buildApiUrl(uploadUrl);
+}
+
+async function readJsonResponse<TResponse>(response: Response): Promise<TResponse> {
+  const text = await response.text();
+
+  if (!text) {
+    return undefined as TResponse;
+  }
+
+  return JSON.parse(text) as TResponse;
 }
 
 function normalizeApiCallOptions(options: ApiCallOptionsInput): ApiCallOptions {

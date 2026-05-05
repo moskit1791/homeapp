@@ -1,36 +1,35 @@
 import type { ModuleKey } from "@homeapp/shared-types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ReactNode, useEffect, useMemo, useState } from "react";
-import { StyleSheet, Text, TextInput, View } from "react-native";
+import * as ImagePicker from "expo-image-picker";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import {
-  CalendarClock,
-  Check,
-  FileText,
-  RefreshCcw,
-  Search,
-  Sparkles,
-  Trash2,
-} from "../../src/ui/icon";
-import {
-  queryKeys,
+  completeAnnualCost,
+  completeCleaningTask,
   createAnnualCost,
   createAttachmentRecord,
+  createAttachmentUploadUrl,
   createCleaningTask,
   createDataEntry,
   deleteDataEntry,
-  completeAnnualCost,
-  completeCleaningTask,
+  getMyHousehold,
+  inviteHouseholdMember,
   listAnnualCostHistory,
   listAnnualCosts,
   listAttachments,
   listCleaningTasks,
   listDataEntries,
+  listHouseholdMembers,
+  queryKeys,
+  removeHouseholdMember,
+  uploadAttachmentFile,
   type AnnualCost,
   type Attachment,
   type CleaningTask,
   type DataEntry,
+  type HouseholdMember,
 } from "../../src/api";
-import { usePermissions } from "../../src/permissions/use-permissions";
+import { useModulePermission, usePermissions } from "../../src/permissions/use-permissions";
 import { useSession } from "../../src/session/session-context";
 import { radii, spacing } from "../../src/theme/tokens";
 import { useAppTheme, type AppPalette } from "../../src/theme/use-app-theme";
@@ -41,36 +40,85 @@ import {
   IconButton,
   InlineAlert,
   QueryState,
-  SectionCard,
-  SegmentedControl,
 } from "../../src/ui";
+import {
+  AccountCircle,
+  Broom,
+  ChartBar,
+  Check,
+  ChevronRight,
+  Cog,
+  Database,
+  FileText,
+  Folder,
+  RefreshCcw,
+  Trash2,
+  Users,
+} from "../../src/ui/icon";
 
 type HomeSegment = "cleaning" | "annual_costs" | "data_entries" | "attachments";
+type ImageAttachmentMimeType = Extract<Attachment["mimeType"], "image/jpeg" | "image/png" | "image/webp">;
+
+type PickedAttachmentPhoto = {
+  fileName: string;
+  fileSize?: number;
+  mimeType: ImageAttachmentMimeType;
+  uri: string;
+};
+
+const imageAttachmentMimeTypes = ["image/jpeg", "image/png", "image/webp"] as const;
 
 type Accent = {
   color: string;
   soft: string;
 };
 
-const segments: Array<{ label: string; value: HomeSegment }> = [
-  { label: "Sprzątanie", value: "cleaning" },
-  { label: "Koszty", value: "annual_costs" },
-  { label: "Dane", value: "data_entries" },
-  { label: "Pliki", value: "attachments" },
+const moduleTiles: Array<{
+  description: string;
+  label: string;
+  moduleKey: ModuleKey;
+  title: string;
+  value: HomeSegment;
+}> = [
+  {
+    description: "Plan zadań i harmonogram sprzątania",
+    label: "Sprzątanie",
+    moduleKey: "cleaning",
+    title: "Sprzątanie",
+    value: "cleaning",
+  },
+  {
+    description: "Przegląd i analiza wydatków rocznych",
+    label: "Koszty",
+    moduleKey: "annual_costs",
+    title: "Koszty roczne",
+    value: "annual_costs",
+  },
+  {
+    description: "Eksport, kopie zapasowe i dane",
+    label: "Dane",
+    moduleKey: "data_entries",
+    title: "Dane",
+    value: "data_entries",
+  },
+  {
+    description: "Dokumenty i rachunki w jednym miejscu",
+    label: "Pliki",
+    moduleKey: "attachments",
+    title: "Pliki",
+    value: "attachments",
+  },
 ];
 
 export default function DomScreen() {
-  const { session } = useSession();
   const permissionsQuery = usePermissions();
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
   const [activeSegment, setActiveSegment] = useState<HomeSegment>("cleaning");
-  const accessToken = session?.accessToken;
-
-  const availableSegments = useMemo(
+  const availableTiles = useMemo(
     () =>
-      segments.filter((segment) =>
-        hasReadPermission(permissionsQuery.data, segment.value),
+      moduleTiles.filter((tile) =>
+        permissionsQuery.data?.find((permission) => permission.moduleKey === tile.moduleKey)?.canRead,
       ),
     [permissionsQuery.data],
   );
@@ -78,16 +126,12 @@ export default function DomScreen() {
   useEffect(() => {
     if (
       permissionsQuery.isSuccess &&
-      availableSegments.length > 0 &&
-      !availableSegments.some((segment) => segment.value === activeSegment)
+      availableTiles.length > 0 &&
+      !availableTiles.some((tile) => tile.value === activeSegment)
     ) {
-      const firstSegment = availableSegments[0];
-
-      if (firstSegment) {
-        setActiveSegment(firstSegment.value);
-      }
+      setActiveSegment(availableTiles[0]!.value);
     }
-  }, [activeSegment, availableSegments, permissionsQuery.isSuccess]);
+  }, [activeSegment, availableTiles, permissionsQuery.isSuccess]);
 
   if (permissionsQuery.isLoading) {
     return (
@@ -97,86 +141,112 @@ export default function DomScreen() {
     );
   }
 
-  if (permissionsQuery.isSuccess && availableSegments.length === 0) {
-    return (
-      <AppScreen title="Dom">
-        <InlineAlert
-          tone="info"
-          text="Nie masz uprawnienia do żadnego modułu domowego."
-        />
-      </AppScreen>
-    );
-  }
-
   return (
     <AppScreen
-      subtitle="Sprzątanie, koszty, dane i pliki w czytelnych sekcjach."
+      actions={
+        <View style={styles.avatar}>
+          <AccountCircle color={theme.colors.text} size={27} />
+        </View>
+      }
+      subtitle="Zarządzaj swoim domem"
       title="Dom"
     >
-      <View style={styles.hero}>
-        <View style={styles.heroIcon}>
-          <Sparkles color={theme.colors.primary} size={23} />
+      {availableTiles.length === 0 ? (
+        <InlineAlert text="Nie masz dostępu do modułów domowych." />
+      ) : (
+        <View style={styles.moduleGrid}>
+          {availableTiles.map((tile) => (
+            <ModuleTile
+              active={tile.value === activeSegment}
+              description={tile.description}
+              key={tile.value}
+              segment={tile.value}
+              title={tile.title}
+              onPress={() => setActiveSegment(tile.value)}
+            />
+          ))}
         </View>
-        <View style={styles.heroContent}>
-          <Text style={styles.heroKicker}>Centrum domu</Text>
-          <Text style={styles.heroTitle}>
-            Wybierz obszar i dopisz to, co ma nie zginąć.
-          </Text>
-          <View style={styles.moduleGrid}>
-            {(availableSegments.length ? availableSegments : segments).map(
-              (segment) => (
-                <ModulePill
-                  active={segment.value === activeSegment}
-                  colors={theme.colors}
-                  key={segment.value}
-                  segment={segment.value}
-                  text={segment.label}
-                />
-              ),
-            )}
-          </View>
-        </View>
-      </View>
+      )}
 
-      <SegmentedControl
-        onChange={setActiveSegment}
-        options={availableSegments.length ? availableSegments : segments}
-        value={activeSegment}
-      />
+      {availableTiles.length > 0 ? <ActiveModule segment={activeSegment} /> : null}
 
-      {activeSegment === "cleaning" ? (
-        <CleaningPanel accessToken={accessToken} />
-      ) : null}
-      {activeSegment === "annual_costs" ? (
-        <AnnualCostsPanel accessToken={accessToken} />
-      ) : null}
-      {activeSegment === "data_entries" ? (
-        <DataEntriesPanel accessToken={accessToken} />
-      ) : null}
-      {activeSegment === "attachments" ? (
-        <AttachmentsPanel accessToken={accessToken} />
-      ) : null}
+      <HouseholdCard />
+      <SettingsRow />
     </AppScreen>
   );
 }
 
-function CleaningPanel({ accessToken }: { accessToken?: string }) {
-  const queryClient = useQueryClient();
-  const permission = useModuleAccess("cleaning");
+function ModuleTile({
+  active,
+  description,
+  onPress,
+  segment,
+  title,
+}: {
+  active: boolean;
+  description: string;
+  onPress: () => void;
+  segment: HomeSegment;
+  title: string;
+}) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
+  const accent = getSegmentAccent(theme.colors, segment);
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.moduleTile,
+        active && { borderColor: accent.color, backgroundColor: accent.soft },
+        pressed && styles.pressed,
+      ]}
+    >
+      <View style={[styles.moduleIcon, { backgroundColor: accent.soft }]}>
+        {getSegmentIcon(segment, accent.color, 31)}
+      </View>
+      <Text style={styles.moduleTitle}>{title}</Text>
+      <Text numberOfLines={3} style={styles.moduleDescription}>
+        {description}
+      </Text>
+      <ChevronRight color={theme.colors.textMuted} size={18} />
+    </Pressable>
+  );
+}
+
+function ActiveModule({ segment }: { segment: HomeSegment }) {
+  if (segment === "cleaning") {
+    return <CleaningPanel />;
+  }
+
+  if (segment === "annual_costs") {
+    return <AnnualCostsPanel />;
+  }
+
+  if (segment === "data_entries") {
+    return <DataEntriesPanel />;
+  }
+
+  return <AttachmentsPanel />;
+}
+
+function CleaningPanel() {
+  const { session } = useSession();
+  const queryClient = useQueryClient();
+  const permission = useModulePermission("cleaning");
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+  const accessToken = session?.accessToken;
   const accent = getSegmentAccent(theme.colors, "cleaning");
   const [name, setName] = useState("");
   const [frequencyDays, setFrequencyDays] = useState("7");
   const [nextDueAt, setNextDueAt] = useState(todayIso());
-  const [createVisible, setCreateVisible] = useState(false);
-
+  const [modalVisible, setModalVisible] = useState(false);
   const tasksQuery = useQuery({
     enabled: permission.canRead && Boolean(accessToken),
     queryFn: () => listCleaningTasks({ accessToken }),
     queryKey: [...queryKeys.cleaning, "tasks"],
   });
-
   const createMutation = useMutation({
     mutationFn: () =>
       createCleaningTask(
@@ -191,46 +261,36 @@ function CleaningPanel({ accessToken }: { accessToken?: string }) {
       ),
     onSuccess: async () => {
       setName("");
-      setCreateVisible(false);
+      setModalVisible(false);
       await queryClient.invalidateQueries({ queryKey: queryKeys.cleaning });
     },
   });
-
   const completeMutation = useMutation({
     mutationFn: (id: string) =>
       completeCleaningTask(id, { completedAt: todayIso() }, { accessToken }),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: queryKeys.cleaning }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.cleaning }),
   });
-
   const tasks = tasksQuery.data ?? [];
-  const overdueCount = tasks.filter((task) => task.isOverdue).length;
-  const canAdd =
-    permission.canCreate && Boolean(name.trim()) && !createMutation.isPending;
+  const overdue = tasks.filter((task) => task.isOverdue).length;
+  const canAdd = permission.canCreate && Boolean(name.trim()) && !createMutation.isPending;
 
   return (
-    <Panel
+    <ModulePanel
+      accent={accent}
       action={
         permission.canCreate ? (
-          <ActionButton
-            onPress={() => setCreateVisible(true)}
-            size="small"
-            title="+ Dodaj"
-          />
+          <ActionButton onPress={() => setModalVisible(true)} size="small" title="+ Dodaj" />
         ) : undefined
       }
-      accent={accent}
-      icon={<Sparkles color={accent.color} size={18} />}
+      icon={<Broom color={accent.color} size={18} />}
       onRefresh={() => tasksQuery.refetch()}
-      subtitle={`${tasks.length} zadań / ${overdueCount} po terminie`}
+      subtitle={`${tasks.length} zadań / ${overdue} po terminie`}
       title="Sprzątanie"
     >
       <QueryState
         emptyText="Brak zadań sprzątania."
         error={tasksQuery.error}
-        isEmpty={
-          !tasksQuery.isLoading && !tasksQuery.error && tasks.length === 0
-        }
+        isEmpty={!tasksQuery.isLoading && tasks.length === 0}
         isLoading={tasksQuery.isLoading}
       />
       <View style={styles.itemList}>
@@ -249,7 +309,7 @@ function CleaningPanel({ accessToken }: { accessToken?: string }) {
         footer={
           <View style={styles.modalFooter}>
             <ActionButton
-              onPress={() => setCreateVisible(false)}
+              onPress={() => setModalVisible(false)}
               style={styles.modalFooterButton}
               title="Anuluj"
               variant="secondary"
@@ -263,10 +323,10 @@ function CleaningPanel({ accessToken }: { accessToken?: string }) {
             />
           </View>
         }
-        onClose={() => setCreateVisible(false)}
+        onClose={() => setModalVisible(false)}
         subtitle="Dodajesz cykliczne zadanie domowe z następnym terminem."
         title="Nowe zadanie sprzątania"
-        visible={createVisible}
+        visible={modalVisible}
       >
         <TextInput
           onChangeText={setName}
@@ -296,34 +356,33 @@ function CleaningPanel({ accessToken }: { accessToken?: string }) {
           <InlineAlert tone="error" text="Nie udało się dodać zadania." />
         ) : null}
       </FormModal>
-    </Panel>
+    </ModulePanel>
   );
 }
 
-function AnnualCostsPanel({ accessToken }: { accessToken?: string }) {
+function AnnualCostsPanel() {
+  const { session } = useSession();
   const queryClient = useQueryClient();
-  const permission = useModuleAccess("annual_costs");
+  const permission = useModulePermission("annual_costs");
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
+  const accessToken = session?.accessToken;
   const accent = getSegmentAccent(theme.colors, "annual_costs");
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
   const [nextDueDate, setNextDueDate] = useState(todayIso());
-  const [createVisible, setCreateVisible] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
   const year = new Date().getFullYear();
-
   const costsQuery = useQuery({
     enabled: permission.canRead && Boolean(accessToken),
     queryFn: () => listAnnualCosts({ accessToken }),
     queryKey: [...queryKeys.annualCosts, "items"],
   });
-
   const historyQuery = useQuery({
     enabled: permission.canRead && Boolean(accessToken),
     queryFn: () => listAnnualCostHistory(year, { accessToken }),
     queryKey: [...queryKeys.annualCosts, "history", year],
   });
-
   const createMutation = useMutation({
     mutationFn: () =>
       createAnnualCost(
@@ -337,11 +396,10 @@ function AnnualCostsPanel({ accessToken }: { accessToken?: string }) {
     onSuccess: async () => {
       setName("");
       setAmount("");
-      setCreateVisible(false);
+      setModalVisible(false);
       await queryClient.invalidateQueries({ queryKey: queryKeys.annualCosts });
     },
   });
-
   const completeMutation = useMutation({
     mutationFn: (cost: AnnualCost) =>
       completeAnnualCost(
@@ -352,41 +410,32 @@ function AnnualCostsPanel({ accessToken }: { accessToken?: string }) {
         },
         { accessToken },
       ),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: queryKeys.annualCosts }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.annualCosts }),
   });
-
   const costs = costsQuery.data ?? [];
   const history = historyQuery.data ?? [];
-  const canAdd =
-    permission.canCreate && Boolean(name.trim()) && !createMutation.isPending;
+  const canAdd = permission.canCreate && Boolean(name.trim()) && !createMutation.isPending;
 
   return (
-    <Panel
+    <ModulePanel
+      accent={accent}
       action={
         permission.canCreate ? (
-          <ActionButton
-            onPress={() => setCreateVisible(true)}
-            size="small"
-            title="+ Dodaj"
-          />
+          <ActionButton onPress={() => setModalVisible(true)} size="small" title="+ Dodaj" />
         ) : undefined
       }
-      accent={accent}
-      icon={<CalendarClock color={accent.color} size={18} />}
+      icon={<ChartBar color={accent.color} size={18} />}
       onRefresh={() => {
         costsQuery.refetch();
         historyQuery.refetch();
       }}
-      subtitle={`${costs.length} cyklicznych pozycji / ${history.length} wpisów w ${year}`}
+      subtitle={`${costs.length} kosztów / ${history.length} wpisów w ${year}`}
       title="Koszty roczne"
     >
       <QueryState
         emptyText="Brak kosztów rocznych."
         error={costsQuery.error}
-        isEmpty={
-          !costsQuery.isLoading && !costsQuery.error && costs.length === 0
-        }
+        isEmpty={!costsQuery.isLoading && costs.length === 0}
         isLoading={costsQuery.isLoading}
       />
       <View style={styles.itemList}>
@@ -401,24 +450,11 @@ function AnnualCostsPanel({ accessToken }: { accessToken?: string }) {
           />
         ))}
       </View>
-
-      {history.length > 0 ? (
-        <View style={styles.subSection}>
-          <Text style={styles.sectionTitle}>Historia {year}</Text>
-          {history.slice(0, 5).map((item) => (
-            <SmallRow
-              key={item.id}
-              meta={item.executedAt}
-              title={`${item.annualCostName} / ${formatMoney(item.amount)}`}
-            />
-          ))}
-        </View>
-      ) : null}
       <FormModal
         footer={
           <View style={styles.modalFooter}>
             <ActionButton
-              onPress={() => setCreateVisible(false)}
+              onPress={() => setModalVisible(false)}
               style={styles.modalFooterButton}
               title="Anuluj"
               variant="secondary"
@@ -432,10 +468,10 @@ function AnnualCostsPanel({ accessToken }: { accessToken?: string }) {
             />
           </View>
         }
-        onClose={() => setCreateVisible(false)}
-        subtitle="Dodajesz koszt cykliczny wraz z następnym terminem."
+        onClose={() => setModalVisible(false)}
+        subtitle="Dodajesz koszt cykliczny z następnym terminem."
         title="Nowy koszt roczny"
-        visible={createVisible}
+        visible={modalVisible}
       >
         <TextInput
           onChangeText={setName}
@@ -465,84 +501,67 @@ function AnnualCostsPanel({ accessToken }: { accessToken?: string }) {
           <InlineAlert tone="error" text="Nie udało się dodać kosztu." />
         ) : null}
       </FormModal>
-    </Panel>
+    </ModulePanel>
   );
 }
 
-function DataEntriesPanel({ accessToken }: { accessToken?: string }) {
+function DataEntriesPanel() {
+  const { session } = useSession();
   const queryClient = useQueryClient();
-  const permission = useModuleAccess("data_entries");
+  const permission = useModulePermission("data_entries");
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
+  const accessToken = session?.accessToken;
   const accent = getSegmentAccent(theme.colors, "data_entries");
   const [search, setSearch] = useState("");
   const [title, setTitle] = useState("");
   const [value, setValue] = useState("");
-  const [createVisible, setCreateVisible] = useState(false);
-
+  const [modalVisible, setModalVisible] = useState(false);
   const entriesQuery = useQuery({
     enabled: permission.canRead && Boolean(accessToken),
     queryFn: () => listDataEntries(search.trim() || undefined, { accessToken }),
     queryKey: [...queryKeys.dataEntries, search.trim()],
   });
-
   const createMutation = useMutation({
-    mutationFn: () =>
-      createDataEntry(
-        { title: title.trim(), value: value.trim() },
-        { accessToken },
-      ),
+    mutationFn: () => createDataEntry({ title: title.trim(), value: value.trim() }, { accessToken }),
     onSuccess: async () => {
       setTitle("");
       setValue("");
-      setCreateVisible(false);
+      setModalVisible(false);
       await queryClient.invalidateQueries({ queryKey: queryKeys.dataEntries });
     },
   });
-
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteDataEntry(id, { accessToken }),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: queryKeys.dataEntries }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.dataEntries }),
   });
-
   const entries = entriesQuery.data ?? [];
-  const canAdd =
-    permission.canCreate && Boolean(title.trim()) && !createMutation.isPending;
+  const canAdd = permission.canCreate && Boolean(title.trim()) && !createMutation.isPending;
 
   return (
-    <Panel
+    <ModulePanel
+      accent={accent}
       action={
         permission.canCreate ? (
-          <ActionButton
-            onPress={() => setCreateVisible(true)}
-            size="small"
-            title="+ Dodaj"
-          />
+          <ActionButton onPress={() => setModalVisible(true)} size="small" title="+ Dodaj" />
         ) : undefined
       }
-      accent={accent}
-      icon={<Search color={accent.color} size={18} />}
+      icon={<Database color={accent.color} size={18} />}
       onRefresh={() => entriesQuery.refetch()}
       subtitle={`${entries.length} zapisanych wpisów`}
       title="Dane"
     >
-      <SearchBlock accent={accent}>
-        <TextInput
-          onChangeText={setSearch}
-          placeholder="Szukaj danych"
-          placeholderTextColor={theme.colors.textSubtle}
-          style={styles.searchInput}
-          value={search}
-        />
-      </SearchBlock>
-
+      <TextInput
+        onChangeText={setSearch}
+        placeholder="Szukaj danych"
+        placeholderTextColor={theme.colors.textSubtle}
+        style={styles.searchInput}
+        value={search}
+      />
       <QueryState
         emptyText="Brak zapisanych danych."
         error={entriesQuery.error}
-        isEmpty={
-          !entriesQuery.isLoading && !entriesQuery.error && entries.length === 0
-        }
+        isEmpty={!entriesQuery.isLoading && entries.length === 0}
         isLoading={entriesQuery.isLoading}
       />
       <View style={styles.itemList}>
@@ -561,7 +580,7 @@ function DataEntriesPanel({ accessToken }: { accessToken?: string }) {
         footer={
           <View style={styles.modalFooter}>
             <ActionButton
-              onPress={() => setCreateVisible(false)}
+              onPress={() => setModalVisible(false)}
               style={styles.modalFooterButton}
               title="Anuluj"
               variant="secondary"
@@ -575,10 +594,10 @@ function DataEntriesPanel({ accessToken }: { accessToken?: string }) {
             />
           </View>
         }
-        onClose={() => setCreateVisible(false)}
+        onClose={() => setModalVisible(false)}
         subtitle="Wpis pojawi się w domowym sejfie danych."
         title="Nowy wpis"
-        visible={createVisible}
+        visible={modalVisible}
       >
         <TextInput
           onChangeText={setTitle}
@@ -599,108 +618,140 @@ function DataEntriesPanel({ accessToken }: { accessToken?: string }) {
           <InlineAlert tone="error" text="Nie udało się dodać wpisu." />
         ) : null}
       </FormModal>
-    </Panel>
+    </ModulePanel>
   );
 }
 
-function AttachmentsPanel({ accessToken }: { accessToken?: string }) {
+function AttachmentsPanel() {
+  const { session } = useSession();
   const queryClient = useQueryClient();
-  const permission = useModuleAccess("attachments");
+  const permission = useModulePermission("attachments");
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
+  const accessToken = session?.accessToken;
   const accent = getSegmentAccent(theme.colors, "attachments");
   const [search, setSearch] = useState("");
-  const [fileName, setFileName] = useState("");
-  const [storagePath, setStoragePath] = useState("");
   const [caption, setCaption] = useState("");
-  const [mimeType, setMimeType] =
-    useState<Attachment["mimeType"]>("application/pdf");
-  const [createVisible, setCreateVisible] = useState(false);
-
+  const [pickedPhoto, setPickedPhoto] = useState<PickedAttachmentPhoto | null>(null);
+  const [uploadError, setUploadError] = useState("");
+  const [modalVisible, setModalVisible] = useState(false);
   const attachmentsQuery = useQuery({
     enabled: permission.canRead && Boolean(accessToken),
     queryFn: () => listAttachments(search.trim() || undefined, { accessToken }),
     queryKey: [...queryKeys.attachments, search.trim()],
   });
-
   const createMutation = useMutation({
-    mutationFn: () =>
-      createAttachmentRecord(
+    mutationFn: async () => {
+      if (!pickedPhoto) {
+        throw new Error("Wybierz zdjęcie z galerii.");
+      }
+
+      const uploadContract = await createAttachmentUploadUrl(
         {
-          caption: caption.trim() || undefined,
-          fileName: fileName.trim(),
-          mimeType,
-          storagePath: storagePath.trim(),
+          fileName: pickedPhoto.fileName,
+          mimeType: pickedPhoto.mimeType,
         },
         { accessToken },
-      ),
+      );
+
+      await uploadAttachmentFile(
+        {
+          fileName: uploadContract.fileName,
+          fileUri: pickedPhoto.uri,
+          mimeType: uploadContract.mimeType,
+          storagePath: uploadContract.storagePath,
+          uploadUrl: uploadContract.uploadUrl,
+        },
+        { accessToken },
+      );
+
+      return createAttachmentRecord(
+        {
+          caption: caption.trim() || undefined,
+          fileName: uploadContract.fileName,
+          mimeType: uploadContract.mimeType,
+          storagePath: uploadContract.storagePath,
+        },
+        { accessToken },
+      );
+    },
     onSuccess: async () => {
-      setFileName("");
-      setStoragePath("");
+      setPickedPhoto(null);
       setCaption("");
-      setCreateVisible(false);
+      setUploadError("");
+      setModalVisible(false);
       await queryClient.invalidateQueries({ queryKey: queryKeys.attachments });
     },
   });
-
   const attachments = attachmentsQuery.data ?? [];
-  const canAdd =
-    permission.canCreate &&
-    Boolean(fileName.trim()) &&
-    Boolean(storagePath.trim()) &&
-    !createMutation.isPending;
+  const canAdd = permission.canCreate && Boolean(pickedPhoto) && !createMutation.isPending;
+
+  async function handlePickPhoto() {
+    setUploadError("");
+
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        allowsEditing: false,
+        mediaTypes: ["images"],
+        quality: 0.86,
+        selectionLimit: 1,
+      });
+
+      if (result.canceled) {
+        return;
+      }
+
+      const photo = normalizePickedPhoto(result.assets[0]);
+
+      if (!photo) {
+        setUploadError("Wybierz zdjęcie JPG, PNG albo WEBP.");
+        return;
+      }
+
+      setPickedPhoto(photo);
+      setModalVisible(true);
+    } catch {
+      setUploadError("Nie udało się otworzyć galerii zdjęć.");
+    }
+  }
 
   return (
-    <Panel
+    <ModulePanel
+      accent={accent}
       action={
         permission.canCreate ? (
-          <ActionButton
-            onPress={() => setCreateVisible(true)}
-            size="small"
-            title="+ Dodaj"
-          />
+          <ActionButton onPress={handlePickPhoto} size="small" title="+ Zdjęcie" />
         ) : undefined
       }
-      accent={accent}
-      icon={<FileText color={accent.color} size={18} />}
+      icon={<Folder color={accent.color} size={18} />}
       onRefresh={() => attachmentsQuery.refetch()}
-      subtitle={`${attachments.length} rekordów plików`}
-      title="Załączniki"
+      subtitle={`${attachments.length} zapisanych plików`}
+      title="Pliki"
     >
-      <SearchBlock accent={accent}>
-        <TextInput
-          onChangeText={setSearch}
-          placeholder="Szukaj plików"
-          placeholderTextColor={theme.colors.textSubtle}
-          style={styles.searchInput}
-          value={search}
-        />
-      </SearchBlock>
-
+      {uploadError ? <InlineAlert tone="error" text={uploadError} /> : null}
+      <TextInput
+        onChangeText={setSearch}
+        placeholder="Szukaj plików"
+        placeholderTextColor={theme.colors.textSubtle}
+        style={styles.searchInput}
+        value={search}
+      />
       <QueryState
         emptyText="Brak załączników."
         error={attachmentsQuery.error}
-        isEmpty={
-          !attachmentsQuery.isLoading &&
-          !attachmentsQuery.error &&
-          attachments.length === 0
-        }
+        isEmpty={!attachmentsQuery.isLoading && attachments.length === 0}
         isLoading={attachmentsQuery.isLoading}
       />
       <View style={styles.itemList}>
         {attachments.map((attachment) => (
-          <AttachmentRow
-            accent={accent}
-            attachment={attachment}
-            key={attachment.id}
-          />
+          <AttachmentRow accent={accent} attachment={attachment} key={attachment.id} />
         ))}
       </View>
       <FormModal
         footer={
           <View style={styles.modalFooter}>
             <ActionButton
-              onPress={() => setCreateVisible(false)}
+              onPress={() => setModalVisible(false)}
               style={styles.modalFooterButton}
               title="Anuluj"
               variant="secondary"
@@ -710,58 +761,218 @@ function AttachmentsPanel({ accessToken }: { accessToken?: string }) {
               loading={createMutation.isPending}
               onPress={() => createMutation.mutate()}
               style={styles.modalFooterButton}
-              title="Dodaj"
+              title="Zapisz"
             />
           </View>
         }
-        onClose={() => setCreateVisible(false)}
-        subtitle="Na razie zapisujemy rekord pliku; sam upload podepniemy w kolejnym kroku."
-        title="Nowy załącznik"
-        visible={createVisible}
+        onClose={() => setModalVisible(false)}
+        subtitle="Zdjęcie trafi do domowego folderu i będzie widoczne dla uprawnionych domowników."
+        title="Nowe zdjęcie"
+        visible={modalVisible}
       >
-        <TextInput
-          onChangeText={setFileName}
-          placeholder="Nazwa pliku"
-          placeholderTextColor={theme.colors.textSubtle}
-          style={styles.input}
-          value={fileName}
-        />
-        <TextInput
-          onChangeText={setStoragePath}
-          placeholder="Ścieżka storage"
-          placeholderTextColor={theme.colors.textSubtle}
-          style={styles.input}
-          value={storagePath}
-        />
+        {pickedPhoto ? (
+          <View style={styles.photoPreviewCard}>
+            <Image source={{ uri: pickedPhoto.uri }} style={styles.photoPreview} />
+            <View style={styles.photoMeta}>
+              <Text numberOfLines={1} style={styles.itemName}>
+                {pickedPhoto.fileName}
+              </Text>
+              <Text style={styles.itemMeta}>
+                {pickedPhoto.mimeType.replace("image/", "").toUpperCase()}
+                {pickedPhoto.fileSize ? ` / ${formatBytes(pickedPhoto.fileSize)}` : ""}
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <InlineAlert text="Wybierz zdjęcie z galerii." />
+        )}
+        <ActionButton onPress={handlePickPhoto} title="Zmień zdjęcie" variant="secondary" />
         <TextInput
           onChangeText={setCaption}
-          placeholder="Opis"
+          placeholder="Opis zdjęcia (opcjonalnie)"
           placeholderTextColor={theme.colors.textSubtle}
           style={styles.input}
           value={caption}
         />
-        <SegmentedControl
-          onChange={setMimeType}
-          options={(
-            [
-              "application/pdf",
-              "image/jpeg",
-              "image/png",
-            ] as Attachment["mimeType"][]
-          ).map((type) => ({
-            label:
-              type === "application/pdf"
-                ? "PDF"
-                : type.replace("image/", "").toUpperCase(),
-            value: type,
-          }))}
-          value={mimeType}
-        />
         {createMutation.error ? (
-          <InlineAlert tone="error" text="Nie udało się dodać załącznika." />
+          <InlineAlert tone="error" text="Nie udało się zapisać zdjęcia." />
         ) : null}
       </FormModal>
-    </Panel>
+    </ModulePanel>
+  );
+}
+
+function HouseholdCard() {
+  const { session } = useSession();
+  const queryClient = useQueryClient();
+  const permission = useModulePermission("household_members");
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+  const accessToken = session?.accessToken;
+  const [email, setEmail] = useState("");
+  const [inviteVisible, setInviteVisible] = useState(false);
+  const householdQuery = useQuery({
+    enabled: permission.canRead && Boolean(accessToken),
+    queryFn: () => getMyHousehold({ accessToken }),
+    queryKey: [...queryKeys.household, "me"],
+  });
+  const membersQuery = useQuery({
+    enabled: permission.canRead && Boolean(accessToken),
+    queryFn: () => listHouseholdMembers({ accessToken }),
+    queryKey: [...queryKeys.household, "members"],
+  });
+  const inviteMutation = useMutation({
+    mutationFn: () => inviteHouseholdMember({ email: email.trim() }, { accessToken }),
+    onSuccess: async () => {
+      setEmail("");
+      setInviteVisible(false);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.household });
+    },
+  });
+  const removeMutation = useMutation({
+    mutationFn: (memberId: string) => removeHouseholdMember(memberId, { accessToken }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.household }),
+  });
+  const members = membersQuery.data ?? [];
+  const canInvite = permission.canCreate && Boolean(email.trim()) && !inviteMutation.isPending;
+
+  if (!permission.canRead) {
+    return null;
+  }
+
+  return (
+    <View style={styles.householdCard}>
+      <View style={[styles.moduleIcon, { backgroundColor: theme.colors.softBlue }]}>
+        <Users color={theme.colors.calendar} size={25} />
+      </View>
+      <View style={styles.householdText}>
+        <Text style={styles.householdTitle}>Członkowie domu</Text>
+        <Text style={styles.householdMeta}>
+          {householdQuery.data?.name ?? "Dom"} / {members.length} osób
+        </Text>
+      </View>
+      <View style={styles.memberAvatars}>
+        {members.slice(0, 3).map((member) => (
+          <MiniAvatar key={member.id} member={member} />
+        ))}
+      </View>
+      {permission.canCreate ? (
+        <IconButton onPress={() => setInviteVisible(true)}>
+          <ChevronRight color={theme.colors.textMuted} size={20} />
+        </IconButton>
+      ) : null}
+      <FormModal
+        footer={
+          <View style={styles.modalFooter}>
+            <ActionButton
+              onPress={() => setInviteVisible(false)}
+              style={styles.modalFooterButton}
+              title="Anuluj"
+              variant="secondary"
+            />
+            <ActionButton
+              disabled={!canInvite}
+              loading={inviteMutation.isPending}
+              onPress={() => inviteMutation.mutate()}
+              style={styles.modalFooterButton}
+              title="Zaproś"
+            />
+          </View>
+        }
+        onClose={() => setInviteVisible(false)}
+        subtitle="Zaproszona osoba dostanie możliwość dołączenia do domu."
+        title="Zaproś domownika"
+        visible={inviteVisible}
+      >
+        <TextInput
+          autoCapitalize="none"
+          keyboardType="email-address"
+          onChangeText={setEmail}
+          placeholder="email@dom.pl"
+          placeholderTextColor={theme.colors.textSubtle}
+          style={styles.input}
+          value={email}
+        />
+        {members.map((member) =>
+          permission.canDelete && member.role !== "owner" ? (
+            <MemberDeleteRow
+              deleting={removeMutation.isPending}
+              key={member.id}
+              member={member}
+              onDelete={() => removeMutation.mutate(member.id)}
+            />
+          ) : null,
+        )}
+        {inviteMutation.error ? (
+          <InlineAlert tone="error" text="Nie udało się zaprosić osoby." />
+        ) : null}
+      </FormModal>
+    </View>
+  );
+}
+
+function SettingsRow() {
+  const { logout, session } = useSession();
+  const queryClient = useQueryClient();
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+
+  async function handleLogout() {
+    queryClient.clear();
+    await logout();
+  }
+
+  return (
+    <View style={styles.settingsRow}>
+      <Cog color={theme.colors.textMuted} size={18} />
+      <View style={styles.householdText}>
+        <Text style={styles.settingsTitle}>Ustawienia i konto</Text>
+        <Text style={styles.settingsMeta}>
+          {session ? "Profil, powiadomienia, język, bezpieczeństwo" : "Brak aktywnej sesji"}
+        </Text>
+      </View>
+      <ActionButton onPress={handleLogout} size="small" title="Wyloguj" variant="secondary" />
+    </View>
+  );
+}
+
+function ModulePanel({
+  accent,
+  action,
+  children,
+  icon,
+  onRefresh,
+  subtitle,
+  title,
+}: {
+  accent: Accent;
+  action?: ReactNode;
+  children: ReactNode;
+  icon: ReactNode;
+  onRefresh: () => void;
+  subtitle: string;
+  title: string;
+}) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+
+  return (
+    <View style={styles.panel}>
+      <View style={styles.panelHeader}>
+        <View style={[styles.panelIcon, { backgroundColor: accent.soft }]}>{icon}</View>
+        <View style={styles.panelText}>
+          <Text style={styles.panelTitle}>{title}</Text>
+          <Text style={styles.panelSubtitle}>{subtitle}</Text>
+        </View>
+        <View style={styles.panelActions}>
+          {action}
+          <IconButton onPress={onRefresh}>
+            <RefreshCcw color={theme.colors.textMuted} size={17} />
+          </IconButton>
+        </View>
+      </View>
+      {children}
+    </View>
   );
 }
 
@@ -782,20 +993,11 @@ function CleaningRow({
   const styles = createStyles(theme.colors);
 
   return (
-    <View
-      style={[
-        styles.itemRow,
-        {
-          borderLeftColor: task.isOverdue ? theme.colors.warning : accent.color,
-        },
-        task.isOverdue && styles.warningRow,
-      ]}
-    >
-      <View style={styles.itemContent}>
+    <View style={[styles.itemRow, task.isOverdue && styles.warningRow]}>
+      <View style={[styles.itemMarker, { backgroundColor: task.isOverdue ? theme.colors.warning : accent.color }]} />
+      <View style={styles.itemText}>
         <Text style={styles.itemName}>{task.name}</Text>
-        <Text style={styles.itemMeta}>
-          Termin: {task.nextDueAt} / co {task.frequencyDays} dni
-        </Text>
+        <Text style={styles.itemMeta}>Termin: {task.nextDueAt} / co {task.frequencyDays} dni</Text>
       </View>
       <IconButton disabled={!canUpdate || completing} onPress={onComplete}>
         <Check color={accent.color} size={17} />
@@ -821,12 +1023,11 @@ function CostRow({
   const styles = createStyles(theme.colors);
 
   return (
-    <View style={[styles.itemRow, { borderLeftColor: accent.color }]}>
-      <View style={styles.itemContent}>
+    <View style={styles.itemRow}>
+      <View style={[styles.itemMarker, { backgroundColor: accent.color }]} />
+      <View style={styles.itemText}>
         <Text style={styles.itemName}>{cost.name}</Text>
-        <Text style={styles.itemMeta}>
-          {cost.nextDueDate} / {formatMoney(cost.defaultAmount)}
-        </Text>
+        <Text style={styles.itemMeta}>{cost.nextDueDate} / {formatMoney(cost.defaultAmount)}</Text>
       </View>
       <IconButton disabled={!canUpdate || completing} onPress={onComplete}>
         <Check color={accent.color} size={17} />
@@ -852,12 +1053,11 @@ function DataRow({
   const styles = createStyles(theme.colors);
 
   return (
-    <View style={[styles.itemRow, { borderLeftColor: accent.color }]}>
-      <View style={styles.itemContent}>
+    <View style={styles.itemRow}>
+      <View style={[styles.itemMarker, { backgroundColor: accent.color }]} />
+      <View style={styles.itemText}>
         <Text style={styles.itemName}>{entry.title}</Text>
-        <Text numberOfLines={2} style={styles.itemMeta}>
-          {entry.value}
-        </Text>
+        <Text numberOfLines={2} style={styles.itemMeta}>{entry.value}</Text>
       </View>
       {canDelete ? (
         <IconButton disabled={deleting} onPress={onDelete}>
@@ -868,168 +1068,157 @@ function DataRow({
   );
 }
 
-function AttachmentRow({
-  accent,
-  attachment,
-}: {
-  accent: Accent;
-  attachment: Attachment;
-}) {
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
+function AttachmentRow({ accent, attachment }: { accent: Accent; attachment: Attachment }) {
+  const styles = createStyles(useAppTheme().colors);
 
   return (
-    <View style={[styles.itemRow, { borderLeftColor: accent.color }]}>
-      <View style={styles.itemContent}>
+    <View style={styles.itemRow}>
+      <View style={[styles.itemMarker, { backgroundColor: accent.color }]} />
+      <FileText color={accent.color} size={17} />
+      <View style={styles.itemText}>
         <Text style={styles.itemName}>{attachment.fileName}</Text>
-        <Text style={styles.itemMeta}>
-          {attachment.mimeType} / {attachment.caption || attachment.storagePath}
+        <Text numberOfLines={1} style={styles.itemMeta}>
+          {attachment.caption || attachment.storagePath}
         </Text>
       </View>
     </View>
   );
 }
 
-function Panel({
-  accent,
-  action,
-  children,
-  icon,
-  onRefresh,
-  subtitle,
-  title,
+function MiniAvatar({ member }: { member: HouseholdMember }) {
+  const styles = createStyles(useAppTheme().colors);
+  const initial = (member.displayName || member.email || "?").slice(0, 1).toUpperCase();
+
+  return (
+    <View style={styles.miniAvatar}>
+      <Text style={styles.miniAvatarText}>{initial}</Text>
+    </View>
+  );
+}
+
+function MemberDeleteRow({
+  deleting,
+  member,
+  onDelete,
 }: {
-  accent: Accent;
-  action?: ReactNode;
-  children: ReactNode;
-  icon: ReactNode;
-  onRefresh: () => void;
-  subtitle: string;
-  title: string;
+  deleting: boolean;
+  member: HouseholdMember;
+  onDelete: () => void;
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
 
   return (
-    <SectionCard
-      action={
-        <View style={styles.panelActions}>
-          {action}
-          <IconButton onPress={onRefresh}>
-            <RefreshCcw color={theme.colors.textMuted} size={18} />
-          </IconButton>
-        </View>
-      }
-      icon={icon}
-      subtitle={subtitle}
-      title={title}
-    >
-      <View style={[styles.panelAccent, { backgroundColor: accent.soft }]} />
-      {children}
-    </SectionCard>
-  );
-}
-
-function SearchBlock({
-  accent,
-  children,
-}: {
-  accent: Accent;
-  children: ReactNode;
-}) {
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
-
-  return (
-    <View style={[styles.searchBlock, { backgroundColor: accent.soft }]}>
-      <Search color={accent.color} size={18} />
-      {children}
+    <View style={styles.memberDeleteRow}>
+      <Text style={styles.itemName}>{member.displayName}</Text>
+      <IconButton disabled={deleting} onPress={onDelete}>
+        <Trash2 color={theme.colors.danger} size={17} />
+      </IconButton>
     </View>
-  );
-}
-
-function ModulePill({
-  active,
-  colors,
-  segment,
-  text,
-}: {
-  active: boolean;
-  colors: AppPalette;
-  segment: HomeSegment;
-  text: string;
-}) {
-  const styles = createStyles(colors);
-  const accent = getSegmentAccent(colors, segment);
-
-  return (
-    <View
-      style={[
-        styles.modulePill,
-        { backgroundColor: active ? accent.color : accent.soft },
-      ]}
-    >
-      <Text
-        style={[
-          styles.modulePillText,
-          { color: active ? colors.inverseText : accent.color },
-        ]}
-      >
-        {text}
-      </Text>
-    </View>
-  );
-}
-
-function SmallRow({ meta, title }: { meta: string; title: string }) {
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
-
-  return (
-    <View style={styles.smallRow}>
-      <Text style={styles.itemName}>{title}</Text>
-      <Text style={styles.itemMeta}>{meta}</Text>
-    </View>
-  );
-}
-
-function useModuleAccess(moduleKey: ModuleKey) {
-  const permissionsQuery = usePermissions();
-  const permission = permissionsQuery.data?.find(
-    (item) => item.moduleKey === moduleKey,
-  );
-
-  return {
-    canCreate: Boolean(permission?.canCreate),
-    canDelete: Boolean(permission?.canDelete),
-    canRead: Boolean(permission?.canRead),
-    canUpdate: Boolean(permission?.canUpdate),
-  };
-}
-
-function hasReadPermission(
-  permissions: Array<{ canRead: boolean; moduleKey: ModuleKey }> | undefined,
-  moduleKey: ModuleKey,
-) {
-  return Boolean(
-    permissions?.find((permission) => permission.moduleKey === moduleKey)
-      ?.canRead,
   );
 }
 
 function getSegmentAccent(colors: AppPalette, segment: HomeSegment): Accent {
   const accents: Record<HomeSegment, Accent> = {
     annual_costs: { color: colors.finance, soft: colors.softGreen },
-    attachments: { color: colors.shopping, soft: colors.softPurple },
-    cleaning: { color: colors.primary, soft: colors.primarySoft },
+    attachments: { color: colors.warning, soft: colors.warningSoft },
+    cleaning: { color: colors.shopping, soft: colors.softPurple },
     data_entries: { color: colors.calendar, soft: colors.softBlue },
   };
 
   return accents[segment];
 }
 
+function getSegmentIcon(segment: HomeSegment, color: string, size: number): ReactNode {
+  if (segment === "cleaning") {
+    return <Broom color={color} size={size} />;
+  }
+
+  if (segment === "annual_costs") {
+    return <ChartBar color={color} size={size} />;
+  }
+
+  if (segment === "data_entries") {
+    return <Database color={color} size={size} />;
+  }
+
+  return <Folder color={color} size={size} />;
+}
+
+function normalizePickedPhoto(asset: ImagePicker.ImagePickerAsset | undefined): PickedAttachmentPhoto | null {
+  if (!asset?.uri) {
+    return null;
+  }
+
+  const mimeType = normalizePickedImageMimeType(asset.mimeType, asset.fileName ?? asset.uri);
+
+  if (!mimeType) {
+    return null;
+  }
+
+  return {
+    fileName: normalizePickedFileName(asset.fileName, mimeType),
+    fileSize: asset.fileSize,
+    mimeType,
+    uri: asset.uri,
+  };
+}
+
+function normalizePickedImageMimeType(
+  mimeType: string | null | undefined,
+  nameOrUri: string,
+): ImageAttachmentMimeType | null {
+  if (mimeType && imageAttachmentMimeTypes.includes(mimeType as ImageAttachmentMimeType)) {
+    return mimeType as ImageAttachmentMimeType;
+  }
+
+  const lowerName = nameOrUri.toLowerCase();
+
+  if (lowerName.endsWith(".png")) {
+    return "image/png";
+  }
+
+  if (lowerName.endsWith(".webp")) {
+    return "image/webp";
+  }
+
+  if (lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg")) {
+    return "image/jpeg";
+  }
+
+  return null;
+}
+
+function normalizePickedFileName(
+  fileName: string | null | undefined,
+  mimeType: ImageAttachmentMimeType,
+): string {
+  const normalized = fileName?.trim();
+
+  if (normalized) {
+    return normalized;
+  }
+
+  return `zdjecie-${Date.now()}.${extensionForMimeType(mimeType)}`;
+}
+
+function extensionForMimeType(mimeType: ImageAttachmentMimeType): string {
+  if (mimeType === "image/png") {
+    return "png";
+  }
+
+  if (mimeType === "image/webp") {
+    return "webp";
+  }
+
+  return "jpg";
+}
+
 function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(
+    today.getDate(),
+  ).padStart(2, "0")}`;
 }
 
 function parseOptionalNumber(value: string): number | null {
@@ -1050,70 +1239,65 @@ function formatMoney(value: string | number | null | undefined): string {
   }
 
   return `${Number(value).toLocaleString("pl-PL", {
-    maximumFractionDigits: 2,
-    minimumFractionDigits: 2,
+    maximumFractionDigits: 0,
   })} zł`;
+}
+
+function formatBytes(value: number): string {
+  if (value < 1024 * 1024) {
+    return `${Math.max(1, Math.round(value / 1024))} KB`;
+  }
+
+  return `${(value / (1024 * 1024)).toFixed(1).replace(".", ",")} MB`;
 }
 
 function createStyles(colors: AppPalette) {
   return StyleSheet.create({
+    avatar: {
+      alignItems: "center",
+      backgroundColor: colors.cardMuted,
+      borderRadius: 999,
+      height: 34,
+      justifyContent: "center",
+      width: 34,
+    },
     dateInput: {
       minWidth: 132,
     },
     flexInput: {
       flex: 1,
     },
-    formCard: {
-      backgroundColor: colors.cardMuted,
-      borderRadius: radii.control,
-      borderWidth: 1,
-      gap: spacing.sm,
-      padding: spacing.md,
-    },
     formRow: {
       flexDirection: "row",
       gap: spacing.sm,
     },
-    formTitle: {
-      fontSize: 12,
-      fontWeight: "900",
-      letterSpacing: 0,
-      textTransform: "uppercase",
-    },
-    hero: {
-      backgroundColor: colors.card,
+    householdCard: {
+      alignItems: "center",
+      backgroundColor: colors.softBlue,
       borderColor: colors.border,
       borderRadius: radii.card,
       borderWidth: 1,
       flexDirection: "row",
-      gap: spacing.md,
-      padding: spacing.lg,
-    },
-    heroContent: {
-      flex: 1,
       gap: spacing.sm,
+      minHeight: 82,
+      padding: spacing.md,
     },
-    heroIcon: {
-      alignItems: "center",
-      backgroundColor: colors.primarySoft,
-      borderRadius: radii.control,
-      height: 48,
-      justifyContent: "center",
-      width: 48,
-    },
-    heroKicker: {
-      color: colors.primaryDark,
+    householdMeta: {
+      color: colors.textMuted,
       fontSize: 12,
-      fontWeight: "900",
       letterSpacing: 0,
-      textTransform: "uppercase",
+      lineHeight: 17,
     },
-    heroTitle: {
+    householdText: {
+      flex: 1,
+      gap: 2,
+      minWidth: 0,
+    },
+    householdTitle: {
       color: colors.text,
-      fontSize: 20,
+      fontSize: 14,
       fontWeight: "900",
       letterSpacing: 0,
-      lineHeight: 25,
     },
     input: {
       backgroundColor: colors.field,
@@ -1126,13 +1310,13 @@ function createStyles(colors: AppPalette) {
       minHeight: 46,
       paddingHorizontal: spacing.md,
     },
-    itemContent: {
-      flex: 1,
-      gap: spacing.xs,
-      paddingRight: spacing.sm,
-    },
     itemList: {
       gap: spacing.sm,
+    },
+    itemMarker: {
+      borderRadius: 999,
+      height: 36,
+      width: 4,
     },
     itemMeta: {
       color: colors.textMuted,
@@ -1151,35 +1335,47 @@ function createStyles(colors: AppPalette) {
       alignItems: "center",
       backgroundColor: colors.card,
       borderColor: colors.border,
-      borderRadius: radii.control,
+      borderRadius: radii.card,
       borderWidth: 1,
-      borderLeftWidth: 4,
       flexDirection: "row",
       gap: spacing.sm,
-      minHeight: 60,
+      minHeight: 58,
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.sm,
     },
-    moduleGrid: {
+    itemText: {
+      flex: 1,
+      gap: 2,
+      minWidth: 0,
+    },
+    memberAvatars: {
       flexDirection: "row",
-      flexWrap: "wrap",
-      gap: spacing.sm,
+      marginLeft: spacing.xs,
     },
-    modulePill: {
+    memberDeleteRow: {
+      alignItems: "center",
+      backgroundColor: colors.cardMuted,
+      borderRadius: radii.card,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      padding: spacing.sm,
+    },
+    miniAvatar: {
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderColor: colors.border,
       borderRadius: 999,
-      overflow: "hidden",
-      paddingHorizontal: spacing.sm,
-      paddingVertical: 6,
+      borderWidth: 1,
+      height: 25,
+      justifyContent: "center",
+      marginLeft: -6,
+      width: 25,
     },
-    modulePillText: {
-      fontSize: 11,
+    miniAvatarText: {
+      color: colors.text,
+      fontSize: 10,
       fontWeight: "900",
       letterSpacing: 0,
-    },
-    multilineInput: {
-      minHeight: 92,
-      paddingTop: spacing.sm,
-      textAlignVertical: "top",
     },
     modalFooter: {
       flexDirection: "row",
@@ -1188,46 +1384,139 @@ function createStyles(colors: AppPalette) {
     modalFooterButton: {
       flex: 1,
     },
-    panelAccent: {
-      borderRadius: 999,
-      height: 6,
+    moduleDescription: {
+      color: colors.textMuted,
+      fontSize: 11,
+      letterSpacing: 0,
+      lineHeight: 16,
+    },
+    moduleGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: spacing.sm,
+    },
+    moduleIcon: {
+      alignItems: "center",
+      borderRadius: radii.control,
+      height: 44,
+      justifyContent: "center",
+      width: 44,
+    },
+    moduleTile: {
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      gap: spacing.sm,
+      minHeight: 154,
+      padding: spacing.md,
+      width: "48.5%",
+    },
+    moduleTitle: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    multilineInput: {
+      minHeight: 92,
+      paddingTop: spacing.sm,
+      textAlignVertical: "top",
+    },
+    panel: {
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      gap: spacing.md,
+      padding: spacing.md,
     },
     panelActions: {
       alignItems: "center",
       flexDirection: "row",
       gap: spacing.xs,
     },
-    searchBlock: {
+    panelHeader: {
       alignItems: "center",
-      borderRadius: radii.control,
       flexDirection: "row",
       gap: spacing.sm,
-      paddingHorizontal: spacing.sm,
-      paddingVertical: spacing.xs,
     },
-    searchInput: {
-      color: colors.text,
-      flex: 1,
-      fontSize: 15,
+    panelIcon: {
+      alignItems: "center",
+      borderRadius: radii.control,
+      height: 36,
+      justifyContent: "center",
+      width: 36,
+    },
+    panelSubtitle: {
+      color: colors.textMuted,
+      fontSize: 12,
       letterSpacing: 0,
-      minHeight: 40,
-      paddingHorizontal: spacing.xs,
     },
-    sectionTitle: {
+    panelText: {
+      flex: 1,
+      gap: 2,
+      minWidth: 0,
+    },
+    panelTitle: {
       color: colors.text,
       fontSize: 15,
       fontWeight: "900",
       letterSpacing: 0,
     },
-    smallRow: {
+    photoMeta: {
+      gap: 2,
+      paddingHorizontal: spacing.xs,
+    },
+    photoPreview: {
+      aspectRatio: 4 / 3,
       backgroundColor: colors.cardMuted,
       borderRadius: radii.control,
-      gap: spacing.xs,
+      width: "100%",
+    },
+    photoPreviewCard: {
+      backgroundColor: colors.cardMuted,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      gap: spacing.sm,
+      padding: spacing.sm,
+    },
+    pressed: {
+      opacity: 0.78,
+    },
+    searchInput: {
+      backgroundColor: colors.field,
+      borderColor: colors.border,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      color: colors.text,
+      fontSize: 15,
+      letterSpacing: 0,
+      minHeight: 42,
+      paddingHorizontal: spacing.md,
+    },
+    settingsMeta: {
+      color: colors.textMuted,
+      fontSize: 11,
+      letterSpacing: 0,
+      lineHeight: 15,
+    },
+    settingsRow: {
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: spacing.md,
       padding: spacing.md,
     },
-    subSection: {
-      gap: spacing.sm,
-      marginTop: spacing.sm,
+    settingsTitle: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: "900",
+      letterSpacing: 0,
     },
     warningRow: {
       backgroundColor: colors.warningSoft,

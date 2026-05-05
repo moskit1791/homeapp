@@ -591,6 +591,73 @@ export interface CreateAttachmentRequest {
   storagePath: string;
 }
 
+export interface CreateAttachmentUploadUrlRequest {
+  fileName: string;
+  mimeType: Attachment['mimeType'];
+}
+
+export interface AttachmentUploadContract {
+  fileName: string;
+  method: 'POST';
+  mimeType: Attachment['mimeType'];
+  storagePath: string;
+  uploadUrl: string;
+}
+
+export interface LocalAttachmentUploadResponse {
+  fileName: string;
+  mimeType: Attachment['mimeType'];
+  size: number;
+  storagePath: string;
+}
+
+export interface UploadAttachmentFileRequest {
+  fileName: string;
+  fileUri: string;
+  mimeType: Attachment['mimeType'];
+  storagePath: string;
+  uploadUrl: string;
+}
+
+export type PushPlatform = 'android' | 'ios' | 'web' | 'unknown';
+
+export interface RegisterPushTokenRequest {
+  deviceName?: string;
+  expoPushToken: string;
+  platform: PushPlatform;
+}
+
+export interface PushToken {
+  createdAt: string;
+  deviceName: string;
+  enabled: boolean;
+  expoPushToken: string;
+  householdId: string;
+  householdMemberId: string;
+  id: string;
+  lastRegisteredAt: string;
+  platform: PushPlatform;
+  updatedAt: string;
+  userId: string;
+}
+
+export interface SendTestPushRequest {
+  body?: string;
+  title?: string;
+}
+
+export interface PushSendResult {
+  sent: number;
+  tickets: Array<{
+    details?: {
+      error?: string;
+    };
+    id?: string;
+    message?: string;
+    status: 'ok' | 'error';
+  }>;
+}
+
 export interface HouseholdMember {
   displayName: string;
   email: string;

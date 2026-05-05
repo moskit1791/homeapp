@@ -3,6 +3,7 @@ import { Tabs, useRouter } from "expo-router";
 import { useEffect } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import {
+  CalendarDays,
   Home,
   ListChecks,
   MoreHorizontal,
@@ -72,19 +73,19 @@ export default function TabsLayout() {
         tabBarInactiveTintColor: theme.colors.textMuted,
         tabBarHideOnKeyboard: true,
         tabBarItemStyle: {
-          paddingVertical: 4,
+          paddingVertical: 3,
         },
         tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: "700",
+          fontSize: 10,
+          fontWeight: "800",
           letterSpacing: 0,
         },
         tabBarStyle: {
           backgroundColor: theme.colors.card,
           borderTopColor: theme.colors.border,
           borderTopWidth: 1,
-          height: 58,
-          paddingBottom: 6,
+          height: 62,
+          paddingBottom: 7,
           paddingTop: 6,
         },
       }}
@@ -92,8 +93,16 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Start",
-          tabBarIcon: ({ color }) => <Home color={color} size={18} />,
+          title: "Dzisiaj",
+          tabBarIcon: ({ color }) => <Home color={color} size={20} />,
+        }}
+      />
+      <Tabs.Screen
+        name="kalendarz"
+        options={{
+          href: shouldShow(["calendar", "notes", "todo"]) ? undefined : null,
+          title: "Kalendarz",
+          tabBarIcon: ({ color }) => <CalendarDays color={color} size={20} />,
         }}
       />
       <Tabs.Screen
@@ -101,25 +110,31 @@ export default function TabsLayout() {
         options={{
           href: shouldShow(["finances"]) ? undefined : null,
           title: "Finanse",
-          tabBarIcon: ({ color }) => <WalletCards color={color} size={18} />,
+          tabBarIcon: ({ color }) => <WalletCards color={color} size={20} />,
         }}
       />
       <Tabs.Screen
-        name="plan"
+        name="lista"
         options={{
-          href: shouldShow(["meal_planner", "calendar", "todo", "notes"])
-            ? undefined
-            : null,
-          title: "Plan",
-          tabBarIcon: ({ color }) => <Utensils color={color} size={18} />,
+          href: shouldShow(["shopping", "meal_planner"]) ? undefined : null,
+          title: "Lista",
+          tabBarIcon: ({ color }) => <ListChecks color={color} size={20} />,
         }}
       />
       <Tabs.Screen
         name="zakupy"
         options={{
-          href: shouldShow(["shopping"]) ? undefined : null,
+          href: null,
           title: "Zakupy",
           tabBarIcon: ({ color }) => <ShoppingCart color={color} size={18} />,
+        }}
+      />
+      <Tabs.Screen
+        name="plan"
+        options={{
+          href: null,
+          title: "Plan",
+          tabBarIcon: ({ color }) => <Utensils color={color} size={18} />,
         }}
       />
       <Tabs.Screen
@@ -134,7 +149,7 @@ export default function TabsLayout() {
             ? undefined
             : null,
           title: "Dom",
-          tabBarIcon: ({ color }) => <ListChecks color={color} size={18} />,
+          tabBarIcon: ({ color }) => <Home color={color} size={20} />,
         }}
       />
       <Tabs.Screen

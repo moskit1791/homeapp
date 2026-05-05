@@ -1,16 +1,20 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { unlink } from 'node:fs/promises';
+import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { loadEnv } from '../../shared/env';
 import { DatabaseService } from '../database/database.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import {
+  ATTACHMENT_MIME_TYPES,
   AttachmentMimeType,
   CreateAttachmentDto,
   CreateAttachmentUploadUrlDto,
+  LocalAttachmentUploadDto,
   UpdateAttachmentDto
 } from './dto/attachments.dto';
+
+export const MAX_ATTACHMENT_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 @Injectable()
 export class AttachmentsService {
@@ -62,6 +66,37 @@ export class AttachmentsService {
       mimeType: dto.mimeType,
       storagePath,
       uploadUrl: '/api/attachments/local-upload'
+    };
+  }
+
+  async storeLocalUpload(
+    householdId: string,
+    dto: LocalAttachmentUploadDto,
+    file: UploadedAttachmentFile | undefined
+  ): Promise<LocalAttachmentUploadResult> {
+    if (!file?.buffer?.length) {
+      throw new BadRequestException('Attachment file is required');
+    }
+
+    if (file.size > MAX_ATTACHMENT_UPLOAD_BYTES) {
+      throw new BadRequestException('Attachment file is too large');
+    }
+
+    if (!this.isAllowedMimeType(file.mimetype) || file.mimetype !== dto.mimeType) {
+      throw new BadRequestException('Unsupported attachment mime type');
+    }
+
+    const storagePath = this.normalizeStoragePath(householdId, dto.storagePath);
+    const absolutePath = this.resolveLocalStoragePath(storagePath);
+
+    await mkdir(path.dirname(absolutePath), { recursive: true });
+    await writeFile(absolutePath, file.buffer);
+
+    return {
+      fileName: this.normalizeFileName(file.originalname || path.basename(storagePath)),
+      mimeType: dto.mimeType,
+      size: file.size,
+      storagePath
     };
   }
 
@@ -220,10 +255,9 @@ export class AttachmentsService {
   }
 
   private async deleteLocalFileIfSafe(storagePath: string): Promise<void> {
-    const absolutePath = path.resolve(this.localStorageRoot, storagePath);
-    const relativePath = path.relative(this.localStorageRoot, absolutePath);
+    const absolutePath = this.tryResolveLocalStoragePath(storagePath);
 
-    if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+    if (!absolutePath) {
       return;
     }
 
@@ -276,6 +310,31 @@ export class AttachmentsService {
 
   private normalizeCaption(caption: string | undefined): string {
     return caption?.trim() ?? '';
+  }
+
+  private resolveLocalStoragePath(storagePath: string): string {
+    const absolutePath = this.tryResolveLocalStoragePath(storagePath);
+
+    if (!absolutePath) {
+      throw new BadRequestException('Invalid attachment storage path');
+    }
+
+    return absolutePath;
+  }
+
+  private tryResolveLocalStoragePath(storagePath: string): string | null {
+    const absolutePath = path.resolve(this.localStorageRoot, storagePath);
+    const relativePath = path.relative(this.localStorageRoot, absolutePath);
+
+    if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+      return null;
+    }
+
+    return absolutePath;
+  }
+
+  private isAllowedMimeType(mimeType: string): mimeType is AttachmentMimeType {
+    return (ATTACHMENT_MIME_TYPES as readonly string[]).includes(mimeType);
   }
 
   private normalizeSearch(search: string | undefined): string | null {
@@ -349,4 +408,18 @@ export interface AttachmentUploadContract {
   mimeType: AttachmentMimeType;
   storagePath: string;
   uploadUrl: '/api/attachments/local-upload';
+}
+
+export interface LocalAttachmentUploadResult {
+  fileName: string;
+  mimeType: AttachmentMimeType;
+  size: number;
+  storagePath: string;
+}
+
+export interface UploadedAttachmentFile {
+  buffer: Buffer;
+  mimetype: string;
+  originalname: string;
+  size: number;
 }

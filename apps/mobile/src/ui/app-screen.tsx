@@ -7,13 +7,24 @@ import { useAppTheme, type AppPalette } from '../theme/use-app-theme';
 interface AppScreenProps extends PropsWithChildren {
   actions?: ReactNode;
   contentStyle?: StyleProp<ViewStyle>;
+  leading?: ReactNode;
   subtitle?: string;
   title: string;
+  titleAlign?: 'left' | 'center';
 }
 
-export function AppScreen({ actions, children, contentStyle, subtitle, title }: AppScreenProps) {
+export function AppScreen({
+  actions,
+  children,
+  contentStyle,
+  leading,
+  subtitle,
+  title,
+  titleAlign = 'left'
+}: AppScreenProps) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
+  const centered = titleAlign === 'center';
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -23,11 +34,16 @@ export function AppScreen({ actions, children, contentStyle, subtitle, title }: 
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <View style={styles.headerText}>
+          {leading ? <View style={styles.leading}>{leading}</View> : null}
+          <View style={[styles.headerText, centered && styles.headerTextCentered]}>
             <Text style={styles.title}>{title}</Text>
             {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
           </View>
-          {actions ? <View style={styles.actions}>{actions}</View> : null}
+          {actions ? (
+            <View style={styles.actions}>{actions}</View>
+          ) : leading && centered ? (
+            <View style={styles.leadingSpacer} />
+          ) : null}
         </View>
         {children}
       </ScrollView>
@@ -38,9 +54,9 @@ export function AppScreen({ actions, children, contentStyle, subtitle, title }: 
 function createStyles(colors: AppPalette) {
   return StyleSheet.create({
   content: {
-    gap: spacing.lg,
-    padding: spacing.lg,
-    paddingBottom: spacing.xxl
+    gap: spacing.md,
+    padding: spacing.md,
+    paddingBottom: 128
   },
   actions: {
     alignItems: 'center',
@@ -48,15 +64,27 @@ function createStyles(colors: AppPalette) {
     gap: spacing.sm
   },
   header: {
-    alignItems: 'flex-start',
+    alignItems: 'center',
     flexDirection: 'row',
     gap: spacing.md,
     justifyContent: 'space-between',
-    marginBottom: spacing.xs
+    marginBottom: spacing.xs,
+    minHeight: 42
   },
   headerText: {
     flex: 1,
     gap: spacing.xs
+  },
+  headerTextCentered: {
+    alignItems: 'center'
+  },
+  leading: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 38
+  },
+  leadingSpacer: {
+    width: 38
   },
   safeArea: {
     backgroundColor: colors.background,
@@ -64,8 +92,8 @@ function createStyles(colors: AppPalette) {
   },
   title: {
     color: colors.text,
-    fontSize: 24,
-    fontWeight: '800',
+    fontSize: 22,
+    fontWeight: '900',
     letterSpacing: 0
   },
   subtitle: {

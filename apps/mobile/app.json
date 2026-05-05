@@ -5,13 +5,28 @@
     "scheme": "homeapp",
     "version": "0.1.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "newArchEnabled": false,
     "android": {
       "package": "com.homeapp.mobile",
       "versionCode": 2
     },
-    "plugins": ["expo-router", "expo-secure-store"],
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "HomeApp potrzebuje dostępu do galerii, żeby dodać zdjęcie jako załącznik."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#0b7a2a"
+        }
+      ]
+    ],
     "experiments": {
       "typedRoutes": true
     }

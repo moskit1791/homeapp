@@ -1,14 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
-import { StyleSheet, Switch, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import {
   Archive,
   Banknote,
-  CalendarPlus,
-  FolderPlus,
+  ChevronLeft,
+  ChevronRight,
+  DotsVertical,
+  Filter,
+  Plus,
   ReceiptText,
-  RefreshCcw,
   WalletCards,
 } from "../../src/ui/icon";
 import {
@@ -16,13 +19,14 @@ import {
   createBudgetItem,
   createExpense,
   generateNextBudgetMonth,
+  getBudgetMonth,
   getFinanceSummary,
   listBudgetCategories,
   listBudgetMonths,
-  upsertIncome,
+  queryKeys,
   type BudgetCategoryWithItems,
   type BudgetMonth,
-  queryKeys,
+  upsertIncome,
 } from "../../src/api";
 import { useModulePermission } from "../../src/permissions/use-permissions";
 import { useSession } from "../../src/session/session-context";
@@ -32,11 +36,8 @@ import {
   ActionButton,
   AppScreen,
   FormModal,
-  IconButton,
   InlineAlert,
-  MetricCard,
   QueryState,
-  SectionCard,
   SegmentedControl,
   TextField,
 } from "../../src/ui";
@@ -59,8 +60,7 @@ export default function FinanseScreen() {
   const queryClient = useQueryClient();
   const theme = useAppTheme();
   const styles = useMemo(() => createStyles(theme.colors), [theme.colors]);
-  const { canCreate, canRead, canUpdate, permissionsQuery } =
-    useModulePermission("finances");
+  const { canCreate, canRead, canUpdate, permissionsQuery } = useModulePermission("finances");
   const accessToken = session?.accessToken;
   const { control, setValue, watch } = useForm<FinanceFormValues>({
     defaultValues: {
@@ -82,82 +82,101 @@ export default function FinanseScreen() {
   const [selectedItemOwnerId, setSelectedItemOwnerId] = useState("");
   const [selectedExpenseItemId, setSelectedExpenseItemId] = useState("");
   const [copyCategory, setCopyCategory] = useState(true);
+  const [selectedMonthId, setSelectedMonthId] = useState<string | null>(null);
   const [financeModal, setFinanceModal] = useState<
     "menu" | "income" | "category" | "item" | "expense" | null
   >(null);
 
-  const summaryQuery = useQuery({
+  const currentQuery = useQuery({
     enabled: canRead && Boolean(accessToken),
     queryFn: () => getFinanceSummary({ accessToken }),
     queryKey: [...queryKeys.finances, "current"],
   });
-
+  const archiveQuery = useQuery({
+    enabled: canRead && Boolean(accessToken),
+    queryFn: () => listBudgetMonths({ accessToken }),
+    queryKey: [...queryKeys.finances, "archive"],
+  });
+  const selectedArchiveQuery = useQuery({
+    enabled:
+      canRead &&
+      Boolean(accessToken) &&
+      Boolean(selectedMonthId) &&
+      selectedMonthId !== currentQuery.data?.month.id,
+    queryFn: () => getBudgetMonth(selectedMonthId ?? "", { accessToken }),
+    queryKey: [...queryKeys.finances, "month", selectedMonthId],
+  });
   const categoriesQuery = useQuery({
     enabled: canRead && Boolean(accessToken),
     queryFn: () => listBudgetCategories({ accessToken }),
     queryKey: [...queryKeys.finances, "categories"],
   });
 
-  const archiveQuery = useQuery({
-    enabled: canRead && Boolean(accessToken),
-    queryFn: () => listBudgetMonths({ accessToken }),
-    queryKey: [...queryKeys.finances, "archive"],
-  });
-
-  const summary = summaryQuery.data;
+  const currentSummary = currentQuery.data;
+  const summary =
+    selectedMonthId && selectedMonthId !== currentSummary?.month.id
+      ? selectedArchiveQuery.data
+      : currentSummary;
   const totals = summary?.summary;
-  const incomes = summary?.incomes ?? [];
+  const incomes = currentSummary?.incomes ?? [];
   const categories = summary?.categories ?? [];
+  const currentCategories = currentSummary?.categories ?? [];
   const flatItems = useMemo<BudgetItemWithCategory[]>(
     () =>
-      categories.flatMap((category) =>
+      currentCategories.flatMap((category) =>
         getCategoryItems(category).map((item) => ({ ...item, category })),
       ),
-    [categories],
+    [currentCategories],
   );
-  const currentMonth = summary?.month;
+  const currentMonth = currentSummary?.month;
+  const visibleMonth = summary?.month;
   const budgetAmount = Number(totals?.totalBudgetAmount ?? 0);
   const spentAmount = Number(totals?.totalSpentAmount ?? 0);
   const remainingAmount = Number(totals?.totalRemainingAmount ?? 0);
-  const budgetUsagePercent =
-    budgetAmount > 0
-      ? Math.min(Math.max((spentAmount / budgetAmount) * 100, 0), 100)
-      : 0;
+  const monthTabs = useMemo(() => {
+    const months = [...(archiveQuery.data ?? []), ...(currentMonth ? [currentMonth] : [])];
+    const unique = new Map<string, BudgetMonth>();
+
+    months.forEach((month) => unique.set(month.id, month));
+
+    return [...unique.values()]
+      .sort((left, right) => left.year - right.year || left.month - right.month)
+      .slice(-5);
+  }, [archiveQuery.data, currentMonth]);
+
+  useEffect(() => {
+    if (!selectedMonthId && currentMonth?.id) {
+      setSelectedMonthId(currentMonth.id);
+    }
+  }, [currentMonth?.id, selectedMonthId]);
 
   useEffect(() => {
     if (!selectedIncomeMemberId && incomes[0]) {
       setSelectedIncomeMemberId(incomes[0].ownerMemberId);
     }
-  }, [incomes, selectedIncomeMemberId, setSelectedIncomeMemberId]);
+  }, [incomes, selectedIncomeMemberId]);
 
   useEffect(() => {
     if (!selectedItemOwnerId && incomes[0]) {
       setSelectedItemOwnerId(incomes[0].ownerMemberId);
     }
-  }, [incomes, selectedItemOwnerId, setSelectedItemOwnerId]);
+  }, [incomes, selectedItemOwnerId]);
 
   useEffect(() => {
-    const firstCategoryId = categoriesQuery.data?.[0]?.id ?? categories[0]?.id;
+    const firstCategoryId = categoriesQuery.data?.[0]?.id ?? currentCategories[0]?.id;
 
     if (!selectedItemCategoryId && firstCategoryId) {
       setSelectedItemCategoryId(firstCategoryId);
     }
-  }, [
-    categories,
-    categoriesQuery.data,
-    selectedItemCategoryId,
-    setSelectedItemCategoryId,
-  ]);
+  }, [categoriesQuery.data, currentCategories, selectedItemCategoryId]);
 
   useEffect(() => {
     if (!selectedExpenseItemId && flatItems[0]) {
       setSelectedExpenseItemId(flatItems[0].id);
     }
-  }, [flatItems, selectedExpenseItemId, setSelectedExpenseItemId]);
+  }, [flatItems, selectedExpenseItemId]);
 
-  const invalidateFinance = () =>
-    queryClient.invalidateQueries({ queryKey: queryKeys.finances });
-
+  const invalidateFinance = () => queryClient.invalidateQueries({ queryKey: queryKeys.finances });
   const incomeMutation = useMutation({
     mutationFn: () =>
       upsertIncome(
@@ -171,7 +190,6 @@ export default function FinanseScreen() {
       await invalidateFinance();
     },
   });
-
   const categoryMutation = useMutation({
     mutationFn: () =>
       createBudgetCategory(
@@ -188,7 +206,6 @@ export default function FinanseScreen() {
       await invalidateFinance();
     },
   });
-
   const itemMutation = useMutation({
     mutationFn: () =>
       createBudgetItem(
@@ -209,7 +226,6 @@ export default function FinanseScreen() {
       await invalidateFinance();
     },
   });
-
   const expenseMutation = useMutation({
     mutationFn: () =>
       createExpense(
@@ -223,12 +239,13 @@ export default function FinanseScreen() {
       setValue("expenseAmount", "");
       setFinanceModal(null);
       await invalidateFinance();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.start });
     },
   });
-
   const nextMonthMutation = useMutation({
     mutationFn: () => generateNextBudgetMonth({ accessToken }),
-    onSuccess: async () => {
+    onSuccess: async (nextMonth) => {
+      setSelectedMonthId(nextMonth.month.id);
       await invalidateFinance();
       await queryClient.invalidateQueries({ queryKey: queryKeys.start });
     },
@@ -245,9 +262,7 @@ export default function FinanseScreen() {
     Boolean(selectedItemOwnerId) &&
     (!itemAmount.trim() || isValidMoney(itemAmount));
   const canSaveExpense =
-    canCreate &&
-    Boolean(selectedExpenseItemId) &&
-    isPositiveMoney(expenseAmount);
+    canCreate && Boolean(selectedExpenseItemId) && isPositiveMoney(expenseAmount);
 
   if (permissionsQuery.isLoading) {
     return (
@@ -268,253 +283,91 @@ export default function FinanseScreen() {
   return (
     <AppScreen
       actions={
-        <View style={styles.topActions}>
-          {canCreate ? (
-            <ActionButton
-              onPress={() => setFinanceModal("menu")}
-              size="small"
-              title="+ Dodaj"
-            />
-          ) : null}
-          <IconButton onPress={() => summaryQuery.refetch()}>
-            <RefreshCcw color={theme.colors.textMuted} size={18} />
-          </IconButton>
+        <View style={styles.headerActions}>
+          <Filter color={theme.colors.text} size={19} />
+          <DotsVertical color={theme.colors.text} size={19} />
         </View>
-      }
-      subtitle={
-        currentMonth
-          ? `Budżet domowy, ${formatMonth(currentMonth)}`
-          : "Brak bieżącego miesiąca"
       }
       title="Finanse"
     >
       <QueryState
-        error={summaryQuery.error}
-        isEmpty={!summaryQuery.isLoading && !summary}
-        isLoading={summaryQuery.isLoading}
         emptyText="Brak danych finansowych."
+        error={currentQuery.error ?? selectedArchiveQuery.error}
+        isEmpty={!currentQuery.isLoading && !summary}
+        isLoading={currentQuery.isLoading || selectedArchiveQuery.isLoading}
       />
 
       {summary ? (
         <>
-          <View style={styles.hero}>
-            <View style={styles.heroHeader}>
-              <View style={styles.heroIcon}>
-                <WalletCards color={theme.colors.finance} size={22} />
-              </View>
-              <View style={styles.heroText}>
-                <Text style={styles.heroLabel}>Saldo miesiąca</Text>
-                <Text
-                  style={[
-                    styles.heroValue,
-                    remainingAmount < 0 && styles.heroValueDanger,
-                  ]}
-                >
-                  {formatMoney(remainingAmount)}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.progressTrack}>
-              <View
-                style={[
-                  styles.progressFill,
-                  remainingAmount < 0 && styles.progressFillDanger,
-                  { width: `${budgetUsagePercent}%` },
-                ]}
-              />
-            </View>
-            <View style={styles.heroMetaRow}>
-              <Text style={styles.heroMeta}>
-                Wydane {formatMoney(spentAmount)}
-              </Text>
-              <Text style={styles.heroMeta}>
-                Budżet {formatMoney(budgetAmount)}
-              </Text>
-            </View>
+          <View style={styles.monthSwitcher}>
+            <ChevronLeft color={theme.colors.textMuted} size={20} />
+            <Text style={styles.monthSwitcherTitle}>{visibleMonth ? formatMonthLong(visibleMonth) : "Miesiąc"}</Text>
+            <ChevronRight color={theme.colors.textMuted} size={20} />
           </View>
 
-          <View style={styles.summaryGrid}>
-            <MetricCard
+          <View style={styles.metricRow}>
+            <FinanceMetric
+              color={theme.colors.finance}
               icon={<Banknote color={theme.colors.finance} size={17} />}
               label="Dochody"
-              style={[styles.metricCard, styles.metricIncome]}
               value={formatMoney(totals?.incomeAmount)}
             />
-            <MetricCard
-              icon={<WalletCards color={theme.colors.info} size={17} />}
+            <FinanceMetric
+              color={theme.colors.text}
+              icon={<WalletCards color={theme.colors.textMuted} size={17} />}
               label="Budżet"
-              style={[styles.metricCard, styles.metricBudget]}
               value={formatMoney(totals?.totalBudgetAmount)}
             />
-            <MetricCard
+            <FinanceMetric
+              color={theme.colors.warning}
               icon={<ReceiptText color={theme.colors.warning} size={17} />}
               label="Wydane"
-              style={[styles.metricCard, styles.metricSpent]}
               value={formatMoney(totals?.totalSpentAmount)}
             />
-            <MetricCard
-              icon={
-                <Archive
-                  color={
-                    remainingAmount < 0
-                      ? theme.colors.danger
-                      : theme.colors.primaryDark
-                  }
-                  size={17}
-                />
-              }
+            <FinanceMetric
+              color={remainingAmount < 0 ? theme.colors.danger : theme.colors.primaryDark}
+              icon={<Archive color={remainingAmount < 0 ? theme.colors.danger : theme.colors.primaryDark} size={17} />}
               label="Zostaje"
-              style={[
-                styles.metricCard,
-                remainingAmount < 0
-                  ? styles.metricDanger
-                  : styles.metricRemaining,
-              ]}
               value={formatMoney(totals?.totalRemainingAmount)}
             />
           </View>
 
-          <SectionCard
-            action={
-              canUpdate ? (
-                <ActionButton
-                  onPress={() => setFinanceModal("income")}
-                  size="small"
-                  title="Zmień"
-                  variant="secondary"
-                />
-              ) : null
-            }
-            icon={<Banknote color={theme.colors.finance} size={18} />}
-            subtitle={`${incomes.length} osób`}
-            title="Dochody"
-          >
-            <View style={styles.list}>
-              {incomes.map((income) => (
-                <MoneyRow
-                  key={income.ownerMemberId}
-                  label={income.displayName}
-                  sublabel={income.email}
-                  value={formatMoney(income.amount)}
-                />
-              ))}
-            </View>
-          </SectionCard>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={styles.monthTabs}>
+              {monthTabs.map((month) => {
+                const active = month.id === selectedMonthId;
 
-          <SectionCard
-            action={
-              canCreate ? (
-                <View style={styles.sectionActions}>
-                  <ActionButton
-                    onPress={() => setFinanceModal("category")}
-                    size="small"
-                    title="Kategoria"
-                    variant="secondary"
-                  />
-                  <ActionButton
-                    onPress={() => setFinanceModal("item")}
-                    size="small"
-                    title="Pozycja"
-                  />
-                </View>
-              ) : null
-            }
-            icon={<FolderPlus color={theme.colors.info} size={18} />}
-            subtitle={`${categories.length} kategorii`}
-            title="Kategorie i budżet"
-          >
-            <View style={styles.list}>
-              {categories.length === 0 ? (
-                <InlineAlert text="Nie ma jeszcze kategorii budżetowych." />
-              ) : null}
-              {categories.map((category) => (
-                <CategoryBlock
-                  category={category}
-                  colors={theme.colors}
-                  key={category.id}
-                />
-              ))}
+                return (
+                  <Pressable
+                    key={month.id}
+                    onPress={() => setSelectedMonthId(month.id)}
+                    style={[styles.monthTab, active && styles.monthTabActive]}
+                  >
+                    <Text style={[styles.monthTabText, active && styles.monthTabTextActive]}>
+                      {formatMonthShort(month)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
-          </SectionCard>
+          </ScrollView>
 
-          <SectionCard
-            action={
-              canCreate ? (
-                <ActionButton
-                  onPress={() => setFinanceModal("expense")}
-                  size="small"
-                  title="Dodaj"
-                />
-              ) : null
-            }
-            icon={<ReceiptText color={theme.colors.warning} size={18} />}
-            subtitle={`${flatItems.length} pozycji`}
-            title="Wydatki"
-          >
-            <View style={styles.list}>
-              {flatItems.length === 0 ? (
-                <InlineAlert text="Dodaj pozycję, aby księgować wydatki." />
-              ) : null}
-              {flatItems.map((item) => (
-                <MoneyRow
-                  key={item.id}
-                  label={item.name}
-                  sublabel={`${item.category.name} - ${formatOwner(item.owner)}`}
-                  value={`${formatMoney(item.spentAmount)} wydane`}
-                />
-              ))}
-            </View>
-          </SectionCard>
+          <FinanceSheet categories={categories} />
 
-          <SectionCard
-            action={
-              canCreate ? (
-                <ActionButton
-                  disabled={nextMonthMutation.isPending}
-                  loading={nextMonthMutation.isPending}
-                  onPress={() => nextMonthMutation.mutate()}
-                  size="small"
-                  title="Nowy miesiąc"
-                  variant="secondary"
-                />
-              ) : null
-            }
-            icon={<CalendarPlus color={theme.colors.info} size={18} />}
-            subtitle={`${archiveQuery.data?.length ?? 0} miesięcy`}
-            title="Archiwum"
-          >
-            <Text style={styles.muted}>
-              Nowy miesiąc przenosi pozycje budżetu i archiwizuje obecny.
+          <View style={styles.totalRow}>
+            <Text style={styles.totalLabel}>RAZEM</Text>
+            <Text style={styles.totalValue}>{formatMoney(budgetAmount)}</Text>
+            <Text style={styles.totalValue}>{formatMoney(spentAmount)}</Text>
+            <Text style={[styles.totalValue, remainingAmount < 0 && styles.dangerText]}>
+              {formatMoney(remainingAmount)}
             </Text>
-            <QueryState
-              error={archiveQuery.error}
-              isLoading={archiveQuery.isLoading}
-            />
-            <View style={styles.list}>
-              {(archiveQuery.data ?? []).slice(0, 6).map((month) => (
-                <MoneyRow
-                  key={month.id}
-                  label={formatMonth(month)}
-                  sublabel={
-                    month.archivedAt
-                      ? `Zamknięty ${formatDate(month.archivedAt)}`
-                      : "Archiwum"
-                  }
-                  value=""
-                />
-              ))}
-              {!archiveQuery.isLoading &&
-              (archiveQuery.data ?? []).length === 0 ? (
-                <InlineAlert text="Archiwum jest jeszcze puste." />
-              ) : null}
-            </View>
-            {nextMonthMutation.error ? (
-              <InlineAlert
-                tone="error"
-                text="Nie udało się wygenerować kolejnego miesiąca."
-              />
-            ) : null}
-          </SectionCard>
+          </View>
+
+          {canCreate ? (
+            <Pressable onPress={() => setFinanceModal("menu")} style={styles.fab}>
+              <Plus color={theme.colors.card} size={25} />
+            </Pressable>
+          ) : null}
 
           <FormModal
             onClose={() => setFinanceModal(null)}
@@ -523,27 +376,19 @@ export default function FinanseScreen() {
             visible={financeModal === "menu"}
           >
             <View style={styles.actionPicker}>
-              <ActionButton
-                onPress={() => setFinanceModal("category")}
-                title="+ Dodaj kategorię"
-                variant="secondary"
-              />
-              <ActionButton
-                onPress={() => setFinanceModal("item")}
-                title="+ Dodaj pozycję budżetu"
-              />
-              <ActionButton
-                onPress={() => setFinanceModal("expense")}
-                title="+ Dodaj wydatek"
-                variant="secondary"
-              />
               {canUpdate ? (
-                <ActionButton
-                  onPress={() => setFinanceModal("income")}
-                  title="Zmień dochód"
-                  variant="ghost"
-                />
+                <ActionButton onPress={() => setFinanceModal("income")} title="Zmień dochód" variant="secondary" />
               ) : null}
+              <ActionButton onPress={() => setFinanceModal("category")} title="Dodaj kategorię" variant="secondary" />
+              <ActionButton onPress={() => setFinanceModal("item")} title="Dodaj pozycję budżetu" />
+              <ActionButton onPress={() => setFinanceModal("expense")} title="Dodaj wydatek" variant="secondary" />
+              <ActionButton
+                disabled={nextMonthMutation.isPending}
+                loading={nextMonthMutation.isPending}
+                onPress={() => nextMonthMutation.mutate()}
+                title="Wygeneruj kolejny miesiąc"
+                variant="ghost"
+              />
             </View>
           </FormModal>
 
@@ -621,9 +466,7 @@ export default function FinanseScreen() {
               placeholder="Np. rachunki"
             />
             <View style={styles.switchRow}>
-              <Text style={styles.muted}>
-                Kopiuj budżet do kolejnego miesiąca
-              </Text>
+              <Text style={styles.muted}>Kopiuj budżet do kolejnego miesiąca</Text>
               <Switch
                 onValueChange={setCopyCategory}
                 thumbColor={theme.colors.card}
@@ -677,7 +520,7 @@ export default function FinanseScreen() {
             />
             <ChoiceSelector
               emptyText="Brak kategorii do wyboru."
-              items={(categoriesQuery.data ?? categories).map((category) => ({
+              items={(categoriesQuery.data ?? currentCategories).map((category) => ({
                 id: category.id,
                 label: category.name,
               }))}
@@ -747,85 +590,106 @@ export default function FinanseScreen() {
   );
 }
 
-function CategoryBlock({
-  category,
-  colors,
+function FinanceMetric({
+  color,
+  icon,
+  label,
+  value,
 }: {
-  category: BudgetCategoryWithItems;
-  colors: AppPalette;
+  color: string;
+  icon: ReactNode;
+  label: string;
+  value: string;
 }) {
-  const styles = useMemo(() => createStyles(colors), [colors]);
-  const items = getCategoryItems(category);
-  const planned = items.reduce(
-    (sum, item) => sum + Number(item.budgetAmount ?? 0),
-    0,
-  );
-  const spent = items.reduce(
-    (sum, item) => sum + Number(item.spentAmount ?? 0),
-    0,
-  );
-  const remaining = planned - spent;
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
 
   return (
-    <View style={styles.categoryBlock}>
-      <View style={styles.categoryHeader}>
-        <View style={styles.categoryTitle}>
-          <Text style={styles.itemTitle}>{category.name}</Text>
-          <Text style={styles.muted}>
-            {items.length} pozycji -{" "}
-            {category.copyBudgetToNextMonth ? "kopiowana" : "jednorazowa"}
-          </Text>
-        </View>
-        <Text
-          style={[
-            styles.categoryTotal,
-            remaining < 0 && styles.moneyValueDanger,
-          ]}
-        >
-          {formatMoney(remaining)}
-        </Text>
+    <View style={styles.metric}>
+      <View style={styles.metricTop}>
+        {icon}
+        <Text style={styles.metricLabel}>{label}</Text>
       </View>
-      <View style={styles.list}>
-        {items.length === 0 ? (
-          <InlineAlert text="Brak pozycji w tej kategorii." />
-        ) : null}
-        {items.map((item) => (
-          <MoneyRow
-            key={item.id}
-            label={item.name}
-            sublabel={`${formatOwner(item.owner)} - wydane ${formatMoney(item.spentAmount)}`}
-            value={
-              item.budgetAmount
-                ? formatMoney(item.remainingAmount ?? 0)
-                : "Bez limitu"
-            }
-          />
-        ))}
-      </View>
+      <Text numberOfLines={1} style={[styles.metricValue, { color }]}>
+        {value}
+      </Text>
     </View>
   );
 }
 
-function MoneyRow({
-  label,
-  sublabel,
-  value,
-}: {
-  label: string;
-  sublabel?: string;
-  value: string;
-}) {
+function FinanceSheet({ categories }: { categories: BudgetCategoryWithItems[] }) {
   const theme = useAppTheme();
-  const styles = useMemo(() => createStyles(theme.colors), [theme.colors]);
+  const styles = createStyles(theme.colors);
+
+  if (categories.length === 0) {
+    return <InlineAlert text="Nie ma jeszcze kategorii budżetowych." />;
+  }
 
   return (
-    <View style={styles.moneyRow}>
-      <View style={styles.moneyRowText}>
-        <Text style={styles.itemTitle}>{label}</Text>
-        {sublabel ? <Text style={styles.muted}>{sublabel}</Text> : null}
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sheetScroller}>
+      <View style={styles.sheet}>
+        <View style={styles.sheetHeader}>
+          <Text style={[styles.headerCell, styles.personCell]}>Osoba</Text>
+          <Text style={[styles.headerCell, styles.categoryCell]}>Kategoria</Text>
+          <Text style={styles.amountHeaderCell}>Budżet</Text>
+          <Text style={styles.amountHeaderCell}>Wydano</Text>
+          <Text style={styles.amountHeaderCell}>Zostaje</Text>
+        </View>
+        {categories.map((category) => {
+          const items = getCategoryItems(category);
+          const planned = items.reduce((sum, item) => sum + Number(item.budgetAmount ?? 0), 0);
+          const spent = items.reduce((sum, item) => sum + Number(item.spentAmount ?? 0), 0);
+          const remaining = planned - spent;
+
+          return (
+            <View key={category.id}>
+              <View style={styles.categoryRow}>
+                <Text style={styles.categoryRowText}>{category.name.toUpperCase()}</Text>
+              </View>
+              {items.length === 0 ? (
+                <View style={styles.sheetRow}>
+                  <Text style={[styles.bodyCell, styles.personCell]}>-</Text>
+                  <Text style={[styles.bodyCell, styles.categoryCell]}>Brak pozycji</Text>
+                  <Text style={styles.amountCell}>-</Text>
+                  <Text style={styles.amountCell}>-</Text>
+                  <Text style={styles.amountCell}>-</Text>
+                </View>
+              ) : null}
+              {items.map((item) => (
+                <View key={item.id} style={styles.sheetRow}>
+                  <Text numberOfLines={1} style={[styles.bodyCell, styles.personCell]}>
+                    {formatOwner(item.owner)}
+                  </Text>
+                  <Text numberOfLines={1} style={[styles.bodyCell, styles.categoryCell]}>
+                    {item.name}
+                  </Text>
+                  <Text style={styles.amountCell}>{formatMoney(item.budgetAmount)}</Text>
+                  <Text style={styles.amountCell}>{formatMoney(item.spentAmount)}</Text>
+                  <Text
+                    style={[
+                      styles.amountCell,
+                      Number(item.remainingAmount ?? 0) < 0 && styles.dangerText,
+                      Number(item.remainingAmount ?? 0) >= 0 && styles.positiveText,
+                    ]}
+                  >
+                    {item.budgetAmount ? formatMoney(item.remainingAmount ?? 0) : "bez limitu"}
+                  </Text>
+                </View>
+              ))}
+              <View style={styles.sumRow}>
+                <Text style={[styles.sumCell, styles.personCell]}>Suma</Text>
+                <Text style={[styles.sumCell, styles.categoryCell]}>{category.name}</Text>
+                <Text style={styles.amountSumCell}>{formatMoney(planned)}</Text>
+                <Text style={styles.amountSumCell}>{formatMoney(spent)}</Text>
+                <Text style={[styles.amountSumCell, remaining < 0 && styles.dangerText]}>
+                  {formatMoney(remaining)}
+                </Text>
+              </View>
+            </View>
+          );
+        })}
       </View>
-      {value ? <Text style={styles.moneyValue}>{value}</Text> : null}
-    </View>
+    </ScrollView>
   );
 }
 
@@ -841,7 +705,7 @@ function ChoiceSelector({
   selectedId: string;
 }) {
   const theme = useAppTheme();
-  const styles = useMemo(() => createStyles(theme.colors), [theme.colors]);
+  const styles = createStyles(theme.colors);
 
   if (items.length === 0) {
     return <InlineAlert text={emptyText} />;
@@ -899,146 +763,164 @@ function isPositiveMoney(value: string): boolean {
 function formatMoney(value: string | number | null | undefined): string {
   const amount = Number(value ?? 0);
 
-  return new Intl.NumberFormat("pl-PL", {
-    currency: "PLN",
-    maximumFractionDigits: 2,
-    minimumFractionDigits: 2,
-    style: "currency",
-  }).format(Number.isFinite(amount) ? amount : 0);
+  return `${(Number.isFinite(amount) ? amount : 0).toLocaleString("pl-PL", {
+    maximumFractionDigits: 0,
+  })} zł`;
 }
 
-function formatMonth(month: BudgetMonth): string {
-  return `${String(month.month).padStart(2, "0")}.${month.year}`;
+function formatMonthShort(month: BudgetMonth): string {
+  const date = new Date(month.year, month.month - 1, 1);
+  const label = new Intl.DateTimeFormat("pl-PL", {
+    month: "short",
+  }).format(date);
+
+  return `${label.replace(".", "")} ${String(month.year).slice(2)}`;
 }
 
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat("pl-PL", {
-    day: "2-digit",
-    month: "2-digit",
+function formatMonthLong(month: BudgetMonth): string {
+  const date = new Date(month.year, month.month - 1, 1);
+  const label = new Intl.DateTimeFormat("pl-PL", {
+    month: "long",
     year: "numeric",
-  }).format(new Date(value));
+  }).format(date);
+
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 function createStyles(colors: AppPalette) {
   return StyleSheet.create({
-    boxTitle: {
-      color: colors.text,
-      fontSize: 14,
-      fontWeight: "800",
-      letterSpacing: 0,
-    },
     actionPicker: {
       gap: spacing.sm,
     },
-    categoryBlock: {
-      backgroundColor: colors.cardMuted,
-      borderColor: colors.border,
-      borderRadius: radii.control,
-      borderWidth: 1,
-      gap: spacing.md,
-      padding: spacing.md,
-    },
-    categoryHeader: {
-      alignItems: "flex-start",
-      flexDirection: "row",
-      gap: spacing.md,
-      justifyContent: "space-between",
-    },
-    categoryTitle: {
-      flex: 1,
-      gap: spacing.xs,
-    },
-    categoryTotal: {
-      color: colors.primaryDark,
-      fontSize: 14,
+    amountCell: {
+      borderColor: colors.line,
+      borderLeftWidth: 1,
+      color: colors.text,
+      fontSize: 11,
       fontWeight: "800",
       letterSpacing: 0,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 7,
       textAlign: "right",
+      width: 60,
+    },
+    amountHeaderCell: {
+      backgroundColor: colors.cardMuted,
+      borderColor: colors.line,
+      borderLeftWidth: 1,
+      color: colors.text,
+      fontSize: 10,
+      fontWeight: "900",
+      letterSpacing: 0,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 8,
+      textAlign: "right",
+      width: 60,
+    },
+    amountSumCell: {
+      borderColor: colors.line,
+      borderLeftWidth: 1,
+      color: colors.text,
+      fontSize: 11,
+      fontWeight: "900",
+      letterSpacing: 0,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 7,
+      textAlign: "right",
+      width: 60,
+    },
+    bodyCell: {
+      color: colors.text,
+      fontSize: 11,
+      fontWeight: "700",
+      letterSpacing: 0,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 7,
+    },
+    categoryCell: {
+      width: 92,
+    },
+    categoryRow: {
+      backgroundColor: colors.primarySoft,
+      borderColor: colors.line,
+      borderTopWidth: 1,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 6,
+    },
+    categoryRowText: {
+      color: colors.primaryDark,
+      fontSize: 11,
+      fontWeight: "900",
+      letterSpacing: 0,
     },
     chipRow: {
       flexDirection: "row",
       flexWrap: "wrap",
       gap: spacing.sm,
     },
-    formBox: {
-      backgroundColor: colors.cardMuted,
-      borderColor: colors.border,
-      borderRadius: radii.control,
-      borderWidth: 1,
-      gap: spacing.md,
-      padding: spacing.md,
+    dangerText: {
+      color: colors.danger,
     },
-    formField: {
-      flex: 1,
+    fab: {
+      alignItems: "center",
+      alignSelf: "flex-end",
+      backgroundColor: colors.primary,
+      borderRadius: 999,
+      elevation: 5,
+      height: 54,
+      justifyContent: "center",
+      marginTop: spacing.xs,
+      shadowColor: colors.primary,
+      shadowOffset: { height: 10, width: 0 },
+      shadowOpacity: 0.26,
+      shadowRadius: 18,
+      width: 54,
     },
-    formRow: {
-      alignItems: "flex-end",
+    headerActions: {
+      alignItems: "center",
       flexDirection: "row",
-      gap: spacing.sm,
+      gap: spacing.md,
+      minHeight: 34,
     },
-    hero: {
-      backgroundColor: colors.primarySoft,
+    headerCell: {
+      backgroundColor: colors.cardMuted,
+      color: colors.text,
+      fontSize: 11,
+      fontWeight: "900",
+      letterSpacing: 0,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 8,
+    },
+    metric: {
+      backgroundColor: colors.card,
       borderColor: colors.border,
       borderRadius: radii.card,
       borderWidth: 1,
-      gap: spacing.md,
-      padding: spacing.lg,
-    },
-    heroHeader: {
-      alignItems: "center",
-      flexDirection: "row",
-      gap: spacing.md,
-    },
-    heroIcon: {
-      alignItems: "center",
-      backgroundColor: colors.card,
-      borderRadius: radii.control,
-      height: 46,
-      justifyContent: "center",
-      width: 46,
-    },
-    heroLabel: {
-      color: colors.textMuted,
-      fontSize: 12,
-      fontWeight: "800",
-      letterSpacing: 0,
-      textTransform: "uppercase",
-    },
-    heroMeta: {
-      color: colors.textMuted,
-      fontSize: 12,
-      fontWeight: "700",
-      letterSpacing: 0,
-    },
-    heroMetaRow: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      gap: spacing.md,
-    },
-    heroText: {
       flex: 1,
       gap: spacing.xs,
+      minHeight: 70,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.sm,
     },
-    heroValue: {
-      color: colors.text,
-      fontSize: 28,
+    metricLabel: {
+      color: colors.textMuted,
+      fontSize: 10,
       fontWeight: "900",
       letterSpacing: 0,
     },
-    heroValueDanger: {
-      color: colors.danger,
+    metricRow: {
+      flexDirection: "row",
+      gap: spacing.xs,
     },
-    inlineButton: {
-      minWidth: 104,
+    metricTop: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: 3,
     },
-    itemTitle: {
-      color: colors.text,
-      fontSize: 14,
-      fontWeight: "800",
+    metricValue: {
+      fontSize: 13,
+      fontWeight: "900",
       letterSpacing: 0,
-    },
-    list: {
-      gap: spacing.sm,
     },
     modalFooter: {
       flexDirection: "row",
@@ -1047,97 +929,129 @@ function createStyles(colors: AppPalette) {
     modalFooterButton: {
       flex: 1,
     },
-    metricCard: {
+    monthSwitcher: {
+      alignItems: "center",
+      backgroundColor: colors.card,
       borderColor: colors.border,
+      borderRadius: 999,
       borderWidth: 1,
-      flexBasis: "47%",
-      flexGrow: 1,
-      minHeight: 96,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      minHeight: 38,
+      paddingHorizontal: spacing.sm,
     },
-    metricBudget: {
-      backgroundColor: colors.infoSoft,
+    monthSwitcherTitle: {
+      color: colors.primaryDark,
+      fontSize: 14,
+      fontWeight: "900",
+      letterSpacing: 0,
     },
-    metricDanger: {
-      backgroundColor: colors.dangerSoft,
-    },
-    metricIncome: {
-      backgroundColor: colors.successSoft,
-    },
-    metricRemaining: {
-      backgroundColor: colors.softGreen,
-    },
-    metricSpent: {
-      backgroundColor: colors.warningSoft,
-    },
-    moneyRow: {
+    monthTab: {
       alignItems: "center",
       backgroundColor: colors.card,
       borderColor: colors.border,
       borderRadius: radii.control,
       borderWidth: 1,
-      flexDirection: "row",
-      gap: spacing.md,
-      justifyContent: "space-between",
-      minHeight: 58,
+      minHeight: 34,
+      justifyContent: "center",
       paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
     },
-    moneyRowText: {
-      flex: 1,
+    monthTabActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    monthTabs: {
+      flexDirection: "row",
       gap: spacing.xs,
-      paddingRight: spacing.sm,
+      paddingRight: spacing.md,
     },
-    moneyValue: {
-      color: colors.text,
-      fontSize: 14,
-      fontWeight: "800",
+    monthTabText: {
+      color: colors.textMuted,
+      fontSize: 11,
+      fontWeight: "900",
       letterSpacing: 0,
-      textAlign: "right",
     },
-    moneyValueDanger: {
-      color: colors.danger,
+    monthTabTextActive: {
+      color: colors.inverseText,
     },
     muted: {
       color: colors.textMuted,
+      flex: 1,
       fontSize: 13,
       letterSpacing: 0,
-      lineHeight: 19,
+      lineHeight: 18,
     },
-    progressFill: {
-      backgroundColor: colors.primary,
-      borderRadius: 999,
-      height: "100%",
+    personCell: {
+      width: 64,
     },
-    progressFillDanger: {
-      backgroundColor: colors.danger,
+    positiveText: {
+      color: colors.primaryDark,
     },
-    progressTrack: {
+    sheet: {
       backgroundColor: colors.card,
-      borderRadius: 999,
-      height: 8,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      minWidth: 336,
       overflow: "hidden",
     },
-    sectionActions: {
+    sheetHeader: {
       flexDirection: "row",
-      flexWrap: "wrap",
-      gap: spacing.xs,
-      justifyContent: "flex-end",
     },
-    summaryGrid: {
+    sheetRow: {
+      backgroundColor: colors.card,
+      borderColor: colors.line,
+      borderTopWidth: 1,
       flexDirection: "row",
-      flexWrap: "wrap",
-      gap: spacing.sm,
     },
-    topActions: {
-      alignItems: "center",
+    sheetScroller: {
+      marginRight: -spacing.md,
+    },
+    sumCell: {
+      color: colors.text,
+      fontSize: 11,
+      fontWeight: "900",
+      letterSpacing: 0,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 7,
+    },
+    sumRow: {
+      backgroundColor: colors.primarySoft,
+      borderColor: colors.line,
+      borderTopWidth: 1,
       flexDirection: "row",
-      gap: spacing.xs,
     },
     switchRow: {
       alignItems: "center",
       flexDirection: "row",
       gap: spacing.md,
       justifyContent: "space-between",
+    },
+    totalLabel: {
+      color: colors.text,
+      flex: 1,
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    totalRow: {
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+    },
+    totalValue: {
+      color: colors.text,
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 0,
+      minWidth: 68,
+      textAlign: "right",
     },
   });
 }
