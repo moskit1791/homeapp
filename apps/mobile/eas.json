@@ -1,0 +1,38 @@
+{
+  "cli": {
+    "appVersionSource": "local",
+    "version": ">= 13.0.0"
+  },
+  "build": {
+    "development": {
+      "android": {
+        "buildType": "apk"
+      },
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "http://localhost:3000/api"
+      }
+    },
+    "preview": {
+      "android": {
+        "buildType": "apk"
+      },
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://app.porabkihome.pl/api"
+      }
+    },
+    "production": {
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://app.porabkihome.pl/api"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

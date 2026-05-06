@@ -1,4 +1,7 @@
+import * as GoogleAuth from 'expo-auth-session/providers/google';
+import Constants from 'expo-constants';
 import { Redirect } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { ReactNode, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -23,6 +26,8 @@ import { ActionButton } from '../src/ui/action-button';
 import { AuthTextField } from '../src/ui/auth-text-field';
 import { Apple, Check, Eye, EyeOff, Google, Home, LogIn, UserPlus } from '../src/ui/icon';
 import { SegmentedControl } from '../src/ui/segmented-control';
+
+WebBrowser.maybeCompleteAuthSession();
 
 const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email('Podaj poprawny e-mail'),
@@ -62,7 +67,20 @@ type LegalDocument = 'privacy' | 'terms';
 export default function Index() {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
-  const { createFirstHousehold, registerAndSignIn, signIn, status } = useSession();
+  const { createFirstHousehold, registerAndSignIn, signIn, signInWithGoogle, status } = useSession();
+  const googleOAuthConfig = readGoogleOAuthConfig();
+  const googleFallbackClientId =
+    googleOAuthConfig.androidClientId ??
+    googleOAuthConfig.iosClientId ??
+    googleOAuthConfig.webClientId ??
+    'google-oauth-not-configured';
+  const [googleRequest, googleResponse, promptGoogleAsync] = GoogleAuth.useIdTokenAuthRequest({
+    androidClientId: googleOAuthConfig.androidClientId,
+    clientId: googleFallbackClientId,
+    iosClientId: googleOAuthConfig.iosClientId,
+    selectAccount: true,
+    webClientId: googleOAuthConfig.webClientId
+  });
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -113,7 +131,6 @@ export default function Index() {
     };
   }, []);
 
-  /*
   useEffect(() => {
     if (googleResponse?.type !== 'success') {
       return;
@@ -133,7 +150,6 @@ export default function Index() {
       .catch((submitError) => setError(getMessage(submitError)))
       .finally(() => setLoading(false));
   }, [googleResponse, rememberMe, signInWithGoogle]);
-  */
 
   useEffect(() => {
     let active = true;
@@ -403,20 +419,17 @@ export default function Index() {
       return;
     }
 
-    setNotice('Przycisk Google jest przygotowany w UI. PeĹ‚ne logowanie OAuth dopniemy po konfiguracji klienta Google.');
-    /*
-    if (!googleAndroidClientId && !googleIosClientId && !googleWebClientId) {
-      setNotice('Google OAuth wymaga EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID lub EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID.');
+    if (!googleOAuthConfig.androidClientId && !googleOAuthConfig.iosClientId && !googleOAuthConfig.webClientId) {
+      setNotice('Google OAuth wymaga skonfigurowanego client ID w env/EAS.');
       return;
     }
 
     if (!googleRequest) {
-      setNotice('Google OAuth jeszcze się inicjalizuje. Spróbuj ponownie za chwilę.');
+      setNotice('Google OAuth jeszcze sie inicjalizuje. Sprobuj ponownie za chwile.');
       return;
     }
 
     void promptGoogleAsync();
-    */
   }
 
   return (
@@ -624,7 +637,12 @@ export default function Index() {
                   <SocialDivider />
                   <View style={styles.socialRow}>
                     <SocialButton icon={<Google color="#DB4437" size={18} />} label="Google" onPress={() => submitSocial('Google')} />
-                    <SocialButton icon={<Apple color={theme.colors.text} size={18} />} label="Apple" onPress={() => submitSocial('Apple')} />
+                    <SocialButton
+                      disabled
+                      icon={<Apple color={theme.colors.textSubtle} size={18} />}
+                      label="Apple"
+                      onPress={() => submitSocial('Apple')}
+                    />
                   </View>
                   <Text style={styles.legalSmall}>
                     Logując się, akceptujesz{' '}
@@ -746,11 +764,26 @@ export default function Index() {
     );
   }
 
-  function SocialButton({ icon, label, onPress }: { icon: ReactNode; label: string; onPress: () => void }) {
+  function SocialButton({
+    disabled,
+    icon,
+    label,
+    onPress
+  }: {
+    disabled?: boolean;
+    icon: ReactNode;
+    label: string;
+    onPress: () => void;
+  }) {
     return (
-      <Pressable onPress={onPress} style={styles.socialButton}>
+      <Pressable
+        accessibilityState={{ disabled: Boolean(disabled) }}
+        disabled={disabled}
+        onPress={onPress}
+        style={[styles.socialButton, disabled && styles.socialButtonDisabled]}
+      >
         {icon}
-        <Text style={styles.socialLabel}>{label}</Text>
+        <Text style={[styles.socialLabel, disabled && styles.socialLabelDisabled]}>{label}</Text>
       </Pressable>
     );
   }
@@ -936,6 +969,28 @@ type AuthDeepLinkAction =
       token: string;
       type: 'verify-email';
     };
+
+function readGoogleOAuthConfig() {
+  const extra = Constants.expoConfig?.extra as
+    | {
+        googleAndroidClientId?: string;
+        googleIosClientId?: string;
+        googleWebClientId?: string;
+      }
+    | undefined;
+
+  return {
+    androidClientId: normalizeOptionalValue(extra?.googleAndroidClientId),
+    iosClientId: normalizeOptionalValue(extra?.googleIosClientId),
+    webClientId: normalizeOptionalValue(extra?.googleWebClientId)
+  };
+}
+
+function normalizeOptionalValue(value: string | undefined): string | undefined {
+  const normalized = value?.trim();
+
+  return normalized ? normalized : undefined;
+}
 
 function getPasswordStrength(value: string) {
   const checks = [
@@ -1260,11 +1315,18 @@ function createStyles(colors: AppPalette) {
       minHeight: 44,
       paddingHorizontal: spacing.md
     },
+    socialButtonDisabled: {
+      backgroundColor: colors.cardMuted,
+      opacity: 0.56
+    },
     socialLabel: {
       color: colors.text,
       fontSize: 13,
       fontWeight: '800',
       letterSpacing: 0
+    },
+    socialLabelDisabled: {
+      color: colors.textSubtle
     },
     socialRow: {
       flexDirection: 'row',

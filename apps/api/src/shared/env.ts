@@ -21,13 +21,21 @@ const booleanEnv = z.preprocess((value) => {
   return value;
 }, z.boolean());
 
+const optionalNonEmptyString = z.preprocess((value) => {
+  if (typeof value === 'string' && value.trim() === '') {
+    return undefined;
+  }
+
+  return value;
+}, z.string().min(1).optional());
+
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1).default(defaultDatabaseUrl),
   APP_PUBLIC_URL: z.string().url().default('http://localhost:3000'),
   AUTH_LINK_BASE_URL: z.string().url().default('homeapp://auth'),
   AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
   AUTH_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
-  GOOGLE_OAUTH_CLIENT_ID: z.string().min(1).optional(),
+  GOOGLE_OAUTH_CLIENT_ID: optionalNonEmptyString,
   JWT_ACCESS_SECRET: z.string().min(32).default(defaultAccessSecret),
   JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().positive().default(900),
   JWT_REFRESH_SECRET: z.string().min(32).default(defaultRefreshSecret),
@@ -38,11 +46,11 @@ const envSchema = z.object({
   MAIL_DRIVER: z.enum(['console', 'smtp']).default('console'),
   PORT: z.coerce.number().int().positive().default(3000),
   SMTP_FROM: z.string().min(1).default(defaultSmtpFrom),
-  SMTP_HOST: z.string().min(1).optional(),
-  SMTP_PASSWORD: z.string().min(1).optional(),
+  SMTP_HOST: optionalNonEmptyString,
+  SMTP_PASSWORD: optionalNonEmptyString,
   SMTP_PORT: z.coerce.number().int().positive().default(587),
   SMTP_SECURE: booleanEnv.default(false),
-  SMTP_USER: z.string().min(1).optional(),
+  SMTP_USER: optionalNonEmptyString,
   STORAGE_DRIVER: z.enum(['local']).default('local')
 }).superRefine((env, context) => {
   if (Boolean(env.SMTP_USER) !== Boolean(env.SMTP_PASSWORD)) {

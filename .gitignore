@@ -10,6 +10,8 @@ adb-homeapp-*
 adb-index.android.bundle
 tmp-bundle-debug/
 builds/homeapp-release-*.apk
+builds/*.apk
+/app.json
 
 .env
 .env.*

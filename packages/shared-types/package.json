@@ -21,6 +21,7 @@
   "devDependencies": {
     "@homeapp/eslint-config": "workspace:*",
     "@homeapp/tsconfig": "workspace:*",
+    "@types/node": "22.10.5",
     "typescript": "^5.7.2"
   }
 }
