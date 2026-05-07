@@ -19,6 +19,26 @@ export class ApiError extends Error {
   }
 }
 
+export interface ApiNetworkErrorOptions {
+  apiBaseUrl: string;
+  cause?: unknown;
+  url: string;
+}
+
+export class ApiNetworkError extends Error {
+  readonly apiBaseUrl: string;
+  override readonly cause?: unknown;
+  readonly url: string;
+
+  constructor(options: ApiNetworkErrorOptions) {
+    super('Nie mogę połączyć się z serwerem.');
+    this.name = 'ApiNetworkError';
+    this.apiBaseUrl = options.apiBaseUrl;
+    this.cause = options.cause;
+    this.url = options.url;
+  }
+}
+
 export async function createApiErrorFromResponse(response: Response): Promise<ApiError> {
   const details = await readResponseDetails(response);
 
@@ -82,4 +102,3 @@ function extractDetailsMessage(details: unknown): string | undefined {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
-

@@ -23,7 +23,7 @@ services:
       db:
         condition: service_healthy
     environment:
-      NODE_ENV: ${NODE_ENV:-development}
+      NODE_ENV: ${NODE_ENV:-production}
       HOST: 0.0.0.0
       PORT: 3000
       DATABASE_URL: postgres://homeapp:${POSTGRES_PASSWORD}@db:5432/homeapp
@@ -36,8 +36,8 @@ services:
       AUTH_RATE_LIMIT_MAX: ${AUTH_RATE_LIMIT_MAX:-20}
       AUTH_RATE_LIMIT_WINDOW_SECONDS: ${AUTH_RATE_LIMIT_WINDOW_SECONDS:-60}
       GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
-      MAIL_DRIVER: ${MAIL_DRIVER:-console}
-      SMTP_FROM: ${SMTP_FROM:-HomeApp <noreply@homeapp.local>}
+      MAIL_DRIVER: ${MAIL_DRIVER:-smtp}
+      SMTP_FROM: ${SMTP_FROM:-HomeApp <noreply@app.porabkihome.pl>}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_SECURE: ${SMTP_SECURE:-false}

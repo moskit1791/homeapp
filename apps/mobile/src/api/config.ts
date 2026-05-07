@@ -1,6 +1,6 @@
 import Constants from 'expo-constants';
 
-const DEFAULT_API_BASE_URL = 'http://localhost:3000/api';
+const DEFAULT_API_BASE_URL = 'https://app.porabkihome.pl/api';
 
 function readConfiguredApiBaseUrl(): string | undefined {
   const extra = Constants.expoConfig?.extra as { apiUrl?: string } | undefined;
@@ -18,7 +18,15 @@ function readEnvApiBaseUrl(): string | undefined {
 }
 
 function normalizeApiBaseUrl(url: string): string {
-  return url.replace(/\/+$/, '');
+  const normalizedUrl = url.replace(/\/+$/, '');
+
+  try {
+    new URL(normalizedUrl);
+  } catch {
+    throw new Error(`Invalid API base URL: ${normalizedUrl}`);
+  }
+
+  return normalizedUrl;
 }
 
 export const apiBaseUrl = normalizeApiBaseUrl(

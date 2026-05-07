@@ -7,7 +7,7 @@ const path = require('node:path');
 
 module.exports = () => {
   const config = appJson.expo;
-  const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api';
+  const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'https://app.porabkihome.pl/api';
   const projectId = process.env.EXPO_PROJECT_ID || config.extra?.eas?.projectId;
   const googleAndroidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
   const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;

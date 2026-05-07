@@ -1,5 +1,5 @@
-import { buildApiUrl } from './config';
-import { createApiErrorFromResponse } from './errors';
+import { buildApiUrl, getApiBaseUrl } from './config';
+import { ApiNetworkError, createApiErrorFromResponse } from './errors';
 
 export type ApiMethod = 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT';
 
@@ -34,7 +34,25 @@ export async function apiRequest<TResponse, TBody = unknown>(
     requestInit.body = JSON.stringify(options.body);
   }
 
-  const response = await fetch(buildApiUrl(path), requestInit);
+  const url = buildApiUrl(path);
+  let response: Response;
+
+  try {
+    response = await fetch(url, requestInit);
+  } catch (error) {
+    console.warn('API network request failed', {
+      apiBaseUrl: getApiBaseUrl(),
+      method: requestInit.method,
+      path,
+      url
+    });
+
+    throw new ApiNetworkError({
+      apiBaseUrl: getApiBaseUrl(),
+      cause: error,
+      url
+    });
+  }
 
   if (!response.ok) {
     throw await createApiErrorFromResponse(response);
@@ -56,4 +74,3 @@ async function readJsonResponse<TResponse>(response: Response): Promise<TRespons
 
   return JSON.parse(text) as TResponse;
 }
-

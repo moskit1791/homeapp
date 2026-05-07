@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { z } from 'zod';
-import { forgotPassword, resendVerification, resetPassword, verifyEmail } from '../src/api';
+import { ApiNetworkError, forgotPassword, resendVerification, resetPassword, verifyEmail } from '../src/api';
 import { useSession } from '../src/session/session-context';
 import { loadRememberedEmail } from '../src/session/secure-session-store';
 import { useAppTheme, type AppPalette } from '../src/theme/use-app-theme';
@@ -333,7 +333,7 @@ export default function Index() {
         });
         setMode('login');
         setLoginValues((current) => ({ ...current, email: parsed.data.email }));
-        setNotice('Tryb developerski: konto zostało potwierdzone. Możesz się zalogować.');
+        setNotice('Konto zostało potwierdzone. Możesz się zalogować.');
       } else {
         setNotice('Wysłaliśmy nowy link weryfikacyjny, jeśli konto czeka na potwierdzenie.');
       }
@@ -378,11 +378,7 @@ export default function Index() {
     try {
       const response = await forgotPassword(parsed.data);
       setNewPasswordValues((current) => ({ ...current, token: response.devResetToken ?? '' }));
-      setResetNotice(
-        response.devResetToken
-          ? 'Tryb developerski: token został uzupełniony automatycznie.'
-          : 'Jeśli konto istnieje, wysłaliśmy instrukcję resetu hasła.'
-      );
+      setResetNotice('Jeśli konto istnieje, wysłaliśmy instrukcję resetu hasła.');
     } catch (submitError) {
       setResetNotice(getMessage(submitError));
     } finally {
@@ -548,7 +544,7 @@ export default function Index() {
                     <>
                       <FormTitle
                         icon={<UserPlus color={theme.colors.primary} size={18} />}
-                        subtitle="Konto zostanie od razu zweryfikowane w trybie developerskim."
+                        subtitle="Po rejestracji wyślemy link do potwierdzenia adresu e-mail."
                         title="Załóż konto"
                       />
                       <AuthTextField
@@ -859,8 +855,7 @@ export default function Index() {
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Reset hasła</Text>
             <Text style={styles.modalText}>
-              Wpisz e-mail konta. W trybie developerskim aplikacja uzupełni token automatycznie, żeby dało się testować
-              przepływ bez poczty.
+              Wpisz e-mail konta. Jeśli konto istnieje, wyślemy instrukcję resetu hasła.
             </Text>
             <AuthTextField
               autoComplete="email"
@@ -922,8 +917,8 @@ function toFieldErrors<TField extends string>(error: z.ZodError): FieldErrors<TF
 }
 
 function getMessage(error: unknown): string {
-  if (error instanceof TypeError && error.message === 'Network request failed') {
-    return 'Nie mogę połączyć się z serwerem. Sprawdź API i połączenie telefonu z komputerem.';
+  if (error instanceof ApiNetworkError || (error instanceof TypeError && error.message === 'Network request failed')) {
+    return 'Nie mogę połączyć się z serwerem. Sprawdź połączenie z internetem i spróbuj ponownie.';
   }
 
   if (error instanceof Error) {

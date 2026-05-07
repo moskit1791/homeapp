@@ -169,6 +169,14 @@ export function loginWithGoogle(
   });
 }
 
+export function checkApiHealth(options?: ApiCallOptionsInput): Promise<{ service: string; status: string }> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<{ service: string; status: string }>('/health', {
+    signal: requestOptions.signal
+  });
+}
+
 export function forgotPassword(
   input: ForgotPasswordRequest,
   options?: ApiCallOptionsInput

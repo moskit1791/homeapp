@@ -31,7 +31,7 @@
       "typedRoutes": true
     },
     "extra": {
-      "apiUrl": "http://localhost:3000/api",
+      "apiUrl": "https://app.porabkihome.pl/api",
       "router": {
         "origin": false
       },
