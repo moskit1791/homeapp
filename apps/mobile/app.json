@@ -3,13 +3,13 @@
     "name": "HomeApp",
     "slug": "homeapp",
     "scheme": "homeapp",
-    "version": "0.1.0",
+    "version": "0.1.50",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "newArchEnabled": false,
     "android": {
       "package": "com.homeapp.mobile",
-      "versionCode": 2
+      "versionCode": 50
     },
     "plugins": [
       "expo-router",

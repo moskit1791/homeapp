@@ -213,8 +213,8 @@ builds/homeapp-release-20260430-1838.apk
 ```
 
 Parametry:
-- Android `versionCode`: `2`
-- Android `versionName`: `0.1.1`
+- Android `versionCode`: `50`
+- Android `versionName`: `0.1.50`
 - API wbudowane w bundle: `http://192.168.100.109:3000/api`
 - Metro nie jest potrzebne.
 
