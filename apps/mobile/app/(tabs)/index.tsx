@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import type { ReactNode } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import {
   getStartDashboard,
@@ -13,7 +14,7 @@ import { useModulePermission } from "../../src/permissions/use-permissions";
 import { useSession } from "../../src/session/session-context";
 import { radii, spacing } from "../../src/theme/tokens";
 import { useAppTheme, type AppPalette } from "../../src/theme/use-app-theme";
-import { AppScreen, IconButton, QueryState } from "../../src/ui";
+import { ActionButton, AppScreen, FormModal, IconButton, QueryState } from "../../src/ui";
 import {
   AccountCircle,
   Bell,
@@ -36,6 +37,7 @@ export default function DzisiajScreen() {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
   const accessToken = session?.accessToken;
+  const [notificationsVisible, setNotificationsVisible] = useState(false);
   const shoppingPermission = useModulePermission("shopping");
   const notesPermission = useModulePermission("notes");
 
@@ -68,6 +70,67 @@ export default function DzisiajScreen() {
     right.updatedAt.localeCompare(left.updatedAt),
   )[0];
   const remainingBudget = dashboard?.finance?.totalRemainingAmount;
+  const remainingBudgetAmount = Number(remainingBudget ?? 0);
+  const openFromNotification = useCallback((route: "/(tabs)/kalendarz" | "/(tabs)/finanse" | "/(tabs)/lista" | "/(tabs)/dom") => {
+    setNotificationsVisible(false);
+    router.push(route as never);
+  }, [router]);
+  const notificationItems = useMemo<NotificationItem[]>(() => {
+    const items: NotificationItem[] = [];
+
+    if (todayEvents.length > 0) {
+      items.push({
+        body: nextEvent ? eventMeta(nextEvent) : "Sprawdź plan dnia.",
+        icon: <CalendarDays color={theme.colors.calendar} size={20} />,
+        id: "today-events",
+        onPress: () => openFromNotification("/(tabs)/kalendarz"),
+        title: todayEvents.length === 1 ? "Masz 1 wydarzenie dzisiaj" : `Masz ${todayEvents.length} wydarzenia dzisiaj`,
+      });
+    }
+
+    if (openShopping.length > 0) {
+      items.push({
+        body: openShopping.length === 1 ? "1 produkt czeka na liście." : `${openShopping.length} produktów czeka na liście.`,
+        icon: <ShoppingCart color={theme.colors.shopping} size={20} />,
+        id: "shopping-open",
+        onPress: () => openFromNotification("/(tabs)/lista"),
+        title: "Zakupy do zrobienia",
+      });
+    }
+
+    if (Number.isFinite(remainingBudgetAmount) && remainingBudgetAmount < 0) {
+      items.push({
+        body: `Budżet jest przekroczony o ${formatMoney(Math.abs(remainingBudgetAmount))}.`,
+        icon: <WalletCards color={theme.colors.danger} size={20} />,
+        id: "budget-negative",
+        onPress: () => openFromNotification("/(tabs)/finanse"),
+        title: "Budżet wymaga uwagi",
+      });
+    }
+
+    if (!nextMeal) {
+      items.push({
+        body: "Nie ma zaplanowanego posiłku na dziś.",
+        icon: <Utensils color={theme.colors.food} size={20} />,
+        id: "meal-missing",
+        onPress: () => openFromNotification("/(tabs)/lista"),
+        title: "Plan posiłków jest pusty",
+      });
+    }
+
+    return items;
+  }, [
+    nextEvent,
+    nextMeal,
+    openShopping.length,
+    remainingBudgetAmount,
+    openFromNotification,
+    theme.colors.calendar,
+    theme.colors.danger,
+    theme.colors.food,
+    theme.colors.shopping,
+    todayEvents.length,
+  ]);
 
   return (
     <AppScreen
@@ -81,12 +144,12 @@ export default function DzisiajScreen() {
             <RefreshCcw color={theme.colors.textMuted} size={17} />
           </IconButton>
           <IconButton
-            accessibilityLabel="Przejdź do ustawień powiadomień"
-            onPress={() => router.push("/(tabs)/dom" as never)}
+            accessibilityLabel="Pokaż powiadomienia"
+            onPress={() => setNotificationsVisible(true)}
           >
             <View style={styles.bellWrap}>
               <Bell color={theme.colors.text} size={19} />
-              <View style={styles.bellDot} />
+              {notificationItems.length > 0 ? <View style={styles.bellDot} /> : null}
             </View>
           </IconButton>
         </View>
@@ -179,7 +242,64 @@ export default function DzisiajScreen() {
           onPress={() => router.push("/(tabs)/lista" as never)}
         />
       </View>
+
+      <FormModal
+        onClose={() => setNotificationsVisible(false)}
+        subtitle={
+          notificationItems.length === 0
+            ? "Brak aktywnych spraw."
+            : notificationItems.length === 1
+            ? "1 aktywna sprawa do sprawdzenia."
+            : `${notificationItems.length} aktywne sprawy do sprawdzenia.`
+        }
+        title="Powiadomienia"
+        visible={notificationsVisible}
+      >
+        {notificationItems.length > 0 ? (
+          notificationItems.map((item) => <NotificationRow item={item} key={item.id} />)
+        ) : (
+          <View style={styles.emptyNotifications}>
+            <Bell color={theme.colors.textSubtle} size={24} />
+            <Text style={styles.emptyNotificationsTitle}>Brak nowych powiadomień</Text>
+            <Text style={styles.emptyNotificationsText}>Najważniejsze rzeczy pojawią się tutaj.</Text>
+          </View>
+        )}
+        <ActionButton
+          onPress={() => openFromNotification("/(tabs)/dom")}
+          title="Ustawienia powiadomień push"
+          variant="secondary"
+        />
+      </FormModal>
     </AppScreen>
+  );
+}
+
+interface NotificationItem {
+  body: string;
+  icon: ReactNode;
+  id: string;
+  onPress: () => void;
+  title: string;
+}
+
+function NotificationRow({ item }: { item: NotificationItem }) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+
+  return (
+    <Pressable
+      accessibilityLabel={`${item.title}. ${item.body}`}
+      accessibilityRole="button"
+      onPress={item.onPress}
+      style={({ pressed }) => [styles.notificationRow, pressed && styles.pressed]}
+    >
+      <View style={styles.notificationIcon}>{item.icon}</View>
+      <View style={styles.notificationText}>
+        <Text style={styles.notificationTitle}>{item.title}</Text>
+        <Text style={styles.notificationBody}>{item.body}</Text>
+      </View>
+      <ChevronRight color={theme.colors.textMuted} size={20} />
+    </Pressable>
   );
 }
 
@@ -358,6 +478,66 @@ function createStyles(colors: AppPalette) {
       alignItems: "center",
       flexDirection: "row",
       gap: spacing.xs,
+    },
+    emptyNotifications: {
+      alignItems: "center",
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      gap: spacing.xs,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.xl,
+    },
+    emptyNotificationsText: {
+      color: colors.textMuted,
+      fontSize: 12,
+      letterSpacing: 0,
+      lineHeight: 17,
+      textAlign: "center",
+    },
+    emptyNotificationsTitle: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: "900",
+      letterSpacing: 0,
+      textAlign: "center",
+    },
+    notificationBody: {
+      color: colors.textMuted,
+      fontSize: 12,
+      letterSpacing: 0,
+      lineHeight: 17,
+    },
+    notificationIcon: {
+      alignItems: "center",
+      backgroundColor: colors.cardMuted,
+      borderRadius: radii.control,
+      height: 38,
+      justifyContent: "center",
+      width: 38,
+    },
+    notificationRow: {
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      minHeight: 68,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+    },
+    notificationText: {
+      flex: 1,
+      gap: 2,
+      minWidth: 0,
+    },
+    notificationTitle: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: "900",
+      letterSpacing: 0,
     },
     pressed: {
       opacity: 0.76,

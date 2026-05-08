@@ -193,20 +193,47 @@ export class HouseholdsService {
     const context = await this.getInvitationContext(householdId, invitedByUserId);
 
     const token = randomBytes(32).toString('hex');
-    const result = await this.database.query<InvitationRow>(
+    const activeInvitation = await this.database.query<{ id: string }>(
       `
-        insert into invitations (
-          household_id,
-          email,
-          invited_by_user_id,
-          token,
-          expires_at
-        )
-        values ($1, $2, $3, $4, now() + interval '7 days')
-        returning id, household_id, email, token, expires_at, accepted_at
+        select id
+        from invitations
+        where household_id = $1
+          and lower(email::text) = $2
+          and accepted_at is null
+          and expires_at > now()
+        order by created_at desc
+        limit 1
       `,
-      [householdId, email, invitedByUserId, token]
+      [householdId, email]
     );
+    const existingInvitationId = activeInvitation.rows[0]?.id;
+    const result = existingInvitationId
+      ? await this.database.query<InvitationRow>(
+          `
+            update invitations
+            set
+              invited_by_user_id = $2,
+              token = $3,
+              expires_at = now() + interval '7 days'
+            where id = $1
+            returning id, household_id, email, token, expires_at, accepted_at
+          `,
+          [existingInvitationId, invitedByUserId, token]
+        )
+      : await this.database.query<InvitationRow>(
+          `
+            insert into invitations (
+              household_id,
+              email,
+              invited_by_user_id,
+              token,
+              expires_at
+            )
+            values ($1, $2, $3, $4, now() + interval '7 days')
+            returning id, household_id, email, token, expires_at, accepted_at
+          `,
+          [householdId, email, invitedByUserId, token]
+        );
 
     const invitation = result.rows[0];
 
@@ -232,14 +259,16 @@ export class HouseholdsService {
         token
       });
     } catch (error) {
-      await this.database.query(
-        `
-          delete from invitations
-          where id = $1
-            and accepted_at is null
-        `,
-        [invitation.id]
-      );
+      if (!existingInvitationId) {
+        await this.database.query(
+          `
+            delete from invitations
+            where id = $1
+              and accepted_at is null
+          `,
+          [invitation.id]
+        );
+      }
 
       throw error;
     }
@@ -427,22 +456,6 @@ export class HouseholdsService {
       throw new ConflictException('User is already an active household member');
     }
 
-    const activeInvitation = await this.database.query<{ id: string }>(
-      `
-        select id
-        from invitations
-        where household_id = $1
-          and lower(email::text) = $2
-          and accepted_at is null
-          and expires_at > now()
-        limit 1
-      `,
-      [householdId, normalizedEmail]
-    );
-
-    if (activeInvitation.rows[0]) {
-      throw new ConflictException('Active invitation already exists for this email');
-    }
   }
 
   private async getInvitationContext(

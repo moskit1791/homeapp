@@ -335,6 +335,19 @@ export default function FinanseScreen() {
             >
               <ChevronRight color={canGoNextMonth ? theme.colors.textMuted : theme.colors.textSubtle} size={20} />
             </IconButton>
+            {canDelete ? (
+              <IconButton
+                accessibilityLabel="Usuń wybrany miesiąc budżetu"
+                disabled={!canRemoveSelectedMonth}
+                onPress={() => setDeleteMonthConfirmVisible(true)}
+                style={[styles.monthNavButton, styles.monthDeleteButton]}
+              >
+                <Trash2
+                  color={canRemoveSelectedMonth ? theme.colors.danger : theme.colors.textSubtle}
+                  size={19}
+                />
+              </IconButton>
+            ) : null}
           </View>
 
           <View style={styles.metricRow}>
@@ -1043,6 +1056,9 @@ function createStyles(colors: AppPalette) {
       borderColor: "transparent",
       height: 34,
       width: 34,
+    },
+    monthDeleteButton: {
+      borderColor: `${colors.danger}55`,
     },
     monthTab: {
       alignItems: "center",

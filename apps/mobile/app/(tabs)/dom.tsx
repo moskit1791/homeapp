@@ -844,6 +844,10 @@ function HouseholdCard() {
   });
   const members = membersQuery.data ?? [];
   const canInvite = permission.canCreate && Boolean(email.trim()) && !inviteMutation.isPending;
+  const inviteErrorMessage =
+    inviteMutation.error instanceof Error
+      ? inviteMutation.error.message
+      : "Nie udało się zaprosić osoby.";
 
   if (!permission.canRead) {
     return null;
@@ -867,7 +871,14 @@ function HouseholdCard() {
         ))}
       </View>
       {permission.canCreate ? (
-        <IconButton onPress={() => setInviteVisible(true)}>
+        <IconButton
+          accessibilityLabel="Zaproś domownika"
+          onPress={() => {
+            inviteMutation.reset();
+            setInvitationNotice(null);
+            setInviteVisible(true);
+          }}
+        >
           <ChevronRight color={theme.colors.textMuted} size={20} />
         </IconButton>
       ) : null}
@@ -885,7 +896,7 @@ function HouseholdCard() {
               loading={inviteMutation.isPending}
               onPress={() => inviteMutation.mutate()}
               style={styles.modalFooterButton}
-              title="Zaproś"
+              title="Wyślij"
             />
           </View>
         }
@@ -914,7 +925,7 @@ function HouseholdCard() {
           ) : null,
         )}
         {inviteMutation.error ? (
-          <InlineAlert tone="error" text="Nie udało się zaprosić osoby." />
+          <InlineAlert tone="error" text={inviteErrorMessage} />
         ) : null}
       </FormModal>
     </View>

@@ -436,6 +436,48 @@ export class UsersService {
         if (membership.role === 'owner') {
           await client.query(
             `
+              delete from expenses e
+              using budget_items bi, budget_months bm
+              where e.budget_item_id = bi.id
+                and bi.budget_month_id = bm.id
+                and bm.household_id = $1
+            `,
+            [membership.household_id]
+          );
+          await client.query(
+            `
+              delete from monthly_incomes mi
+              using budget_months bm
+              where mi.budget_month_id = bm.id
+                and bm.household_id = $1
+            `,
+            [membership.household_id]
+          );
+          await client.query(
+            `
+              delete from budget_items bi
+              using budget_months bm
+              where bi.budget_month_id = bm.id
+                and bm.household_id = $1
+            `,
+            [membership.household_id]
+          );
+          await client.query(
+            `
+              delete from budget_categories
+              where household_id = $1
+            `,
+            [membership.household_id]
+          );
+          await client.query(
+            `
+              delete from budget_months
+              where household_id = $1
+            `,
+            [membership.household_id]
+          );
+          await client.query(
+            `
               delete from households
               where id = $1
             `,
