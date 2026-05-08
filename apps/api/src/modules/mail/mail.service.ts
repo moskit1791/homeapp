@@ -9,7 +9,7 @@ export class MailService {
 
   async sendEmailVerification(input: AuthMailInput): Promise<void> {
     const env = loadEnv();
-    const link = this.buildLink(env.AUTH_LINK_BASE_URL, '/verify-email', {
+    const link = this.buildPublicAuthLink(env, 'verify-email', {
       email: input.email,
       token: input.token
     });
@@ -18,7 +18,7 @@ export class MailService {
       html: [
         `<p>Czesc ${escapeHtml(input.displayName)},</p>`,
         '<p>Potwierdz adres e-mail, aby aktywowac konto w HomeApp.</p>',
-        `<p><a href="${escapeHtml(link)}">Potwierdz konto</a></p>`,
+        this.buttonLink(link, 'Potwierdz konto'),
         `<p>Jesli przycisk nie dziala, skopiuj ten link: ${escapeHtml(link)}</p>`
       ].join(''),
       subject: 'Potwierdz konto w HomeApp',
@@ -33,7 +33,7 @@ export class MailService {
 
   async sendPasswordReset(input: AuthMailInput): Promise<void> {
     const env = loadEnv();
-    const link = this.buildLink(env.AUTH_LINK_BASE_URL, '/reset-password', {
+    const link = this.buildPublicAuthLink(env, 'reset-password', {
       token: input.token
     });
 
@@ -41,7 +41,7 @@ export class MailService {
       html: [
         `<p>Czesc ${escapeHtml(input.displayName)},</p>`,
         '<p>Otrzymalismy prosbe o reset hasla do HomeApp.</p>',
-        `<p><a href="${escapeHtml(link)}">Ustaw nowe haslo</a></p>`,
+        this.buttonLink(link, 'Ustaw nowe haslo'),
         '<p>Link wygasa po 1 godzinie. Jesli to nie Ty, zignoruj ta wiadomosc.</p>',
         `<p>Jesli przycisk nie dziala, skopiuj ten link: ${escapeHtml(link)}</p>`
       ].join(''),
@@ -58,7 +58,7 @@ export class MailService {
 
   async sendHouseholdInvitation(input: HouseholdInvitationMailInput): Promise<void> {
     const env = loadEnv();
-    const link = this.buildLink(env.AUTH_LINK_BASE_URL, '/invitation', {
+    const link = this.buildPublicAuthLink(env, 'invitation', {
       token: input.token
     });
 
@@ -66,7 +66,7 @@ export class MailService {
       html: [
         `<p>Czesc,</p>`,
         `<p>${escapeHtml(input.invitedByDisplayName)} zaprasza Cie do domu "${escapeHtml(input.householdName)}" w HomeApp.</p>`,
-        `<p><a href="${escapeHtml(link)}">Dolacz do domu</a></p>`,
+        this.buttonLink(link, 'Dolacz do domu'),
         '<p>Link wygasa po 7 dniach. Zaloguj sie kontem z adresem, na ktory przyszlo zaproszenie.</p>',
         `<p>Jesli przycisk nie dziala, skopiuj ten link: ${escapeHtml(link)}</p>`
       ].join(''),
@@ -135,6 +135,24 @@ export class MailService {
     }
 
     return url.toString();
+  }
+
+  private buildPublicAuthLink(
+    env: AppEnv,
+    action: 'invitation' | 'reset-password' | 'verify-email',
+    params: Record<string, string>
+  ): string {
+    return this.buildLink(env.APP_PUBLIC_URL, `/api/auth/open/${action}`, params);
+  }
+
+  private buttonLink(link: string, label: string): string {
+    return [
+      '<p>',
+      `<a href="${escapeHtml(link)}" style="background:#0b7a2a;border-radius:8px;color:#ffffff;display:inline-block;font-weight:700;padding:12px 18px;text-decoration:none;">`,
+      escapeHtml(label),
+      '</a>',
+      '</p>'
+    ].join('');
   }
 }
 

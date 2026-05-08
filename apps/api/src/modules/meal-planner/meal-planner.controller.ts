@@ -97,6 +97,24 @@ export class MealPlannerController {
     return plan;
   }
 
+  @Delete('meal-plans/:id')
+  @RequirePermission('meal_planner', 'delete')
+  async deletePlan(
+    @CurrentHousehold() household: HouseholdContext | undefined,
+    @Param() params: MealPlanIdParamDto
+  ) {
+    const deleted = await this.mealPlannerService.deletePlan(
+      this.requireHousehold(household).householdId,
+      params.id
+    );
+
+    if (!deleted) {
+      throw new NotFoundException('Meal plan not found');
+    }
+
+    return { ok: true };
+  }
+
   @Post('meal-plans/randomize')
   @RequirePermission('meal_planner', 'read')
   randomize(

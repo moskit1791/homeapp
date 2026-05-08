@@ -1,11 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
+import * as Notifications from 'expo-notifications';
 import * as SplashScreen from 'expo-splash-screen';
 import { Component, PropsWithChildren, ReactNode, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { registerForPushNotifications } from '../src/notifications/register-push-notifications';
+import { storeNotificationFromExpo } from '../src/notifications/notification-center';
 import { SessionProvider, useSession } from '../src/session/session-context';
 import { spacing } from '../src/theme/tokens';
 import { useAppTheme, type AppPalette } from '../src/theme/use-app-theme';
@@ -24,6 +26,7 @@ export default function RootLayout() {
         <RootErrorBoundary>
           <SessionProvider>
             <PushNotificationBootstrap />
+            <NotificationCenterBootstrap />
             <StatusBar style={theme.isDark ? 'light' : 'dark'} />
             <Stack screenOptions={{ headerShown: false }} />
           </SessionProvider>
@@ -31,6 +34,24 @@ export default function RootLayout() {
       </SafeAreaProvider>
     </QueryClientProvider>
   );
+}
+
+function NotificationCenterBootstrap() {
+  useEffect(() => {
+    const receivedSubscription = Notifications.addNotificationReceivedListener((notification) => {
+      storeNotificationFromExpo(notification).catch(() => undefined);
+    });
+    const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      storeNotificationFromExpo(response.notification).catch(() => undefined);
+    });
+
+    return () => {
+      receivedSubscription.remove();
+      responseSubscription.remove();
+    };
+  }, []);
+
+  return null;
 }
 
 function PushNotificationBootstrap() {

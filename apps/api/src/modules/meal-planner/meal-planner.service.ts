@@ -210,6 +210,25 @@ export class MealPlannerService {
     return copied;
   }
 
+  async deletePlan(householdId: string, mealPlanId: string): Promise<boolean> {
+    const result = await this.database.query(
+      `
+        delete from meal_plan_weeks
+        where household_id = $1
+          and id = $2
+      `,
+      [householdId, mealPlanId]
+    );
+
+    const deleted = Boolean(result.rowCount && result.rowCount > 0);
+
+    if (deleted) {
+      this.realtime.publish(householdId, 'meal.changed', mealPlanId);
+    }
+
+    return deleted;
+  }
+
   async randomize(householdId: string, dto: RandomizeMealPlanDto): Promise<MealRandomizeResult> {
     const targetWeekStartDate = dto.targetWeekStartDate ?? (await this.getCurrentWeekStartDate());
     this.ensureMonday(targetWeekStartDate);

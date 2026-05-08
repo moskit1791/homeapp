@@ -1,8 +1,21 @@
+def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
+def googleServicesJsonSource = System.getenv("GOOGLE_SERVICES_JSON") ?: "${projectRoot}/google-services.json"
+def googleServicesJsonFile = file("${projectDir}/google-services.json")
+
+if (file(googleServicesJsonSource).exists()) {
+    copy {
+        from googleServicesJsonSource
+        into projectDir
+        rename { "google-services.json" }
+    }
+} else if (!googleServicesJsonFile.exists()) {
+    logger.warn("google-services.json was not found. Android push registration will fail without Firebase config.")
+}
+
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
-
-def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
+apply plugin: "com.google.gms.google-services"
 
 /**
  * This is the configuration block to customize your React Native Android app.
@@ -93,8 +106,8 @@ android {
         applicationId 'com.homeapp.mobile'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 51
-        versionName "0.1.51"
+        versionCode 54
+        versionName "0.1.54"
     }
     signingConfigs {
         debug {

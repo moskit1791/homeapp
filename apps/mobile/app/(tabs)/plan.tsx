@@ -20,6 +20,7 @@ import {
   createMealPlan,
   createNote,
   createTodoItem,
+  deleteMealPlanWeek,
   deleteNote,
   deleteTodoItem,
   drawMealInspirations,
@@ -174,6 +175,7 @@ export default function PlanScreen() {
         <FoodSegment
           accessToken={accessToken}
           canCreate={activePermission.canCreate}
+          canDelete={activePermission.canDelete}
           canUpdate={activePermission.canUpdate}
         />
       ) : activeSegment === "calendar" ? (
@@ -203,10 +205,12 @@ export default function PlanScreen() {
 function FoodSegment({
   accessToken,
   canCreate,
+  canDelete,
   canUpdate,
 }: {
   accessToken?: string | null;
   canCreate: boolean;
+  canDelete: boolean;
   canUpdate: boolean;
 }) {
   const queryClient = useQueryClient();
@@ -216,6 +220,8 @@ function FoodSegment({
   const [slotIndex, setSlotIndex] = useState(0);
   const [mealName, setMealName] = useState("");
   const [note, setNote] = useState("");
+  const [deletePlanConfirmVisible, setDeletePlanConfirmVisible] =
+    useState(false);
   const [mealModalVisible, setMealModalVisible] = useState(false);
 
   const currentQuery = useQuery({
@@ -295,6 +301,22 @@ function FoodSegment({
       queryClient.invalidateQueries({ queryKey: queryKeys.meal }),
   });
 
+  const deletePlanMutation = useMutation({
+    mutationFn: () => {
+      const current = currentQuery.data;
+
+      if (!current) {
+        throw new Error("Missing current meal plan");
+      }
+
+      return deleteMealPlanWeek(current.week.id, { accessToken });
+    },
+    onSuccess: async () => {
+      setDeletePlanConfirmVisible(false);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.meal });
+    },
+  });
+
   const entries = currentQuery.data?.entries ?? [];
   const history = historyQuery.data ?? [];
   const suggestions = inspirationQuery.data?.suggestions ?? [];
@@ -305,13 +327,23 @@ function FoodSegment({
     <>
       <Toolbar
         action={
-          canUpdate ? (
-            <ActionButton
-              onPress={() => setMealModalVisible(true)}
-              size="small"
-              title="+ Dodaj"
-            />
-          ) : undefined
+          <View style={styles.toolbarActionGroup}>
+            {canUpdate ? (
+              <ActionButton
+                onPress={() => setMealModalVisible(true)}
+                size="small"
+                title="+ Dodaj"
+              />
+            ) : null}
+            {canDelete ? (
+              <IconButton
+                disabled={!currentQuery.data || deletePlanMutation.isPending}
+                onPress={() => setDeletePlanConfirmVisible(true)}
+              >
+                <Trash2 color={theme.colors.danger} size={18} />
+              </IconButton>
+            ) : null}
+          </View>
         }
         onRefresh={() => currentQuery.refetch()}
         title="Plan posiłków"
@@ -417,6 +449,44 @@ function FoodSegment({
         />
         {upsertMutation.error ? (
           <InlineAlert text="Nie udało się zapisać posiłku." tone="error" />
+        ) : null}
+      </FormModal>
+
+      <FormModal
+        footer={
+          <View style={styles.modalFooter}>
+            <ActionButton
+              onPress={() => setDeletePlanConfirmVisible(false)}
+              style={styles.modalFooterButton}
+              title="Anuluj"
+              variant="secondary"
+            />
+            <ActionButton
+              disabled={!currentQuery.data}
+              loading={deletePlanMutation.isPending}
+              onPress={() => deletePlanMutation.mutate()}
+              style={styles.modalFooterButton}
+              title="Usuń"
+            />
+          </View>
+        }
+        onClose={() => setDeletePlanConfirmVisible(false)}
+        subtitle={
+          currentQuery.data?.week.weekStartDate
+            ? `Tydzień od ${formatDate(currentQuery.data.week.weekStartDate)} zostanie usunięty razem z posiłkami.`
+            : "Brak aktywnego planu do usunięcia."
+        }
+        title="Usuń plan posiłków"
+        visible={deletePlanConfirmVisible}
+      >
+        <View style={styles.deleteWarning}>
+          <Trash2 color={theme.colors.danger} size={18} />
+          <Text style={styles.deleteWarningText}>
+            Ta akcja usuwa cały tydzień planu posiłków. Nie usuwa inspiracji ani historii innych tygodni.
+          </Text>
+        </View>
+        {deletePlanMutation.error ? (
+          <InlineAlert text="Nie udało się usunąć planu posiłków." tone="error" />
         ) : null}
       </FormModal>
 
@@ -1295,6 +1365,24 @@ function createStyles(colors: AppPalette) {
       flexDirection: "row",
       gap: spacing.sm,
     },
+    deleteWarning: {
+      alignItems: "flex-start",
+      backgroundColor: colors.dangerSoft,
+      borderColor: `${colors.danger}55`,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      padding: spacing.md,
+    },
+    deleteWarningText: {
+      color: colors.danger,
+      flex: 1,
+      fontSize: 13,
+      fontWeight: "700",
+      letterSpacing: 0,
+      lineHeight: 18,
+    },
     input: {
       backgroundColor: colors.field,
       borderColor: colors.border,
@@ -1429,6 +1517,11 @@ function createStyles(colors: AppPalette) {
       justifyContent: "space-between",
     },
     toolbarActions: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.xs,
+    },
+    toolbarActionGroup: {
       alignItems: "center",
       flexDirection: "row",
       gap: spacing.xs,

@@ -77,6 +77,8 @@ import type {
   StartDashboard,
   TodoItem,
   UpdateCalendarEventRequest,
+  UpdateAttachmentRequest,
+  UpdateHouseholdRequest,
   UpdateMealPlanRequest,
   UpdateNoteRequest,
   UpdateShoppingItemRequest,
@@ -281,6 +283,20 @@ export function getMyHousehold(options?: ApiCallOptionsInput): Promise<Household
 
   return apiRequest<Household>('/households/me', {
     accessToken: requestOptions.accessToken,
+    signal: requestOptions.signal
+  });
+}
+
+export function updateMyHousehold(
+  input: UpdateHouseholdRequest,
+  options?: ApiCallOptionsInput
+): Promise<Household> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<Household, UpdateHouseholdRequest>('/households/me', {
+    accessToken: requestOptions.accessToken,
+    body: input,
+    method: 'PATCH',
     signal: requestOptions.signal
   });
 }
@@ -539,6 +555,19 @@ export function updateMealPlan(
     accessToken: requestOptions.accessToken,
     body: input,
     method: 'PATCH',
+    signal: requestOptions.signal
+  });
+}
+
+export function deleteMealPlanWeek(
+  planId: string,
+  options?: ApiCallOptionsInput
+): Promise<OkResponse> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<OkResponse>(`/meal-plans/${planId}`, {
+    accessToken: requestOptions.accessToken,
+    method: 'DELETE',
     signal: requestOptions.signal
   });
 }
@@ -987,6 +1016,35 @@ export function createAttachmentRecord(
     method: 'POST',
     signal: requestOptions.signal
   });
+}
+
+export function updateAttachment(
+  id: string,
+  input: UpdateAttachmentRequest,
+  options?: ApiCallOptionsInput
+): Promise<Attachment> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<Attachment, UpdateAttachmentRequest>(`/attachments/${id}`, {
+    accessToken: requestOptions.accessToken,
+    body: input,
+    method: 'PATCH',
+    signal: requestOptions.signal
+  });
+}
+
+export function deleteAttachment(id: string, options?: ApiCallOptionsInput): Promise<OkResponse> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<OkResponse>(`/attachments/${id}`, {
+    accessToken: requestOptions.accessToken,
+    method: 'DELETE',
+    signal: requestOptions.signal
+  });
+}
+
+export function getAttachmentFileUrl(id: string): string {
+  return buildApiUrl(`/attachments/${id}/file`);
 }
 
 export function listShoppingLists(options?: ApiCallOptionsInput): Promise<ShoppingList[]> {

@@ -99,6 +99,7 @@ export interface CreateHouseholdRequest {
 }
 
 export type CreateHouseholdInput = CreateHouseholdRequest;
+export type UpdateHouseholdRequest = Partial<CreateHouseholdRequest>;
 
 export interface Household {
   currencyCode: string;
@@ -590,6 +591,11 @@ export interface CreateAttachmentRequest {
   fileName: string;
   mimeType: Attachment['mimeType'];
   storagePath: string;
+}
+
+export interface UpdateAttachmentRequest {
+  caption?: string;
+  fileName?: string;
 }
 
 export interface CreateAttachmentUploadUrlRequest {

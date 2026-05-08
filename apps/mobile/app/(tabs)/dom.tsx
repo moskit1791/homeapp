@@ -1,5 +1,6 @@
 import type { ModuleKey } from "@homeapp/shared-types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
@@ -11,8 +12,10 @@ import {
   createAttachmentUploadUrl,
   createCleaningTask,
   createDataEntry,
+  deleteAttachment,
   deleteMyAccount,
   deleteDataEntry,
+  getAttachmentFileUrl,
   getMyHousehold,
   inviteHouseholdMember,
   listAnnualCostHistory,
@@ -24,6 +27,8 @@ import {
   queryKeys,
   removeHouseholdMember,
   sendTestPush,
+  updateAttachment,
+  updateMyHousehold,
   uploadAttachmentFile,
   type AnnualCost,
   type Attachment,
@@ -39,6 +44,7 @@ import { useAppTheme, type AppPalette } from "../../src/theme/use-app-theme";
 import {
   ActionButton,
   AppScreen,
+  AppToast,
   FormModal,
   IconButton,
   InlineAlert,
@@ -54,6 +60,7 @@ import {
   Database,
   FileText,
   Folder,
+  Pencil,
   RefreshCcw,
   Trash2,
   Users,
@@ -114,6 +121,7 @@ const moduleTiles: Array<{
 ];
 
 export default function DomScreen() {
+  const params = useLocalSearchParams<{ settings?: string }>();
   const permissionsQuery = usePermissions();
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
@@ -174,7 +182,7 @@ export default function DomScreen() {
       {availableTiles.length > 0 ? <ActiveModule segment={activeSegment} /> : null}
 
       <HouseholdCard />
-      <SettingsRow />
+      <SettingsRow openOnMount={params.settings === "1"} />
     </AppScreen>
   );
 }
@@ -635,6 +643,9 @@ function AttachmentsPanel() {
   const accent = getSegmentAccent(theme.colors, "attachments");
   const [search, setSearch] = useState("");
   const [caption, setCaption] = useState("");
+  const [editCaption, setEditCaption] = useState("");
+  const [editFileName, setEditFileName] = useState("");
+  const [editingAttachment, setEditingAttachment] = useState<Attachment | null>(null);
   const [pickedPhoto, setPickedPhoto] = useState<PickedAttachmentPhoto | null>(null);
   const [uploadError, setUploadError] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
@@ -686,8 +697,38 @@ function AttachmentsPanel() {
       await queryClient.invalidateQueries({ queryKey: queryKeys.attachments });
     },
   });
+  const updateMutation = useMutation({
+    mutationFn: () => {
+      if (!editingAttachment) {
+        throw new Error("Missing attachment");
+      }
+
+      return updateAttachment(
+        editingAttachment.id,
+        {
+          caption: editCaption.trim(),
+          fileName: editFileName.trim(),
+        },
+        { accessToken },
+      );
+    },
+    onSuccess: async () => {
+      setEditingAttachment(null);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.attachments });
+    },
+  });
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteAttachment(id, { accessToken }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.attachments }),
+  });
   const attachments = attachmentsQuery.data ?? [];
   const canAdd = permission.canCreate && Boolean(pickedPhoto) && !createMutation.isPending;
+
+  function openEditAttachment(attachment: Attachment) {
+    setEditingAttachment(attachment);
+    setEditFileName(attachment.fileName);
+    setEditCaption(attachment.caption);
+  }
 
   async function handlePickPhoto() {
     setUploadError("");
@@ -747,7 +788,17 @@ function AttachmentsPanel() {
       />
       <View style={styles.itemList}>
         {attachments.map((attachment) => (
-          <AttachmentRow accent={accent} attachment={attachment} key={attachment.id} />
+          <AttachmentRow
+            accessToken={accessToken}
+            accent={accent}
+            attachment={attachment}
+            canDelete={permission.canDelete}
+            canUpdate={permission.canUpdate}
+            deleting={deleteMutation.isPending}
+            key={attachment.id}
+            onDelete={() => deleteMutation.mutate(attachment.id)}
+            onEdit={() => openEditAttachment(attachment)}
+          />
         ))}
       </View>
       <FormModal
@@ -801,6 +852,48 @@ function AttachmentsPanel() {
           <InlineAlert tone="error" text="Nie udało się zapisać zdjęcia." />
         ) : null}
       </FormModal>
+      <FormModal
+        footer={
+          <View style={styles.modalFooter}>
+            <ActionButton
+              onPress={() => setEditingAttachment(null)}
+              style={styles.modalFooterButton}
+              title="Anuluj"
+              variant="secondary"
+            />
+            <ActionButton
+              disabled={!editFileName.trim()}
+              loading={updateMutation.isPending}
+              onPress={() => updateMutation.mutate()}
+              style={styles.modalFooterButton}
+              title="Zapisz"
+            />
+          </View>
+        }
+        onClose={() => setEditingAttachment(null)}
+        subtitle="Zmień nazwę albo opis pliku."
+        title="Opis pliku"
+        visible={Boolean(editingAttachment)}
+      >
+        <TextInput
+          onChangeText={setEditFileName}
+          placeholder="Nazwa pliku"
+          placeholderTextColor={theme.colors.textSubtle}
+          style={styles.input}
+          value={editFileName}
+        />
+        <TextInput
+          multiline
+          onChangeText={setEditCaption}
+          placeholder="Opis, np. gwarancja komputer"
+          placeholderTextColor={theme.colors.textSubtle}
+          style={[styles.input, styles.textArea]}
+          value={editCaption}
+        />
+        {updateMutation.error ? (
+          <InlineAlert tone="error" text="Nie udało się zapisać opisu pliku." />
+        ) : null}
+      </FormModal>
     </ModulePanel>
   );
 }
@@ -835,6 +928,7 @@ function HouseholdCard() {
           ? `Zaproszenie wysłane do ${invitation.email}. Wysłano też powiadomienie push.`
           : `Zaproszenie wysłane do ${invitation.email}.`
       );
+      setTimeout(() => setInvitationNotice(null), 2600);
       await queryClient.invalidateQueries({ queryKey: queryKeys.household });
     },
   });
@@ -855,6 +949,7 @@ function HouseholdCard() {
 
   return (
     <>
+    <AppToast text={invitationNotice} />
     <View style={styles.householdCard}>
       <View style={[styles.moduleIcon, { backgroundColor: theme.colors.softBlue }]}>
         <Users color={theme.colors.calendar} size={25} />
@@ -929,25 +1024,78 @@ function HouseholdCard() {
         ) : null}
       </FormModal>
     </View>
-    {invitationNotice ? <InlineAlert text={invitationNotice} /> : null}
     </>
   );
 }
 
-function SettingsRow() {
+function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
   const { logout, session } = useSession();
   const queryClient = useQueryClient();
+  const householdPermission = useModulePermission("household_members");
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
+  const accessToken = session?.accessToken;
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const [homeName, setHomeName] = useState("");
+  const [currencyCode, setCurrencyCode] = useState("PLN");
+  const [mealSlotsPerDay, setMealSlotsPerDay] = useState("4");
+  const [toast, setToast] = useState<string | null>(null);
+  const householdQuery = useQuery({
+    enabled: Boolean(accessToken),
+    queryFn: () => getMyHousehold({ accessToken }),
+    queryKey: [...queryKeys.household, "me"],
+  });
+
+  useEffect(() => {
+    if (openOnMount) {
+      setSettingsVisible(true);
+    }
+  }, [openOnMount]);
+
+  useEffect(() => {
+    const household = householdQuery.data;
+
+    if (!household) {
+      return;
+    }
+
+    setHomeName(household.name);
+    setCurrencyCode(household.currencyCode);
+    setMealSlotsPerDay(String(household.mealSlotsPerDay));
+  }, [householdQuery.data]);
+
+  function showToast(message: string) {
+    setToast(message);
+    setTimeout(() => setToast(null), 2200);
+  }
+
+  const updateHouseholdMutation = useMutation({
+    mutationFn: () =>
+      updateMyHousehold(
+        {
+          currencyCode: currencyCode.trim().toUpperCase(),
+          mealSlotsPerDay: Number(mealSlotsPerDay),
+          name: homeName.trim(),
+        },
+        { accessToken },
+      ),
+    onSuccess: async () => {
+      showToast("Ustawienia domu zapisane");
+      await queryClient.invalidateQueries({ queryKey: queryKeys.household });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.start });
+    },
+  });
   const registerPushMutation = useMutation({
     mutationFn: async () => {
-      if (!session?.accessToken) {
+      if (!accessToken) {
         return null;
       }
 
-      return registerForPushNotifications(session.accessToken);
+      return registerForPushNotifications(accessToken);
+    },
+    onSuccess: (token) => {
+      showToast(token ? "Powiadomienia włączone" : "Nie udało się pobrać tokenu push");
     },
   });
   const testPushMutation = useMutation({
@@ -957,11 +1105,12 @@ function SettingsRow() {
           body: "To testowe powiadomienie z ustawień HomeApp.",
           title: "HomeApp",
         },
-        { accessToken: session?.accessToken },
+        { accessToken },
       ),
+    onSuccess: () => showToast("Powiadomienie wysłane"),
   });
   const deleteAccountMutation = useMutation({
-    mutationFn: () => deleteMyAccount({ accessToken: session?.accessToken }),
+    mutationFn: () => deleteMyAccount({ accessToken }),
     onSuccess: async () => {
       setDeleteConfirmVisible(false);
       setSettingsVisible(false);
@@ -978,6 +1127,7 @@ function SettingsRow() {
 
   return (
     <>
+    <AppToast text={toast} />
     <Pressable
       accessibilityLabel="Otwórz ustawienia i konto"
       accessibilityRole="button"
@@ -1017,10 +1167,56 @@ function SettingsRow() {
     >
       <View style={styles.settingsPanel}>
         <View style={styles.settingsPanelRow}>
-          <Text style={styles.settingsPanelTitle}>Sesja</Text>
+          <Text style={styles.settingsPanelTitle}>Dom</Text>
           <Text style={styles.settingsPanelMeta}>
-            {session ? "Konto jest zalogowane na tym urządzeniu." : "Brak aktywnej sesji."}
+            Nazwa domu, waluta i liczba slotów posiłków.
           </Text>
+          <TextInput
+            editable={householdPermission.canUpdate}
+            onChangeText={setHomeName}
+            placeholder="Nazwa domu"
+            placeholderTextColor={theme.colors.textSubtle}
+            style={styles.input}
+            value={homeName}
+          />
+          <View style={styles.formRow}>
+            <TextInput
+              autoCapitalize="characters"
+              editable={householdPermission.canUpdate}
+              maxLength={3}
+              onChangeText={setCurrencyCode}
+              placeholder="PLN"
+              placeholderTextColor={theme.colors.textSubtle}
+              style={[styles.input, styles.flexInput]}
+              value={currencyCode}
+            />
+            <TextInput
+              editable={householdPermission.canUpdate}
+              keyboardType="number-pad"
+              maxLength={1}
+              onChangeText={setMealSlotsPerDay}
+              placeholder="4"
+              placeholderTextColor={theme.colors.textSubtle}
+              style={[styles.input, styles.timeInput]}
+              value={mealSlotsPerDay}
+            />
+          </View>
+          <ActionButton
+            disabled={
+              !householdPermission.canUpdate ||
+              !homeName.trim() ||
+              !/^[A-Za-z]{3}$/.test(currencyCode.trim()) ||
+              Number(mealSlotsPerDay) < 1 ||
+              Number(mealSlotsPerDay) > 8
+            }
+            loading={updateHouseholdMutation.isPending}
+            onPress={() => updateHouseholdMutation.mutate()}
+            title="Zapisz ustawienia domu"
+            variant="secondary"
+          />
+          {updateHouseholdMutation.error ? (
+            <InlineAlert tone="error" text="Nie udało się zapisać ustawień domu." />
+          ) : null}
         </View>
         <View style={styles.settingsPanelRow}>
           <Text style={styles.settingsPanelTitle}>Powiadomienia push</Text>
@@ -1028,15 +1224,12 @@ function SettingsRow() {
             Wyślij test, żeby potwierdzić rejestrację tokenu push dla tego telefonu.
           </Text>
           <ActionButton
-            disabled={!session?.accessToken}
+            disabled={!accessToken}
             loading={registerPushMutation.isPending}
             onPress={() => registerPushMutation.mutate()}
             title="Włącz / odśwież powiadomienia"
             variant="secondary"
           />
-          {registerPushMutation.data ? (
-            <InlineAlert text="Telefon został zarejestrowany do powiadomień." />
-          ) : null}
           {registerPushMutation.data === null ? (
             <InlineAlert tone="error" text="Nie udało się pobrać tokenu push dla tego telefonu." />
           ) : null}
@@ -1044,15 +1237,12 @@ function SettingsRow() {
             <InlineAlert tone="error" text="Rejestracja powiadomień nie powiodła się." />
           ) : null}
           <ActionButton
-            disabled={!session?.accessToken}
+            disabled={!accessToken}
             loading={testPushMutation.isPending}
             onPress={() => testPushMutation.mutate()}
             title="Wyślij test push"
             variant="secondary"
           />
-          {testPushMutation.data ? (
-            <InlineAlert text={`Wysłano: ${testPushMutation.data.sent}`} />
-          ) : null}
           {testPushMutation.error ? (
             <InlineAlert tone="error" text="Nie udało się wysłać testowego powiadomienia." />
           ) : null}
@@ -1063,7 +1253,7 @@ function SettingsRow() {
             Konto zostanie wylogowane, tokeny powiadomień zostaną wyłączone, a adres e-mail odłączony od profilu.
           </Text>
           <ActionButton
-            disabled={!session?.accessToken}
+            disabled={!accessToken}
             onPress={() => setDeleteConfirmVisible(true)}
             style={styles.dangerButton}
             title="Usuń konto"
@@ -1091,7 +1281,7 @@ function SettingsRow() {
             variant="secondary"
           />
           <ActionButton
-            disabled={!session?.accessToken}
+            disabled={!accessToken}
             loading={deleteAccountMutation.isPending}
             onPress={() => deleteAccountMutation.mutate()}
             style={[styles.modalFooterButton, styles.dangerButton]}
@@ -1132,6 +1322,13 @@ function ModulePanel({
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
+  const [refreshNotice, setRefreshNotice] = useState<string | null>(null);
+
+  function handleRefresh() {
+    onRefresh();
+    setRefreshNotice("Widok odświeżony");
+    setTimeout(() => setRefreshNotice(null), 1800);
+  }
 
   return (
     <View style={styles.panel}>
@@ -1143,11 +1340,12 @@ function ModulePanel({
         </View>
         <View style={styles.panelActions}>
           {action}
-          <IconButton onPress={onRefresh}>
+          <IconButton onPress={handleRefresh}>
             <RefreshCcw color={theme.colors.textMuted} size={17} />
           </IconButton>
         </View>
       </View>
+      {refreshNotice ? <Text style={styles.refreshNotice}>{refreshNotice}</Text> : null}
       {children}
     </View>
   );
@@ -1245,19 +1443,59 @@ function DataRow({
   );
 }
 
-function AttachmentRow({ accent, attachment }: { accent: Accent; attachment: Attachment }) {
-  const styles = createStyles(useAppTheme().colors);
+function AttachmentRow({
+  accessToken,
+  accent,
+  attachment,
+  canDelete,
+  canUpdate,
+  deleting,
+  onDelete,
+  onEdit,
+}: {
+  accessToken?: string | null;
+  accent: Accent;
+  attachment: Attachment;
+  canDelete: boolean;
+  canUpdate: boolean;
+  deleting: boolean;
+  onDelete: () => void;
+  onEdit: () => void;
+}) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+  const isImage = attachment.mimeType.startsWith("image/");
 
   return (
     <View style={styles.itemRow}>
       <View style={[styles.itemMarker, { backgroundColor: accent.color }]} />
-      <FileText color={accent.color} size={17} />
+      {isImage ? (
+        <Image
+          source={{
+            headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+            uri: getAttachmentFileUrl(attachment.id),
+          }}
+          style={styles.attachmentThumb}
+        />
+      ) : (
+        <FileText color={accent.color} size={17} />
+      )}
       <View style={styles.itemText}>
         <Text style={styles.itemName}>{attachment.fileName}</Text>
-        <Text numberOfLines={1} style={styles.itemMeta}>
-          {attachment.caption || attachment.storagePath}
+        <Text numberOfLines={2} style={styles.itemMeta}>
+          {attachment.caption || "Brak opisu"}
         </Text>
       </View>
+      {canUpdate ? (
+        <IconButton onPress={onEdit}>
+          <Pencil color={theme.colors.primary} size={17} />
+        </IconButton>
+      ) : null}
+      {canDelete ? (
+        <IconButton disabled={deleting} onPress={onDelete}>
+          <Trash2 color={theme.colors.danger} size={17} />
+        </IconButton>
+      ) : null}
     </View>
   );
 }
@@ -1437,6 +1675,12 @@ function createStyles(colors: AppPalette) {
       height: 34,
       justifyContent: "center",
       width: 34,
+    },
+    attachmentThumb: {
+      backgroundColor: colors.cardMuted,
+      borderRadius: radii.control,
+      height: 48,
+      width: 48,
     },
     dateInput: {
       minWidth: 132,
@@ -1672,6 +1916,21 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
       minHeight: 42,
       paddingHorizontal: spacing.md,
+    },
+    refreshNotice: {
+      color: colors.primary,
+      fontSize: 12,
+      fontWeight: "800",
+      letterSpacing: 0,
+      marginTop: -spacing.xs,
+    },
+    textArea: {
+      minHeight: 90,
+      paddingTop: spacing.md,
+      textAlignVertical: "top",
+    },
+    timeInput: {
+      width: 82,
     },
     settingsMeta: {
       color: colors.textMuted,

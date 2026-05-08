@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -59,6 +60,8 @@ type BudgetItemWithCategory = BudgetItem & {
 export default function FinanseScreen() {
   const { session } = useSession();
   const queryClient = useQueryClient();
+  const params = useLocalSearchParams<{ action?: string }>();
+  const router = useRouter();
   const theme = useAppTheme();
   const styles = useMemo(() => createStyles(theme.colors), [theme.colors]);
   const { canCreate, canDelete, canRead, canUpdate, permissionsQuery } = useModulePermission("finances");
@@ -88,6 +91,7 @@ export default function FinanseScreen() {
     "menu" | "income" | "category" | "item" | "expense" | null
   >(null);
   const [deleteMonthConfirmVisible, setDeleteMonthConfirmVisible] = useState(false);
+  const [handledRouteAction, setHandledRouteAction] = useState<string | null>(null);
 
   const currentQuery = useQuery({
     enabled: canRead && Boolean(accessToken),
@@ -147,6 +151,7 @@ export default function FinanseScreen() {
   }, [archiveQuery.data, currentMonth]);
   const selectedMonthIndex = monthTabs.findIndex((month) => month.id === selectedMonthId);
   const selectedMonth = monthTabs.find((month) => month.id === selectedMonthId) ?? visibleMonth;
+  const showingArchiveMonth = Boolean(selectedMonthId) && selectedMonthId !== currentSummary?.month.id;
   const canGoPreviousMonth = selectedMonthIndex > 0;
   const canGoNextMonth = selectedMonthIndex >= 0 && selectedMonthIndex < monthTabs.length - 1;
 
@@ -163,6 +168,16 @@ export default function FinanseScreen() {
       setSelectedMonthId(currentMonth.id);
     }
   }, [currentMonth?.id, selectedMonthId]);
+
+  useEffect(() => {
+    if (params.action !== "expense" || handledRouteAction === params.action) {
+      return;
+    }
+
+    setFinanceModal("expense");
+    setHandledRouteAction(params.action);
+    router.setParams({ action: undefined });
+  }, [handledRouteAction, params.action, router]);
 
   useEffect(() => {
     if (!selectedIncomeMemberId && incomes[0]) {
@@ -267,9 +282,13 @@ export default function FinanseScreen() {
   const deleteMonthMutation = useMutation({
     mutationFn: () => deleteBudgetMonth(selectedMonthId ?? "", { accessToken }),
     onSuccess: async () => {
+      const deletedMonthId = selectedMonthId;
       setDeleteMonthConfirmVisible(false);
       setFinanceModal(null);
       setSelectedMonthId(null);
+      if (deletedMonthId) {
+        queryClient.removeQueries({ queryKey: [...queryKeys.finances, "month", deletedMonthId] });
+      }
       await invalidateFinance();
       await queryClient.invalidateQueries({ queryKey: queryKeys.start });
     },
@@ -310,7 +329,7 @@ export default function FinanseScreen() {
     <AppScreen title="Finanse">
       <QueryState
         emptyText="Brak danych finansowych."
-        error={currentQuery.error ?? selectedArchiveQuery.error}
+        error={currentQuery.error ?? (showingArchiveMonth ? selectedArchiveQuery.error : null)}
         isEmpty={!currentQuery.isLoading && !summary}
         isLoading={currentQuery.isLoading || selectedArchiveQuery.isLoading}
       />

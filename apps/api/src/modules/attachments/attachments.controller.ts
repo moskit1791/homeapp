@@ -8,12 +8,15 @@ import {
   Patch,
   Post,
   Query,
+  Res,
+  StreamableFile,
   UnauthorizedException,
   UploadedFile,
   UseInterceptors,
   UseGuards
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { createReadStream } from 'node:fs';
 import { CurrentHousehold } from '../../shared/decorators/current-household.decorator';
 import { HouseholdContext } from '../../shared/request-context';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -115,6 +118,30 @@ export class AttachmentsController {
     }
 
     return attachment;
+  }
+
+  @Get(':id/file')
+  @RequirePermission('attachments', 'read')
+  async getAttachmentFile(
+    @CurrentHousehold() household: HouseholdContext | undefined,
+    @Param() params: AttachmentIdParamDto,
+    @Res({ passthrough: true }) response: { set: (headers: Record<string, string>) => void }
+  ) {
+    const file = await this.attachmentsService.getAttachmentFile(
+      this.requireHousehold(household).householdId,
+      params.id
+    );
+
+    if (!file) {
+      throw new NotFoundException('Attachment not found');
+    }
+
+    response.set({
+      'Content-Disposition': `inline; filename="${file.fileName.replace(/"/g, '')}"`,
+      'Content-Type': file.mimeType
+    });
+
+    return new StreamableFile(createReadStream(file.absolutePath));
   }
 
   @Delete(':id')

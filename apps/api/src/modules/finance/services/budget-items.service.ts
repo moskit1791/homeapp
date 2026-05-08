@@ -99,6 +99,13 @@ export class BudgetItemsService {
           budget_amount = $6,
           display_order = coalesce($7, display_order)
         where id = $2
+          and exists (
+            select 1
+            from budget_months bm
+            where bm.id = budget_items.budget_month_id
+              and bm.household_id = $1
+              and bm.is_current = true
+          )
         returning
           id,
           budget_month_id,

@@ -59,6 +59,7 @@ export default function KalendarzScreen() {
   const styles = createStyles(theme.colors);
   const accessToken = session?.accessToken;
   const [visibleMonth, setVisibleMonth] = useState(() => monthAnchor(new Date()));
+  const [selectedDate, setSelectedDate] = useState(todayIso());
   const [activeSegment, setActiveSegment] = useState<AgendaSegment>("notes");
   const [eventTitle, setEventTitle] = useState("");
   const [eventDate, setEventDate] = useState(todayIso());
@@ -93,6 +94,9 @@ export default function KalendarzScreen() {
     queryFn: () => listCalendarUpcoming(4, { accessToken }),
     queryKey: [...queryKeys.calendar, "mobile-upcoming"],
   });
+  const selectedDayEvents = (monthEventsQuery.data ?? []).filter(
+    (event) => event.eventDate === selectedDate,
+  );
   const queryClient = useQueryClient();
   const createEventMutation = useMutation({
     mutationFn: () =>
@@ -184,13 +188,22 @@ export default function KalendarzScreen() {
           events={monthEventsQuery.data ?? []}
           isLoading={monthEventsQuery.isLoading}
           month={visibleMonth}
+          onSelectDate={(date) => {
+            setSelectedDate(date);
+            setEventDate(date);
+          }}
+          selectedDate={selectedDate}
         />
       ) : (
         <InlineAlert text="Nie masz uprawnienia do kalendarza." />
       )}
 
       {calendarPermission.canRead ? (
-        <UpcomingEvents events={upcomingQuery.data ?? []} query={upcomingQuery} />
+        <UpcomingEvents
+          date={selectedDate}
+          events={selectedDayEvents}
+          query={monthEventsQuery}
+        />
       ) : null}
 
       {readableAgenda.length > 0 ? (
@@ -270,10 +283,14 @@ function CalendarMonth({
   events,
   isLoading,
   month,
+  onSelectDate,
+  selectedDate,
 }: {
   events: CalendarEvent[];
   isLoading: boolean;
   month: Date;
+  onSelectDate: (date: string) => void;
+  selectedDate: string;
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
@@ -296,15 +313,23 @@ function CalendarMonth({
       <View style={styles.dayGrid}>
         {days.map((day) => {
           const isToday = day.iso === todayIso();
+          const isSelected = day.iso === selectedDate;
           const hasEvents = day.iso ? (eventsByDate.get(day.iso) ?? 0) > 0 : false;
 
           return (
             <View key={`${day.iso}-${day.label}`} style={styles.dayCell}>
-              <View
+              <Pressable
+                disabled={!day.iso}
+                onPress={() => {
+                  if (day.iso) {
+                    onSelectDate(day.iso);
+                  }
+                }}
                 style={[
                   styles.dayBubble,
                   !day.inMonth && styles.dayBubbleMuted,
                   isToday && styles.dayBubbleToday,
+                  isSelected && styles.dayBubbleSelected,
                 ]}
               >
                 <Text
@@ -312,11 +337,12 @@ function CalendarMonth({
                     styles.dayText,
                     !day.inMonth && styles.dayTextMuted,
                     isToday && styles.dayTextToday,
+                    isSelected && styles.dayTextSelected,
                   ]}
                 >
                   {day.label}
                 </Text>
-              </View>
+              </Pressable>
               <View style={styles.dotSlot}>
                 {hasEvents ? <View style={styles.eventDot} /> : null}
               </View>
@@ -332,9 +358,11 @@ function CalendarMonth({
 }
 
 function UpcomingEvents({
+  date,
   events,
   query,
 }: {
+  date: string;
   events: CalendarEvent[];
   query: { error: unknown; isLoading: boolean };
 }) {
@@ -344,7 +372,7 @@ function UpcomingEvents({
   if (query.isLoading || query.error || events.length === 0) {
     return (
       <QueryState
-        emptyText="Brak najbliższych wydarzeń."
+        emptyText={`Brak wydarzeń dla ${formatDate(date)}.`}
         error={query.error}
         isEmpty={!query.isLoading && events.length === 0}
         isLoading={query.isLoading}
@@ -797,6 +825,9 @@ function createStyles(colors: AppPalette) {
     dayBubbleMuted: {
       opacity: 0.42,
     },
+    dayBubbleSelected: {
+      backgroundColor: colors.calendar,
+    },
     dayBubbleToday: {
       backgroundColor: colors.primary,
     },
@@ -818,6 +849,9 @@ function createStyles(colors: AppPalette) {
     },
     dayTextMuted: {
       color: colors.textSubtle,
+    },
+    dayTextSelected: {
+      color: colors.inverseText,
     },
     dayTextToday: {
       color: colors.inverseText,

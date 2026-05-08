@@ -5,6 +5,7 @@ export { EmptyState } from "./empty-state";
 export { FormModal } from "./form-modal";
 export { IconButton } from "./icon-button";
 export { InlineAlert } from "./inline-alert";
+export { AppToast } from "./toast";
 export { ListRow } from "./list-row";
 export { MetricCard } from "./metric-card";
 export { QueryState } from "./query-state";

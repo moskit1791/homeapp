@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import {
   CalendarDays,
+  CheckCircle2,
   Home,
   ListChecks,
   MoreHorizontal,
@@ -94,7 +95,7 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: "Dzisiaj",
-          tabBarIcon: ({ color }) => <Home color={color} size={20} />,
+          tabBarIcon: ({ color }) => <CheckCircle2 color={color} size={20} />,
         }}
       />
       <Tabs.Screen

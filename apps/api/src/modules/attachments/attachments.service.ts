@@ -201,6 +201,29 @@ export class AttachmentsService {
     return attachment;
   }
 
+  async getAttachmentFile(
+    householdId: string,
+    id: string
+  ): Promise<AttachmentFileRecord | null> {
+    const attachment = await this.findAttachment(householdId, id);
+
+    if (!attachment) {
+      return null;
+    }
+
+    const absolutePath = this.tryResolveLocalStoragePath(attachment.storagePath);
+
+    if (!absolutePath) {
+      throw new BadRequestException('Invalid attachment storage path');
+    }
+
+    return {
+      absolutePath,
+      fileName: attachment.fileName,
+      mimeType: attachment.mimeType
+    };
+  }
+
   async deleteAttachment(householdId: string, id: string): Promise<boolean> {
     const current = await this.findAttachment(householdId, id);
 
@@ -400,6 +423,12 @@ export interface AttachmentRecord {
   mimeType: AttachmentMimeType;
   storagePath: string;
   updatedAt: string;
+}
+
+export interface AttachmentFileRecord {
+  absolutePath: string;
+  fileName: string;
+  mimeType: AttachmentMimeType;
 }
 
 export interface AttachmentUploadContract {

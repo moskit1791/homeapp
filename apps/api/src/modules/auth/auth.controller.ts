@@ -1,4 +1,16 @@
-import { Body, Controller, Delete, Headers, Post, UnauthorizedException, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Headers,
+  Param,
+  Query,
+  Redirect,
+  Post,
+  UnauthorizedException,
+  UseGuards
+} from '@nestjs/common';
 import {
   ForgotPasswordDto,
   GoogleLoginDto,
@@ -64,6 +76,29 @@ export class AuthController {
     }
 
     return this.authService.logout(authorization.slice('Bearer '.length).trim());
+  }
+
+  @Get('open/:action')
+  @Redirect()
+  openAuthLink(
+    @Param('action') action: string,
+    @Query('email') email?: string,
+    @Query('token') token?: string
+  ) {
+    const safeAction = ['invitation', 'reset-password', 'verify-email'].includes(action)
+      ? action
+      : 'invitation';
+    const url = new URL(`homeapp://auth/${safeAction}`);
+
+    if (email) {
+      url.searchParams.set('email', email);
+    }
+
+    if (token) {
+      url.searchParams.set('token', token);
+    }
+
+    return { url: url.toString() };
   }
 
   @Delete('me')

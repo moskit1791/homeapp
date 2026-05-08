@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import type { ReactNode } from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import {
   getStartDashboard,
@@ -10,11 +10,16 @@ import {
   queryKeys,
   type StartCalendarEvent,
 } from "../../src/api";
+import {
+  clearStoredNotifications,
+  listStoredNotifications,
+  type StoredNotification,
+} from "../../src/notifications/notification-center";
 import { useModulePermission } from "../../src/permissions/use-permissions";
 import { useSession } from "../../src/session/session-context";
 import { radii, spacing } from "../../src/theme/tokens";
 import { useAppTheme, type AppPalette } from "../../src/theme/use-app-theme";
-import { ActionButton, AppScreen, FormModal, IconButton, QueryState } from "../../src/ui";
+import { ActionButton, AppScreen, AppToast, FormModal, IconButton, QueryState } from "../../src/ui";
 import {
   AccountCircle,
   Bell,
@@ -24,11 +29,10 @@ import {
   NotePlus,
   NotebookText,
   Plus,
-  ReceiptText,
   RefreshCcw,
+  ReceiptText,
   ShoppingCart,
   Utensils,
-  WalletCards,
 } from "../../src/ui/icon";
 
 export default function DzisiajScreen() {
@@ -38,6 +42,8 @@ export default function DzisiajScreen() {
   const styles = createStyles(theme.colors);
   const accessToken = session?.accessToken;
   const [notificationsVisible, setNotificationsVisible] = useState(false);
+  const [pushNotifications, setPushNotifications] = useState<StoredNotification[]>([]);
+  const [toast, setToast] = useState<string | null>(null);
   const shoppingPermission = useModulePermission("shopping");
   const notesPermission = useModulePermission("notes");
 
@@ -69,12 +75,29 @@ export default function DzisiajScreen() {
   const latestNote = [...(notesQuery.data ?? [])].sort((left, right) =>
     right.updatedAt.localeCompare(left.updatedAt),
   )[0];
-  const remainingBudget = dashboard?.finance?.totalRemainingAmount;
-  const remainingBudgetAmount = Number(remainingBudget ?? 0);
   const openFromNotification = useCallback((route: "/(tabs)/kalendarz" | "/(tabs)/finanse" | "/(tabs)/lista" | "/(tabs)/dom") => {
     setNotificationsVisible(false);
     router.push(route as never);
   }, [router]);
+  const openNotificationSettings = useCallback(() => {
+    setNotificationsVisible(false);
+    router.push({ pathname: "/(tabs)/dom", params: { settings: "1" } } as never);
+  }, [router]);
+
+  useEffect(() => {
+    if (!notificationsVisible) {
+      return;
+    }
+
+    listStoredNotifications()
+      .then(setPushNotifications)
+      .catch(() => setPushNotifications([]));
+  }, [notificationsVisible]);
+
+  function showToast(message: string) {
+    setToast(message);
+    setTimeout(() => setToast(null), 2200);
+  }
   const notificationItems = useMemo<NotificationItem[]>(() => {
     const items: NotificationItem[] = [];
 
@@ -98,16 +121,6 @@ export default function DzisiajScreen() {
       });
     }
 
-    if (Number.isFinite(remainingBudgetAmount) && remainingBudgetAmount < 0) {
-      items.push({
-        body: `Budżet jest przekroczony o ${formatMoney(Math.abs(remainingBudgetAmount))}.`,
-        icon: <WalletCards color={theme.colors.danger} size={20} />,
-        id: "budget-negative",
-        onPress: () => openFromNotification("/(tabs)/finanse"),
-        title: "Budżet wymaga uwagi",
-      });
-    }
-
     if (!nextMeal) {
       items.push({
         body: "Nie ma zaplanowanego posiłku na dziś.",
@@ -123,10 +136,8 @@ export default function DzisiajScreen() {
     nextEvent,
     nextMeal,
     openShopping.length,
-    remainingBudgetAmount,
     openFromNotification,
     theme.colors.calendar,
-    theme.colors.danger,
     theme.colors.food,
     theme.colors.shopping,
     todayEvents.length,
@@ -139,7 +150,9 @@ export default function DzisiajScreen() {
           <IconButton
             accessibilityLabel="Odśwież ekran Dzisiaj"
             disabled={dashboardQuery.isFetching}
-            onPress={() => dashboardQuery.refetch()}
+            onPress={() => {
+              dashboardQuery.refetch().finally(() => showToast("Widok odświeżony"));
+            }}
           >
             <RefreshCcw color={theme.colors.textMuted} size={17} />
           </IconButton>
@@ -163,6 +176,7 @@ export default function DzisiajScreen() {
       title="Dzisiaj"
       titleAlign="center"
     >
+      <AppToast text={toast} />
       <QueryState error={dashboardQuery.error} isLoading={dashboardQuery.isLoading} />
 
       <View style={styles.greeting}>
@@ -186,14 +200,6 @@ export default function DzisiajScreen() {
           onPress={() => router.push("/(tabs)/kalendarz" as never)}
           title="Ostatnia notatka"
           value={latestNote?.title ?? "Notatki"}
-        />
-        <HomeTile
-          accent={theme.colors.finance}
-          icon={<WalletCards color={theme.colors.finance} size={24} />}
-          meta="zostaje do końca miesiąca"
-          onPress={() => router.push("/(tabs)/finanse" as never)}
-          title="Budżet w tym miesiącu"
-          value={formatMoney(remainingBudget)}
         />
         <HomeTile
           accent={theme.colors.shopping}
@@ -227,7 +233,9 @@ export default function DzisiajScreen() {
           color={theme.colors.finance}
           icon={<ReceiptText color={theme.colors.finance} size={21} />}
           label="Dodaj wydatek"
-          onPress={() => router.push("/(tabs)/finanse" as never)}
+          onPress={() =>
+            router.push({ pathname: "/(tabs)/finanse", params: { action: "expense" } } as never)
+          }
         />
         <QuickAction
           color={theme.colors.shopping}
@@ -255,7 +263,25 @@ export default function DzisiajScreen() {
         title="Powiadomienia"
         visible={notificationsVisible}
       >
-        {notificationItems.length > 0 ? (
+        {pushNotifications.length > 0 ? (
+          <>
+            {pushNotifications.map((item) => (
+              <StoredNotificationRow item={item} key={item.id} />
+            ))}
+            <ActionButton
+              onPress={() => {
+                clearStoredNotifications()
+                  .then(() => {
+                    setPushNotifications([]);
+                    showToast("Powiadomienia wyczyszczone");
+                  })
+                  .catch(() => showToast("Nie udało się wyczyścić powiadomień"));
+              }}
+              title="Wyczyść listę"
+              variant="ghost"
+            />
+          </>
+        ) : notificationItems.length > 0 ? (
           notificationItems.map((item) => <NotificationRow item={item} key={item.id} />)
         ) : (
           <View style={styles.emptyNotifications}>
@@ -265,8 +291,8 @@ export default function DzisiajScreen() {
           </View>
         )}
         <ActionButton
-          onPress={() => openFromNotification("/(tabs)/dom")}
-          title="Ustawienia powiadomień push"
+          onPress={openNotificationSettings}
+          title="Przejdź do ustawień powiadomień"
           variant="secondary"
         />
       </FormModal>
@@ -300,6 +326,24 @@ function NotificationRow({ item }: { item: NotificationItem }) {
       </View>
       <ChevronRight color={theme.colors.textMuted} size={20} />
     </Pressable>
+  );
+}
+
+function StoredNotificationRow({ item }: { item: StoredNotification }) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+
+  return (
+    <View style={styles.notificationRow}>
+      <View style={styles.notificationIcon}>
+        <Bell color={theme.colors.primary} size={20} />
+      </View>
+      <View style={styles.notificationText}>
+        <Text style={styles.notificationTitle}>{item.title}</Text>
+        {item.body ? <Text style={styles.notificationBody}>{item.body}</Text> : null}
+        <Text style={styles.notificationTime}>{formatDateTime(item.receivedAt)}</Text>
+      </View>
+    </View>
   );
 }
 
@@ -408,12 +452,19 @@ function formatShortDate(value: string): string {
   }).format(date);
 }
 
-function formatMoney(value: string | number | null | undefined): string {
-  const amount = Number(value ?? 0);
+function formatDateTime(value: string): string {
+  const date = new Date(value);
 
-  return `${(Number.isFinite(amount) ? amount : 0).toLocaleString("pl-PL", {
-    maximumFractionDigits: 0,
-  })} zł`;
+  if (Number.isNaN(date.getTime())) {
+    return value.slice(0, 16);
+  }
+
+  return new Intl.DateTimeFormat("pl-PL", {
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    month: "2-digit",
+  }).format(date);
 }
 
 function tint(color: string, opacity: number): string {
@@ -537,6 +588,12 @@ function createStyles(colors: AppPalette) {
       color: colors.text,
       fontSize: 13,
       fontWeight: "900",
+      letterSpacing: 0,
+    },
+    notificationTime: {
+      color: colors.textSubtle,
+      fontSize: 11,
+      fontWeight: "700",
       letterSpacing: 0,
     },
     pressed: {
