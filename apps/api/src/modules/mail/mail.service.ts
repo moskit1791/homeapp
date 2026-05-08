@@ -56,6 +56,31 @@ export class MailService {
     });
   }
 
+  async sendHouseholdInvitation(input: HouseholdInvitationMailInput): Promise<void> {
+    const env = loadEnv();
+    const link = this.buildLink(env.AUTH_LINK_BASE_URL, '/invitation', {
+      token: input.token
+    });
+
+    await this.send(env, {
+      html: [
+        `<p>Czesc,</p>`,
+        `<p>${escapeHtml(input.invitedByDisplayName)} zaprasza Cie do domu "${escapeHtml(input.householdName)}" w HomeApp.</p>`,
+        `<p><a href="${escapeHtml(link)}">Dolacz do domu</a></p>`,
+        '<p>Link wygasa po 7 dniach. Zaloguj sie kontem z adresem, na ktory przyszlo zaproszenie.</p>',
+        `<p>Jesli przycisk nie dziala, skopiuj ten link: ${escapeHtml(link)}</p>`
+      ].join(''),
+      subject: `Zaproszenie do domu ${input.householdName} w HomeApp`,
+      text: [
+        'Czesc,',
+        `${input.invitedByDisplayName} zaprasza Cie do domu "${input.householdName}" w HomeApp.`,
+        'Link wygasa po 7 dniach. Zaloguj sie kontem z adresem, na ktory przyszlo zaproszenie.',
+        link
+      ].join('\n\n'),
+      to: input.email
+    });
+  }
+
   private async send(env: AppEnv, message: OutboundMail): Promise<void> {
     if (env.MAIL_DRIVER === 'console') {
       this.logger.log(`Console mail to ${message.to}: ${message.subject}`);
@@ -116,6 +141,13 @@ export class MailService {
 interface AuthMailInput {
   displayName: string;
   email: string;
+  token: string;
+}
+
+interface HouseholdInvitationMailInput {
+  email: string;
+  householdName: string;
+  invitedByDisplayName: string;
   token: string;
 }
 

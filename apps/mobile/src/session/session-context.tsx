@@ -12,6 +12,7 @@ import {
   LoginResponse,
   LoginRequest,
   RegisterRequest,
+  acceptInvitation,
   createHousehold,
   getStartDashboard,
   login,
@@ -38,6 +39,7 @@ interface Session {
 type SessionStatus = "checking" | "signed-out" | "needs-household" | "ready";
 
 interface SignInOptions {
+  invitationToken?: string | null;
   remember?: boolean;
 }
 
@@ -221,6 +223,16 @@ export function SessionProvider({ children }: PropsWithChildren) {
           await clearRememberedEmail();
         }
 
+        if (options?.invitationToken) {
+          await acceptInvitation(
+            { token: options.invitationToken },
+            { accessToken: authSession.accessToken },
+          );
+          await getStartDashboard({ accessToken: authSession.accessToken });
+          setStatus("ready");
+          return;
+        }
+
         setStatus("needs-household");
       },
       session,
@@ -240,6 +252,13 @@ export function SessionProvider({ children }: PropsWithChildren) {
         }
 
         try {
+          if (options?.invitationToken) {
+            await acceptInvitation(
+              { token: options.invitationToken },
+              { accessToken: authSession.accessToken },
+            );
+          }
+
           await getStartDashboard({ accessToken: authSession.accessToken });
           setStatus("ready");
         } catch (error) {
@@ -266,6 +285,13 @@ export function SessionProvider({ children }: PropsWithChildren) {
         }
 
         try {
+          if (options?.invitationToken) {
+            await acceptInvitation(
+              { token: options.invitationToken },
+              { accessToken: authSession.accessToken },
+            );
+          }
+
           await getStartDashboard({ accessToken: authSession.accessToken });
           setStatus("ready");
         } catch (error) {

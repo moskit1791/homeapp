@@ -68,6 +68,7 @@ export interface ResetPasswordRequest {
 }
 
 export type ResetPasswordResponse = OkResponse;
+export type DeleteAccountResponse = OkResponse;
 
 export interface GoogleLoginRequest {
   idToken: string;
@@ -677,7 +678,18 @@ export interface HouseholdInvitation {
   email: string;
   expiresAt: string;
   id: string;
+  notificationSent?: number;
   token: string;
+}
+
+export interface AcceptInvitationRequest {
+  token: string;
+}
+
+export interface AcceptInvitationResponse {
+  householdId: string;
+  invitationId: string;
+  membership: HouseholdMembership;
 }
 
 export interface PatchMemberPermissionsRequest {

@@ -73,13 +73,22 @@ export default function DzisiajScreen() {
     <AppScreen
       actions={
         <View style={styles.headerActions}>
-          <IconButton disabled={dashboardQuery.isFetching} onPress={() => dashboardQuery.refetch()}>
+          <IconButton
+            accessibilityLabel="Odśwież ekran Dzisiaj"
+            disabled={dashboardQuery.isFetching}
+            onPress={() => dashboardQuery.refetch()}
+          >
             <RefreshCcw color={theme.colors.textMuted} size={17} />
           </IconButton>
-          <View style={styles.bellWrap}>
-            <Bell color={theme.colors.text} size={19} />
-            <View style={styles.bellDot} />
-          </View>
+          <IconButton
+            accessibilityLabel="Przejdź do ustawień powiadomień"
+            onPress={() => router.push("/(tabs)/dom" as never)}
+          >
+            <View style={styles.bellWrap}>
+              <Bell color={theme.colors.text} size={19} />
+              <View style={styles.bellDot} />
+            </View>
+          </IconButton>
         </View>
       }
       leading={
@@ -194,6 +203,8 @@ function HomeTile({
 
   return (
     <Pressable
+      accessibilityLabel={`${title}: ${value}. ${meta}`}
+      accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [
         styles.tile,
@@ -232,6 +243,8 @@ function QuickAction({
 
   return (
     <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [styles.quickAction, pressed && styles.pressed]}
     >

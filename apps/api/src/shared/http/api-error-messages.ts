@@ -24,6 +24,8 @@ const exactMessages: Record<string, string> = {
   "Calendar event title is required": "Podaj tytul wydarzenia.",
   "Cleaning task name is required": "Podaj nazwe zadania sprzatania.",
   "Cleaning task not found": "Nie znaleziono zadania sprzatania.",
+  "Cannot delete the only budget month":
+    "Nie mozna usunac jedynego miesiaca budzetowego.",
   "Current budget month not found":
     "Nie znaleziono aktualnego miesiaca budzetowego.",
   "Data entry title is required": "Podaj tytul wpisu.",
@@ -93,6 +95,8 @@ const exactMessages: Record<string, string> = {
     "Wlasciciel musi byc aktywnym domownikiem.",
   "Owner permissions are implicit and cannot be edited":
     "Uprawnienia wlasciciela sa domyslne i nie mozna ich edytowac.",
+  "Owner account cannot be deleted while other household members exist":
+    "Nie mozna usunac konta wlasciciela, gdy w domu sa inni domownicy.",
   "Recurrence COUNT is too large": "Liczba powtorzen jest zbyt duza.",
   "Recurrence INTERVAL is too large": "Interwal powtarzania jest zbyt duzy.",
   "Recurrence rule requires FREQ=DAILY, WEEKLY or MONTHLY":

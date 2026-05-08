@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { AccountStatus } from '@homeapp/shared-types';
 import { DatabaseService } from '../database/database.service';
 
@@ -400,6 +400,101 @@ export class UsersService {
     );
   }
 
+  async deleteAccount(userId: string): Promise<void> {
+    await this.database.transaction(async (client) => {
+      const memberships = await client.query<AccountDeletionMembershipRow>(
+        `
+          select
+            hm.id,
+            hm.household_id,
+            hm.role,
+            (
+              select count(*)::integer
+              from household_members other_members
+              where other_members.household_id = hm.household_id
+                and other_members.is_active = true
+                and other_members.id <> hm.id
+            ) as other_active_members
+          from household_members hm
+          where hm.user_id = $1
+            and hm.is_active = true
+          for update
+        `,
+        [userId]
+      );
+      const blockingOwnerMembership = memberships.rows.find(
+        (membership) => membership.role === 'owner' && membership.other_active_members > 0
+      );
+
+      if (blockingOwnerMembership) {
+        throw new BadRequestException(
+          'Owner account cannot be deleted while other household members exist'
+        );
+      }
+
+      for (const membership of memberships.rows) {
+        if (membership.role === 'owner') {
+          await client.query(
+            `
+              delete from households
+              where id = $1
+            `,
+            [membership.household_id]
+          );
+          continue;
+        }
+
+        await client.query(
+          `
+            update household_members
+            set
+              is_active = false,
+              removed_at = now()
+            where id = $1
+          `,
+          [membership.id]
+        );
+      }
+
+      await client.query(
+        `
+          update auth_refresh_tokens
+          set revoked_at = now()
+          where user_id = $1
+            and revoked_at is null
+        `,
+        [userId]
+      );
+      await client.query(
+        `
+          update push_tokens
+          set enabled = false
+          where user_id = $1
+        `,
+        [userId]
+      );
+      await client.query(
+        `
+          update users
+          set
+            auth_provider_user_id = gen_random_uuid(),
+            email = $2,
+            display_name = 'Usuniete konto',
+            account_status = 'inactive',
+            password_hash = null,
+            email_verified_at = null,
+            email_verification_token_hash = null,
+            email_verification_expires_at = null,
+            password_reset_token_hash = null,
+            password_reset_expires_at = null,
+            google_subject = null
+          where id = $1
+        `,
+        [userId, `deleted-${userId}@deleted.homeapp.local`]
+      );
+    });
+  }
+
   private mapUserRecord(row: UserRecordRow | undefined): UserRecord {
     if (!row) {
       throw new Error('Expected user record');
@@ -449,6 +544,13 @@ interface StoreRefreshTokenInput {
   expiresAt: Date;
   tokenHash: string;
   userId: string;
+}
+
+interface AccountDeletionMembershipRow {
+  household_id: string;
+  id: string;
+  other_active_members: number;
+  role: 'member' | 'owner';
 }
 
 interface UserRecordRow {

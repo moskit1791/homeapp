@@ -8,16 +8,16 @@ import {
   Banknote,
   ChevronLeft,
   ChevronRight,
-  DotsVertical,
-  Filter,
   Plus,
   ReceiptText,
+  Trash2,
   WalletCards,
 } from "../../src/ui/icon";
 import {
   createBudgetCategory,
   createBudgetItem,
   createExpense,
+  deleteBudgetMonth,
   generateNextBudgetMonth,
   getBudgetMonth,
   getFinanceSummary,
@@ -36,6 +36,7 @@ import {
   ActionButton,
   AppScreen,
   FormModal,
+  IconButton,
   InlineAlert,
   QueryState,
   SegmentedControl,
@@ -60,7 +61,7 @@ export default function FinanseScreen() {
   const queryClient = useQueryClient();
   const theme = useAppTheme();
   const styles = useMemo(() => createStyles(theme.colors), [theme.colors]);
-  const { canCreate, canRead, canUpdate, permissionsQuery } = useModulePermission("finances");
+  const { canCreate, canDelete, canRead, canUpdate, permissionsQuery } = useModulePermission("finances");
   const accessToken = session?.accessToken;
   const { control, setValue, watch } = useForm<FinanceFormValues>({
     defaultValues: {
@@ -86,6 +87,7 @@ export default function FinanseScreen() {
   const [financeModal, setFinanceModal] = useState<
     "menu" | "income" | "category" | "item" | "expense" | null
   >(null);
+  const [deleteMonthConfirmVisible, setDeleteMonthConfirmVisible] = useState(false);
 
   const currentQuery = useQuery({
     enabled: canRead && Boolean(accessToken),
@@ -143,6 +145,18 @@ export default function FinanseScreen() {
       .sort((left, right) => left.year - right.year || left.month - right.month)
       .slice(-5);
   }, [archiveQuery.data, currentMonth]);
+  const selectedMonthIndex = monthTabs.findIndex((month) => month.id === selectedMonthId);
+  const selectedMonth = monthTabs.find((month) => month.id === selectedMonthId) ?? visibleMonth;
+  const canGoPreviousMonth = selectedMonthIndex > 0;
+  const canGoNextMonth = selectedMonthIndex >= 0 && selectedMonthIndex < monthTabs.length - 1;
+
+  function selectAdjacentMonth(direction: -1 | 1) {
+    const nextMonth = monthTabs[selectedMonthIndex + direction];
+
+    if (nextMonth) {
+      setSelectedMonthId(nextMonth.id);
+    }
+  }
 
   useEffect(() => {
     if (!selectedMonthId && currentMonth?.id) {
@@ -250,6 +264,16 @@ export default function FinanseScreen() {
       await queryClient.invalidateQueries({ queryKey: queryKeys.start });
     },
   });
+  const deleteMonthMutation = useMutation({
+    mutationFn: () => deleteBudgetMonth(selectedMonthId ?? "", { accessToken }),
+    onSuccess: async () => {
+      setDeleteMonthConfirmVisible(false);
+      setFinanceModal(null);
+      setSelectedMonthId(null);
+      await invalidateFinance();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.start });
+    },
+  });
 
   const canSaveIncome =
     canUpdate && Boolean(selectedIncomeMemberId) && isValidMoney(incomeAmount);
@@ -263,6 +287,8 @@ export default function FinanseScreen() {
     (!itemAmount.trim() || isValidMoney(itemAmount));
   const canSaveExpense =
     canCreate && Boolean(selectedExpenseItemId) && isPositiveMoney(expenseAmount);
+  const canRemoveSelectedMonth =
+    canDelete && Boolean(selectedMonthId) && monthTabs.length > 1 && !deleteMonthMutation.isPending;
 
   if (permissionsQuery.isLoading) {
     return (
@@ -281,15 +307,7 @@ export default function FinanseScreen() {
   }
 
   return (
-    <AppScreen
-      actions={
-        <View style={styles.headerActions}>
-          <Filter color={theme.colors.text} size={19} />
-          <DotsVertical color={theme.colors.text} size={19} />
-        </View>
-      }
-      title="Finanse"
-    >
+    <AppScreen title="Finanse">
       <QueryState
         emptyText="Brak danych finansowych."
         error={currentQuery.error ?? selectedArchiveQuery.error}
@@ -300,9 +318,23 @@ export default function FinanseScreen() {
       {summary ? (
         <>
           <View style={styles.monthSwitcher}>
-            <ChevronLeft color={theme.colors.textMuted} size={20} />
+            <IconButton
+              accessibilityLabel="Poprzedni miesiąc budżetu"
+              disabled={!canGoPreviousMonth}
+              onPress={() => selectAdjacentMonth(-1)}
+              style={styles.monthNavButton}
+            >
+              <ChevronLeft color={canGoPreviousMonth ? theme.colors.textMuted : theme.colors.textSubtle} size={20} />
+            </IconButton>
             <Text style={styles.monthSwitcherTitle}>{visibleMonth ? formatMonthLong(visibleMonth) : "Miesiąc"}</Text>
-            <ChevronRight color={theme.colors.textMuted} size={20} />
+            <IconButton
+              accessibilityLabel="Następny miesiąc budżetu"
+              disabled={!canGoNextMonth}
+              onPress={() => selectAdjacentMonth(1)}
+              style={styles.monthNavButton}
+            >
+              <ChevronRight color={canGoNextMonth ? theme.colors.textMuted : theme.colors.textSubtle} size={20} />
+            </IconButton>
           </View>
 
           <View style={styles.metricRow}>
@@ -389,6 +421,53 @@ export default function FinanseScreen() {
                 title="Wygeneruj kolejny miesiąc"
                 variant="ghost"
               />
+              {canDelete ? (
+                <ActionButton
+                  disabled={!canRemoveSelectedMonth}
+                  onPress={() => setDeleteMonthConfirmVisible(true)}
+                  title="Usuń wybrany miesiąc"
+                  variant="ghost"
+                />
+              ) : null}
+              {deleteMonthMutation.error ? (
+                <InlineAlert tone="error" text="Nie udało się usunąć miesiąca." />
+              ) : null}
+            </View>
+          </FormModal>
+
+          <FormModal
+            footer={
+              <View style={styles.modalFooter}>
+                <ActionButton
+                  onPress={() => setDeleteMonthConfirmVisible(false)}
+                  style={styles.modalFooterButton}
+                  title="Anuluj"
+                  variant="secondary"
+                />
+                <ActionButton
+                  disabled={!canRemoveSelectedMonth}
+                  loading={deleteMonthMutation.isPending}
+                  onPress={() => deleteMonthMutation.mutate()}
+                  style={styles.modalFooterButton}
+                  title="Usuń"
+                />
+              </View>
+            }
+            onClose={() => setDeleteMonthConfirmVisible(false)}
+            subtitle={
+              selectedMonth
+                ? `${formatMonthLong(selectedMonth)} zostanie usunięty wraz z wpisami budżetu.`
+                : "Wybierz miesiąc budżetu."
+            }
+            title="Usuń miesiąc"
+            visible={deleteMonthConfirmVisible}
+          >
+            <View style={styles.deleteWarning}>
+              <Trash2 color={theme.colors.danger} size={18} />
+              <Text style={styles.deleteWarningText}>
+                Ta akcja usuwa miesiąc budżetowy, jego pozycje, dochody i wydatki. Jeśli usuwasz aktualny miesiąc,
+                poprzedni miesiąc wróci jako aktywny.
+              </Text>
             </View>
           </FormModal>
 
@@ -861,6 +940,23 @@ function createStyles(colors: AppPalette) {
     dangerText: {
       color: colors.danger,
     },
+    deleteWarning: {
+      alignItems: "flex-start",
+      backgroundColor: colors.warningSoft,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      padding: spacing.md,
+    },
+    deleteWarningText: {
+      color: colors.text,
+      flex: 1,
+      fontSize: 13,
+      letterSpacing: 0,
+      lineHeight: 19,
+    },
     fab: {
       alignItems: "center",
       alignSelf: "flex-end",
@@ -875,12 +971,6 @@ function createStyles(colors: AppPalette) {
       shadowOpacity: 0.26,
       shadowRadius: 18,
       width: 54,
-    },
-    headerActions: {
-      alignItems: "center",
-      flexDirection: "row",
-      gap: spacing.md,
-      minHeight: 34,
     },
     headerCell: {
       backgroundColor: colors.cardMuted,
@@ -938,13 +1028,21 @@ function createStyles(colors: AppPalette) {
       flexDirection: "row",
       justifyContent: "space-between",
       minHeight: 38,
-      paddingHorizontal: spacing.sm,
+      paddingHorizontal: 4,
     },
     monthSwitcherTitle: {
       color: colors.primaryDark,
+      flex: 1,
       fontSize: 14,
       fontWeight: "900",
       letterSpacing: 0,
+      textAlign: "center",
+    },
+    monthNavButton: {
+      backgroundColor: "transparent",
+      borderColor: "transparent",
+      height: 34,
+      width: 34,
     },
     monthTab: {
       alignItems: "center",

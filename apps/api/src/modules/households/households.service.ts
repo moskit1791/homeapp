@@ -2,13 +2,15 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
-  Injectable
+  Injectable,
+  Logger
 } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import { HouseholdMemberRole } from '@homeapp/shared-types';
 import { PoolClient } from 'pg';
 import { UserContext } from '../../shared/request-context';
 import { DatabaseService } from '../database/database.service';
+import { MailService } from '../mail/mail.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import {
   CreateHouseholdDto,
@@ -19,8 +21,12 @@ import {
 
 @Injectable()
 export class HouseholdsService {
+  private readonly logger = new Logger(HouseholdsService.name);
+  private readonly expoPushUrl = 'https://exp.host/--/api/v2/push/send';
+
   constructor(
     private readonly database: DatabaseService,
+    private readonly mailService: MailService,
     private readonly realtime: RealtimeService
   ) {}
 
@@ -181,8 +187,10 @@ export class HouseholdsService {
   }
 
   async createInvitation(householdId: string, invitedByUserId: string, dto: InviteMemberDto) {
+    const email = this.normalizeEmail(dto.email);
     await this.ensureOwnerCanInvite(householdId, invitedByUserId);
-    await this.ensureCanInviteEmail(householdId, dto.email);
+    await this.ensureCanInviteEmail(householdId, email);
+    const context = await this.getInvitationContext(householdId, invitedByUserId);
 
     const token = randomBytes(32).toString('hex');
     const result = await this.database.query<InvitationRow>(
@@ -197,7 +205,7 @@ export class HouseholdsService {
         values ($1, $2, $3, $4, now() + interval '7 days')
         returning id, household_id, email, token, expires_at, accepted_at
       `,
-      [householdId, dto.email, invitedByUserId, token]
+      [householdId, email, invitedByUserId, token]
     );
 
     const invitation = result.rows[0];
@@ -212,8 +220,36 @@ export class HouseholdsService {
       expiresAt: invitation.expires_at,
       householdId: invitation.household_id,
       id: invitation.id,
+      notificationSent: 0,
       token: invitation.token
     };
+
+    try {
+      await this.mailService.sendHouseholdInvitation({
+        email,
+        householdName: context.household_name,
+        invitedByDisplayName: context.inviter_display_name,
+        token
+      });
+    } catch (error) {
+      await this.database.query(
+        `
+          delete from invitations
+          where id = $1
+            and accepted_at is null
+        `,
+        [invitation.id]
+      );
+
+      throw error;
+    }
+
+    created.notificationSent = await this.sendInvitationPushIfPossible({
+      email,
+      householdName: context.household_name,
+      invitedByDisplayName: context.inviter_display_name,
+      token
+    });
     this.realtime.publish(householdId, 'household.changed', invitation.id);
 
     return created;
@@ -357,7 +393,23 @@ export class HouseholdsService {
   }
 
   private async ensureCanInviteEmail(householdId: string, email: string): Promise<void> {
-    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedEmail = this.normalizeEmail(email);
+    const existingAnyMember = await this.database.query<{ id: string }>(
+      `
+        select hm.id
+        from household_members hm
+        join users u on u.id = hm.user_id
+        where hm.is_active = true
+          and lower(u.email::text) = $1
+        limit 1
+      `,
+      [normalizedEmail]
+    );
+
+    if (existingAnyMember.rows[0]) {
+      throw new ConflictException('User already belongs to a household');
+    }
+
     const existingMember = await this.database.query<{ id: string }>(
       `
         select hm.id
@@ -391,6 +443,113 @@ export class HouseholdsService {
     if (activeInvitation.rows[0]) {
       throw new ConflictException('Active invitation already exists for this email');
     }
+  }
+
+  private async getInvitationContext(
+    householdId: string,
+    invitedByUserId: string
+  ): Promise<InvitationContextRow> {
+    const result = await this.database.query<InvitationContextRow>(
+      `
+        select
+          h.name as household_name,
+          u.display_name as inviter_display_name
+        from households h
+        join users u on u.id = $2
+        where h.id = $1
+        limit 1
+      `,
+      [householdId, invitedByUserId]
+    );
+    const row = result.rows[0];
+
+    if (!row) {
+      throw new BadRequestException('Household not found');
+    }
+
+    return row;
+  }
+
+  private async sendInvitationPushIfPossible(input: {
+    email: string;
+    householdName: string;
+    invitedByDisplayName: string;
+    token: string;
+  }): Promise<number> {
+    const tokens = await this.database.query<{ expo_push_token: string }>(
+      `
+        select distinct pt.expo_push_token
+        from users u
+        join push_tokens pt on pt.user_id = u.id
+        where lower(u.email::text) = $1
+          and pt.enabled = true
+      `,
+      [this.normalizeEmail(input.email)]
+    );
+
+    if (tokens.rows.length === 0) {
+      return 0;
+    }
+
+    try {
+      const response = await fetch(this.expoPushUrl, {
+        body: JSON.stringify(
+          tokens.rows.map((token) => ({
+            body: `${input.invitedByDisplayName} zaprasza Cie do domu ${input.householdName}.`,
+            data: {
+              kind: 'household-invitation',
+              token: input.token
+            },
+            sound: 'default' as const,
+            title: 'Zaproszenie do HomeApp',
+            to: token.expo_push_token
+          }))
+        ),
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json'
+        },
+        method: 'POST'
+      });
+
+      if (!response.ok) {
+        this.logger.warn(`Expo push rejected invitation notification: ${response.status}`);
+        return 0;
+      }
+
+      const body = (await response.json()) as ExpoPushResponse;
+      const tickets = Array.isArray(body.data) ? body.data : [];
+      await Promise.all(
+        tickets.map((ticket, index) =>
+          ticket.status === 'error' && ticket.details?.error === 'DeviceNotRegistered'
+            ? this.disablePushToken(tokens.rows[index]!.expo_push_token)
+            : undefined
+        )
+      );
+
+      return tickets.filter((ticket) => ticket.status === 'ok').length;
+    } catch (error) {
+      this.logger.warn(
+        'Failed to send invitation push notification',
+        error instanceof Error ? error.stack : undefined
+      );
+      return 0;
+    }
+  }
+
+  private async disablePushToken(expoPushToken: string): Promise<void> {
+    await this.database.query(
+      `
+        update push_tokens
+        set enabled = false
+        where expo_push_token = $1
+      `,
+      [expoPushToken]
+    );
+  }
+
+  private normalizeEmail(email: string): string {
+    return email.trim().toLowerCase();
   }
 
   private async createDefaultShoppingLists(client: PoolClient, householdId: string) {
@@ -488,6 +647,22 @@ interface InvitationRow {
   household_id: string;
   id: string;
   token: string;
+}
+
+interface InvitationContextRow {
+  household_name: string;
+  inviter_display_name: string;
+}
+
+interface ExpoPushResponse {
+  data?: ExpoPushTicket[];
+}
+
+interface ExpoPushTicket {
+  details?: {
+    error?: string;
+  };
+  status: 'ok' | 'error';
 }
 
 interface ActiveMembershipRow {

@@ -88,6 +88,24 @@ export class FinanceController {
     );
   }
 
+  @Delete('months/:id')
+  @RequirePermission('finances', 'delete')
+  async deleteMonth(
+    @CurrentHousehold() household: HouseholdContext | undefined,
+    @Param() params: FinanceMonthIdParamDto
+  ) {
+    const deleted = await this.budgetMonthsService.deleteMonth(
+      this.requireHousehold(household).householdId,
+      params.id
+    );
+
+    if (!deleted) {
+      throw new NotFoundException('Budget month not found');
+    }
+
+    return { ok: true };
+  }
+
   @Get('months/:id/person-summary')
   @RequirePermission('finances', 'read')
   getPersonSummary(

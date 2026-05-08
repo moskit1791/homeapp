@@ -92,6 +92,7 @@ export default function Index() {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [acceptedPrivacy, setAcceptedPrivacy] = useState(false);
   const [legalDocument, setLegalDocument] = useState<LegalDocument | null>(null);
+  const [pendingInvitationToken, setPendingInvitationToken] = useState<string | null>(null);
   const [resetVisible, setResetVisible] = useState(false);
   const [resetNotice, setResetNotice] = useState<string | null>(null);
   const [resetValues, setResetValues] = useState<ResetRequestValues>({ email: '' });
@@ -146,10 +147,14 @@ export default function Index() {
     setError(null);
     setLoading(true);
 
-    void signInWithGoogle(idToken, { remember: rememberMe })
+    void signInWithGoogle(idToken, {
+      invitationToken: pendingInvitationToken,
+      remember: rememberMe
+    })
+      .then(() => setPendingInvitationToken(null))
       .catch((submitError) => setError(getMessage(submitError)))
       .finally(() => setLoading(false));
-  }, [googleResponse, rememberMe, signInWithGoogle]);
+  }, [googleResponse, pendingInvitationToken, rememberMe, signInWithGoogle]);
 
   useEffect(() => {
     let active = true;
@@ -167,6 +172,13 @@ export default function Index() {
         setResetVisible(true);
         setNewPasswordValues((current) => ({ ...current, token: action.token }));
         setResetNotice('Token resetu został uzupełniony z linku.');
+        return;
+      }
+
+      if (action.type === 'invitation') {
+        setPendingInvitationToken(action.token);
+        setMode('login');
+        setNotice('Zaproszenie zapisane. Zaloguj się kontem z zaproszonego adresu e-mail.');
         return;
       }
 
@@ -273,7 +285,11 @@ export default function Index() {
     setLoading(true);
 
     try {
-      await signIn(parsed.data, { remember: rememberMe });
+      await signIn(parsed.data, {
+        invitationToken: pendingInvitationToken,
+        remember: rememberMe
+      });
+      setPendingInvitationToken(null);
     } catch (submitError) {
       setError(getMessage(submitError));
     } finally {
@@ -298,7 +314,11 @@ export default function Index() {
     setLoading(true);
 
     try {
-      await registerAndSignIn(parsed.data, { remember: rememberMe });
+      await registerAndSignIn(parsed.data, {
+        invitationToken: pendingInvitationToken,
+        remember: rememberMe
+      });
+      setPendingInvitationToken(null);
     } catch (submitError) {
       const message = getMessage(submitError);
 
@@ -773,6 +793,7 @@ export default function Index() {
   }) {
     return (
       <Pressable
+        accessibilityRole="button"
         accessibilityState={{ disabled: Boolean(disabled) }}
         disabled={disabled}
         onPress={onPress}
@@ -786,7 +807,7 @@ export default function Index() {
 
   function IconTap({ children, onPress }: { children: ReactNode; onPress: () => void }) {
     return (
-      <Pressable onPress={onPress} style={styles.iconTap}>
+      <Pressable accessibilityRole="button" onPress={onPress} style={styles.iconTap}>
         {children}
       </Pressable>
     );
@@ -850,7 +871,7 @@ export default function Index() {
     visible: boolean;
   }) {
     return (
-      <Modal animationType="slide" onRequestClose={onClose} transparent visible={visible}>
+      <Modal animationType="fade" onRequestClose={onClose} transparent visible={visible}>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Reset hasła</Text>
@@ -941,6 +962,12 @@ function parseAuthDeepLink(rawUrl: string): AuthDeepLinkAction | null {
       return token ? { token, type: 'reset-password' } : null;
     }
 
+    if (route.endsWith('invitation') || route.endsWith('accept-invitation')) {
+      const token = parsed.searchParams.get('token')?.trim();
+
+      return token ? { token, type: 'invitation' } : null;
+    }
+
     if (route.endsWith('verify-email')) {
       const email = parsed.searchParams.get('email')?.trim();
       const token = parsed.searchParams.get('token')?.trim();
@@ -958,6 +985,10 @@ type AuthDeepLinkAction =
   | {
       token: string;
       type: 'reset-password';
+    }
+  | {
+      token: string;
+      type: 'invitation';
     }
   | {
       email: string;

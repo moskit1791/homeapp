@@ -30,6 +30,7 @@ export function ActionButton({
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityState={{ disabled: isDisabled }}
       disabled={isDisabled}
       onPress={onPress}
       style={({ pressed }) => [

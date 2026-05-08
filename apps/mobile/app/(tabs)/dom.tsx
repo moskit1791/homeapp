@@ -11,6 +11,7 @@ import {
   createAttachmentUploadUrl,
   createCleaningTask,
   createDataEntry,
+  deleteMyAccount,
   deleteDataEntry,
   getMyHousehold,
   inviteHouseholdMember,
@@ -22,6 +23,7 @@ import {
   listHouseholdMembers,
   queryKeys,
   removeHouseholdMember,
+  sendTestPush,
   uploadAttachmentFile,
   type AnnualCost,
   type Attachment,
@@ -29,6 +31,7 @@ import {
   type DataEntry,
   type HouseholdMember,
 } from "../../src/api";
+import { registerForPushNotifications } from "../../src/notifications/register-push-notifications";
 import { useModulePermission, usePermissions } from "../../src/permissions/use-permissions";
 import { useSession } from "../../src/session/session-context";
 import { radii, spacing } from "../../src/theme/tokens";
@@ -811,6 +814,7 @@ function HouseholdCard() {
   const accessToken = session?.accessToken;
   const [email, setEmail] = useState("");
   const [inviteVisible, setInviteVisible] = useState(false);
+  const [invitationNotice, setInvitationNotice] = useState<string | null>(null);
   const householdQuery = useQuery({
     enabled: permission.canRead && Boolean(accessToken),
     queryFn: () => getMyHousehold({ accessToken }),
@@ -823,9 +827,14 @@ function HouseholdCard() {
   });
   const inviteMutation = useMutation({
     mutationFn: () => inviteHouseholdMember({ email: email.trim() }, { accessToken }),
-    onSuccess: async () => {
+    onSuccess: async (invitation) => {
       setEmail("");
       setInviteVisible(false);
+      setInvitationNotice(
+        invitation.notificationSent && invitation.notificationSent > 0
+          ? `Zaproszenie wysłane do ${invitation.email}. Wysłano też powiadomienie push.`
+          : `Zaproszenie wysłane do ${invitation.email}.`
+      );
       await queryClient.invalidateQueries({ queryKey: queryKeys.household });
     },
   });
@@ -841,6 +850,7 @@ function HouseholdCard() {
   }
 
   return (
+    <>
     <View style={styles.householdCard}>
       <View style={[styles.moduleIcon, { backgroundColor: theme.colors.softBlue }]}>
         <Users color={theme.colors.calendar} size={25} />
@@ -908,6 +918,8 @@ function HouseholdCard() {
         ) : null}
       </FormModal>
     </View>
+    {invitationNotice ? <InlineAlert text={invitationNotice} /> : null}
+    </>
   );
 }
 
@@ -916,14 +928,51 @@ function SettingsRow() {
   const queryClient = useQueryClient();
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
+  const [settingsVisible, setSettingsVisible] = useState(false);
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const registerPushMutation = useMutation({
+    mutationFn: async () => {
+      if (!session?.accessToken) {
+        return null;
+      }
+
+      return registerForPushNotifications(session.accessToken);
+    },
+  });
+  const testPushMutation = useMutation({
+    mutationFn: () =>
+      sendTestPush(
+        {
+          body: "To testowe powiadomienie z ustawień HomeApp.",
+          title: "HomeApp",
+        },
+        { accessToken: session?.accessToken },
+      ),
+  });
+  const deleteAccountMutation = useMutation({
+    mutationFn: () => deleteMyAccount({ accessToken: session?.accessToken }),
+    onSuccess: async () => {
+      setDeleteConfirmVisible(false);
+      setSettingsVisible(false);
+      queryClient.clear();
+      await logout();
+    },
+  });
 
   async function handleLogout() {
+    setSettingsVisible(false);
     queryClient.clear();
     await logout();
   }
 
   return (
-    <View style={styles.settingsRow}>
+    <>
+    <Pressable
+      accessibilityLabel="Otwórz ustawienia i konto"
+      accessibilityRole="button"
+      onPress={() => setSettingsVisible(true)}
+      style={({ pressed }) => [styles.settingsRow, pressed && styles.pressed]}
+    >
       <Cog color={theme.colors.textMuted} size={18} />
       <View style={styles.householdText}>
         <Text style={styles.settingsTitle}>Ustawienia i konto</Text>
@@ -931,8 +980,125 @@ function SettingsRow() {
           {session ? "Profil, powiadomienia, język, bezpieczeństwo" : "Brak aktywnej sesji"}
         </Text>
       </View>
-      <ActionButton onPress={handleLogout} size="small" title="Wyloguj" variant="secondary" />
-    </View>
+      <ChevronRight color={theme.colors.textMuted} size={20} />
+    </Pressable>
+    <FormModal
+      footer={
+        <View style={styles.modalFooter}>
+          <ActionButton
+            onPress={() => setSettingsVisible(false)}
+            style={styles.modalFooterButton}
+            title="Zamknij"
+            variant="secondary"
+          />
+          <ActionButton
+            onPress={handleLogout}
+            style={styles.modalFooterButton}
+            title="Wyloguj"
+            variant="secondary"
+          />
+        </View>
+      }
+      onClose={() => setSettingsVisible(false)}
+      subtitle="Profil, powiadomienia i bezpieczeństwo konta."
+      title="Ustawienia i konto"
+      visible={settingsVisible}
+    >
+      <View style={styles.settingsPanel}>
+        <View style={styles.settingsPanelRow}>
+          <Text style={styles.settingsPanelTitle}>Sesja</Text>
+          <Text style={styles.settingsPanelMeta}>
+            {session ? "Konto jest zalogowane na tym urządzeniu." : "Brak aktywnej sesji."}
+          </Text>
+        </View>
+        <View style={styles.settingsPanelRow}>
+          <Text style={styles.settingsPanelTitle}>Powiadomienia push</Text>
+          <Text style={styles.settingsPanelMeta}>
+            Wyślij test, żeby potwierdzić rejestrację tokenu push dla tego telefonu.
+          </Text>
+          <ActionButton
+            disabled={!session?.accessToken}
+            loading={registerPushMutation.isPending}
+            onPress={() => registerPushMutation.mutate()}
+            title="Włącz / odśwież powiadomienia"
+            variant="secondary"
+          />
+          {registerPushMutation.data ? (
+            <InlineAlert text="Telefon został zarejestrowany do powiadomień." />
+          ) : null}
+          {registerPushMutation.data === null ? (
+            <InlineAlert tone="error" text="Nie udało się pobrać tokenu push dla tego telefonu." />
+          ) : null}
+          {registerPushMutation.error ? (
+            <InlineAlert tone="error" text="Rejestracja powiadomień nie powiodła się." />
+          ) : null}
+          <ActionButton
+            disabled={!session?.accessToken}
+            loading={testPushMutation.isPending}
+            onPress={() => testPushMutation.mutate()}
+            title="Wyślij test push"
+            variant="secondary"
+          />
+          {testPushMutation.data ? (
+            <InlineAlert text={`Wysłano: ${testPushMutation.data.sent}`} />
+          ) : null}
+          {testPushMutation.error ? (
+            <InlineAlert tone="error" text="Nie udało się wysłać testowego powiadomienia." />
+          ) : null}
+        </View>
+        <View style={[styles.settingsPanelRow, styles.dangerPanel]}>
+          <Text style={styles.settingsPanelTitle}>Usuwanie konta</Text>
+          <Text style={styles.settingsPanelMeta}>
+            Konto zostanie wylogowane, tokeny powiadomień zostaną wyłączone, a adres e-mail odłączony od profilu.
+          </Text>
+          <ActionButton
+            disabled={!session?.accessToken}
+            onPress={() => setDeleteConfirmVisible(true)}
+            style={styles.dangerButton}
+            title="Usuń konto"
+          />
+          {deleteAccountMutation.error ? (
+            <InlineAlert
+              tone="error"
+              text={
+                deleteAccountMutation.error instanceof Error
+                  ? deleteAccountMutation.error.message
+                  : "Nie udało się usunąć konta."
+              }
+            />
+          ) : null}
+        </View>
+      </View>
+    </FormModal>
+    <FormModal
+      footer={
+        <View style={styles.modalFooter}>
+          <ActionButton
+            onPress={() => setDeleteConfirmVisible(false)}
+            style={styles.modalFooterButton}
+            title="Anuluj"
+            variant="secondary"
+          />
+          <ActionButton
+            disabled={!session?.accessToken}
+            loading={deleteAccountMutation.isPending}
+            onPress={() => deleteAccountMutation.mutate()}
+            style={[styles.modalFooterButton, styles.dangerButton]}
+            title="Usuń konto"
+          />
+        </View>
+      }
+      onClose={() => setDeleteConfirmVisible(false)}
+      subtitle="Tej akcji nie da się cofnąć z aplikacji."
+      title="Usuń konto"
+      visible={deleteConfirmVisible}
+    >
+      <InlineAlert
+        tone="error"
+        text="Jeśli jesteś właścicielem domu z innymi domownikami, backend zatrzyma usuwanie konta, żeby nie zostawić domu bez właściciela."
+      />
+    </FormModal>
+    </>
   );
 }
 
@@ -1511,6 +1677,36 @@ function createStyles(colors: AppPalette) {
       flexDirection: "row",
       gap: spacing.md,
       padding: spacing.md,
+    },
+    settingsPanel: {
+      gap: spacing.md,
+    },
+    dangerButton: {
+      backgroundColor: colors.danger,
+      borderColor: colors.danger,
+    },
+    dangerPanel: {
+      borderColor: colors.danger,
+    },
+    settingsPanelMeta: {
+      color: colors.textMuted,
+      fontSize: 13,
+      letterSpacing: 0,
+      lineHeight: 19,
+    },
+    settingsPanelRow: {
+      backgroundColor: colors.cardMuted,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      gap: spacing.sm,
+      padding: spacing.md,
+    },
+    settingsPanelTitle: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: "900",
+      letterSpacing: 0,
     },
     settingsTitle: {
       color: colors.text,

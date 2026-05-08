@@ -33,6 +33,7 @@ export type CleaningFrequencyMode = 'preset' | 'custom_days';
 export const REALTIME_EVENTS = [
   'finance.changed',
   'finance.month.generated',
+  'finance.month.deleted',
   'meal.changed',
   'calendar.changed',
   'todo.changed',

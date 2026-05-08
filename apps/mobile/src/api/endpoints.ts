@@ -5,6 +5,8 @@ import type {
   AnnualCost,
   AnnualCostCompletion,
   AnnualCostHistory,
+  AcceptInvitationRequest,
+  AcceptInvitationResponse,
   Attachment,
   AttachmentUploadContract,
   BudgetCategory,
@@ -35,6 +37,7 @@ import type {
   CreateShoppingItemRequest,
   CreateTodoItemRequest,
   DataEntry,
+  DeleteAccountResponse,
   EffectivePermission,
   Expense,
   Household,
@@ -203,6 +206,16 @@ export function resetPassword(
   });
 }
 
+export function deleteMyAccount(options?: ApiCallOptionsInput): Promise<DeleteAccountResponse> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<DeleteAccountResponse>('/auth/me', {
+    accessToken: requestOptions.accessToken,
+    method: 'DELETE',
+    signal: requestOptions.signal
+  });
+}
+
 export function createHousehold(
   input: CreateHouseholdRequest,
   options?: ApiCallOptionsInput
@@ -295,6 +308,20 @@ export function inviteHouseholdMember(
   });
 }
 
+export function acceptInvitation(
+  input: AcceptInvitationRequest,
+  options?: ApiCallOptionsInput
+): Promise<AcceptInvitationResponse> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<AcceptInvitationResponse, AcceptInvitationRequest>('/invitations/accept', {
+    accessToken: requestOptions.accessToken,
+    body: input,
+    method: 'POST',
+    signal: requestOptions.signal
+  });
+}
+
 export function removeHouseholdMember(
   memberId: string,
   options?: ApiCallOptionsInput
@@ -366,6 +393,19 @@ export function generateNextBudgetMonth(
   return apiRequest<BudgetMonthDetail>('/finance/months/generate-next', {
     accessToken: requestOptions.accessToken,
     method: 'POST',
+    signal: requestOptions.signal
+  });
+}
+
+export function deleteBudgetMonth(
+  monthId: string,
+  options?: ApiCallOptionsInput
+): Promise<OkResponse> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<OkResponse>(`/finance/months/${monthId}`, {
+    accessToken: requestOptions.accessToken,
+    method: 'DELETE',
     signal: requestOptions.signal
   });
 }

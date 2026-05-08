@@ -4,19 +4,28 @@ import { radii, spacing } from '../theme/tokens';
 import { useAppTheme, type AppPalette } from '../theme/use-app-theme';
 
 interface IconButtonProps {
+  accessibilityLabel?: string;
   children: ReactNode;
   disabled?: boolean;
   onPress: () => void;
   style?: StyleProp<ViewStyle>;
 }
 
-export function IconButton({ children, disabled = false, onPress, style }: IconButtonProps) {
+export function IconButton({
+  accessibilityLabel,
+  children,
+  disabled = false,
+  onPress,
+  style
+}: IconButtonProps) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
 
   return (
     <Pressable
+      accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
+      accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [

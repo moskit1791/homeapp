@@ -193,6 +193,13 @@ export class AuthService {
     return { ok: true };
   }
 
+  async deleteAccount(accessToken: string) {
+    const payload = this.verifyAccessToken(accessToken);
+    await this.usersService.deleteAccount(payload.userId);
+
+    return { ok: true };
+  }
+
   verifyAccessToken(token: string): AccessTokenPayload {
     const env = loadEnv();
 

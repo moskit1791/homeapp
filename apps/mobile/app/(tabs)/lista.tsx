@@ -30,11 +30,9 @@ import {
 } from "../../src/ui";
 import {
   Check,
-  DotsVertical,
   Plus,
   Trash2,
   Utensils,
-  UserPlus,
 } from "../../src/ui/icon";
 
 type MainSegment = "shopping" | "meals";
@@ -48,8 +46,6 @@ export default function ListaScreen() {
   const permissionsQuery = usePermissions();
   const shoppingPermission = useModulePermission("shopping");
   const mealPermission = useModulePermission("meal_planner");
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
   const [activeSegment, setActiveSegment] = useState<MainSegment>("shopping");
   const availableSegments = useMemo(
     () =>
@@ -85,28 +81,22 @@ export default function ListaScreen() {
   }
 
   return (
-    <AppScreen
-      actions={
-        <View style={styles.headerActions}>
-          <UserPlus color={theme.colors.text} size={19} />
-          <DotsVertical color={theme.colors.text} size={19} />
-        </View>
-      }
-      title="Lista"
-    >
+    <AppScreen title="Lista">
       <SegmentedControl
         onChange={setActiveSegment}
         options={availableSegments}
         value={activeSegment}
       />
 
-      {activeSegment === "shopping" ? <ShoppingBoard /> : null}
+      {activeSegment === "shopping" ? (
+        <ShoppingBoard onOpenMealPlan={() => setActiveSegment("meals")} />
+      ) : null}
       {activeSegment === "meals" ? <MealsBoard /> : null}
     </AppScreen>
   );
 }
 
-function ShoppingBoard() {
+function ShoppingBoard({ onOpenMealPlan }: { onOpenMealPlan: () => void }) {
   const { session } = useSession();
   const queryClient = useQueryClient();
   const permission = useModulePermission("shopping");
@@ -218,7 +208,7 @@ function ShoppingBoard() {
         ) : null}
       </View>
 
-      <MealPlanBanner />
+      <MealPlanBanner onOpenMealPlan={onOpenMealPlan} />
 
       <FormModal
         footer={
@@ -456,7 +446,6 @@ function ShoppingGroupCard({
     <View style={styles.shoppingGroup}>
       <View style={styles.groupHeader}>
         <Text style={styles.groupTitle}>{group.title}</Text>
-        <DotsVertical color={theme.colors.textMuted} size={18} />
       </View>
       <View style={styles.groupBody}>
         <View style={styles.groupItems}>
@@ -493,7 +482,7 @@ function ShoppingGroupCard({
   );
 }
 
-function MealPlanBanner() {
+function MealPlanBanner({ onOpenMealPlan }: { onOpenMealPlan: () => void }) {
   const { session } = useSession();
   const query = useQuery({
     enabled: Boolean(session?.accessToken),
@@ -505,13 +494,18 @@ function MealPlanBanner() {
   const count = query.data?.entries.length ?? 0;
 
   return (
-    <View style={styles.mealBanner}>
+    <Pressable
+      accessibilityLabel="Zobacz plan posiłków"
+      accessibilityRole="button"
+      onPress={onOpenMealPlan}
+      style={({ pressed }) => [styles.mealBanner, pressed && styles.pressed]}
+    >
       <View>
         <Text style={styles.mealBannerTitle}>Powiązany plan posiłków</Text>
         <Text style={styles.mealBannerMeta}>{count} z 7 posiłków zaplanowanych na dziś</Text>
       </View>
       <Text style={styles.mealBannerAction}>Zobacz plan</Text>
-    </View>
+    </Pressable>
   );
 }
 
@@ -540,36 +534,90 @@ type ShoppingGroup = {
   title: string;
 };
 
+type ShoppingCategoryRule = {
+  emoji: string;
+  keywords: RegExp;
+  title: string;
+};
+
+const shoppingCategoryRules: ShoppingCategoryRule[] = [
+  {
+    emoji: "🥦",
+    keywords: /pomidor|ogorek|ogor|banan|jablko|grusz|cytryn|limonk|salat|papryk|marchew|ziemni|cebula|czosn|owoc|warzyw|brokul|kalaf|kapust|cukini|truskawk|malin|borow|winogron|awokado/,
+    title: "Warzywa i owoce",
+  },
+  {
+    emoji: "🧀",
+    keywords: /mleko|jogurt|kefir|maslank|ser|twarog|serek|maslo|smietan|mozzarell|feta|skyr|jajk/,
+    title: "Nabiał i jajka",
+  },
+  {
+    emoji: "🥖",
+    keywords: /chleb|bulka|bulki|bagiet|kajzer|tost|pieczyw|tortill|croissant|drozdz/,
+    title: "Pieczywo",
+  },
+  {
+    emoji: "🍗",
+    keywords: /kurczak|indyk|wolow|wieprz|mieso|wedlin|szynk|kielbas|parowk|boczek|ryb|losos|tunczyk|dorsz|sledz/,
+    title: "Mięso i ryby",
+  },
+  {
+    emoji: "🫙",
+    keywords: /makaron|ryz|kasz|oliw|olej|maka|cukier|sol|pieprz|platk|musli|konserw|puszk|sos|passat|przypraw|ketchup|majonez|musztard|ocet|dzem|miod/,
+    title: "Spiżarnia",
+  },
+  {
+    emoji: "🧊",
+    keywords: /mrozon|lody|frytki|pizza|pierog/,
+    title: "Mrożonki",
+  },
+  {
+    emoji: "🧃",
+    keywords: /woda|sok|napoj|cola|pepsi|kawa|herbat|piwo|wino|smoothie/,
+    title: "Napoje",
+  },
+  {
+    emoji: "🍫",
+    keywords: /czekolad|ciastk|baton|chips|chrupk|orzech|palusz|cukierk|zelk|przekask|deser/,
+    title: "Słodycze i przekąski",
+  },
+  {
+    emoji: "🧼",
+    keywords: /plyn|proszek|kapsulk|zmywark|prani|papier|recznik|worki|gabka|scierk|mop|chemia|sprzat|odkamieniacz/,
+    title: "Chemia i sprzątanie",
+  },
+  {
+    emoji: "🧴",
+    keywords: /szampon|mydlo|zel|pasta|szczotecz|dezodorant|krem|balsam|kosmet|higien|chustecz|wacik/,
+    title: "Higiena",
+  },
+];
+
 function groupShoppingItems(items: ShoppingItem[]): ShoppingGroup[] {
-  const groups: ShoppingGroup[] = [
-    { emoji: "🥒", items: [], title: "Warzywa i owoce" },
-    { emoji: "🧀", items: [], title: "Nabiał" },
-    { emoji: "🫙", items: [], title: "Spiżarnia" },
-    { emoji: "🛒", items: [], title: "Pozostałe" },
-  ];
+  const groups = new Map<string, ShoppingGroup>();
+
+  shoppingCategoryRules.forEach((rule) => {
+    groups.set(rule.title, { emoji: rule.emoji, items: [], title: rule.title });
+  });
+  groups.set("Pozostałe", { emoji: "🛒", items: [], title: "Pozostałe" });
 
   items.forEach((item) => {
-    const name = item.name.toLowerCase();
-    const target = groups.find((group) => {
-      if (group.title === "Warzywa i owoce") {
-        return /pomidor|og[oó]rek|banan|sa[łl]ata|jab[łl]ko|owoc|warzyw/.test(name);
-      }
+    const name = normalizeShoppingName(item.name);
+    const targetRule = shoppingCategoryRules.find((rule) => rule.keywords.test(name));
+    const target = groups.get(targetRule?.title ?? "Pozostałe");
 
-      if (group.title === "Nabiał") {
-        return /mleko|jogurt|ser|twar[oó]g|mas[łl]o|śmietan/.test(name);
-      }
-
-      if (group.title === "Spiżarnia") {
-        return /makaron|ryż|oliw|kasz|m[ąa]k|cukier|s[óo]l/.test(name);
-      }
-
-      return false;
-    });
-
-    (target ?? groups[3]!).items.push(item);
+    target?.items.push(item);
   });
 
-  return groups.filter((group) => group.items.length > 0);
+  return [...groups.values()].filter((group) => group.items.length > 0);
+}
+
+function normalizeShoppingName(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ł/g, "l");
 }
 
 function groupMeals(entries: MealPlanEntry[]) {
@@ -706,12 +754,6 @@ function createStyles(colors: AppPalette) {
       fontWeight: "900",
       letterSpacing: 0,
     },
-    headerActions: {
-      alignItems: "center",
-      flexDirection: "row",
-      gap: spacing.md,
-      minHeight: 34,
-    },
     input: {
       backgroundColor: colors.field,
       borderColor: colors.border,
@@ -841,6 +883,9 @@ function createStyles(colors: AppPalette) {
     },
     modalFooterButton: {
       flex: 1,
+    },
+    pressed: {
+      opacity: 0.78,
     },
     sectionMeta: {
       color: colors.textMuted,

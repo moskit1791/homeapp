@@ -36,7 +36,7 @@ export function FormModal({
 
   return (
     <Modal
-      animationType="slide"
+      animationType="fade"
       onRequestClose={onClose}
       transparent
       visible={visible}
@@ -56,7 +56,7 @@ export function FormModal({
                   <Text style={styles.subtitle}>{subtitle}</Text>
                 ) : null}
               </View>
-              <IconButton onPress={onClose}>
+              <IconButton accessibilityLabel="Zamknij okno" onPress={onClose}>
                 <Close color={theme.colors.textMuted} size={18} />
               </IconButton>
             </View>

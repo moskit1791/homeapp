@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { radii, shadows, spacing } from '../theme/tokens';
+import { radii, spacing } from '../theme/tokens';
 import { useAppTheme, type AppPalette } from '../theme/use-app-theme';
 
 export interface SegmentOption<TValue extends string> {
@@ -28,7 +28,9 @@ export function SegmentedControl<TValue extends string>({
 
         return (
           <Pressable
+            accessibilityLabel={option.label}
             accessibilityRole="button"
+            accessibilityState={{ selected: active }}
             key={option.value}
             onPress={() => onChange(option.value)}
             style={({ pressed }) => [
@@ -48,35 +50,39 @@ export function SegmentedControl<TValue extends string>({
 function createStyles(colors: AppPalette) {
   return StyleSheet.create({
   active: {
-    backgroundColor: colors.card,
-    ...shadows.control
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primary
   },
   activeLabel: {
-    color: colors.text
+    color: colors.primaryDark
   },
   label: {
     color: colors.textMuted,
-    fontSize: 13,
-    fontWeight: '800',
+    fontSize: 12,
+    fontWeight: '900',
     letterSpacing: 0
   },
   option: {
     alignItems: 'center',
+    borderColor: 'transparent',
+    borderWidth: 1,
     borderRadius: radii.control,
     flex: 1,
     justifyContent: 'center',
-    minHeight: 40,
-    paddingHorizontal: spacing.sm
+    minHeight: 32,
+    paddingHorizontal: spacing.xs
   },
   pressed: {
     opacity: 0.78
   },
   root: {
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderWidth: 1,
     borderRadius: radii.control,
     flexDirection: 'row',
-    gap: spacing.xs,
-    padding: spacing.xs
+    gap: 4,
+    padding: 4
   }
 });
 }

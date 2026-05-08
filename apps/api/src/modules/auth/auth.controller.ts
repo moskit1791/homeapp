@@ -1,4 +1,4 @@
-import { Body, Controller, Headers, Post, UnauthorizedException, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Headers, Post, UnauthorizedException, UseGuards } from '@nestjs/common';
 import {
   ForgotPasswordDto,
   GoogleLoginDto,
@@ -64,5 +64,14 @@ export class AuthController {
     }
 
     return this.authService.logout(authorization.slice('Bearer '.length).trim());
+  }
+
+  @Delete('me')
+  deleteAccount(@Headers('authorization') authorization?: string) {
+    if (!authorization?.startsWith('Bearer ')) {
+      throw new UnauthorizedException('Missing bearer token');
+    }
+
+    return this.authService.deleteAccount(authorization.slice('Bearer '.length).trim());
   }
 }

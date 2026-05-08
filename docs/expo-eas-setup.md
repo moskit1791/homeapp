@@ -53,13 +53,40 @@ Do lokalnego Gradle builda mozna uzyc `apps/mobile/.env` na podstawie `apps/mobi
 
 ## 4. Skonfiguruj darmowe push notifications na Androidzie
 
-1. Utworz projekt Firebase.
-2. Dodaj aplikacje Android z package name `com.homeapp.mobile`.
-3. Pobierz `google-services.json`.
-4. Wloz plik do `apps/mobile/google-services.json`.
-5. Nie commituj tego pliku. Jest ignorowany w `apps/mobile/.gitignore`.
+Expo Push Service jest darmowy dla naszego zastosowania, ale Android dalej wymaga Firebase Cloud Messaging.
+Potrzebne sa dwa elementy: publiczny `google-services.json` w aplikacji oraz prywatny klucz FCM V1 w EAS.
 
-Konfiguracja Expo automatycznie podepnie `google-services.json`, jesli plik istnieje.
+1. Wejdz w Firebase Console i utworz albo wybierz projekt dla HomeApp.
+2. W `Project settings` -> `General` dodaj aplikacje Android:
+   - Android package name: `com.homeapp.mobile`
+   - App nickname: `HomeApp`
+3. Pobierz `google-services.json` i zapisz go lokalnie jako:
+
+```text
+apps/mobile/google-services.json
+```
+
+Ten plik jest ignorowany w `apps/mobile/.gitignore`.
+
+4. W Firebase Console wejdz w `Project settings` -> `Service accounts`.
+5. Kliknij `Generate new private key` i pobierz JSON z kluczem serwisowym. Tego pliku nie commituj.
+6. Wgraj klucz FCM V1 do EAS:
+
+```powershell
+cd apps/mobile
+npx eas-cli credentials
+```
+
+W menu wybierz:
+
+```text
+Android -> production -> Google Service Account
+Manage your Google Service Account Key for Push Notifications (FCM V1)
+Set up a Google Service Account Key for Push Notifications (FCM V1)
+Upload a new service account key
+```
+
+Po tej konfiguracji trzeba zbudowac i zainstalowac nowy APK, bo natywna konfiguracja FCM trafia do builda.
 
 ## 5. Buildy
 

@@ -9,6 +9,7 @@ const realtimeInvalidationKeys: Record<RealtimeEventType, QueryKey[]> = {
   'cleaning.changed': [queryKeys.cleaning],
   'data.changed': [queryKeys.dataEntries],
   'finance.changed': [queryKeys.start, queryKeys.finances],
+  'finance.month.deleted': [queryKeys.start, queryKeys.finances],
   'finance.month.generated': [queryKeys.start, queryKeys.finances],
   'household.changed': [queryKeys.household, queryKeys.permissions],
   'meal.changed': [queryKeys.start, queryKeys.meal],
@@ -32,4 +33,3 @@ export async function invalidateRealtimeEventQueries(
     )
   );
 }
-

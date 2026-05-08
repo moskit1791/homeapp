@@ -85,6 +85,118 @@ export class BudgetMonthsService {
     return result.rows.map((row) => this.mapMonth(row));
   }
 
+  async deleteMonth(householdId: string, monthId: string): Promise<boolean> {
+    const deleted = await this.database.transaction(async (client) => {
+      await client.query(
+        `
+          select pg_advisory_xact_lock(hashtext('homeapp.finance.month'), hashtext($1))
+        `,
+        [householdId]
+      );
+
+      const targetResult = await client.query<BudgetMonthRow>(
+        `
+          select
+            id,
+            household_id,
+            year,
+            month,
+            source_budget_month_id,
+            is_current,
+            generated_at,
+            archived_at,
+            created_at,
+            updated_at
+          from budget_months
+          where household_id = $1
+            and id = $2
+          limit 1
+          for update
+        `,
+        [householdId, monthId]
+      );
+      const target = targetResult.rows[0];
+
+      if (!target) {
+        return false;
+      }
+
+      if (!target.is_current) {
+        await client.query(
+          `
+            delete from budget_months
+            where household_id = $1
+              and id = $2
+          `,
+          [householdId, monthId]
+        );
+
+        return true;
+      }
+
+      const fallbackResult = await client.query<BudgetMonthRow>(
+        `
+          select
+            id,
+            household_id,
+            year,
+            month,
+            source_budget_month_id,
+            is_current,
+            generated_at,
+            archived_at,
+            created_at,
+            updated_at
+          from budget_months
+          where household_id = $1
+            and id <> $2
+          order by
+            case when id = $3::uuid then 0 else 1 end,
+            year desc,
+            month desc,
+            generated_at desc
+          limit 1
+          for update
+        `,
+        [householdId, monthId, target.source_budget_month_id]
+      );
+      const fallback = fallbackResult.rows[0];
+
+      if (!fallback) {
+        throw new BadRequestException('Cannot delete the only budget month');
+      }
+
+      await client.query(
+        `
+          delete from budget_months
+          where household_id = $1
+            and id = $2
+        `,
+        [householdId, monthId]
+      );
+      await client.query(
+        `
+          update budget_months
+          set
+            is_current = true,
+            archived_at = null
+          where household_id = $1
+            and id = $2
+        `,
+        [householdId, fallback.id]
+      );
+
+      return true;
+    });
+
+    if (deleted) {
+      this.realtime.publish(householdId, 'finance.month.deleted', monthId);
+      this.realtime.publish(householdId, 'finance.changed', monthId);
+    }
+
+    return deleted;
+  }
+
   async generateNextMonth(householdId: string): Promise<BudgetMonthRecord> {
     const generated = await this.database.transaction(async (client) => {
       await client.query(

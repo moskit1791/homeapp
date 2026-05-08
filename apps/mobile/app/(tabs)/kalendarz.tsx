@@ -40,8 +40,8 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
-  DotsVertical,
   Pencil,
+  RefreshCcw,
   Trash2,
 } from "../../src/ui/icon";
 
@@ -141,17 +141,21 @@ export default function KalendarzScreen() {
       actions={
         <View style={styles.headerActions}>
           {calendarPermission.canCreate ? (
-            <IconButton onPress={() => setEventModalVisible(true)}>
+            <IconButton
+              accessibilityLabel="Dodaj wydarzenie"
+              onPress={() => setEventModalVisible(true)}
+            >
               <CalendarPlus color={theme.colors.text} size={18} />
             </IconButton>
           ) : null}
           <IconButton
+            accessibilityLabel="Odśwież kalendarz"
             onPress={() => {
               monthEventsQuery.refetch();
               upcomingQuery.refetch();
             }}
           >
-            <DotsVertical color={theme.colors.text} size={19} />
+            <RefreshCcw color={theme.colors.text} size={18} />
           </IconButton>
         </View>
       }
@@ -160,10 +164,16 @@ export default function KalendarzScreen() {
       <View style={styles.monthHeader}>
         <Text style={styles.monthTitle}>{formatMonthTitle(visibleMonth)}</Text>
         <View style={styles.monthNav}>
-          <IconButton onPress={() => setVisibleMonth(addMonths(visibleMonth, -1))}>
+          <IconButton
+            accessibilityLabel="Poprzedni miesiąc"
+            onPress={() => setVisibleMonth(addMonths(visibleMonth, -1))}
+          >
             <ChevronLeft color={theme.colors.textMuted} size={19} />
           </IconButton>
-          <IconButton onPress={() => setVisibleMonth(addMonths(visibleMonth, 1))}>
+          <IconButton
+            accessibilityLabel="Następny miesiąc"
+            onPress={() => setVisibleMonth(addMonths(visibleMonth, 1))}
+          >
             <ChevronRight color={theme.colors.textMuted} size={19} />
           </IconButton>
         </View>
