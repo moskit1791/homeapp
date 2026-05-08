@@ -1165,6 +1165,11 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
       title="Ustawienia i konto"
       visible={settingsVisible}
     >
+      {toast ? (
+        <View style={styles.settingsToast}>
+          <Text style={styles.settingsToastText}>{toast}</Text>
+        </View>
+      ) : null}
       <View style={styles.settingsPanel}>
         <View style={styles.settingsPanelRow}>
           <Text style={styles.settingsPanelTitle}>Dom</Text>
@@ -1950,6 +1955,21 @@ function createStyles(colors: AppPalette) {
     },
     settingsPanel: {
       gap: spacing.md,
+    },
+    settingsToast: {
+      backgroundColor: colors.softGreen,
+      borderColor: `${colors.primary}33`,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+    },
+    settingsToastText: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: "800",
+      letterSpacing: 0,
+      lineHeight: 18,
     },
     dangerButton: {
       backgroundColor: colors.danger,
