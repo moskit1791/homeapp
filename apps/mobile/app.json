@@ -5,11 +5,24 @@
     "scheme": "homeapp",
     "version": "0.1.55",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
+    "icon": "./assets/icon.png",
     "newArchEnabled": false,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF",
+      "dark": {
+        "backgroundColor": "#0B1220"
+      }
+    },
     "android": {
       "package": "com.homeapp.mobile",
-      "versionCode": 55
+      "versionCode": 55,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
+      }
     },
     "plugins": [
       "expo-router",

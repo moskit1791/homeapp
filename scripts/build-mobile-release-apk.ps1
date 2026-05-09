@@ -1,10 +1,12 @@
 param(
   [string]$ApiUrl = $env:EXPO_PUBLIC_API_URL,
+  [switch]$UseLanApi,
   [string]$WorkDir
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+$ProductionApiUrl = 'https://app.porabkihome.pl/api'
 
 function Get-DefaultLanIp {
   $configs = Get-NetIPConfiguration |
@@ -24,12 +26,16 @@ function Get-DefaultLanIp {
 }
 
 if (-not $ApiUrl) {
-  $ipAddress = Get-DefaultLanIp
-  if (-not $ipAddress) {
-    throw 'Could not detect LAN IP. Pass -ApiUrl, for example: http://192.168.1.20:3000/api'
-  }
+  if ($UseLanApi) {
+    $ipAddress = Get-DefaultLanIp
+    if (-not $ipAddress) {
+      throw 'Could not detect LAN IP. Pass -ApiUrl, for example: http://192.168.1.20:3000/api'
+    }
 
-  $ApiUrl = "http://${ipAddress}:3000/api"
+    $ApiUrl = "http://${ipAddress}:3000/api"
+  } else {
+    $ApiUrl = $ProductionApiUrl
+  }
 }
 
 $repoRoot = Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')
