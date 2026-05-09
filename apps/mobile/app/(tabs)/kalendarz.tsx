@@ -103,7 +103,7 @@ export default function KalendarzScreen() {
       createCalendarEvent(
         {
           eventDate,
-          eventTime: eventTime.trim() || null,
+          eventTime: normalizeEventTime(eventTime),
           note: eventNote.trim() || null,
           scopeType: "household",
           title: eventTitle.trim(),
@@ -122,7 +122,8 @@ export default function KalendarzScreen() {
   const canSaveEvent =
     calendarPermission.canCreate &&
     Boolean(eventTitle.trim()) &&
-    /^\d{4}-\d{2}-\d{2}$/.test(eventDate);
+    /^\d{4}-\d{2}-\d{2}$/.test(eventDate) &&
+    isOptionalTimeInputValid(eventTime);
 
   if (permissionsQuery.isLoading) {
     return (
@@ -256,8 +257,10 @@ export default function KalendarzScreen() {
             value={eventDate}
           />
           <TextInput
-            onChangeText={setEventTime}
-            placeholder="HH:MM"
+            keyboardType="number-pad"
+            maxLength={5}
+            onChangeText={(value) => setEventTime(formatTimeInput(value))}
+            placeholder="HH:mm"
             placeholderTextColor={theme.colors.textSubtle}
             style={[styles.input, styles.timeInput]}
             value={eventTime}
@@ -320,6 +323,7 @@ function CalendarMonth({
             <View key={`${day.iso}-${day.label}`} style={styles.dayCell}>
               <Pressable
                 disabled={!day.iso}
+                hitSlop={8}
                 onPress={() => {
                   if (day.iso) {
                     onSelectDate(day.iso);
@@ -781,7 +785,45 @@ function formatMonthTitle(date: Date): string {
 }
 
 function formatDate(value: string): string {
-  return value.slice(5).replace("-", ".");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return value;
+  }
+
+  return `${value.slice(8, 10)}.${value.slice(5, 7)}`;
+}
+
+function formatTimeInput(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 4);
+
+  if (digits.length <= 2) {
+    return digits;
+  }
+
+  return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+}
+
+function isOptionalTimeInputValid(value: string): boolean {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return true;
+  }
+
+  if (!/^\d{2}:\d{2}$/.test(trimmed)) {
+    return false;
+  }
+
+  const [hoursPart, minutesPart] = trimmed.split(":");
+  const hours = Number(hoursPart);
+  const minutes = Number(minutesPart);
+
+  return Number.isInteger(hours) && Number.isInteger(minutes) && hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59;
+}
+
+function normalizeEventTime(value: string): string | null {
+  const trimmed = value.trim();
+
+  return trimmed ? trimmed : null;
 }
 
 function formatDateTime(value: string): string {
@@ -818,9 +860,9 @@ function createStyles(colors: AppPalette) {
     dayBubble: {
       alignItems: "center",
       borderRadius: 999,
-      height: 24,
+      height: 32,
       justifyContent: "center",
-      width: 24,
+      width: 32,
     },
     dayBubbleMuted: {
       opacity: 0.42,
@@ -834,7 +876,7 @@ function createStyles(colors: AppPalette) {
     dayCell: {
       alignItems: "center",
       flexBasis: "14.285%",
-      height: 34,
+      height: 44,
       justifyContent: "center",
     },
     dayGrid: {

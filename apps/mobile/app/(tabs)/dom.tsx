@@ -1,9 +1,11 @@
-import type { ModuleKey } from "@homeapp/shared-types";
+import { REALTIME_EVENTS, type ModuleKey, type RealtimeEventType } from "@homeapp/shared-types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import * as FileSystem from "expo-file-system";
 import { useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
+import * as Sharing from "expo-sharing";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import {
   completeAnnualCost,
   completeCleaningTask,
@@ -15,9 +17,10 @@ import {
   deleteAttachment,
   deleteMyAccount,
   deleteDataEntry,
-  getAttachmentFileUrl,
+  getAttachmentFileRequest,
   getMyHousehold,
   inviteHouseholdMember,
+  listNotificationPreferences,
   listAnnualCostHistory,
   listAnnualCosts,
   listAttachments,
@@ -29,12 +32,14 @@ import {
   sendTestPush,
   updateAttachment,
   updateMyHousehold,
+  updateNotificationPreferences,
   uploadAttachmentFile,
   type AnnualCost,
   type Attachment,
   type CleaningTask,
   type DataEntry,
   type HouseholdMember,
+  type NotificationPreference,
 } from "../../src/api";
 import { registerForPushNotifications } from "../../src/notifications/register-push-notifications";
 import { useModulePermission, usePermissions } from "../../src/permissions/use-permissions";
@@ -51,7 +56,6 @@ import {
   QueryState,
 } from "../../src/ui";
 import {
-  AccountCircle,
   Broom,
   ChartBar,
   Check,
@@ -60,6 +64,7 @@ import {
   Database,
   FileText,
   Folder,
+  Eye,
   Pencil,
   RefreshCcw,
   Trash2,
@@ -120,6 +125,65 @@ const moduleTiles: Array<{
   },
 ];
 
+const notificationPreferenceLabels: Record<RealtimeEventType, { label: string; meta: string }> = {
+  "annual_cost.changed": {
+    label: "Koszty roczne",
+    meta: "Nowe, zmienione i oznaczone koszty roczne.",
+  },
+  "attachment.changed": {
+    label: "Pliki",
+    meta: "Dodanie, opis i usunięcie plików.",
+  },
+  "calendar.changed": {
+    label: "Kalendarz",
+    meta: "Wydarzenia dodane lub zmienione przez domowników.",
+  },
+  "cleaning.changed": {
+    label: "Sprzątanie",
+    meta: "Zadania sprzątania i oznaczenia wykonania.",
+  },
+  "data.changed": {
+    label: "Dane",
+    meta: "Wpisy w domowym sejfie danych.",
+  },
+  "finance.changed": {
+    label: "Finanse",
+    meta: "Kategorie, budżety, wydatki i dochody.",
+  },
+  "finance.month.deleted": {
+    label: "Usunięcie miesiąca finansów",
+    meta: "Kiedy domownik usunie miesiąc budżetu.",
+  },
+  "finance.month.generated": {
+    label: "Nowy miesiąc finansów",
+    meta: "Kiedy domownik wygeneruje kolejny miesiąc.",
+  },
+  "household.changed": {
+    label: "Dom",
+    meta: "Zmiany ustawień domu i składu domowników.",
+  },
+  "meal.changed": {
+    label: "Plan posiłków",
+    meta: "Tygodnie, posiłki i inspiracje kulinarne.",
+  },
+  "note.changed": {
+    label: "Notatki",
+    meta: "Notatki dodane lub zmienione przez domowników.",
+  },
+  "permissions.changed": {
+    label: "Uprawnienia",
+    meta: "Zmiany dostępu do modułów.",
+  },
+  "shopping.changed": {
+    label: "Zakupy",
+    meta: "Produkty dodane, odhaczone lub usunięte z list.",
+  },
+  "todo.changed": {
+    label: "To-do",
+    meta: "Zadania dodane, zamknięte lub przywrócone.",
+  },
+};
+
 export default function DomScreen() {
   const params = useLocalSearchParams<{ settings?: string }>();
   const permissionsQuery = usePermissions();
@@ -154,14 +218,12 @@ export default function DomScreen() {
 
   return (
     <AppScreen
-      actions={
-        <View style={styles.avatar}>
-          <AccountCircle color={theme.colors.text} size={27} />
-        </View>
-      }
+      actions={<SettingsRow openOnMount={params.settings === "1"} />}
       subtitle="Zarządzaj swoim domem"
       title="Dom"
     >
+      <HouseholdCard />
+
       {availableTiles.length === 0 ? (
         <InlineAlert text="Nie masz dostępu do modułów domowych." />
       ) : (
@@ -180,9 +242,6 @@ export default function DomScreen() {
       )}
 
       {availableTiles.length > 0 ? <ActiveModule segment={activeSegment} /> : null}
-
-      <HouseholdCard />
-      <SettingsRow openOnMount={params.settings === "1"} />
     </AppScreen>
   );
 }
@@ -206,6 +265,9 @@ function ModuleTile({
 
   return (
     <Pressable
+      accessibilityLabel={`${title}. ${description}`}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
       onPress={onPress}
       style={({ pressed }) => [
         styles.moduleTile,
@@ -213,14 +275,13 @@ function ModuleTile({
         pressed && styles.pressed,
       ]}
     >
-      <View style={[styles.moduleIcon, { backgroundColor: accent.soft }]}>
-        {getSegmentIcon(segment, accent.color, 31)}
+      <View style={styles.moduleTileTop}>
+        <View style={[styles.moduleTileIcon, { backgroundColor: accent.soft }]}>
+          {getSegmentIcon(segment, accent.color, 20)}
+        </View>
+        <ChevronRight color={active ? accent.color : theme.colors.textMuted} size={15} />
       </View>
-      <Text style={styles.moduleTitle}>{title}</Text>
-      <Text numberOfLines={3} style={styles.moduleDescription}>
-        {description}
-      </Text>
-      <ChevronRight color={theme.colors.textMuted} size={18} />
+      <Text numberOfLines={2} style={styles.moduleTitle}>{title}</Text>
     </Pressable>
   );
 }
@@ -647,6 +708,10 @@ function AttachmentsPanel() {
   const [editFileName, setEditFileName] = useState("");
   const [editingAttachment, setEditingAttachment] = useState<Attachment | null>(null);
   const [pickedPhoto, setPickedPhoto] = useState<PickedAttachmentPhoto | null>(null);
+  const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null);
+  const [previewError, setPreviewError] = useState("");
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [openingAttachment, setOpeningAttachment] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
   const attachmentsQuery = useQuery({
@@ -730,6 +795,36 @@ function AttachmentsPanel() {
     setEditCaption(attachment.caption);
   }
 
+  function openPreviewAttachment(attachment: Attachment) {
+    setPreviewAttachment(attachment);
+    setPreviewError("");
+    setPreviewLoading(attachment.mimeType.startsWith("image/"));
+  }
+
+  function closePreviewAttachment() {
+    setPreviewAttachment(null);
+    setPreviewError("");
+    setPreviewLoading(false);
+    setOpeningAttachment(false);
+  }
+
+  async function handleOpenAttachmentFile() {
+    if (!previewAttachment) {
+      return;
+    }
+
+    setOpeningAttachment(true);
+    setPreviewError("");
+
+    try {
+      await shareAttachmentFile(previewAttachment, accessToken);
+    } catch {
+      setPreviewError("Nie udało się otworzyć pliku. Spróbuj ponownie za chwilę.");
+    } finally {
+      setOpeningAttachment(false);
+    }
+  }
+
   async function handlePickPhoto() {
     setUploadError("");
 
@@ -798,6 +893,7 @@ function AttachmentsPanel() {
             key={attachment.id}
             onDelete={() => deleteMutation.mutate(attachment.id)}
             onEdit={() => openEditAttachment(attachment)}
+            onPreview={() => openPreviewAttachment(attachment)}
           />
         ))}
       </View>
@@ -893,6 +989,58 @@ function AttachmentsPanel() {
         {updateMutation.error ? (
           <InlineAlert tone="error" text="Nie udało się zapisać opisu pliku." />
         ) : null}
+      </FormModal>
+      <FormModal
+        footer={
+          <View style={styles.modalFooter}>
+            <ActionButton
+              onPress={closePreviewAttachment}
+              style={styles.modalFooterButton}
+              title="Zamknij"
+              variant="secondary"
+            />
+            {previewAttachment && !previewAttachment.mimeType.startsWith("image/") ? (
+              <ActionButton
+                loading={openingAttachment}
+                onPress={handleOpenAttachmentFile}
+                style={styles.modalFooterButton}
+                title="Otwórz plik"
+              />
+            ) : null}
+          </View>
+        }
+        onClose={closePreviewAttachment}
+        subtitle={previewAttachment?.caption || "Podgląd pliku z domowego folderu."}
+        title={previewAttachment?.fileName ?? "Podgląd pliku"}
+        visible={Boolean(previewAttachment)}
+      >
+        {previewError ? <InlineAlert tone="error" text={previewError} /> : null}
+        {previewAttachment?.mimeType.startsWith("image/") ? (
+          <View style={styles.attachmentPreviewShell}>
+            <Image
+              onError={() => {
+                setPreviewError("Nie udało się wczytać zdjęcia.");
+                setPreviewLoading(false);
+              }}
+              onLoadEnd={() => setPreviewLoading(false)}
+              onLoadStart={() => setPreviewLoading(true)}
+              resizeMode="contain"
+              source={getAttachmentFileRequest(previewAttachment.id, { accessToken })}
+              style={styles.attachmentPreviewImage}
+            />
+            {previewLoading ? (
+              <View style={styles.attachmentPreviewLoader}>
+                <ActivityIndicator color={theme.colors.primary} />
+              </View>
+            ) : null}
+          </View>
+        ) : (
+          <View style={styles.attachmentPreviewPlaceholder}>
+            <FileText color={accent.color} size={32} />
+            <Text style={styles.itemName}>Ten plik nie jest zdjęciem.</Text>
+            <Text style={styles.itemMeta}>Możesz otworzyć go w aplikacji obsługującej ten typ pliku.</Text>
+          </View>
+        )}
       </FormModal>
     </ModulePanel>
   );
@@ -1046,6 +1194,11 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
     queryFn: () => getMyHousehold({ accessToken }),
     queryKey: [...queryKeys.household, "me"],
   });
+  const notificationPreferencesQuery = useQuery({
+    enabled: Boolean(accessToken),
+    queryFn: () => listNotificationPreferences({ accessToken }),
+    queryKey: [...queryKeys.permissions, "notification-preferences"],
+  });
 
   useEffect(() => {
     if (openOnMount) {
@@ -1109,6 +1262,16 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
       ),
     onSuccess: () => showToast("Powiadomienie wysłane"),
   });
+  const notificationPreferencesMutation = useMutation({
+    mutationFn: (preferences: NotificationPreference[]) =>
+      updateNotificationPreferences({ preferences }, { accessToken }),
+    onSuccess: async () => {
+      showToast("Ustawienia powiadomień zapisane");
+      await queryClient.invalidateQueries({
+        queryKey: [...queryKeys.permissions, "notification-preferences"],
+      });
+    },
+  });
   const deleteAccountMutation = useMutation({
     mutationFn: () => deleteMyAccount({ accessToken }),
     onSuccess: async () => {
@@ -1125,24 +1288,25 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
     await logout();
   }
 
+  function toggleNotificationPreference(eventType: RealtimeEventType, enabled: boolean) {
+    const current =
+      notificationPreferencesQuery.data ??
+      REALTIME_EVENTS.map((type) => ({
+        enabled: true,
+        eventType: type,
+      }));
+    const next = current.map((preference) =>
+      preference.eventType === eventType ? { ...preference, enabled } : preference,
+    );
+
+    notificationPreferencesMutation.mutate(next);
+  }
+
   return (
     <>
-    <AppToast text={toast} />
-    <Pressable
-      accessibilityLabel="Otwórz ustawienia i konto"
-      accessibilityRole="button"
-      onPress={() => setSettingsVisible(true)}
-      style={({ pressed }) => [styles.settingsRow, pressed && styles.pressed]}
-    >
-      <Cog color={theme.colors.textMuted} size={18} />
-      <View style={styles.householdText}>
-        <Text style={styles.settingsTitle}>Ustawienia i konto</Text>
-        <Text style={styles.settingsMeta}>
-          {session ? "Profil, powiadomienia, język, bezpieczeństwo" : "Brak aktywnej sesji"}
-        </Text>
-      </View>
-      <ChevronRight color={theme.colors.textMuted} size={20} />
-    </Pressable>
+    <IconButton accessibilityLabel="Otwórz ustawienia i konto" onPress={() => setSettingsVisible(true)}>
+      <Cog color={theme.colors.text} size={19} />
+    </IconButton>
     <FormModal
       footer={
         <View style={styles.modalFooter}>
@@ -1174,7 +1338,7 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
         <View style={styles.settingsPanelRow}>
           <Text style={styles.settingsPanelTitle}>Dom</Text>
           <Text style={styles.settingsPanelMeta}>
-            Nazwa domu, waluta i liczba slotów posiłków.
+            Nazwa domu, waluta i liczba posiłków dziennie.
           </Text>
           <TextInput
             editable={householdPermission.canUpdate}
@@ -1185,26 +1349,32 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
             value={homeName}
           />
           <View style={styles.formRow}>
-            <TextInput
-              autoCapitalize="characters"
-              editable={householdPermission.canUpdate}
-              maxLength={3}
-              onChangeText={setCurrencyCode}
-              placeholder="PLN"
-              placeholderTextColor={theme.colors.textSubtle}
-              style={[styles.input, styles.flexInput]}
-              value={currencyCode}
-            />
-            <TextInput
-              editable={householdPermission.canUpdate}
-              keyboardType="number-pad"
-              maxLength={1}
-              onChangeText={setMealSlotsPerDay}
-              placeholder="4"
-              placeholderTextColor={theme.colors.textSubtle}
-              style={[styles.input, styles.timeInput]}
-              value={mealSlotsPerDay}
-            />
+            <View style={styles.flexInput}>
+              <Text style={styles.inputLabel}>Waluta</Text>
+              <TextInput
+                autoCapitalize="characters"
+                editable={householdPermission.canUpdate}
+                maxLength={3}
+                onChangeText={setCurrencyCode}
+                placeholder="PLN"
+                placeholderTextColor={theme.colors.textSubtle}
+                style={styles.input}
+                value={currencyCode}
+              />
+            </View>
+            <View style={styles.mealSlotsField}>
+              <Text style={styles.inputLabel}>Posiłków dziennie</Text>
+              <TextInput
+                editable={householdPermission.canUpdate}
+                keyboardType="number-pad"
+                maxLength={1}
+                onChangeText={(value) => setMealSlotsPerDay(value.replace(/\D/g, "").slice(0, 1))}
+                placeholder="4"
+                placeholderTextColor={theme.colors.textSubtle}
+                style={styles.input}
+                value={mealSlotsPerDay}
+              />
+            </View>
           </View>
           <ActionButton
             disabled={
@@ -1250,6 +1420,45 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
           />
           {testPushMutation.error ? (
             <InlineAlert tone="error" text="Nie udało się wysłać testowego powiadomienia." />
+          ) : null}
+          <View style={styles.notificationPreferencesHeader}>
+            <Text style={styles.inputLabel}>Powiadamiaj mnie, gdy inny domownik zmieni:</Text>
+            {notificationPreferencesMutation.isPending ? (
+              <Text style={styles.settingsMeta}>Zapisywanie...</Text>
+            ) : null}
+          </View>
+          <QueryState
+            error={notificationPreferencesQuery.error}
+            isLoading={notificationPreferencesQuery.isLoading}
+          />
+          <View style={styles.notificationPreferenceList}>
+            {(notificationPreferencesQuery.data ?? []).map((preference) => {
+              const copy = notificationPreferenceLabels[preference.eventType];
+
+              return (
+                <View key={preference.eventType} style={styles.notificationPreferenceRow}>
+                  <View style={styles.notificationPreferenceText}>
+                    <Text style={styles.itemName}>{copy.label}</Text>
+                    <Text style={styles.itemMeta}>{copy.meta}</Text>
+                  </View>
+                  <Switch
+                    disabled={notificationPreferencesMutation.isPending}
+                    onValueChange={(enabled) =>
+                      toggleNotificationPreference(preference.eventType, enabled)
+                    }
+                    thumbColor={preference.enabled ? theme.colors.primary : theme.colors.textSubtle}
+                    trackColor={{
+                      false: theme.colors.border,
+                      true: theme.colors.softGreen,
+                    }}
+                    value={preference.enabled}
+                  />
+                </View>
+              );
+            })}
+          </View>
+          {notificationPreferencesMutation.error ? (
+            <InlineAlert tone="error" text="Nie udało się zapisać ustawień powiadomień." />
           ) : null}
         </View>
         <View style={[styles.settingsPanelRow, styles.dangerPanel]}>
@@ -1457,6 +1666,7 @@ function AttachmentRow({
   deleting,
   onDelete,
   onEdit,
+  onPreview,
 }: {
   accessToken?: string | null;
   accent: Accent;
@@ -1466,31 +1676,47 @@ function AttachmentRow({
   deleting: boolean;
   onDelete: () => void;
   onEdit: () => void;
+  onPreview: () => void;
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
   const isImage = attachment.mimeType.startsWith("image/");
+  const [thumbError, setThumbError] = useState(false);
+
+  useEffect(() => {
+    setThumbError(false);
+  }, [attachment.id]);
 
   return (
     <View style={styles.itemRow}>
       <View style={[styles.itemMarker, { backgroundColor: accent.color }]} />
-      {isImage ? (
-        <Image
-          source={{
-            headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
-            uri: getAttachmentFileUrl(attachment.id),
-          }}
-          style={styles.attachmentThumb}
-        />
-      ) : (
-        <FileText color={accent.color} size={17} />
-      )}
-      <View style={styles.itemText}>
-        <Text style={styles.itemName}>{attachment.fileName}</Text>
-        <Text numberOfLines={2} style={styles.itemMeta}>
-          {attachment.caption || "Brak opisu"}
-        </Text>
-      </View>
+      <Pressable
+        accessibilityLabel={`Podgląd pliku ${attachment.fileName}`}
+        accessibilityRole="button"
+        onPress={onPreview}
+        style={({ pressed }) => [styles.attachmentPreviewArea, pressed && styles.pressed]}
+      >
+        {isImage && !thumbError ? (
+          <Image
+            onError={() => setThumbError(true)}
+            source={getAttachmentFileRequest(attachment.id, { accessToken })}
+            style={styles.attachmentThumb}
+          />
+        ) : (
+          <View style={styles.attachmentFileIcon}>
+            <FileText color={accent.color} size={17} />
+          </View>
+        )}
+        <View style={styles.itemText}>
+          <Text style={styles.itemName}>{attachment.fileName}</Text>
+          <Text numberOfLines={2} style={styles.itemMeta}>
+            {attachment.caption || "Brak opisu"}
+          </Text>
+        </View>
+      </Pressable>
+      <IconButton accessibilityLabel={`Podgląd pliku ${attachment.fileName}`} onPress={onPreview}>
+        <Eye color={theme.colors.primary} size={17} />
+      </IconButton>
       {canUpdate ? (
         <IconButton onPress={onEdit}>
           <Pencil color={theme.colors.primary} size={17} />
@@ -1671,6 +1897,41 @@ function formatBytes(value: number): string {
   return `${(value / (1024 * 1024)).toFixed(1).replace(".", ",")} MB`;
 }
 
+async function shareAttachmentFile(attachment: Attachment, accessToken?: string | null): Promise<void> {
+  const cacheDirectory = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
+
+  if (!cacheDirectory) {
+    throw new Error("File cache is unavailable");
+  }
+
+  const request = getAttachmentFileRequest(attachment.id, { accessToken });
+  const localUri = `${cacheDirectory}${attachment.id}-${sanitizeCacheFileName(attachment.fileName)}`;
+  const result = await FileSystem.downloadAsync(request.url, localUri, {
+    headers: request.headers,
+  });
+
+  if (result.status < 200 || result.status >= 300) {
+    throw new Error(`Attachment download failed with status ${result.status}`);
+  }
+
+  const isAvailable = await Sharing.isAvailableAsync();
+
+  if (!isAvailable) {
+    throw new Error("Sharing is unavailable");
+  }
+
+  await Sharing.shareAsync(result.uri, {
+    dialogTitle: attachment.fileName,
+    mimeType: attachment.mimeType,
+  });
+}
+
+function sanitizeCacheFileName(fileName: string): string {
+  const sanitized = fileName.replace(/[^\w.-]+/g, "_").replace(/^_+|_+$/g, "");
+
+  return sanitized || "attachment";
+}
+
 function createStyles(colors: AppPalette) {
   return StyleSheet.create({
     avatar: {
@@ -1686,6 +1947,55 @@ function createStyles(colors: AppPalette) {
       borderRadius: radii.control,
       height: 48,
       width: 48,
+    },
+    attachmentFileIcon: {
+      alignItems: "center",
+      backgroundColor: colors.cardMuted,
+      borderRadius: radii.control,
+      height: 48,
+      justifyContent: "center",
+      width: 48,
+    },
+    attachmentPreviewArea: {
+      alignItems: "center",
+      flex: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      minWidth: 0,
+    },
+    attachmentPreviewImage: {
+      alignSelf: "center",
+      backgroundColor: colors.cardMuted,
+      borderRadius: radii.control,
+      height: 430,
+      maxHeight: 430,
+      width: "100%",
+    },
+    attachmentPreviewLoader: {
+      alignItems: "center",
+      backgroundColor: `${colors.card}CC`,
+      bottom: 0,
+      justifyContent: "center",
+      left: 0,
+      position: "absolute",
+      right: 0,
+      top: 0,
+    },
+    attachmentPreviewPlaceholder: {
+      alignItems: "center",
+      backgroundColor: colors.cardMuted,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      gap: spacing.sm,
+      minHeight: 220,
+      justifyContent: "center",
+      padding: spacing.lg,
+    },
+    attachmentPreviewShell: {
+      borderRadius: radii.control,
+      overflow: "hidden",
+      position: "relative",
     },
     dateInput: {
       minWidth: 132,
@@ -1736,6 +2046,13 @@ function createStyles(colors: AppPalette) {
       minHeight: 46,
       paddingHorizontal: spacing.md,
     },
+    inputLabel: {
+      color: colors.text,
+      fontSize: 12,
+      fontWeight: "800",
+      letterSpacing: 0,
+      marginBottom: spacing.xs,
+    },
     itemList: {
       gap: spacing.sm,
     },
@@ -1770,6 +2087,30 @@ function createStyles(colors: AppPalette) {
       paddingVertical: spacing.sm,
     },
     itemText: {
+      flex: 1,
+      gap: 2,
+      minWidth: 0,
+    },
+    notificationPreferenceList: {
+      gap: spacing.xs,
+    },
+    notificationPreferenceRow: {
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      minHeight: 64,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
+    },
+    notificationPreferencesHeader: {
+      gap: 2,
+      paddingTop: spacing.xs,
+    },
+    notificationPreferenceText: {
       flex: 1,
       gap: 2,
       minWidth: 0,
@@ -1818,7 +2159,6 @@ function createStyles(colors: AppPalette) {
     },
     moduleGrid: {
       flexDirection: "row",
-      flexWrap: "wrap",
       gap: spacing.sm,
     },
     moduleIcon: {
@@ -1829,20 +2169,40 @@ function createStyles(colors: AppPalette) {
       width: 44,
     },
     moduleTile: {
+      alignItems: "center",
       backgroundColor: colors.card,
       borderColor: colors.border,
       borderRadius: radii.card,
       borderWidth: 1,
-      gap: spacing.sm,
-      minHeight: 154,
-      padding: spacing.md,
-      width: "48.5%",
+      flex: 1,
+      gap: spacing.xs,
+      justifyContent: "center",
+      minHeight: 78,
+      paddingHorizontal: spacing.xs,
+      paddingVertical: spacing.sm,
+    },
+    moduleTileIcon: {
+      alignItems: "center",
+      borderRadius: radii.control,
+      height: 32,
+      justifyContent: "center",
+      width: 32,
+    },
+    moduleTileTop: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: 2,
     },
     moduleTitle: {
       color: colors.text,
-      fontSize: 14,
+      fontSize: 11,
       fontWeight: "900",
       letterSpacing: 0,
+      lineHeight: 14,
+      textAlign: "center",
+    },
+    mealSlotsField: {
+      width: 116,
     },
     multilineInput: {
       minHeight: 92,

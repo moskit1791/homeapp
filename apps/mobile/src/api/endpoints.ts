@@ -58,6 +58,7 @@ import type {
   MealRandomizeRequest,
   MealRandomizeResult,
   Note,
+  NotificationPreference,
   OkResponse,
   PatchMemberPermissionsRequest,
   PushSendResult,
@@ -81,6 +82,7 @@ import type {
   UpdateHouseholdRequest,
   UpdateMealPlanRequest,
   UpdateNoteRequest,
+  UpdateNotificationPreferencesRequest,
   UpdateShoppingItemRequest,
   UpdateTodoItemRequest,
   UploadAttachmentFileRequest,
@@ -276,6 +278,34 @@ export function sendTestPush(
     method: 'POST',
     signal: requestOptions.signal
   });
+}
+
+export function listNotificationPreferences(
+  options?: ApiCallOptionsInput
+): Promise<NotificationPreference[]> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<NotificationPreference[]>('/notifications/preferences', {
+    accessToken: requestOptions.accessToken,
+    signal: requestOptions.signal
+  });
+}
+
+export function updateNotificationPreferences(
+  input: UpdateNotificationPreferencesRequest,
+  options?: ApiCallOptionsInput
+): Promise<NotificationPreference[]> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<NotificationPreference[], UpdateNotificationPreferencesRequest>(
+    '/notifications/preferences',
+    {
+      accessToken: requestOptions.accessToken,
+      body: input,
+      method: 'PATCH',
+      signal: requestOptions.signal
+    }
+  );
 }
 
 export function getMyHousehold(options?: ApiCallOptionsInput): Promise<Household> {
@@ -1045,6 +1075,21 @@ export function deleteAttachment(id: string, options?: ApiCallOptionsInput): Pro
 
 export function getAttachmentFileUrl(id: string): string {
   return buildApiUrl(`/attachments/${id}/file`);
+}
+
+export function getAttachmentFileRequest(
+  id: string,
+  options?: ApiCallOptionsInput
+): { headers?: Record<string, string>; url: string } {
+  const requestOptions = normalizeApiCallOptions(options);
+  const headers = requestOptions.accessToken
+    ? { Authorization: `Bearer ${requestOptions.accessToken}` }
+    : undefined;
+
+  return {
+    headers,
+    url: getAttachmentFileUrl(id)
+  };
 }
 
 export function listShoppingLists(options?: ApiCallOptionsInput): Promise<ShoppingList[]> {

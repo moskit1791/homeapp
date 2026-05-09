@@ -121,24 +121,12 @@ export default function DzisiajScreen() {
       });
     }
 
-    if (!nextMeal) {
-      items.push({
-        body: "Nie ma zaplanowanego posiłku na dziś.",
-        icon: <Utensils color={theme.colors.food} size={20} />,
-        id: "meal-missing",
-        onPress: () => openFromNotification("/(tabs)/lista"),
-        title: "Plan posiłków jest pusty",
-      });
-    }
-
     return items;
   }, [
     nextEvent,
-    nextMeal,
     openShopping.length,
     openFromNotification,
     theme.colors.calendar,
-    theme.colors.food,
     theme.colors.shopping,
     todayEvents.length,
   ]);
@@ -212,7 +200,7 @@ export default function DzisiajScreen() {
         <HomeTile
           accent={theme.colors.food}
           icon={<Utensils color={theme.colors.food} size={24} />}
-          meta={nextMeal ? `Dzień ${nextMeal.weekday}, slot ${nextMeal.slotIndex + 1}` : "Ułóż plan posiłków"}
+          meta={nextMeal ? formatMealMeta(nextMeal.weekday, nextMeal.slotIndex) : "Ułóż plan posiłków"}
           onPress={() => router.push("/(tabs)/lista" as never)}
           title="Dzisiejszy posiłek"
           value={nextMeal?.mealName ?? "Brak planu"}
@@ -286,7 +274,7 @@ export default function DzisiajScreen() {
         ) : (
           <View style={styles.emptyNotifications}>
             <Bell color={theme.colors.textSubtle} size={24} />
-            <Text style={styles.emptyNotificationsTitle}>Brak nowych powiadomień</Text>
+            <Text style={styles.emptyNotificationsTitle}>Brak powiadomień</Text>
             <Text style={styles.emptyNotificationsText}>Najważniejsze rzeczy pojawią się tutaj.</Text>
           </View>
         )}
@@ -431,6 +419,24 @@ function isTodayEvent(event: StartCalendarEvent): boolean {
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+function formatMealMeta(weekday: number, slotIndex: number): string {
+  return `${weekdayLabel(weekday)}, posiłek ${slotIndex + 1}`;
+}
+
+function weekdayLabel(day: number): string {
+  return (
+    [
+      "poniedziałek",
+      "wtorek",
+      "środa",
+      "czwartek",
+      "piątek",
+      "sobota",
+      "niedziela",
+    ][day - 1] ?? `dzień ${day}`
+  );
 }
 
 function eventMeta(event: StartCalendarEvent): string {

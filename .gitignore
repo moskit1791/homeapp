@@ -6,9 +6,13 @@ dist/
 build/
 coverage/
 *.log
+adb-*
 adb-homeapp-*
 adb-index.android.bundle
+build-logs/
 tmp-bundle-debug/
+tmp-*
+.tmp-*
 builds/homeapp-release-*.apk
 builds/*.apk
 /app.json

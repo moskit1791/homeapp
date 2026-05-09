@@ -137,7 +137,8 @@ export class AttachmentsController {
     }
 
     response.set({
-      'Content-Disposition': `inline; filename="${file.fileName.replace(/"/g, '')}"`,
+      'Content-Disposition': buildInlineContentDisposition(file.fileName),
+      'Content-Length': String(file.size),
       'Content-Type': file.mimeType
     });
 
@@ -169,4 +170,10 @@ export class AttachmentsController {
 
     return household;
   }
+}
+
+function buildInlineContentDisposition(fileName: string): string {
+  const fallback = fileName.replace(/[^\x20-\x7E]+/g, '_').replace(/["\\]/g, '');
+
+  return `inline; filename="${fallback || 'attachment'}"; filename*=UTF-8''${encodeURIComponent(fileName)}`;
 }

@@ -1,6 +1,6 @@
 import * as GoogleAuth from 'expo-auth-session/providers/google';
 import Constants from 'expo-constants';
-import { Redirect } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { ReactNode, useEffect, useState } from 'react';
 import {
@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { z } from 'zod';
-import { ApiNetworkError, forgotPassword, resendVerification, resetPassword, verifyEmail } from '../src/api';
+import { ApiNetworkError, forgotPassword, resendVerification, verifyEmail } from '../src/api';
 import { useSession } from '../src/session/session-context';
 import { loadRememberedEmail } from '../src/session/secure-session-store';
 import { useAppTheme, type AppPalette } from '../src/theme/use-app-theme';
@@ -46,27 +46,21 @@ const resetRequestSchema = z.object({
   email: z.string().trim().toLowerCase().email('Podaj poprawny e-mail')
 });
 
-const resetPasswordSchema = z.object({
-  password: z.string().min(8, 'Hasło musi mieć min. 8 znaków'),
-  token: z.string().trim().min(1, 'Podaj token resetu')
-});
-
 type LoginFormValues = z.input<typeof loginSchema>;
 type RegisterFormValues = z.input<typeof registerSchema>;
 type HouseholdFormValues = z.input<typeof householdSchema>;
 type ResetRequestValues = z.input<typeof resetRequestSchema>;
-type ResetPasswordValues = z.input<typeof resetPasswordSchema>;
 type LoginField = keyof LoginFormValues;
 type RegisterField = keyof RegisterFormValues;
 type HouseholdField = keyof HouseholdFormValues;
 type ResetRequestField = keyof ResetRequestValues;
-type ResetPasswordField = keyof ResetPasswordValues;
 type FieldErrors<TField extends string> = Partial<Record<TField, string>>;
 type LegalDocument = 'privacy' | 'terms';
 
 export default function Index() {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
+  const router = useRouter();
   const { createFirstHousehold, registerAndSignIn, signIn, signInWithGoogle, status } = useSession();
   const googleOAuthConfig = readGoogleOAuthConfig();
   const googleFallbackClientId =
@@ -88,7 +82,6 @@ export default function Index() {
   const [rememberMe, setRememberMe] = useState(true);
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [showRegisterPassword, setShowRegisterPassword] = useState(false);
-  const [showResetPassword, setShowResetPassword] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [acceptedPrivacy, setAcceptedPrivacy] = useState(false);
   const [legalDocument, setLegalDocument] = useState<LegalDocument | null>(null);
@@ -96,10 +89,6 @@ export default function Index() {
   const [resetVisible, setResetVisible] = useState(false);
   const [resetNotice, setResetNotice] = useState<string | null>(null);
   const [resetValues, setResetValues] = useState<ResetRequestValues>({ email: '' });
-  const [newPasswordValues, setNewPasswordValues] = useState<ResetPasswordValues>({
-    password: '',
-    token: ''
-  });
   const [loginValues, setLoginValues] = useState<LoginFormValues>({ email: '', password: '' });
   const [registerValues, setRegisterValues] = useState<RegisterFormValues>({
     displayName: '',
@@ -111,7 +100,6 @@ export default function Index() {
   const [registerErrors, setRegisterErrors] = useState<FieldErrors<RegisterField>>({});
   const [householdErrors, setHouseholdErrors] = useState<FieldErrors<HouseholdField>>({});
   const [resetErrors, setResetErrors] = useState<FieldErrors<ResetRequestField>>({});
-  const [newPasswordErrors, setNewPasswordErrors] = useState<FieldErrors<ResetPasswordField>>({});
 
   useEffect(() => {
     let active = true;
@@ -169,9 +157,7 @@ export default function Index() {
       setError(null);
 
       if (action.type === 'reset-password') {
-        setResetVisible(true);
-        setNewPasswordValues((current) => ({ ...current, token: action.token }));
-        setResetNotice('Token resetu został uzupełniony z linku.');
+        router.push({ pathname: '/auth/reset-password', params: { token: action.token } } as never);
         return;
       }
 
@@ -217,7 +203,7 @@ export default function Index() {
       active = false;
       subscription.remove();
     };
-  }, []);
+  }, [router]);
 
   if (status === 'ready') {
     return <Redirect href={'/(tabs)' as never} />;
@@ -264,12 +250,6 @@ export default function Index() {
   function updateResetField(field: ResetRequestField, value: string) {
     setResetValues((current) => ({ ...current, [field]: value }));
     setResetErrors((current) => ({ ...current, [field]: undefined }));
-    setResetNotice(null);
-  }
-
-  function updateNewPasswordField(field: ResetPasswordField, value: string) {
-    setNewPasswordValues((current) => ({ ...current, [field]: value }));
-    setNewPasswordErrors((current) => ({ ...current, [field]: undefined }));
     setResetNotice(null);
   }
 
@@ -396,32 +376,8 @@ export default function Index() {
     setResetNotice(null);
 
     try {
-      const response = await forgotPassword(parsed.data);
-      setNewPasswordValues((current) => ({ ...current, token: response.devResetToken ?? '' }));
+      await forgotPassword(parsed.data);
       setResetNotice('Jeśli konto istnieje, wysłaliśmy instrukcję resetu hasła.');
-    } catch (submitError) {
-      setResetNotice(getMessage(submitError));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function submitNewPassword() {
-    const parsed = resetPasswordSchema.safeParse(newPasswordValues);
-
-    if (!parsed.success) {
-      setNewPasswordErrors(toFieldErrors<ResetPasswordField>(parsed.error));
-      return;
-    }
-
-    setLoading(true);
-    setResetNotice(null);
-
-    try {
-      await resetPassword(parsed.data);
-      setResetVisible(false);
-      setNotice('Hasło zostało zmienione. Możesz się zalogować.');
-      setLoginValues((current) => ({ ...current, email: resetValues.email }));
     } catch (submitError) {
       setResetNotice(getMessage(submitError));
     } finally {
@@ -682,17 +638,11 @@ export default function Index() {
       <ResetPasswordModal
         errors={resetErrors}
         loading={loading}
-        newPasswordErrors={newPasswordErrors}
-        newPasswordValues={newPasswordValues}
         notice={resetNotice}
         onClose={() => setResetVisible(false)}
         onRequestReset={submitResetRequest}
-        onResetPassword={submitNewPassword}
-        onUpdateNewPassword={updateNewPasswordField}
         onUpdateRequest={updateResetField}
         requestValues={resetValues}
-        setShowPassword={setShowResetPassword}
-        showPassword={showResetPassword}
         visible={resetVisible}
       />
     </SafeAreaView>
@@ -839,90 +789,63 @@ export default function Index() {
     );
   }
 
-  function ResetPasswordModal({
-    errors,
-    loading,
-    newPasswordErrors,
-    newPasswordValues,
-    notice,
-    onClose,
-    onRequestReset,
-    onResetPassword,
-    onUpdateNewPassword,
-    onUpdateRequest,
-    requestValues,
-    setShowPassword,
-    showPassword,
-    visible
-  }: {
-    errors: FieldErrors<ResetRequestField>;
-    loading: boolean;
-    newPasswordErrors: FieldErrors<ResetPasswordField>;
-    newPasswordValues: ResetPasswordValues;
-    notice: string | null;
-    onClose: () => void;
-    onRequestReset: () => void;
-    onResetPassword: () => void;
-    onUpdateNewPassword: (field: ResetPasswordField, value: string) => void;
-    onUpdateRequest: (field: ResetRequestField, value: string) => void;
-    requestValues: ResetRequestValues;
-    setShowPassword: (updater: (current: boolean) => boolean) => void;
-    showPassword: boolean;
-    visible: boolean;
-  }) {
-    return (
-      <Modal animationType="fade" onRequestClose={onClose} transparent visible={visible}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Reset hasła</Text>
-            <Text style={styles.modalText}>
-              Wpisz e-mail konta. Jeśli konto istnieje, wyślemy instrukcję resetu hasła.
-            </Text>
-            <AuthTextField
-              autoComplete="email"
-              error={errors.email}
-              keyboardType="email-address"
-              label="Adres e-mail"
-              onChangeText={(value) => onUpdateRequest('email', value)}
-              placeholder="adres@email.pl"
-              value={requestValues.email}
-            />
-            <ActionButton loading={loading} onPress={onRequestReset} title="Wyślij instrukcję" variant="secondary" />
-            <AuthTextField
-              error={newPasswordErrors.token}
-              label="Token resetu"
-              onChangeText={(value) => onUpdateNewPassword('token', value)}
-              placeholder="Token z e-maila"
-              value={newPasswordValues.token}
-            />
-            <AuthTextField
-              error={newPasswordErrors.password}
-              label="Nowe hasło"
-              onChangeText={(value) => onUpdateNewPassword('password', value)}
-              placeholder="Minimum 8 znaków"
-              rightElement={
-                <IconTap onPress={() => setShowPassword((current) => !current)}>
-                  {showPassword ? (
-                    <EyeOff color={theme.colors.textMuted} size={18} />
-                  ) : (
-                    <Eye color={theme.colors.textMuted} size={18} />
-                  )}
-                </IconTap>
-              }
-              secureTextEntry={!showPassword}
-              value={newPasswordValues.password}
-            />
-            <PasswordStrength value={newPasswordValues.password} />
-            {notice ? <Banner message={notice} tone={notice.includes('Nie') ? 'error' : 'info'} /> : null}
-            <View style={styles.modalActions}>
-              <ActionButton onPress={onClose} title="Anuluj" variant="secondary" />
-              <ActionButton loading={loading} onPress={onResetPassword} title="Zmień hasło" />
+}
+
+function ResetPasswordModal({
+  errors,
+  loading,
+  notice,
+  onClose,
+  onRequestReset,
+  onUpdateRequest,
+  requestValues,
+  visible
+}: {
+  errors: FieldErrors<ResetRequestField>;
+  loading: boolean;
+  notice: string | null;
+  onClose: () => void;
+  onRequestReset: () => void;
+  onUpdateRequest: (field: ResetRequestField, value: string) => void;
+  requestValues: ResetRequestValues;
+  visible: boolean;
+}) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+  const noticeTone = notice?.startsWith('Nie') ? 'error' : 'info';
+
+  return (
+    <Modal animationType="fade" onRequestClose={onClose} transparent visible={visible}>
+      <View style={styles.modalBackdrop}>
+        <View style={styles.modalCard}>
+          <Text style={styles.modalTitle}>Reset hasła</Text>
+          <Text style={styles.modalText}>
+            Wpisz e-mail konta. Jeśli konto istnieje, wyślemy link do osobnego widoku zmiany hasła.
+          </Text>
+          <AuthTextField
+            autoComplete="email"
+            error={errors.email}
+            keyboardType="email-address"
+            label="Adres e-mail"
+            onChangeText={(value) => onUpdateRequest('email', value)}
+            placeholder="adres@email.pl"
+            value={requestValues.email}
+          />
+          {notice ? (
+            <View style={[styles.banner, noticeTone === 'error' ? styles.errorBox : styles.infoBox]}>
+              <Text style={[styles.bannerText, noticeTone === 'error' ? styles.error : styles.infoText]}>
+                {notice}
+              </Text>
             </View>
+          ) : null}
+          <View style={styles.modalActions}>
+            <ActionButton disabled={loading} onPress={onClose} title="Anuluj" variant="secondary" />
+            <ActionButton loading={loading} onPress={onRequestReset} title="Wyślij instrukcję" />
           </View>
         </View>
-      </Modal>
-    );
-  }
+      </View>
+    </Modal>
+  );
 }
 
 function toFieldErrors<TField extends string>(error: z.ZodError): FieldErrors<TField> {

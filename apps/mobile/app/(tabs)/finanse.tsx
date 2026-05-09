@@ -336,30 +336,34 @@ export default function FinanseScreen() {
 
       {summary ? (
         <>
-          <View style={styles.monthSwitcher}>
-            <IconButton
-              accessibilityLabel="Poprzedni miesiąc budżetu"
-              disabled={!canGoPreviousMonth}
-              onPress={() => selectAdjacentMonth(-1)}
-              style={styles.monthNavButton}
-            >
-              <ChevronLeft color={canGoPreviousMonth ? theme.colors.textMuted : theme.colors.textSubtle} size={20} />
-            </IconButton>
-            <Text style={styles.monthSwitcherTitle}>{visibleMonth ? formatMonthLong(visibleMonth) : "Miesiąc"}</Text>
-            <IconButton
-              accessibilityLabel="Następny miesiąc budżetu"
-              disabled={!canGoNextMonth}
-              onPress={() => selectAdjacentMonth(1)}
-              style={styles.monthNavButton}
-            >
-              <ChevronRight color={canGoNextMonth ? theme.colors.textMuted : theme.colors.textSubtle} size={20} />
-            </IconButton>
+          <View style={styles.monthSwitcherRow}>
+            <View style={styles.monthSwitcher}>
+              <IconButton
+                accessibilityLabel="Poprzedni miesiąc budżetu"
+                disabled={!canGoPreviousMonth}
+                onPress={() => selectAdjacentMonth(-1)}
+                style={styles.monthNavButton}
+              >
+                <ChevronLeft color={canGoPreviousMonth ? theme.colors.textMuted : theme.colors.textSubtle} size={20} />
+              </IconButton>
+              <Text numberOfLines={1} style={styles.monthSwitcherTitle}>
+                {visibleMonth ? formatMonthLong(visibleMonth) : "Miesiąc"}
+              </Text>
+              <IconButton
+                accessibilityLabel="Następny miesiąc budżetu"
+                disabled={!canGoNextMonth}
+                onPress={() => selectAdjacentMonth(1)}
+                style={styles.monthNavButton}
+              >
+                <ChevronRight color={canGoNextMonth ? theme.colors.textMuted : theme.colors.textSubtle} size={20} />
+              </IconButton>
+            </View>
             {canDelete ? (
               <IconButton
                 accessibilityLabel="Usuń wybrany miesiąc budżetu"
                 disabled={!canRemoveSelectedMonth}
                 onPress={() => setDeleteMonthConfirmVisible(true)}
-                style={[styles.monthNavButton, styles.monthDeleteButton]}
+                style={styles.monthDeleteButton}
               >
                 <Trash2
                   color={canRemoveSelectedMonth ? theme.colors.danger : theme.colors.textSubtle}
@@ -1057,10 +1061,16 @@ function createStyles(colors: AppPalette) {
       borderColor: colors.border,
       borderRadius: 999,
       borderWidth: 1,
+      flex: 1,
       flexDirection: "row",
       justifyContent: "space-between",
       minHeight: 38,
       paddingHorizontal: 4,
+    },
+    monthSwitcherRow: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.sm,
     },
     monthSwitcherTitle: {
       color: colors.primaryDark,
@@ -1077,7 +1087,10 @@ function createStyles(colors: AppPalette) {
       width: 34,
     },
     monthDeleteButton: {
+      backgroundColor: colors.card,
       borderColor: `${colors.danger}55`,
+      height: 38,
+      width: 38,
     },
     monthTab: {
       alignItems: "center",

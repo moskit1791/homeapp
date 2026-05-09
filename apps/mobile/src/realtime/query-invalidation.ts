@@ -19,6 +19,14 @@ const realtimeInvalidationKeys: Record<RealtimeEventType, QueryKey[]> = {
   'todo.changed': [queryKeys.start, queryKeys.todo]
 };
 
+const allRealtimeInvalidationKeys = Array.from(
+  new Map(
+    Object.values(realtimeInvalidationKeys)
+      .flat()
+      .map((queryKey) => [JSON.stringify(queryKey), queryKey])
+  ).values()
+);
+
 export function getRealtimeInvalidationKeys(event: RealtimeEvent): QueryKey[] {
   return realtimeInvalidationKeys[event.type];
 }
@@ -31,5 +39,11 @@ export async function invalidateRealtimeEventQueries(
     getRealtimeInvalidationKeys(event).map((queryKey) =>
       queryClient.invalidateQueries({ queryKey })
     )
+  );
+}
+
+export async function invalidateAllRealtimeQueries(queryClient: QueryClient): Promise<void> {
+  await Promise.all(
+    allRealtimeInvalidationKeys.map((queryKey) => queryClient.invalidateQueries({ queryKey }))
   );
 }

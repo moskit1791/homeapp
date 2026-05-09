@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UnauthorizedException, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { CurrentHousehold } from '../../shared/decorators/current-household.decorator';
 import { CurrentUser } from '../../shared/decorators/current-user.decorator';
 import { HouseholdContext, UserContext } from '../../shared/request-context';
@@ -6,7 +6,8 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { HouseholdContextGuard } from '../households/guards/household-context.guard';
 import {
   RegisterPushTokenDto,
-  SendTestPushDto
+  SendTestPushDto,
+  UpdateNotificationPreferencesDto
 } from './dto/notifications.dto';
 import { NotificationsService } from './notifications.service';
 
@@ -34,6 +35,19 @@ export class NotificationsController {
     @Body() dto: SendTestPushDto
   ) {
     return this.notificationsService.sendTestPush(this.requireHousehold(household), dto);
+  }
+
+  @Get('preferences')
+  listPreferences(@CurrentHousehold() household: HouseholdContext | undefined) {
+    return this.notificationsService.listPreferences(this.requireHousehold(household));
+  }
+
+  @Patch('preferences')
+  updatePreferences(
+    @CurrentHousehold() household: HouseholdContext | undefined,
+    @Body() dto: UpdateNotificationPreferencesDto
+  ) {
+    return this.notificationsService.updatePreferences(this.requireHousehold(household), dto);
   }
 
   private requireHousehold(household: HouseholdContext | undefined): HouseholdContext {

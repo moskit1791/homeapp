@@ -1,8 +1,13 @@
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { RealtimeEvent } from '../api';
-import { invalidateRealtimeEventQueries } from './query-invalidation';
+import {
+  invalidateAllRealtimeQueries,
+  invalidateRealtimeEventQueries
+} from './query-invalidation';
 import { subscribeToRealtimeEvents } from './sse';
+
+const fallbackRefreshIntervalMs = 5_000;
 
 export interface UseRealtimeInvalidationsOptions {
   accessToken?: string | null;
@@ -29,7 +34,19 @@ export function useRealtimeInvalidations(options: UseRealtimeInvalidationsOption
       }
     });
 
-    return () => subscription.unsubscribe();
+    if (subscription.supported) {
+      return () => subscription.unsubscribe();
+    }
+
+    void invalidateAllRealtimeQueries(queryClient);
+    const fallbackRefresh = setInterval(() => {
+      void invalidateAllRealtimeQueries(queryClient);
+    }, fallbackRefreshIntervalMs);
+
+    return () => {
+      clearInterval(fallbackRefresh);
+      subscription.unsubscribe();
+    };
   }, [accessToken, enabled, onError, onEvent, queryClient]);
 }
 

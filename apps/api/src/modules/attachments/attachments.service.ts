@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { mkdir, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { loadEnv } from '../../shared/env';
 import { DatabaseService } from '../database/database.service';
@@ -217,10 +217,17 @@ export class AttachmentsService {
       throw new BadRequestException('Invalid attachment storage path');
     }
 
+    const fileStat = await stat(absolutePath).catch(() => null);
+
+    if (!fileStat?.isFile()) {
+      return null;
+    }
+
     return {
       absolutePath,
       fileName: attachment.fileName,
-      mimeType: attachment.mimeType
+      mimeType: attachment.mimeType,
+      size: fileStat.size
     };
   }
 
@@ -429,6 +436,7 @@ export interface AttachmentFileRecord {
   absolutePath: string;
   fileName: string;
   mimeType: AttachmentMimeType;
+  size: number;
 }
 
 export interface AttachmentUploadContract {

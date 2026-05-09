@@ -25,6 +25,7 @@ import {
   deleteTodoItem,
   drawMealInspirations,
   getCurrentMealPlanWeek,
+  getMyHousehold,
   listCalendarEvents,
   listCalendarUpcoming,
   listMealPlanHistory,
@@ -224,6 +225,11 @@ function FoodSegment({
     useState(false);
   const [mealModalVisible, setMealModalVisible] = useState(false);
 
+  const householdQuery = useQuery({
+    enabled: Boolean(accessToken),
+    queryFn: () => getMyHousehold({ accessToken }),
+    queryKey: [...queryKeys.household, "me"],
+  });
   const currentQuery = useQuery({
     enabled: Boolean(accessToken),
     queryFn: () => getCurrentMealPlanWeek({ accessToken }),
@@ -320,6 +326,7 @@ function FoodSegment({
   const entries = currentQuery.data?.entries ?? [];
   const history = historyQuery.data ?? [];
   const suggestions = inspirationQuery.data?.suggestions ?? [];
+  const mealSlots = buildMealSlotIndexes(householdQuery.data?.mealSlotsPerDay);
   const canSave =
     canUpdate && Boolean(mealName.trim()) && !upsertMutation.isPending;
 
@@ -372,7 +379,7 @@ function FoodSegment({
               <View style={styles.itemContent}>
                 <Text style={styles.itemName}>{item.mealName}</Text>
                 <Text style={styles.itemQuantity}>
-                  {weekdayLabel(item.weekday)}, slot {item.slotIndex + 1}
+                  {weekdayLabel(item.weekday)}, posiłek {item.slotIndex + 1}
                 </Text>
                 {item.note ? (
                   <Text style={styles.muted}>{item.note}</Text>
@@ -402,7 +409,7 @@ function FoodSegment({
           </View>
         }
         onClose={() => setMealModalVisible(false)}
-        subtitle="Wybierz dzień, slot i wpisz posiłek do planu."
+        subtitle="Wybierz dzień i numer posiłku, potem wpisz nazwę."
         title="Ustaw posiłek"
         visible={mealModalVisible}
       >
@@ -417,12 +424,12 @@ function FoodSegment({
           ))}
         </View>
         <View style={styles.chips}>
-          {[0, 1, 2, 3].map((slot) => (
+          {mealSlots.map((slot) => (
             <Chip
               active={slotIndex === slot}
               key={slot}
               onPress={() => setSlotIndex(slot)}
-              title={`Slot ${slot + 1}`}
+              title={`Posiłek ${slot + 1}`}
             />
           ))}
         </View>
@@ -570,7 +577,7 @@ function CalendarSegment({
       createCalendarEvent(
         {
           eventDate,
-          eventTime: eventTime.trim() || null,
+          eventTime: normalizeEventTime(eventTime),
           note: note.trim() || null,
           scopeType: "household",
           title: title.trim(),
@@ -587,7 +594,10 @@ function CalendarSegment({
   });
 
   const canSave =
-    canCreate && Boolean(title.trim()) && /^\d{4}-\d{2}-\d{2}$/.test(eventDate);
+    canCreate &&
+    Boolean(title.trim()) &&
+    /^\d{4}-\d{2}-\d{2}$/.test(eventDate) &&
+    isOptionalTimeInputValid(eventTime);
 
   return (
     <>
@@ -658,8 +668,10 @@ function CalendarSegment({
             value={eventDate}
           />
           <TextInput
-            onChangeText={setEventTime}
-            placeholder="HH:MM"
+            keyboardType="number-pad"
+            maxLength={5}
+            onChangeText={(value) => setEventTime(formatTimeInput(value))}
+            placeholder="HH:mm"
             placeholderTextColor={theme.colors.textSubtle}
             style={[styles.input, styles.timeInput]}
             value={eventTime}
@@ -1219,6 +1231,12 @@ function groupMealEntries(entries: MealPlanEntry[]): MealPlanEntry[] {
   );
 }
 
+function buildMealSlotIndexes(value: number | null | undefined): number[] {
+  const count = Number.isFinite(value) ? Math.max(1, Math.min(8, Number(value))) : 4;
+
+  return Array.from({ length: count }, (_, index) => index);
+}
+
 function todayDate(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -1245,7 +1263,45 @@ function currentWeekRange() {
 }
 
 function formatDate(value: string): string {
-  return value.slice(5).replace("-", ".");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return value;
+  }
+
+  return `${value.slice(8, 10)}.${value.slice(5, 7)}`;
+}
+
+function formatTimeInput(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 4);
+
+  if (digits.length <= 2) {
+    return digits;
+  }
+
+  return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+}
+
+function isOptionalTimeInputValid(value: string): boolean {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return true;
+  }
+
+  if (!/^\d{2}:\d{2}$/.test(trimmed)) {
+    return false;
+  }
+
+  const [hoursPart, minutesPart] = trimmed.split(":");
+  const hours = Number(hoursPart);
+  const minutes = Number(minutesPart);
+
+  return Number.isInteger(hours) && Number.isInteger(minutes) && hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59;
+}
+
+function normalizeEventTime(value: string): string | null {
+  const trimmed = value.trim();
+
+  return trimmed ? trimmed : null;
 }
 
 function formatDateTime(value: string): string {

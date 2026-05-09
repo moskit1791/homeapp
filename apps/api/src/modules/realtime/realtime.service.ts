@@ -1,10 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { RealtimeEvent, RealtimeEventType } from '@homeapp/shared-types';
 import { Observable, Subject, filter } from 'rxjs';
+import { RequestContextStorage } from '../../shared/request-context-storage';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class RealtimeService {
   private readonly events$ = new Subject<RealtimeEvent>();
+
+  constructor(
+    private readonly notificationsService: NotificationsService,
+    private readonly requestContextStorage: RequestContextStorage
+  ) {}
 
   createEvent(householdId: string, type: RealtimeEventType, resourceId?: string): RealtimeEvent {
     return {
@@ -28,6 +35,7 @@ export class RealtimeService {
         : eventOrHouseholdId;
 
     this.events$.next(event);
+    this.publishPushNotification(event);
 
     return event;
   }
@@ -42,5 +50,16 @@ export class RealtimeService {
     }
 
     return type;
+  }
+
+  private publishPushNotification(event: RealtimeEvent): void {
+    const actorMemberId = this.requestContextStorage.get()?.household?.memberId;
+
+    void this.notificationsService.sendHouseholdChangeNotification({
+      actorMemberId,
+      eventType: event.type,
+      householdId: event.householdId,
+      resourceId: event.resourceId
+    });
   }
 }

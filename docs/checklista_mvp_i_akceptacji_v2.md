@@ -1,6 +1,7 @@
 # Checklista MVP i akceptacji – system domowy v2
 
 ## 1. Auth i dom
+
 - [x] rejestracja e-mail + hasło działa
 - [x] logowanie e-mail + hasło działa
 - [ ] logowanie Google działa
@@ -14,12 +15,14 @@
 - [x] banned blokuje logowanie
 
 ## 2. Uprawnienia
+
 - [x] moduły mogą być ukryte przez brak read
 - [x] read-only działa
 - [x] create/update/delete są egzekwowane po stronie backendu
 - [x] owner ma pełen dostęp
 
 ## 3. Finanse
+
 - [x] istnieje jeden bieżący miesiąc
 - [x] można pobrać bieżący miesiąc
 - [x] można utworzyć kategorię
@@ -39,6 +42,7 @@
 - [x] dochodu archiwalnego nie można edytować
 
 ## 4. Jedzenie
+
 - [x] można utworzyć tydzień planu
 - [x] można wpisać posiłki do slotów
 - [x] działa historia tygodni
@@ -48,6 +52,7 @@
 - [x] losowanie omija ostatnie tygodnie
 
 ## 5. Kalendarz
+
 - [x] można dodać wydarzenie
 - [x] wydarzenie może być dla domu
 - [x] wydarzenie może być dla osoby
@@ -55,12 +60,14 @@
 - [x] najbliższe wydarzenia widać na starcie
 
 ## 6. To-do i notatki
+
 - [x] działa tworzenie zadania
 - [x] działa zmiana statusu todo/done
 - [x] działa tworzenie notatki
 - [x] zadania i notatki są w osobnych zakładkach
 
 ## 7. Zakupy
+
 - [x] istnieją dwie listy: codzienne i długoterminowe
 - [x] można dodać pozycję
 - [x] można wpisać ilość
@@ -69,6 +76,7 @@
 - [x] zaznaczone są wyszarzone
 
 ## 8. Sprzątanie
+
 - [x] można utworzyć zadanie
 - [x] można ustawić częstotliwość
 - [x] można ustawić okno realizacji
@@ -77,6 +85,7 @@
 - [x] zaległe są na górze listy
 
 ## 9. Koszty roczne
+
 - [x] można utworzyć koszt roczny
 - [x] można oznaczyć wykonanie
 - [x] zapisuje się historia
@@ -84,11 +93,13 @@
 - [x] historia ma filtr po roku
 
 ## 10. Dane
+
 - [x] można dodać wpis title/value
 - [x] działa wyszukiwarka
 - [x] lista jest wspólna dla domu
 
 ## 11. Załączniki
+
 - [x] można dodać zdjęcie
 - [x] można dodać PDF
 - [x] można ustawić podpis
@@ -96,14 +107,21 @@
 - [x] storage jest prywatny
 
 ## 12. Start
+
 - [x] pokazuje podsumowanie finansów
 - [x] pokazuje wydarzenia
 - [x] pokazuje plan jedzenia
 - [x] układ pozostaje prosty
 
 ## 13. Realtime
-- [ ] zmiany jednego użytkownika widać u drugiego
-- [ ] zmiany finansów odświeżają finanse
-- [ ] zmiany zakupów odświeżają zakupy
-- [ ] zmiany planu odświeżają plan
-- [ ] zmiany domu i uprawnień odświeżają widoczność modułów
+
+- [x] zmiany jednego użytkownika widać u drugiego
+- [x] zmiany finansów odświeżają finanse
+- [x] zmiany zakupów odświeżają zakupy
+- [x] zmiany planu odświeżają plan
+- [x] zmiany domu i uprawnień odświeżają widoczność modułów
+
+wdrozenie ai.
+przechwycenie powiadomien systemowych aby uzupelnic budzet.
+dodac kategorie dlugi.
+synchronizacja danych jesli jeden uzytkownik domu to do wyboru czy chce lokalnie wszystko przegladać i zapisywać czy do baz danych. Jeśli ktoś wybrał lokalny zapis inforkmacji to PRzy zapraszaniu drugiego uzytkownika do domu trzeba napisc ostrzezenie, że zapraszając użytkownika dom automatycznie przejdzie na synchronizację serwerową a nie lokalną.

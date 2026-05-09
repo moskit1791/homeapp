@@ -4,6 +4,7 @@ import type {
   ModuleKey,
   PermissionSet,
   RealtimeEvent as SharedRealtimeEvent,
+  RealtimeEventType,
   ScopeType,
   ShoppingListType
 } from '@homeapp/shared-types';
@@ -663,6 +664,15 @@ export interface PushSendResult {
     message?: string;
     status: 'ok' | 'error';
   }>;
+}
+
+export interface NotificationPreference {
+  enabled: boolean;
+  eventType: RealtimeEventType;
+}
+
+export interface UpdateNotificationPreferencesRequest {
+  preferences: NotificationPreference[];
 }
 
 export interface HouseholdMember {

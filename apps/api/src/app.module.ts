@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { AnnualCostsModule } from './modules/annual-costs/annual-costs.module';
 import { AttachmentsModule } from './modules/attachments/attachments.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -20,10 +21,13 @@ import { ShoppingModule } from './modules/shopping/shopping.module';
 import { StartModule } from './modules/start/start.module';
 import { TodoModule } from './modules/todo/todo.module';
 import { UsersModule } from './modules/users/users.module';
+import { RequestContextInterceptor } from './shared/request-context.interceptor';
+import { RequestContextModule } from './shared/request-context.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    RequestContextModule,
     DatabaseModule,
     AuthModule,
     UsersModule,
@@ -44,6 +48,12 @@ import { UsersModule } from './modules/users/users.module';
     StartModule,
     RealtimeModule
   ],
-  controllers: [HealthController]
+  controllers: [HealthController],
+  providers: [
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: RequestContextInterceptor
+    }
+  ]
 })
 export class AppModule {}

@@ -56,7 +56,25 @@ function getApiErrorMessage(status: number, statusText: string, details: unknown
     return detailsMessage;
   }
 
+  const fallbackMessage = getFallbackStatusMessage(status);
+
+  if (fallbackMessage) {
+    return fallbackMessage;
+  }
+
   return statusText ? `${status} ${statusText}` : `HTTP ${status}`;
+}
+
+function getFallbackStatusMessage(status: number): string | undefined {
+  if (status === 530) {
+    return 'Serwer aplikacji jest chwilowo niedostępny. Spróbuj ponownie za moment.';
+  }
+
+  if (status === 502 || status === 503 || status === 504) {
+    return 'Serwer aplikacji jest chwilowo niedostępny. Spróbuj ponownie za moment.';
+  }
+
+  return undefined;
 }
 
 async function readResponseDetails(response: Response): Promise<unknown> {

@@ -1,4 +1,6 @@
-import { IsIn, IsOptional, IsString, Length, MaxLength } from 'class-validator';
+import { REALTIME_EVENTS, RealtimeEventType } from '@homeapp/shared-types';
+import { IsArray, IsBoolean, IsIn, IsOptional, IsString, Length, MaxLength, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export const PUSH_PLATFORMS = ['android', 'ios', 'web', 'unknown'] as const;
 
@@ -28,4 +30,19 @@ export class SendTestPushDto {
   @IsString()
   @MaxLength(180)
   body?: string;
+}
+
+export class NotificationPreferenceItemDto {
+  @IsIn([...REALTIME_EVENTS])
+  eventType!: RealtimeEventType;
+
+  @IsBoolean()
+  enabled!: boolean;
+}
+
+export class UpdateNotificationPreferencesDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => NotificationPreferenceItemDto)
+  preferences!: NotificationPreferenceItemDto[];
 }

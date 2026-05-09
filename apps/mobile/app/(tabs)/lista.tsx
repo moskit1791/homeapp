@@ -7,6 +7,7 @@ import {
   createShoppingItem,
   deleteShoppingItem,
   getCurrentMealPlanWeek,
+  getMyHousehold,
   listShoppingItems,
   listShoppingLists,
   queryKeys,
@@ -274,6 +275,11 @@ function MealsBoard() {
   const [mealName, setMealName] = useState("");
   const [note, setNote] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
+  const householdQuery = useQuery({
+    enabled: Boolean(accessToken),
+    queryFn: () => getMyHousehold({ accessToken }),
+    queryKey: [...queryKeys.household, "me"],
+  });
   const currentQuery = useQuery({
     enabled: permission.canRead && Boolean(accessToken),
     queryFn: () => getCurrentMealPlanWeek({ accessToken }),
@@ -315,6 +321,7 @@ function MealsBoard() {
     (left, right) => left.weekday - right.weekday || left.slotIndex - right.slotIndex,
   );
   const groupedEntries = groupMeals(entries);
+  const mealSlots = buildMealSlotIndexes(householdQuery.data?.mealSlotsPerDay);
   const canSave = permission.canUpdate && Boolean(mealName.trim()) && !upsertMutation.isPending;
 
   return (
@@ -326,7 +333,7 @@ function MealsBoard() {
         <View style={styles.mealHeroText}>
           <Text style={styles.sectionTitle}>Plan posiłków</Text>
           <Text style={styles.sectionMeta}>
-            {entries.length ? `${entries.length} wpisów w tym tygodniu` : "Zaplanuj, kup i gotuj bez chaosu"}
+            {formatMealPlanSummary(entries.length)}
           </Text>
         </View>
         {permission.canUpdate ? (
@@ -385,7 +392,7 @@ function MealsBoard() {
           </View>
         }
         onClose={() => setModalVisible(false)}
-        subtitle="Wybierz dzień i slot, potem wpisz posiłek."
+        subtitle="Wybierz dzień i numer posiłku, potem wpisz nazwę."
         title="Dodaj posiłek"
         visible={modalVisible}
       >
@@ -395,8 +402,8 @@ function MealsBoard() {
           ))}
         </View>
         <View style={styles.chips}>
-          {[0, 1, 2, 3].map((slot) => (
-            <Chip active={slotIndex === slot} key={slot} onPress={() => setSlotIndex(slot)} title={`Slot ${slot + 1}`} />
+          {mealSlots.map((slot) => (
+            <Chip active={slotIndex === slot} key={slot} onPress={() => setSlotIndex(slot)} title={`Posiłek ${slot + 1}`} />
           ))}
         </View>
         <TextInput
@@ -492,6 +499,7 @@ function MealPlanBanner({ onOpenMealPlan }: { onOpenMealPlan: () => void }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
   const count = query.data?.entries.length ?? 0;
+  const summary = query.isLoading ? "Sprawdzam plan posiłków" : formatMealPlanSummary(count);
 
   return (
     <Pressable
@@ -502,7 +510,7 @@ function MealPlanBanner({ onOpenMealPlan }: { onOpenMealPlan: () => void }) {
     >
       <View>
         <Text style={styles.mealBannerTitle}>Powiązany plan posiłków</Text>
-        <Text style={styles.mealBannerMeta}>{count} z 7 posiłków zaplanowanych na dziś</Text>
+        <Text style={styles.mealBannerMeta}>{summary}</Text>
       </View>
       <Text style={styles.mealBannerAction}>Zobacz plan</Text>
     </Pressable>
@@ -631,6 +639,24 @@ function groupMeals(entries: MealPlanEntry[]) {
     day,
     entries: dayEntries,
   }));
+}
+
+function buildMealSlotIndexes(value: number | null | undefined): number[] {
+  const count = Number.isFinite(value) ? Math.max(1, Math.min(8, Number(value))) : 4;
+
+  return Array.from({ length: count }, (_, index) => index);
+}
+
+function formatMealPlanSummary(count: number): string {
+  if (count === 0) {
+    return "Brak posiłków w planie na ten tydzień";
+  }
+
+  if (count === 1) {
+    return "1 posiłek w planie na ten tydzień";
+  }
+
+  return `${count} posiłków w planie na ten tydzień`;
 }
 
 function currentWeekStart(): string {
