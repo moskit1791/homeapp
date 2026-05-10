@@ -392,7 +392,7 @@ function TechPanel({
             Wylogowanie usuwa aktywny token z aplikacji.
           </Text>
         </View>
-        <ActionButton onPress={onLogout} title="Wyloguj" variant="secondary" />
+        <ActionButton onPress={onLogout} title="Wyloguj się" variant="secondary" />
       </View>
     </SectionCard>
   );

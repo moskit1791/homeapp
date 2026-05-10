@@ -342,15 +342,13 @@ export class BudgetMonthsService {
           bi.owner_member_id,
           bi.category_id,
           bi.name,
-          case
-            when bc.copy_budget_to_next_month = true then bi.budget_amount
-            else null
-          end,
+          null,
           bi.display_order
         from budget_items bi
         join budget_categories bc on bc.id = bi.category_id
         where bi.budget_month_id = $1
           and bi.is_deleted = false
+          and bc.copy_budget_to_next_month = true
       `,
       [sourceBudgetMonthId, targetBudgetMonthId]
     );

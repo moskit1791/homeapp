@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import {
   checkShoppingItem,
@@ -33,7 +34,9 @@ const listTypes: Array<{ label: string; value: ShoppingListType }> = [
 
 export default function ZakupyScreen() {
   const { session } = useSession();
+  const params = useLocalSearchParams<{ action?: string }>();
   const queryClient = useQueryClient();
+  const router = useRouter();
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
   const { canCreate, canDelete, canRead, canUpdate, permissionsQuery } =
@@ -42,6 +45,7 @@ export default function ZakupyScreen() {
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState("");
   const [isCreateVisible, setCreateVisible] = useState(false);
+  const [handledRouteAction, setHandledRouteAction] = useState<string | null>(null);
   const accessToken = session?.accessToken;
 
   const listsQuery = useQuery({
@@ -106,6 +110,21 @@ export default function ZakupyScreen() {
       createMutation.mutate();
     }
   }
+
+  useEffect(() => {
+    if (!params.action) {
+      setHandledRouteAction(null);
+      return;
+    }
+
+    if (params.action !== "item" || handledRouteAction === params.action || !canCreate) {
+      return;
+    }
+
+    setCreateVisible(true);
+    setHandledRouteAction(params.action);
+    router.setParams({ action: undefined });
+  }, [canCreate, handledRouteAction, params.action, router]);
 
   if (permissionsQuery.isLoading) {
     return (

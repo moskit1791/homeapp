@@ -215,7 +215,7 @@ export default function DzisiajScreen() {
           color={theme.colors.warning}
           icon={<NotePlus color={theme.colors.warning} size={21} />}
           label="Dodaj notatkę"
-          onPress={() => router.push("/(tabs)/kalendarz" as never)}
+          onPress={() => router.push({ pathname: "/(tabs)/plan", params: { action: "note" } } as never)}
         />
         <QuickAction
           color={theme.colors.finance}
@@ -229,13 +229,13 @@ export default function DzisiajScreen() {
           color={theme.colors.shopping}
           icon={<CartPlus color={theme.colors.shopping} size={21} />}
           label="Dodaj zakupy"
-          onPress={() => router.push("/(tabs)/lista" as never)}
+          onPress={() => router.push({ pathname: "/(tabs)/zakupy", params: { action: "item" } } as never)}
         />
         <QuickAction
           color={theme.colors.food}
           icon={<Utensils color={theme.colors.food} size={21} />}
           label="Dodaj posiłek"
-          onPress={() => router.push("/(tabs)/lista" as never)}
+          onPress={() => router.push({ pathname: "/(tabs)/plan", params: { action: "meal" } } as never)}
         />
       </View>
 
@@ -611,30 +611,32 @@ function createStyles(colors: AppPalette) {
       borderColor: colors.border,
       borderRadius: radii.card,
       borderWidth: 1,
-      flex: 1,
       gap: spacing.xs,
-      minHeight: 76,
+      minHeight: 96,
       justifyContent: "center",
-      paddingHorizontal: spacing.xs,
-      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.md,
+      width: "48%",
     },
     quickGrid: {
       flexDirection: "row",
+      flexWrap: "wrap",
       gap: spacing.sm,
+      justifyContent: "space-between",
     },
     quickIcon: {
       alignItems: "center",
       borderRadius: radii.control,
-      height: 32,
+      height: 40,
       justifyContent: "center",
-      width: 32,
+      width: 40,
     },
     quickLabel: {
       color: colors.text,
-      fontSize: 11,
-      fontWeight: "800",
+      fontSize: 12,
+      fontWeight: "900",
       letterSpacing: 0,
-      lineHeight: 14,
+      lineHeight: 15,
       textAlign: "center",
     },
     quickPlus: {
@@ -642,11 +644,11 @@ function createStyles(colors: AppPalette) {
       backgroundColor: colors.primary,
       borderRadius: 999,
       bottom: -2,
-      height: 14,
+      height: 16,
       justifyContent: "center",
       position: "absolute",
       right: -2,
-      width: 14,
+      width: 16,
     },
     sectionHeader: {
       marginTop: spacing.xs,

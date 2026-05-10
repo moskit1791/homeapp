@@ -45,6 +45,24 @@ export class MealPlannerController {
     return this.mealPlannerService.listHistory(this.requireHousehold(household).householdId);
   }
 
+  @Get('meal-plans/:id')
+  @RequirePermission('meal_planner', 'read')
+  async getPlan(
+    @CurrentHousehold() household: HouseholdContext | undefined,
+    @Param() params: MealPlanIdParamDto
+  ) {
+    const plan = await this.mealPlannerService.getPlan(
+      this.requireHousehold(household).householdId,
+      params.id
+    );
+
+    if (!plan) {
+      throw new NotFoundException('Meal plan not found');
+    }
+
+    return plan;
+  }
+
   @Post('meal-plans')
   @RequirePermission('meal_planner', 'create')
   createPlan(

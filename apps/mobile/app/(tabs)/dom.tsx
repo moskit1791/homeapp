@@ -1319,7 +1319,7 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
           <ActionButton
             onPress={handleLogout}
             style={styles.modalFooterButton}
-            title="Wyloguj"
+            title="Wyloguj się"
             variant="secondary"
           />
         </View>
@@ -1441,18 +1441,20 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
                     <Text style={styles.itemName}>{copy.label}</Text>
                     <Text style={styles.itemMeta}>{copy.meta}</Text>
                   </View>
-                  <Switch
-                    disabled={notificationPreferencesMutation.isPending}
-                    onValueChange={(enabled) =>
-                      toggleNotificationPreference(preference.eventType, enabled)
-                    }
-                    thumbColor={preference.enabled ? theme.colors.primary : theme.colors.textSubtle}
-                    trackColor={{
-                      false: theme.colors.border,
-                      true: theme.colors.softGreen,
-                    }}
-                    value={preference.enabled}
-                  />
+                  <View style={styles.notificationPreferenceSwitch}>
+                    <Switch
+                      disabled={notificationPreferencesMutation.isPending}
+                      onValueChange={(enabled) =>
+                        toggleNotificationPreference(preference.eventType, enabled)
+                      }
+                      thumbColor={preference.enabled ? theme.colors.primary : theme.colors.textSubtle}
+                      trackColor={{
+                        false: theme.colors.border,
+                        true: theme.colors.softGreen,
+                      }}
+                      value={preference.enabled}
+                    />
+                  </View>
                 </View>
               );
             })}
@@ -1906,7 +1908,7 @@ async function shareAttachmentFile(attachment: Attachment, accessToken?: string 
 
   const request = getAttachmentFileRequest(attachment.id, { accessToken });
   const localUri = `${cacheDirectory}${attachment.id}-${sanitizeCacheFileName(attachment.fileName)}`;
-  const result = await FileSystem.downloadAsync(request.url, localUri, {
+  const result = await FileSystem.downloadAsync(request.uri, localUri, {
     headers: request.headers,
   });
 
@@ -2095,7 +2097,7 @@ function createStyles(colors: AppPalette) {
       gap: spacing.xs,
     },
     notificationPreferenceRow: {
-      alignItems: "center",
+      alignItems: "flex-start",
       backgroundColor: colors.card,
       borderColor: colors.border,
       borderRadius: radii.control,
@@ -2106,6 +2108,12 @@ function createStyles(colors: AppPalette) {
       paddingHorizontal: spacing.sm,
       paddingVertical: spacing.xs,
     },
+    notificationPreferenceSwitch: {
+      alignSelf: "center",
+      flexShrink: 0,
+      justifyContent: "center",
+      minWidth: 56,
+    },
     notificationPreferencesHeader: {
       gap: 2,
       paddingTop: spacing.xs,
@@ -2114,6 +2122,7 @@ function createStyles(colors: AppPalette) {
       flex: 1,
       gap: 2,
       minWidth: 0,
+      paddingRight: spacing.xs,
     },
     memberAvatars: {
       flexDirection: "row",

@@ -28,6 +28,7 @@ import type {
   CreateCleaningTaskRequest,
   CreateDataEntryRequest,
   CreateExpenseRequest,
+  CreateFinanceDebtRequest,
   CreateHouseholdRequest,
   CreateHouseholdResponse,
   CreateInvitationRequest,
@@ -45,6 +46,7 @@ import type {
   HouseholdMember,
   ForgotPasswordRequest,
   ForgotPasswordResponse,
+  FinanceDebt,
   GoogleLoginRequest,
   Income,
   IncomeSummary,
@@ -79,6 +81,8 @@ import type {
   TodoItem,
   UpdateCalendarEventRequest,
   UpdateAttachmentRequest,
+  UpdateBudgetItemRequest,
+  UpdateFinanceDebtRequest,
   UpdateHouseholdRequest,
   UpdateMealPlanRequest,
   UpdateNoteRequest,
@@ -501,6 +505,34 @@ export function createBudgetItem(
   });
 }
 
+export function updateBudgetItem(
+  budgetItemId: string,
+  input: UpdateBudgetItemRequest,
+  options?: ApiCallOptionsInput
+): Promise<BudgetItem> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<BudgetItem, UpdateBudgetItemRequest>(`/finance/budget-items/${budgetItemId}`, {
+    accessToken: requestOptions.accessToken,
+    body: input,
+    method: 'PATCH',
+    signal: requestOptions.signal
+  });
+}
+
+export function deleteBudgetItem(
+  budgetItemId: string,
+  options?: ApiCallOptionsInput
+): Promise<OkResponse> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<OkResponse>(`/finance/budget-items/${budgetItemId}`, {
+    accessToken: requestOptions.accessToken,
+    method: 'DELETE',
+    signal: requestOptions.signal
+  });
+}
+
 export function createExpense(
   input: CreateExpenseRequest,
   options?: ApiCallOptionsInput
@@ -536,6 +568,57 @@ export function upsertIncome(
   });
 }
 
+export function listFinanceDebts(options?: ApiCallOptionsInput): Promise<FinanceDebt[]> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<FinanceDebt[]>('/finance/debts', {
+    accessToken: requestOptions.accessToken,
+    signal: requestOptions.signal
+  });
+}
+
+export function createFinanceDebt(
+  input: CreateFinanceDebtRequest,
+  options?: ApiCallOptionsInput
+): Promise<FinanceDebt> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<FinanceDebt, CreateFinanceDebtRequest>('/finance/debts', {
+    accessToken: requestOptions.accessToken,
+    body: input,
+    method: 'POST',
+    signal: requestOptions.signal
+  });
+}
+
+export function updateFinanceDebt(
+  debtId: string,
+  input: UpdateFinanceDebtRequest,
+  options?: ApiCallOptionsInput
+): Promise<FinanceDebt> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<FinanceDebt, UpdateFinanceDebtRequest>(`/finance/debts/${debtId}`, {
+    accessToken: requestOptions.accessToken,
+    body: input,
+    method: 'PATCH',
+    signal: requestOptions.signal
+  });
+}
+
+export function deleteFinanceDebt(
+  debtId: string,
+  options?: ApiCallOptionsInput
+): Promise<OkResponse> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<OkResponse>(`/finance/debts/${debtId}`, {
+    accessToken: requestOptions.accessToken,
+    method: 'DELETE',
+    signal: requestOptions.signal
+  });
+}
+
 export async function getCurrentMealPlanWeek(
   options?: ApiCallOptionsInput
 ): Promise<MealPlanDetail | null> {
@@ -555,6 +638,18 @@ export function listMealPlanHistory(
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<MealPlanSummary[]>('/meal-plans/history', {
+    accessToken: requestOptions.accessToken,
+    signal: requestOptions.signal
+  });
+}
+
+export function getMealPlanWeek(
+  planId: string,
+  options?: ApiCallOptionsInput
+): Promise<MealPlanDetail> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<MealPlanDetail>(`/meal-plans/${planId}`, {
     accessToken: requestOptions.accessToken,
     signal: requestOptions.signal
   });
@@ -715,6 +810,19 @@ export function updateCalendarEvent(
     accessToken: requestOptions.accessToken,
     body: input,
     method: 'PATCH',
+    signal: requestOptions.signal
+  });
+}
+
+export function deleteCalendarEvent(
+  eventId: string,
+  options?: ApiCallOptionsInput
+): Promise<OkResponse> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<OkResponse>(`/calendar/events/${eventId}`, {
+    accessToken: requestOptions.accessToken,
+    method: 'DELETE',
     signal: requestOptions.signal
   });
 }
@@ -1080,7 +1188,7 @@ export function getAttachmentFileUrl(id: string): string {
 export function getAttachmentFileRequest(
   id: string,
   options?: ApiCallOptionsInput
-): { headers?: Record<string, string>; url: string } {
+): { headers?: Record<string, string>; uri: string } {
   const requestOptions = normalizeApiCallOptions(options);
   const headers = requestOptions.accessToken
     ? { Authorization: `Bearer ${requestOptions.accessToken}` }
@@ -1088,7 +1196,7 @@ export function getAttachmentFileRequest(
 
   return {
     headers,
-    url: getAttachmentFileUrl(id)
+    uri: getAttachmentFileUrl(id)
   };
 }
 

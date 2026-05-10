@@ -67,13 +67,14 @@ export default function Index() {
     googleOAuthConfig.androidClientId ??
     googleOAuthConfig.iosClientId ??
     googleOAuthConfig.webClientId ??
+    googleOAuthConfig.oauthClientId ??
     'google-oauth-not-configured';
   const [googleRequest, googleResponse, promptGoogleAsync] = GoogleAuth.useIdTokenAuthRequest({
     androidClientId: googleOAuthConfig.androidClientId,
     clientId: googleFallbackClientId,
     iosClientId: googleOAuthConfig.iosClientId,
     selectAccount: true,
-    webClientId: googleOAuthConfig.webClientId
+    webClientId: googleOAuthConfig.webClientId ?? googleOAuthConfig.oauthClientId
   });
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [error, setError] = useState<string | null>(null);
@@ -391,7 +392,12 @@ export default function Index() {
       return;
     }
 
-    if (!googleOAuthConfig.androidClientId && !googleOAuthConfig.iosClientId && !googleOAuthConfig.webClientId) {
+    if (
+      !googleOAuthConfig.androidClientId &&
+      !googleOAuthConfig.iosClientId &&
+      !googleOAuthConfig.webClientId &&
+      !googleOAuthConfig.oauthClientId
+    ) {
       setNotice('Google OAuth wymaga skonfigurowanego client ID w env/EAS.');
       return;
     }
@@ -924,6 +930,7 @@ function readGoogleOAuthConfig() {
     | {
         googleAndroidClientId?: string;
         googleIosClientId?: string;
+        googleOAuthClientId?: string;
         googleWebClientId?: string;
       }
     | undefined;
@@ -931,6 +938,7 @@ function readGoogleOAuthConfig() {
   return {
     androidClientId: normalizeOptionalValue(extra?.googleAndroidClientId),
     iosClientId: normalizeOptionalValue(extra?.googleIosClientId),
+    oauthClientId: normalizeOptionalValue(extra?.googleOAuthClientId),
     webClientId: normalizeOptionalValue(extra?.googleWebClientId)
   };
 }

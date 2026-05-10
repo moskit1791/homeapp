@@ -21,19 +21,23 @@ import {
   CreateBudgetCategoryDto,
   CreateBudgetItemDto,
   CreateExpenseDto,
+  CreateFinanceDebtDto,
   FinanceBudgetItemIdParamDto,
   FinanceCategoryIdParamDto,
+  FinanceDebtIdParamDto,
   FinanceExpenseIdParamDto,
   FinanceMemberIdParamDto,
   FinanceMonthIdParamDto,
   UpdateBudgetCategoryDto,
   UpdateBudgetItemDto,
+  UpdateFinanceDebtDto,
   UpsertIncomeDto
 } from './dto/finance.dto';
 import { BudgetCategoriesService } from './services/budget-categories.service';
 import { BudgetItemsService } from './services/budget-items.service';
 import { BudgetMonthsService } from './services/budget-months.service';
 import { ExpensesService } from './services/expenses.service';
+import { FinanceDebtsService } from './services/finance-debts.service';
 import { FinanceSummaryService } from './services/finance-summary.service';
 import { IncomesService } from './services/incomes.service';
 
@@ -45,6 +49,7 @@ export class FinanceController {
     private readonly budgetCategoriesService: BudgetCategoriesService,
     private readonly budgetItemsService: BudgetItemsService,
     private readonly expensesService: ExpensesService,
+    private readonly financeDebtsService: FinanceDebtsService,
     private readonly financeSummaryService: FinanceSummaryService,
     private readonly incomesService: IncomesService
   ) {}
@@ -247,6 +252,62 @@ export class FinanceController {
       params.memberId,
       dto
     );
+  }
+
+  @Get('debts')
+  @RequirePermission('finances', 'read')
+  listDebts(@CurrentHousehold() household: HouseholdContext | undefined) {
+    return this.financeDebtsService.listDebts(this.requireHousehold(household).householdId, true);
+  }
+
+  @Post('debts')
+  @RequirePermission('finances', 'create')
+  createDebt(
+    @CurrentHousehold() household: HouseholdContext | undefined,
+    @Body() dto: CreateFinanceDebtDto
+  ) {
+    return this.financeDebtsService.createDebt(
+      this.requireHousehold(household).householdId,
+      dto
+    );
+  }
+
+  @Patch('debts/:id')
+  @RequirePermission('finances', 'update')
+  async updateDebt(
+    @CurrentHousehold() household: HouseholdContext | undefined,
+    @Param() params: FinanceDebtIdParamDto,
+    @Body() dto: UpdateFinanceDebtDto
+  ) {
+    const debt = await this.financeDebtsService.updateDebt(
+      this.requireHousehold(household).householdId,
+      params.id,
+      dto
+    );
+
+    if (!debt) {
+      throw new NotFoundException('Finance debt not found');
+    }
+
+    return debt;
+  }
+
+  @Delete('debts/:id')
+  @RequirePermission('finances', 'delete')
+  async deleteDebt(
+    @CurrentHousehold() household: HouseholdContext | undefined,
+    @Param() params: FinanceDebtIdParamDto
+  ) {
+    const deleted = await this.financeDebtsService.deleteDebt(
+      this.requireHousehold(household).householdId,
+      params.id
+    );
+
+    if (!deleted) {
+      throw new NotFoundException('Finance debt not found');
+    }
+
+    return { ok: true };
   }
 
   private requireHousehold(household: HouseholdContext | undefined): HouseholdContext {

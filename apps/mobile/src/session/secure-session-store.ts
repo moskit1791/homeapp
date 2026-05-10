@@ -94,3 +94,26 @@ export function saveRememberedEmail(email: string): Promise<void> {
 export function clearRememberedEmail(): Promise<void> {
   return deleteItem(rememberedEmailKey);
 }
+
+export async function loadStoredJson<T>(key: string): Promise<T | null> {
+  const rawValue = await readItem(key);
+
+  if (!rawValue) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(rawValue) as T;
+  } catch {
+    await deleteItem(key);
+    return null;
+  }
+}
+
+export function saveStoredJson<T>(key: string, value: T): Promise<void> {
+  return writeItem(key, JSON.stringify(value));
+}
+
+export function clearStoredItem(key: string): Promise<void> {
+  return deleteItem(key);
+}

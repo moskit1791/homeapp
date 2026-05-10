@@ -1,5 +1,6 @@
 import {
   IsBoolean,
+  IsDateString,
   IsInt,
   IsNumber,
   IsOptional,
@@ -31,6 +32,11 @@ export class FinanceBudgetItemIdParamDto {
 }
 
 export class FinanceExpenseIdParamDto {
+  @IsUUID()
+  id!: string;
+}
+
+export class FinanceDebtIdParamDto {
   @IsUUID()
   id!: string;
 }
@@ -141,4 +147,59 @@ export class UpsertIncomeDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   amount!: number;
+}
+
+export class CreateFinanceDebtDto {
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.01)
+  amount!: number;
+
+  @IsOptional()
+  @IsDateString()
+  dueDate?: string | null;
+
+  @IsString()
+  @Length(1, 160)
+  lenderName!: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 500)
+  note?: string | null;
+
+  @IsString()
+  @Length(1, 200)
+  purpose!: string;
+}
+
+export class UpdateFinanceDebtDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.01)
+  amount?: number;
+
+  @IsOptional()
+  @IsDateString()
+  dueDate?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  isSettled?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 160)
+  lenderName?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 500)
+  note?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 200)
+  purpose?: string;
 }

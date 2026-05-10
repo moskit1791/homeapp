@@ -8,6 +8,7 @@ import { BudgetCategoriesService } from './services/budget-categories.service';
 import { BudgetItemsService } from './services/budget-items.service';
 import { BudgetMonthsService } from './services/budget-months.service';
 import { ExpensesService } from './services/expenses.service';
+import { FinanceDebtsService } from './services/finance-debts.service';
 import { FinanceSummaryService } from './services/finance-summary.service';
 import { IncomesService } from './services/incomes.service';
 
@@ -16,6 +17,7 @@ const services = [
   BudgetCategoriesService,
   BudgetItemsService,
   ExpensesService,
+  FinanceDebtsService,
   IncomesService,
   FinanceSummaryService
 ];

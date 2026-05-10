@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ModuleKey } from "@homeapp/shared-types";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   CalendarDays,
   Check,
@@ -12,7 +13,7 @@ import {
   Utensils,
 } from "../../src/ui/icon";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import {
   completeTodoItem,
   copyMealPlanWeek,
@@ -25,6 +26,7 @@ import {
   deleteTodoItem,
   drawMealInspirations,
   getCurrentMealPlanWeek,
+  getMealPlanWeek,
   getMyHousehold,
   listCalendarEvents,
   listCalendarUpcoming,
@@ -74,10 +76,13 @@ const segments: Array<{
 
 export default function PlanScreen() {
   const { session } = useSession();
+  const params = useLocalSearchParams<{ action?: string }>();
   const permissionsQuery = usePermissions();
+  const router = useRouter();
   const theme = useAppTheme();
   const styles = useMemo(() => createStyles(theme.colors), [theme.colors]);
   const [activeSegment, setActiveSegment] = useState<SegmentKey>("food");
+  const [handledRouteAction, setHandledRouteAction] = useState<string | null>(null);
   const permissions = permissionsQuery.data;
   const accessToken = session?.accessToken;
 
@@ -111,6 +116,28 @@ export default function PlanScreen() {
       setActiveSegment(firstReadable.key);
     }
   }, [activeConfig.moduleKey, permissions, permissionsQuery.isSuccess]);
+
+  useEffect(() => {
+    if (!params.action) {
+      setHandledRouteAction(null);
+      return;
+    }
+
+    if (!permissionsQuery.isSuccess || !params.action || handledRouteAction === params.action) {
+      return;
+    }
+
+    if (params.action === "meal" && getPermission(permissions, "meal_planner").canRead) {
+      setActiveSegment("food");
+      setHandledRouteAction(params.action);
+      return;
+    }
+
+    if (params.action === "note" && getPermission(permissions, "notes").canRead) {
+      setActiveSegment("notes");
+      setHandledRouteAction(params.action);
+    }
+  }, [handledRouteAction, params.action, permissions, permissionsQuery.isSuccess]);
 
   if (permissionsQuery.isLoading) {
     return (
@@ -178,6 +205,8 @@ export default function PlanScreen() {
           canCreate={activePermission.canCreate}
           canDelete={activePermission.canDelete}
           canUpdate={activePermission.canUpdate}
+          openCreateAction={params.action === "meal" && handledRouteAction === "meal"}
+          onCreateActionHandled={() => router.setParams({ action: undefined })}
         />
       ) : activeSegment === "calendar" ? (
         <CalendarSegment
@@ -197,6 +226,8 @@ export default function PlanScreen() {
           canCreate={activePermission.canCreate}
           canDelete={activePermission.canDelete}
           canUpdate={activePermission.canUpdate}
+          openCreateAction={params.action === "note" && handledRouteAction === "note"}
+          onCreateActionHandled={() => router.setParams({ action: undefined })}
         />
       )}
     </AppScreen>
@@ -208,11 +239,15 @@ function FoodSegment({
   canCreate,
   canDelete,
   canUpdate,
+  onCreateActionHandled,
+  openCreateAction,
 }: {
   accessToken?: string | null;
   canCreate: boolean;
   canDelete: boolean;
   canUpdate: boolean;
+  onCreateActionHandled?: () => void;
+  openCreateAction?: boolean;
 }) {
   const queryClient = useQueryClient();
   const theme = useAppTheme();
@@ -221,6 +256,8 @@ function FoodSegment({
   const [slotIndex, setSlotIndex] = useState(0);
   const [mealName, setMealName] = useState("");
   const [note, setNote] = useState("");
+  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
+  const [weekStartInput, setWeekStartInput] = useState(currentWeekRange().from);
   const [deletePlanConfirmVisible, setDeletePlanConfirmVisible] =
     useState(false);
   const [mealModalVisible, setMealModalVisible] = useState(false);
@@ -240,26 +277,51 @@ function FoodSegment({
     queryFn: () => listMealPlanHistory({ accessToken }),
     queryKey: [...queryKeys.meal, "history"],
   });
+  const selectedPlanQuery = useQuery({
+    enabled:
+      Boolean(accessToken) &&
+      Boolean(selectedPlanId) &&
+      selectedPlanId !== currentQuery.data?.week.id,
+    queryFn: () => getMealPlanWeek(selectedPlanId ?? "", { accessToken }),
+    queryKey: [...queryKeys.meal, "detail", selectedPlanId],
+  });
+  const history = historyQuery.data ?? [];
+  const activePlan =
+    selectedPlanId && selectedPlanId !== currentQuery.data?.week.id
+      ? selectedPlanQuery.data
+      : currentQuery.data;
   const inspirationQuery = useQuery({
     enabled: false,
     queryFn: () =>
       drawMealInspirations(
         {
           slotIndex,
-          targetWeekStartDate: currentQuery.data?.week.weekStartDate,
+          targetWeekStartDate: activePlan?.week.weekStartDate,
           weekday,
         },
         { accessToken },
       ),
-    queryKey: [...queryKeys.meal, "inspirations", weekday, slotIndex],
+    queryKey: [...queryKeys.meal, "inspirations", activePlan?.week.weekStartDate, weekday, slotIndex],
   });
+
+  useEffect(() => {
+    if (selectedPlanId) {
+      return;
+    }
+
+    const nextPlanId = currentQuery.data?.week.id ?? history[0]?.id;
+
+    if (nextPlanId) {
+      setSelectedPlanId(nextPlanId);
+    }
+  }, [currentQuery.data?.week.id, history, selectedPlanId]);
 
   const upsertMutation = useMutation({
     mutationFn: async () => {
       const currentPlan =
-        currentQuery.data ??
+        activePlan ??
         (await createMealPlan(
-          { weekStartDate: currentWeekRange().from },
+          { weekStartDate: normalizeWeekStartDate(weekStartInput) },
           { accessToken },
         ));
       const weekId = currentPlan?.week?.id;
@@ -281,7 +343,8 @@ function FoodSegment({
         { accessToken },
       );
     },
-    onSuccess: async () => {
+    onSuccess: async (plan) => {
+      setSelectedPlanId(plan.week.id);
       setMealName("");
       setNote("");
       setMealModalVisible(false);
@@ -289,9 +352,21 @@ function FoodSegment({
     },
   });
 
+  const createWeekMutation = useMutation({
+    mutationFn: () =>
+      createMealPlan(
+        { weekStartDate: normalizeWeekStartDate(weekStartInput) },
+        { accessToken },
+      ),
+    onSuccess: async (plan) => {
+      setSelectedPlanId(plan.week.id);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.meal });
+    },
+  });
+
   const copyMutation = useMutation({
     mutationFn: () => {
-      const current = currentQuery.data;
+      const current = activePlan;
 
       if (!current) {
         throw new Error("Missing current meal plan");
@@ -303,13 +378,15 @@ function FoodSegment({
         { accessToken },
       );
     },
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: queryKeys.meal }),
+    onSuccess: async (plan) => {
+      setSelectedPlanId(plan.week.id);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.meal });
+    },
   });
 
   const deletePlanMutation = useMutation({
     mutationFn: () => {
-      const current = currentQuery.data;
+      const current = activePlan;
 
       if (!current) {
         throw new Error("Missing current meal plan");
@@ -318,17 +395,26 @@ function FoodSegment({
       return deleteMealPlanWeek(current.week.id, { accessToken });
     },
     onSuccess: async () => {
+      setSelectedPlanId(null);
       setDeletePlanConfirmVisible(false);
       await queryClient.invalidateQueries({ queryKey: queryKeys.meal });
     },
   });
 
-  const entries = currentQuery.data?.entries ?? [];
-  const history = historyQuery.data ?? [];
+  const entries = activePlan?.entries ?? [];
   const suggestions = inspirationQuery.data?.suggestions ?? [];
   const mealSlots = buildMealSlotIndexes(householdQuery.data?.mealSlotsPerDay);
   const canSave =
     canUpdate && Boolean(mealName.trim()) && !upsertMutation.isPending;
+
+  useEffect(() => {
+    if (!openCreateAction || !canUpdate) {
+      return;
+    }
+
+    setMealModalVisible(true);
+    onCreateActionHandled?.();
+  }, [canUpdate, onCreateActionHandled, openCreateAction]);
 
   return (
     <>
@@ -344,7 +430,7 @@ function FoodSegment({
             ) : null}
             {canDelete ? (
               <IconButton
-                disabled={!currentQuery.data || deletePlanMutation.isPending}
+                disabled={!activePlan || deletePlanMutation.isPending}
                 onPress={() => setDeletePlanConfirmVisible(true)}
               >
                 <Trash2 color={theme.colors.danger} size={18} />
@@ -352,23 +438,27 @@ function FoodSegment({
             ) : null}
           </View>
         }
-        onRefresh={() => currentQuery.refetch()}
+        onRefresh={() => {
+          currentQuery.refetch();
+          historyQuery.refetch();
+          selectedPlanQuery.refetch();
+        }}
         title="Plan posiłków"
       />
       <SectionCard
         icon={<Utensils color={theme.colors.food} size={18} />}
         subtitle={
-          currentQuery.data?.week.weekStartDate
-            ? `Od ${formatDate(currentQuery.data.week.weekStartDate)}`
-            : "Brak bieżącego planu"
+          activePlan?.week.weekStartDate
+            ? `Od ${formatDate(activePlan.week.weekStartDate)}`
+            : "Wybierz albo utwórz tydzień"
         }
         title="Tydzień"
       >
         <QueryState
           emptyText="Brak wpisów w planie."
-          error={currentQuery.error}
-          isEmpty={!currentQuery.isLoading && entries.length === 0}
-          isLoading={currentQuery.isLoading}
+          error={currentQuery.error ?? selectedPlanQuery.error}
+          isEmpty={!currentQuery.isLoading && !selectedPlanQuery.isLoading && entries.length === 0}
+          isLoading={currentQuery.isLoading || selectedPlanQuery.isLoading}
         />
         <View style={styles.itemList}>
           {groupMealEntries(entries).map((item) => (
@@ -469,7 +559,7 @@ function FoodSegment({
               variant="secondary"
             />
             <ActionButton
-              disabled={!currentQuery.data}
+              disabled={!activePlan}
               loading={deletePlanMutation.isPending}
               onPress={() => deletePlanMutation.mutate()}
               style={styles.modalFooterButton}
@@ -479,8 +569,8 @@ function FoodSegment({
         }
         onClose={() => setDeletePlanConfirmVisible(false)}
         subtitle={
-          currentQuery.data?.week.weekStartDate
-            ? `Tydzień od ${formatDate(currentQuery.data.week.weekStartDate)} zostanie usunięty razem z posiłkami.`
+          activePlan?.week.weekStartDate
+            ? `Tydzień od ${formatDate(activePlan.week.weekStartDate)} zostanie usunięty razem z posiłkami.`
             : "Brak aktywnego planu do usunięcia."
         }
         title="Usuń plan posiłków"
@@ -516,18 +606,54 @@ function FoodSegment({
         </SectionCard>
       ) : null}
 
-      {canCreate && currentQuery.data ? (
+      {canCreate ? (
         <SectionCard title="Historia">
+          <View style={styles.weekPicker}>
+            <TextInput
+              onChangeText={setWeekStartInput}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor={theme.colors.textSubtle}
+              style={[styles.input, styles.weekInput]}
+              value={weekStartInput}
+            />
+            <ActionButton
+              disabled={!/^\d{4}-\d{2}-\d{2}$/.test(weekStartInput) || createWeekMutation.isPending}
+              loading={createWeekMutation.isPending}
+              onPress={() => createWeekMutation.mutate()}
+              title="Utwórz tydzień"
+              variant="secondary"
+            />
+          </View>
+          {createWeekMutation.error ? (
+            <InlineAlert text="Nie udało się utworzyć tygodnia. Podaj datę z wybranego tygodnia." tone="error" />
+          ) : null}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={styles.chips}>
+              {history.map((week) => (
+                <Chip
+                  active={selectedPlanId === week.id}
+                  key={week.id}
+                  onPress={() => setSelectedPlanId(week.id)}
+                  title={formatDate(week.weekStartDate)}
+                />
+              ))}
+            </View>
+          </ScrollView>
           <View style={styles.itemList}>
-            {history.slice(0, 3).map((week) => (
-              <HistoryRow key={week.id} week={week} />
+            {history.map((week) => (
+              <HistoryRow
+                active={selectedPlanId === week.id}
+                key={week.id}
+                onPress={() => setSelectedPlanId(week.id)}
+                week={week}
+              />
             ))}
           </View>
           {history.length === 0 ? (
-            <InlineAlert text="Brak wcześniejszych tygodni." />
+            <InlineAlert text="Brak zapisanych tygodni." />
           ) : null}
           <ActionButton
-            disabled={copyMutation.isPending}
+            disabled={!activePlan || copyMutation.isPending}
             loading={copyMutation.isPending}
             onPress={() => copyMutation.mutate()}
             title="Skopiuj na kolejny tydzień"
@@ -841,11 +967,15 @@ function NotesSegment({
   canCreate,
   canDelete,
   canUpdate,
+  onCreateActionHandled,
+  openCreateAction,
 }: {
   accessToken?: string | null;
   canCreate: boolean;
   canDelete: boolean;
   canUpdate: boolean;
+  onCreateActionHandled?: () => void;
+  openCreateAction?: boolean;
 }) {
   const queryClient = useQueryClient();
   const theme = useAppTheme();
@@ -910,6 +1040,16 @@ function NotesSegment({
     resetNoteForm();
     setNoteModalVisible(false);
   }
+
+  useEffect(() => {
+    if (!openCreateAction || !canCreate) {
+      return;
+    }
+
+    resetNoteForm();
+    setNoteModalVisible(true);
+    onCreateActionHandled?.();
+  }, [canCreate, onCreateActionHandled, openCreateAction]);
 
   return (
     <>
@@ -1164,17 +1304,25 @@ function Toolbar({
   );
 }
 
-function HistoryRow({ week }: { week: MealPlanSummary }) {
+function HistoryRow({
+  active,
+  onPress,
+  week,
+}: {
+  active: boolean;
+  onPress: () => void;
+  week: MealPlanSummary;
+}) {
   const theme = useAppTheme();
   const styles = useMemo(() => createStyles(theme.colors), [theme.colors]);
 
   return (
-    <View style={styles.compactRow}>
+    <Pressable onPress={onPress} style={[styles.compactRow, active && styles.compactRowActive]}>
       <Text style={styles.itemName}>
         Tydzień od {formatDate(week.weekStartDate)}
       </Text>
       <Text style={styles.itemQuantity}>{week.entriesCount} wpisów</Text>
-    </View>
+    </Pressable>
   );
 }
 
@@ -1260,6 +1408,23 @@ function currentWeekRange() {
     from: from.toISOString().slice(0, 10),
     to: to.toISOString().slice(0, 10),
   };
+}
+
+function normalizeWeekStartDate(value: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return currentWeekRange().from;
+  }
+
+  const date = new Date(`${value}T00:00:00.000Z`);
+
+  if (Number.isNaN(date.getTime())) {
+    return currentWeekRange().from;
+  }
+
+  const day = date.getUTCDay() === 0 ? 7 : date.getUTCDay();
+  date.setUTCDate(date.getUTCDate() - day + 1);
+
+  return date.toISOString().slice(0, 10);
 }
 
 function formatDate(value: string): string {
@@ -1412,6 +1577,10 @@ function createStyles(colors: AppPalette) {
       borderRadius: radii.control,
       gap: spacing.xs,
       padding: spacing.md,
+    },
+    compactRowActive: {
+      backgroundColor: colors.primarySoft,
+      borderColor: colors.primary,
     },
     flex: {
       flex: 1,
@@ -1566,6 +1735,15 @@ function createStyles(colors: AppPalette) {
     },
     timeInput: {
       width: 96,
+    },
+    weekInput: {
+      flex: 1,
+      minWidth: 134,
+    },
+    weekPicker: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.sm,
     },
     toolbar: {
       alignItems: "center",

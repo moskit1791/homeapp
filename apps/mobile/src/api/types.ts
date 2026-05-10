@@ -322,6 +322,14 @@ export interface CreateBudgetItemRequest {
   ownerMemberId: string;
 }
 
+export interface UpdateBudgetItemRequest {
+  budgetAmount?: number | null;
+  categoryId?: string;
+  displayOrder?: number;
+  name?: string;
+  ownerMemberId?: string;
+}
+
 export interface CreateExpenseRequest {
   amount: number;
   budgetItemId: string;
@@ -346,6 +354,37 @@ export interface Income {
   id: string;
   ownerMemberId: string;
   updatedAt: string;
+}
+
+export interface FinanceDebt {
+  amount: string;
+  createdAt: string;
+  dueDate: string | null;
+  householdId: string;
+  id: string;
+  isSettled: boolean;
+  lenderName: string;
+  note: string | null;
+  purpose: string;
+  settledAt: string | null;
+  updatedAt: string;
+}
+
+export interface CreateFinanceDebtRequest {
+  amount: number;
+  dueDate?: string | null;
+  lenderName: string;
+  note?: string | null;
+  purpose: string;
+}
+
+export interface UpdateFinanceDebtRequest {
+  amount?: number;
+  dueDate?: string | null;
+  isSettled?: boolean;
+  lenderName?: string;
+  note?: string | null;
+  purpose?: string;
 }
 
 export interface MealPlanWeek {
@@ -442,6 +481,7 @@ export interface CalendarEvent {
   ownerMemberId: string | null;
   recurrenceRule: string | null;
   scopeType: ScopeType;
+  sourceEventId?: string;
   title: string;
 }
 

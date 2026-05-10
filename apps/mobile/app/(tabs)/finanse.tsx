@@ -3,12 +3,13 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import {
   Archive,
   Banknote,
   ChevronLeft,
   ChevronRight,
+  Pencil,
   Plus,
   ReceiptText,
   Trash2,
@@ -18,18 +19,27 @@ import {
   createBudgetCategory,
   createBudgetItem,
   createExpense,
+  createFinanceDebt,
+  deleteBudgetItem,
+  deleteFinanceDebt,
   deleteBudgetMonth,
   generateNextBudgetMonth,
   getBudgetMonth,
   getFinanceSummary,
   listBudgetCategories,
   listBudgetMonths,
+  listFinanceDebts,
   queryKeys,
+  updateBudgetItem,
+  updateFinanceDebt,
   type BudgetCategoryWithItems,
+  type BudgetMonthDetail,
   type BudgetMonth,
+  type FinanceDebt,
   upsertIncome,
 } from "../../src/api";
 import { useModulePermission } from "../../src/permissions/use-permissions";
+import { loadStoredJson, saveStoredJson } from "../../src/session/secure-session-store";
 import { useSession } from "../../src/session/session-context";
 import { radii, spacing } from "../../src/theme/tokens";
 import { useAppTheme, type AppPalette } from "../../src/theme/use-app-theme";
@@ -46,6 +56,11 @@ import {
 
 type FinanceFormValues = {
   categoryName: string;
+  debtAmount: string;
+  debtDueDate: string;
+  debtLenderName: string;
+  debtNote: string;
+  debtPurpose: string;
   expenseAmount: string;
   incomeAmount: string;
   itemAmount: string;
@@ -56,6 +71,39 @@ type BudgetItem = BudgetCategoryWithItems["items"][number];
 type BudgetItemWithCategory = BudgetItem & {
   category: BudgetCategoryWithItems;
 };
+
+type FinanceModal = "menu" | "income" | "category" | "item" | "editItem" | "expense" | "copyAmounts" | "debt" | null;
+type FinanceSortKey = "category" | "owner" | "name" | "budget" | "spent" | "remaining";
+type FinanceSortDirection = "asc" | "desc";
+
+type FinanceFilters = {
+  categoryId: string;
+  onlyOverBudget: boolean;
+  ownerMemberId: string;
+  search: string;
+  sortBy: FinanceSortKey;
+  sortDirection: FinanceSortDirection;
+};
+
+const financeFilterStorageKey = "homeapp.finance.filters.v1";
+
+const defaultFinanceFilters: FinanceFilters = {
+  categoryId: "",
+  onlyOverBudget: false,
+  ownerMemberId: "",
+  search: "",
+  sortBy: "category",
+  sortDirection: "asc",
+};
+
+const financeSortOptions: Array<{ id: FinanceSortKey; label: string }> = [
+  { id: "category", label: "Kategoria" },
+  { id: "owner", label: "Osoba" },
+  { id: "name", label: "Pozycja" },
+  { id: "budget", label: "Budżet" },
+  { id: "spent", label: "Wydano" },
+  { id: "remaining", label: "Zostaje" },
+];
 
 export default function FinanseScreen() {
   const { session } = useSession();
@@ -69,6 +117,11 @@ export default function FinanseScreen() {
   const { control, setValue, watch } = useForm<FinanceFormValues>({
     defaultValues: {
       categoryName: "",
+      debtAmount: "",
+      debtDueDate: "",
+      debtLenderName: "",
+      debtNote: "",
+      debtPurpose: "",
       expenseAmount: "",
       incomeAmount: "",
       itemAmount: "",
@@ -81,15 +134,25 @@ export default function FinanseScreen() {
   const itemName = watch("itemName");
   const itemAmount = watch("itemAmount");
   const expenseAmount = watch("expenseAmount");
+  const debtAmount = watch("debtAmount");
+  const debtDueDate = watch("debtDueDate");
+  const debtLenderName = watch("debtLenderName");
+  const debtNote = watch("debtNote");
+  const debtPurpose = watch("debtPurpose");
   const [selectedIncomeMemberId, setSelectedIncomeMemberId] = useState("");
   const [selectedItemCategoryId, setSelectedItemCategoryId] = useState("");
   const [selectedItemOwnerId, setSelectedItemOwnerId] = useState("");
   const [selectedExpenseItemId, setSelectedExpenseItemId] = useState("");
   const [copyCategory, setCopyCategory] = useState(true);
+  const [activeFinanceView, setActiveFinanceView] = useState<"budget" | "debts">("budget");
   const [selectedMonthId, setSelectedMonthId] = useState<string | null>(null);
-  const [financeModal, setFinanceModal] = useState<
-    "menu" | "income" | "category" | "item" | "expense" | null
-  >(null);
+  const [financeModal, setFinanceModal] = useState<FinanceModal>(null);
+  const [editingBudgetItem, setEditingBudgetItem] = useState<BudgetItemWithCategory | null>(null);
+  const [editingDebt, setEditingDebt] = useState<FinanceDebt | null>(null);
+  const [copiedMonthDetail, setCopiedMonthDetail] = useState<BudgetMonthDetail | null>(null);
+  const [copyAmountInputs, setCopyAmountInputs] = useState<Record<string, string>>({});
+  const [financeFilters, setFinanceFilters] = useState<FinanceFilters>(defaultFinanceFilters);
+  const [financeFiltersLoaded, setFinanceFiltersLoaded] = useState(false);
   const [deleteMonthConfirmVisible, setDeleteMonthConfirmVisible] = useState(false);
   const [handledRouteAction, setHandledRouteAction] = useState<string | null>(null);
 
@@ -117,6 +180,11 @@ export default function FinanseScreen() {
     queryFn: () => listBudgetCategories({ accessToken }),
     queryKey: [...queryKeys.finances, "categories"],
   });
+  const debtsQuery = useQuery({
+    enabled: canRead && Boolean(accessToken),
+    queryFn: () => listFinanceDebts({ accessToken }),
+    queryKey: [...queryKeys.finances, "debts"],
+  });
 
   const currentSummary = currentQuery.data;
   const summary =
@@ -127,6 +195,13 @@ export default function FinanseScreen() {
   const incomes = currentSummary?.incomes ?? [];
   const categories = summary?.categories ?? [];
   const currentCategories = currentSummary?.categories ?? [];
+  const visibleFlatItems = useMemo<BudgetItemWithCategory[]>(
+    () =>
+      categories.flatMap((category) =>
+        getCategoryItems(category).map((item) => ({ ...item, category })),
+      ),
+    [categories],
+  );
   const flatItems = useMemo<BudgetItemWithCategory[]>(
     () =>
       currentCategories.flatMap((category) =>
@@ -139,6 +214,10 @@ export default function FinanseScreen() {
   const budgetAmount = Number(totals?.totalBudgetAmount ?? 0);
   const spentAmount = Number(totals?.totalSpentAmount ?? 0);
   const remainingAmount = Number(totals?.totalRemainingAmount ?? 0);
+  const debts = debtsQuery.data ?? [];
+  const openDebts = debts.filter((debt) => !debt.isSettled);
+  const settledDebts = debts.filter((debt) => debt.isSettled);
+  const openDebtTotal = openDebts.reduce((sum, debt) => sum + Number(debt.amount ?? 0), 0);
   const monthTabs = useMemo(() => {
     const months = [...(archiveQuery.data ?? []), ...(currentMonth ? [currentMonth] : [])];
     const unique = new Map<string, BudgetMonth>();
@@ -152,8 +231,33 @@ export default function FinanseScreen() {
   const selectedMonthIndex = monthTabs.findIndex((month) => month.id === selectedMonthId);
   const selectedMonth = monthTabs.find((month) => month.id === selectedMonthId) ?? visibleMonth;
   const showingArchiveMonth = Boolean(selectedMonthId) && selectedMonthId !== currentSummary?.month.id;
+  const canEditVisibleMonth = canUpdate && Boolean(selectedMonthId) && selectedMonthId === currentSummary?.month.id;
+  const canDeleteVisibleMonthItems = canDelete && Boolean(selectedMonthId) && selectedMonthId === currentSummary?.month.id;
   const canGoPreviousMonth = selectedMonthIndex > 0;
   const canGoNextMonth = selectedMonthIndex >= 0 && selectedMonthIndex < monthTabs.length - 1;
+  const copiedMonthItems = useMemo<BudgetItemWithCategory[]>(
+    () =>
+      (copiedMonthDetail?.categories ?? []).flatMap((category) =>
+        getCategoryItems(category).map((item) => ({ ...item, category })),
+      ),
+    [copiedMonthDetail],
+  );
+  const financeOwnerOptions = useMemo(() => {
+    const owners = new Map<string, string>();
+
+    incomes.forEach((income) => owners.set(income.ownerMemberId, income.displayName || income.email));
+    visibleFlatItems.forEach((item) => {
+      if (item.owner?.memberId) {
+        owners.set(item.owner.memberId, formatOwner(item.owner));
+      }
+    });
+
+    return [...owners.entries()].map(([id, label]) => ({ id, label }));
+  }, [incomes, visibleFlatItems]);
+  const filteredRows = useMemo(
+    () => applyFinanceFilters(visibleFlatItems, financeFilters),
+    [financeFilters, visibleFlatItems],
+  );
 
   function selectAdjacentMonth(direction: -1 | 1) {
     const nextMonth = monthTabs[selectedMonthIndex + direction];
@@ -170,6 +274,39 @@ export default function FinanseScreen() {
   }, [currentMonth?.id, selectedMonthId]);
 
   useEffect(() => {
+    let isMounted = true;
+
+    loadStoredJson<Partial<FinanceFilters>>(financeFilterStorageKey).then((storedFilters) => {
+      if (!isMounted) {
+        return;
+      }
+
+      if (storedFilters) {
+        setFinanceFilters({ ...defaultFinanceFilters, ...storedFilters });
+      }
+
+      setFinanceFiltersLoaded(true);
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!financeFiltersLoaded) {
+      return;
+    }
+
+    saveStoredJson(financeFilterStorageKey, financeFilters);
+  }, [financeFilters, financeFiltersLoaded]);
+
+  useEffect(() => {
+    if (!params.action) {
+      setHandledRouteAction(null);
+      return;
+    }
+
     if (params.action !== "expense" || handledRouteAction === params.action) {
       return;
     }
@@ -255,6 +392,70 @@ export default function FinanseScreen() {
       await invalidateFinance();
     },
   });
+  const updateItemMutation = useMutation({
+    mutationFn: () =>
+      updateBudgetItem(
+        editingBudgetItem?.id ?? "",
+        {
+          budgetAmount: itemAmount.trim() ? parseMoney(itemAmount) : null,
+          categoryId: selectedItemCategoryId,
+          name: itemName.trim(),
+          ownerMemberId: selectedItemOwnerId,
+        },
+        { accessToken },
+      ),
+    onSuccess: async (item) => {
+      setValue("itemName", "");
+      setValue("itemAmount", "");
+      setEditingBudgetItem(null);
+      setSelectedExpenseItemId(item.id);
+      setFinanceModal(null);
+      await invalidateFinance();
+    },
+  });
+  const deleteItemMutation = useMutation({
+    mutationFn: (budgetItemId: string) => deleteBudgetItem(budgetItemId, { accessToken }),
+    onSuccess: async (_, budgetItemId) => {
+      if (selectedExpenseItemId === budgetItemId) {
+        setSelectedExpenseItemId("");
+      }
+      await invalidateFinance();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.start });
+    },
+  });
+  const saveDebtMutation = useMutation({
+    mutationFn: () => {
+      const input = {
+        amount: parseMoney(debtAmount),
+        dueDate: debtDueDate.trim() ? debtDueDate.trim() : null,
+        lenderName: debtLenderName.trim(),
+        note: debtNote.trim() || null,
+        purpose: debtPurpose.trim(),
+      };
+
+      return editingDebt
+        ? updateFinanceDebt(editingDebt.id, input, { accessToken })
+        : createFinanceDebt(input, { accessToken });
+    },
+    onSuccess: async () => {
+      resetDebtForm();
+      setFinanceModal(null);
+      await invalidateFinance();
+    },
+  });
+  const settleDebtMutation = useMutation({
+    mutationFn: (debt: FinanceDebt) =>
+      updateFinanceDebt(debt.id, { isSettled: !debt.isSettled }, { accessToken }),
+    onSuccess: async () => {
+      await invalidateFinance();
+    },
+  });
+  const deleteDebtMutation = useMutation({
+    mutationFn: (debtId: string) => deleteFinanceDebt(debtId, { accessToken }),
+    onSuccess: async () => {
+      await invalidateFinance();
+    },
+  });
   const expenseMutation = useMutation({
     mutationFn: () =>
       createExpense(
@@ -275,6 +476,39 @@ export default function FinanseScreen() {
     mutationFn: () => generateNextBudgetMonth({ accessToken }),
     onSuccess: async (nextMonth) => {
       setSelectedMonthId(nextMonth.month.id);
+      setCopiedMonthDetail(nextMonth);
+      setCopyAmountInputs(
+        Object.fromEntries(
+          nextMonth.categories.flatMap((category) =>
+            getCategoryItems(category).map((item) => [item.id, item.budgetAmount ?? ""]),
+          ),
+        ),
+      );
+      setFinanceModal("copyAmounts");
+      await invalidateFinance();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.start });
+    },
+  });
+  const copyAmountsMutation = useMutation({
+    mutationFn: async () => {
+      await Promise.all(
+        copiedMonthItems.map((item) =>
+          updateBudgetItem(
+            item.id,
+            {
+              budgetAmount: copyAmountInputs[item.id]?.trim()
+                ? parseMoney(copyAmountInputs[item.id] ?? "")
+                : null,
+            },
+            { accessToken },
+          ),
+        ),
+      );
+    },
+    onSuccess: async () => {
+      setCopiedMonthDetail(null);
+      setCopyAmountInputs({});
+      setFinanceModal(null);
       await invalidateFinance();
       await queryClient.invalidateQueries({ queryKey: queryKeys.start });
     },
@@ -294,6 +528,49 @@ export default function FinanseScreen() {
     },
   });
 
+  function closeFinanceModal() {
+    setFinanceModal(null);
+    setEditingBudgetItem(null);
+    setEditingDebt(null);
+  }
+
+  function openEditBudgetItem(item: BudgetItemWithCategory) {
+    setEditingBudgetItem(item);
+    setSelectedItemCategoryId(item.categoryId);
+    setSelectedItemOwnerId(item.owner?.memberId ?? "");
+    setValue("itemName", item.name);
+    setValue("itemAmount", item.budgetAmount ? formatMoneyInput(item.budgetAmount) : "");
+    setFinanceModal("item");
+  }
+
+  function updateFinanceFilters(nextFilters: Partial<FinanceFilters>) {
+    setFinanceFilters((current) => ({ ...current, ...nextFilters }));
+  }
+
+  function resetDebtForm() {
+    setEditingDebt(null);
+    setValue("debtAmount", "");
+    setValue("debtDueDate", "");
+    setValue("debtLenderName", "");
+    setValue("debtNote", "");
+    setValue("debtPurpose", "");
+  }
+
+  function openCreateDebt() {
+    resetDebtForm();
+    setFinanceModal("debt");
+  }
+
+  function openEditDebt(debt: FinanceDebt) {
+    setEditingDebt(debt);
+    setValue("debtAmount", formatMoneyInput(debt.amount));
+    setValue("debtDueDate", debt.dueDate ?? "");
+    setValue("debtLenderName", debt.lenderName);
+    setValue("debtNote", debt.note ?? "");
+    setValue("debtPurpose", debt.purpose);
+    setFinanceModal("debt");
+  }
+
   const canSaveIncome =
     canUpdate && Boolean(selectedIncomeMemberId) && isValidMoney(incomeAmount);
   const canSaveCategory = canCreate && Boolean(categoryName.trim());
@@ -304,8 +581,28 @@ export default function FinanseScreen() {
     Boolean(selectedItemCategoryId) &&
     Boolean(selectedItemOwnerId) &&
     (!itemAmount.trim() || isValidMoney(itemAmount));
+  const canSaveEditedItem =
+    canUpdate &&
+    Boolean(editingBudgetItem?.id) &&
+    Boolean(itemName.trim()) &&
+    Boolean(selectedItemCategoryId) &&
+    Boolean(selectedItemOwnerId) &&
+    (!itemAmount.trim() || isValidMoney(itemAmount));
   const canSaveExpense =
     canCreate && Boolean(selectedExpenseItemId) && isPositiveMoney(expenseAmount);
+  const canSaveDebt =
+    (editingDebt ? canUpdate : canCreate) &&
+    Boolean(debtLenderName.trim()) &&
+    Boolean(debtPurpose.trim()) &&
+    isPositiveMoney(debtAmount) &&
+    (!debtDueDate.trim() || /^\d{4}-\d{2}-\d{2}$/.test(debtDueDate));
+  const canSaveCopyAmounts =
+    copiedMonthItems.length > 0 &&
+    copiedMonthItems.every((item) => {
+      const value = copyAmountInputs[item.id] ?? "";
+
+      return !value.trim() || isValidMoney(value);
+    });
   const canRemoveSelectedMonth =
     canDelete && Boolean(selectedMonthId) && monthTabs.length > 1 && !deleteMonthMutation.isPending;
 
@@ -334,7 +631,16 @@ export default function FinanseScreen() {
         isLoading={currentQuery.isLoading || selectedArchiveQuery.isLoading}
       />
 
-      {summary ? (
+      <SegmentedControl
+        onChange={(value) => setActiveFinanceView(value as "budget" | "debts")}
+        options={[
+          { label: "Budżet", value: "budget" },
+          { label: "Pożyczki", value: "debts" },
+        ]}
+        value={activeFinanceView}
+      />
+
+      {activeFinanceView === "budget" && summary ? (
         <>
           <View style={styles.monthSwitcherRow}>
             <View style={styles.monthSwitcher}>
@@ -420,7 +726,25 @@ export default function FinanseScreen() {
             </View>
           </ScrollView>
 
-          <FinanceSheet categories={categories} />
+          <FinanceFiltersPanel
+            categories={categories}
+            filters={financeFilters}
+            onChange={updateFinanceFilters}
+            owners={financeOwnerOptions}
+            resultCount={filteredRows.length}
+            totalCount={visibleFlatItems.length}
+          />
+
+          <FinanceSheet
+            canDelete={canDeleteVisibleMonthItems}
+            canUpdate={canEditVisibleMonth}
+            deletingItemId={
+              deleteItemMutation.isPending ? String(deleteItemMutation.variables ?? "") : null
+            }
+            onDelete={(item) => deleteItemMutation.mutate(item.id)}
+            onEdit={openEditBudgetItem}
+            rows={filteredRows}
+          />
 
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>RAZEM</Text>
@@ -438,7 +762,7 @@ export default function FinanseScreen() {
           ) : null}
 
           <FormModal
-            onClose={() => setFinanceModal(null)}
+            onClose={closeFinanceModal}
             subtitle="Wybierz, co chcesz dopisać do finansów."
             title="Dodaj w finansach"
             visible={financeModal === "menu"}
@@ -448,7 +772,15 @@ export default function FinanseScreen() {
                 <ActionButton onPress={() => setFinanceModal("income")} title="Zmień dochód" variant="secondary" />
               ) : null}
               <ActionButton onPress={() => setFinanceModal("category")} title="Dodaj kategorię" variant="secondary" />
-              <ActionButton onPress={() => setFinanceModal("item")} title="Dodaj pozycję budżetu" />
+              <ActionButton
+                onPress={() => {
+                  setEditingBudgetItem(null);
+                  setValue("itemName", "");
+                  setValue("itemAmount", "");
+                  setFinanceModal("item");
+                }}
+                title="Dodaj pozycję budżetu"
+              />
               <ActionButton onPress={() => setFinanceModal("expense")} title="Dodaj wydatek" variant="secondary" />
               <ActionButton
                 disabled={nextMonthMutation.isPending}
@@ -511,7 +843,7 @@ export default function FinanseScreen() {
             footer={
               <View style={styles.modalFooter}>
                 <ActionButton
-                  onPress={() => setFinanceModal(null)}
+                  onPress={closeFinanceModal}
                   style={styles.modalFooterButton}
                   title="Anuluj"
                   variant="secondary"
@@ -555,7 +887,7 @@ export default function FinanseScreen() {
             footer={
               <View style={styles.modalFooter}>
                 <ActionButton
-                  onPress={() => setFinanceModal(null)}
+                  onPress={closeFinanceModal}
                   style={styles.modalFooterButton}
                   title="Anuluj"
                   variant="secondary"
@@ -581,7 +913,7 @@ export default function FinanseScreen() {
               placeholder="Np. rachunki"
             />
             <View style={styles.switchRow}>
-              <Text style={styles.muted}>Kopiuj budżet do kolejnego miesiąca</Text>
+              <Text style={styles.muted}>Kopiuj pozycje do kolejnego miesiąca</Text>
               <Switch
                 onValueChange={setCopyCategory}
                 thumbColor={theme.colors.card}
@@ -601,23 +933,23 @@ export default function FinanseScreen() {
             footer={
               <View style={styles.modalFooter}>
                 <ActionButton
-                  onPress={() => setFinanceModal(null)}
+                  onPress={closeFinanceModal}
                   style={styles.modalFooterButton}
                   title="Anuluj"
                   variant="secondary"
                 />
                 <ActionButton
-                  disabled={!canSaveItem}
-                  loading={itemMutation.isPending}
-                  onPress={() => itemMutation.mutate()}
+                  disabled={editingBudgetItem ? !canSaveEditedItem : !canSaveItem}
+                  loading={editingBudgetItem ? updateItemMutation.isPending : itemMutation.isPending}
+                  onPress={() => (editingBudgetItem ? updateItemMutation.mutate() : itemMutation.mutate())}
                   style={styles.modalFooterButton}
-                  title="Dodaj"
+                  title={editingBudgetItem ? "Zapisz" : "Dodaj"}
                 />
               </View>
             }
-            onClose={() => setFinanceModal(null)}
-            subtitle="Pozycja to konkretny limit lub koszt w aktualnym miesiącu."
-            title="Dodaj pozycję budżetu"
+            onClose={closeFinanceModal}
+            subtitle={editingBudgetItem ? "Zmieniasz nazwę, osobę, kategorię albo limit tej pozycji." : "Pozycja to konkretny limit lub koszt w aktualnym miesiącu."}
+            title={editingBudgetItem ? "Edytuj pozycję budżetu" : "Dodaj pozycję budżetu"}
             visible={financeModal === "item"}
           >
             <TextField
@@ -651,8 +983,8 @@ export default function FinanseScreen() {
               onSelect={setSelectedItemOwnerId}
               selectedId={selectedItemOwnerId}
             />
-            {itemMutation.error ? (
-              <InlineAlert tone="error" text="Nie udało się dodać pozycji." />
+            {itemMutation.error || updateItemMutation.error ? (
+              <InlineAlert tone="error" text="Nie udało się zapisać pozycji." />
             ) : null}
           </FormModal>
 
@@ -699,6 +1031,125 @@ export default function FinanseScreen() {
               <InlineAlert tone="error" text="Nie udało się dodać wydatku." />
             ) : null}
           </FormModal>
+
+          <FormModal
+            footer={
+              <View style={styles.modalFooter}>
+                <ActionButton
+                  onPress={closeFinanceModal}
+                  style={styles.modalFooterButton}
+                  title="Później"
+                  variant="secondary"
+                />
+                <ActionButton
+                  disabled={!canSaveCopyAmounts}
+                  loading={copyAmountsMutation.isPending}
+                  onPress={() => copyAmountsMutation.mutate()}
+                  style={styles.modalFooterButton}
+                  title="Zapisz kwoty"
+                />
+              </View>
+            }
+            onClose={closeFinanceModal}
+            subtitle="Pozycje zostały skopiowane bez kwot. Wpisz tylko te limity, które znasz."
+            title="Kwoty nowego miesiąca"
+            visible={financeModal === "copyAmounts"}
+          >
+            <View style={styles.copyAmountList}>
+              {copiedMonthItems.map((item) => (
+                <View key={item.id} style={styles.copyAmountRow}>
+                  <View style={styles.copyAmountText}>
+                    <Text numberOfLines={1} style={styles.copyAmountTitle}>
+                      {item.name}
+                    </Text>
+                    <Text numberOfLines={1} style={styles.copyAmountMeta}>
+                      {item.category.name} / {formatOwner(item.owner)}
+                    </Text>
+                  </View>
+                  <TextInput
+                    keyboardType="decimal-pad"
+                    onChangeText={(value) =>
+                      setCopyAmountInputs((current) => ({ ...current, [item.id]: value }))
+                    }
+                    placeholder="0,00"
+                    placeholderTextColor={theme.colors.textSubtle}
+                    style={styles.copyAmountInput}
+                    value={copyAmountInputs[item.id] ?? ""}
+                  />
+                </View>
+              ))}
+            </View>
+            {copyAmountsMutation.error ? (
+              <InlineAlert tone="error" text="Nie udało się zapisać kwot nowego miesiąca." />
+            ) : null}
+          </FormModal>
+        </>
+      ) : null}
+
+      {activeFinanceView === "debts" ? (
+        <>
+          <View style={styles.debtSummary}>
+            <View>
+              <Text style={styles.debtSummaryLabel}>Do oddania</Text>
+              <Text style={styles.debtSummaryValue}>{formatMoney(openDebtTotal)}</Text>
+            </View>
+            <Text style={styles.debtSummaryMeta}>
+              {openDebts.length} aktywne / {settledDebts.length} spłacone
+            </Text>
+          </View>
+          <QueryState
+            emptyText="Brak pożyczek i debetów."
+            error={debtsQuery.error}
+            isEmpty={!debtsQuery.isLoading && debts.length === 0}
+            isLoading={debtsQuery.isLoading}
+          />
+          <FinanceDebtsList
+            canDelete={canDelete}
+            canUpdate={canUpdate}
+            deleting={deleteDebtMutation.isPending}
+            debts={debts}
+            onDelete={(debt) => deleteDebtMutation.mutate(debt.id)}
+            onEdit={openEditDebt}
+            onToggleSettled={(debt) => settleDebtMutation.mutate(debt)}
+            updating={settleDebtMutation.isPending}
+          />
+          {canCreate ? (
+            <Pressable onPress={openCreateDebt} style={styles.fab}>
+              <Plus color={theme.colors.card} size={25} />
+            </Pressable>
+          ) : null}
+          <FormModal
+            footer={
+              <View style={styles.modalFooter}>
+                <ActionButton
+                  onPress={closeFinanceModal}
+                  style={styles.modalFooterButton}
+                  title="Anuluj"
+                  variant="secondary"
+                />
+                <ActionButton
+                  disabled={!canSaveDebt}
+                  loading={saveDebtMutation.isPending}
+                  onPress={() => saveDebtMutation.mutate()}
+                  style={styles.modalFooterButton}
+                  title={editingDebt ? "Zapisz" : "Dodaj"}
+                />
+              </View>
+            }
+            onClose={closeFinanceModal}
+            subtitle="Ta lista jest poza miesięcznym budżetem i nie wpływa na podsumowania."
+            title={editingDebt ? "Edytuj pożyczkę" : "Dodaj pożyczkę/debet"}
+            visible={financeModal === "debt"}
+          >
+            <TextField control={control} keyboardType="decimal-pad" label="Kwota" name="debtAmount" placeholder="0,00" />
+            <TextField control={control} label="Od kogo" name="debtLenderName" placeholder="Np. rodzice, znajomy, bank" />
+            <TextField control={control} label="Na co" name="debtPurpose" placeholder="Np. naprawa auta" />
+            <TextField control={control} label="Termin oddania" name="debtDueDate" placeholder="YYYY-MM-DD, opcjonalnie" />
+            <TextField control={control} label="Notatka" name="debtNote" placeholder="Opcjonalnie" />
+            {saveDebtMutation.error ? (
+              <InlineAlert tone="error" text="Nie udało się zapisać pożyczki." />
+            ) : null}
+          </FormModal>
         </>
       ) : null}
     </AppScreen>
@@ -732,77 +1183,286 @@ function FinanceMetric({
   );
 }
 
-function FinanceSheet({ categories }: { categories: BudgetCategoryWithItems[] }) {
+function FinanceDebtsList({
+  canDelete,
+  canUpdate,
+  debts,
+  deleting,
+  onDelete,
+  onEdit,
+  onToggleSettled,
+  updating,
+}: {
+  canDelete: boolean;
+  canUpdate: boolean;
+  debts: FinanceDebt[];
+  deleting: boolean;
+  onDelete: (debt: FinanceDebt) => void;
+  onEdit: (debt: FinanceDebt) => void;
+  onToggleSettled: (debt: FinanceDebt) => void;
+  updating: boolean;
+}) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
 
-  if (categories.length === 0) {
-    return <InlineAlert text="Nie ma jeszcze kategorii budżetowych." />;
+  if (debts.length === 0) {
+    return null;
   }
+
+  return (
+    <View style={styles.debtList}>
+      {debts.map((debt) => (
+        <View key={debt.id} style={[styles.debtCard, debt.isSettled && styles.debtCardSettled]}>
+          <View style={styles.debtCardText}>
+            <Text numberOfLines={1} style={[styles.debtTitle, debt.isSettled && styles.debtSettledText]}>
+              {debt.purpose}
+            </Text>
+            <Text style={styles.debtMeta}>
+              {debt.lenderName}
+              {debt.dueDate ? ` / do ${formatDateShort(debt.dueDate)}` : ""}
+            </Text>
+            {debt.note ? <Text style={styles.debtNote}>{debt.note}</Text> : null}
+          </View>
+          <View style={styles.debtSide}>
+            <Text style={[styles.debtAmount, debt.isSettled && styles.debtSettledText]}>
+              {formatMoney(debt.amount)}
+            </Text>
+            <View style={styles.debtActions}>
+              {canUpdate ? (
+                <ActionButton
+                  disabled={updating}
+                  onPress={() => onToggleSettled(debt)}
+                  size="small"
+                  title={debt.isSettled ? "Cofnij" : "Spłacone"}
+                  variant={debt.isSettled ? "secondary" : "primary"}
+                />
+              ) : null}
+              {canUpdate ? (
+                <IconButton accessibilityLabel="Edytuj pożyczkę" onPress={() => onEdit(debt)}>
+                  <Pencil color={theme.colors.textMuted} size={15} />
+                </IconButton>
+              ) : null}
+              {canDelete ? (
+                <IconButton
+                  accessibilityLabel="Usuń pożyczkę"
+                  disabled={deleting}
+                  onPress={() => onDelete(debt)}
+                >
+                  <Trash2 color={theme.colors.danger} size={15} />
+                </IconButton>
+              ) : null}
+            </View>
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function FinanceFiltersPanel({
+  categories,
+  filters,
+  onChange,
+  owners,
+  resultCount,
+  totalCount,
+}: {
+  categories: BudgetCategoryWithItems[];
+  filters: FinanceFilters;
+  onChange: (filters: Partial<FinanceFilters>) => void;
+  owners: Array<{ id: string; label: string }>;
+  resultCount: number;
+  totalCount: number;
+}) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+
+  return (
+    <View style={styles.filterPanel}>
+      <View style={styles.filterHeader}>
+        <Text style={styles.filterTitle}>Widok budżetu</Text>
+        <Text style={styles.filterCount}>{resultCount}/{totalCount}</Text>
+      </View>
+      <TextInput
+        onChangeText={(search) => onChange({ search })}
+        placeholder="Szukaj pozycji"
+        placeholderTextColor={theme.colors.textSubtle}
+        style={styles.filterInput}
+        value={filters.search}
+      />
+      <View style={styles.filterGroup}>
+        <Text style={styles.filterLabel}>Osoba</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View style={styles.filterChipRow}>
+            <FilterChip active={!filters.ownerMemberId} label="Wszyscy" onPress={() => onChange({ ownerMemberId: "" })} />
+            {owners.map((owner) => (
+              <FilterChip
+                active={filters.ownerMemberId === owner.id}
+                key={owner.id}
+                label={owner.label}
+                onPress={() => onChange({ ownerMemberId: owner.id })}
+              />
+            ))}
+          </View>
+        </ScrollView>
+      </View>
+      <View style={styles.filterGroup}>
+        <Text style={styles.filterLabel}>Kategoria</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View style={styles.filterChipRow}>
+            <FilterChip active={!filters.categoryId} label="Wszystkie" onPress={() => onChange({ categoryId: "" })} />
+            {categories.map((category) => (
+              <FilterChip
+                active={filters.categoryId === category.id}
+                key={category.id}
+                label={category.name}
+                onPress={() => onChange({ categoryId: category.id })}
+              />
+            ))}
+          </View>
+        </ScrollView>
+      </View>
+      <View style={styles.filterGroup}>
+        <Text style={styles.filterLabel}>Sortowanie</Text>
+        <View style={styles.filterChipRow}>
+          {financeSortOptions.map((option) => (
+            <FilterChip
+              active={filters.sortBy === option.id}
+              key={option.id}
+              label={option.label}
+              onPress={() => onChange({ sortBy: option.id })}
+            />
+          ))}
+          <FilterChip
+            active={filters.sortDirection === "desc"}
+            label={filters.sortDirection === "asc" ? "Rosnąco" : "Malejąco"}
+            onPress={() =>
+              onChange({ sortDirection: filters.sortDirection === "asc" ? "desc" : "asc" })
+            }
+          />
+          <FilterChip
+            active={filters.onlyOverBudget}
+            label="Po limicie"
+            onPress={() => onChange({ onlyOverBudget: !filters.onlyOverBudget })}
+          />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function FilterChip({
+  active,
+  label,
+  onPress,
+}: {
+  active: boolean;
+  label: string;
+  onPress: () => void;
+}) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+
+  return (
+    <Pressable onPress={onPress} style={[styles.filterChip, active && styles.filterChipActive]}>
+      <Text numberOfLines={1} style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function FinanceSheet({
+  canDelete,
+  canUpdate,
+  deletingItemId,
+  onDelete,
+  onEdit,
+  rows,
+}: {
+  canDelete: boolean;
+  canUpdate: boolean;
+  deletingItemId: string | null;
+  onDelete: (item: BudgetItemWithCategory) => void;
+  onEdit: (item: BudgetItemWithCategory) => void;
+  rows: BudgetItemWithCategory[];
+}) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+
+  if (rows.length === 0) {
+    return <InlineAlert text="Brak pozycji pasujących do filtrów." />;
+  }
+
+  const groups = groupRowsByCategory(rows);
 
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sheetScroller}>
       <View style={styles.sheet}>
         <View style={styles.sheetHeader}>
           <Text style={[styles.headerCell, styles.personCell]}>Osoba</Text>
-          <Text style={[styles.headerCell, styles.categoryCell]}>Kategoria</Text>
+          <Text style={[styles.headerCell, styles.categoryCell]}>Pozycja</Text>
           <Text style={styles.amountHeaderCell}>Budżet</Text>
           <Text style={styles.amountHeaderCell}>Wydano</Text>
           <Text style={styles.amountHeaderCell}>Zostaje</Text>
+          {canUpdate || canDelete ? <Text style={styles.actionHeaderCell}>Akcje</Text> : null}
         </View>
-        {categories.map((category) => {
-          const items = getCategoryItems(category);
-          const planned = items.reduce((sum, item) => sum + Number(item.budgetAmount ?? 0), 0);
-          const spent = items.reduce((sum, item) => sum + Number(item.spentAmount ?? 0), 0);
-          const remaining = planned - spent;
-
-          return (
-            <View key={category.id}>
-              <View style={styles.categoryRow}>
-                <Text style={styles.categoryRowText}>{category.name.toUpperCase()}</Text>
-              </View>
-              {items.length === 0 ? (
-                <View style={styles.sheetRow}>
-                  <Text style={[styles.bodyCell, styles.personCell]}>-</Text>
-                  <Text style={[styles.bodyCell, styles.categoryCell]}>Brak pozycji</Text>
-                  <Text style={styles.amountCell}>-</Text>
-                  <Text style={styles.amountCell}>-</Text>
-                  <Text style={styles.amountCell}>-</Text>
-                </View>
-              ) : null}
-              {items.map((item) => (
-                <View key={item.id} style={styles.sheetRow}>
-                  <Text numberOfLines={1} style={[styles.bodyCell, styles.personCell]}>
-                    {formatOwner(item.owner)}
-                  </Text>
-                  <Text numberOfLines={1} style={[styles.bodyCell, styles.categoryCell]}>
-                    {item.name}
-                  </Text>
-                  <Text style={styles.amountCell}>{formatMoney(item.budgetAmount)}</Text>
-                  <Text style={styles.amountCell}>{formatMoney(item.spentAmount)}</Text>
-                  <Text
-                    style={[
-                      styles.amountCell,
-                      Number(item.remainingAmount ?? 0) < 0 && styles.dangerText,
-                      Number(item.remainingAmount ?? 0) >= 0 && styles.positiveText,
-                    ]}
-                  >
-                    {item.budgetAmount ? formatMoney(item.remainingAmount ?? 0) : "bez limitu"}
-                  </Text>
-                </View>
-              ))}
-              <View style={styles.sumRow}>
-                <Text style={[styles.sumCell, styles.personCell]}>Suma</Text>
-                <Text style={[styles.sumCell, styles.categoryCell]}>{category.name}</Text>
-                <Text style={styles.amountSumCell}>{formatMoney(planned)}</Text>
-                <Text style={styles.amountSumCell}>{formatMoney(spent)}</Text>
-                <Text style={[styles.amountSumCell, remaining < 0 && styles.dangerText]}>
-                  {formatMoney(remaining)}
-                </Text>
-              </View>
+        {groups.map((group) => (
+          <View key={group.category.id}>
+            <View style={styles.categoryRow}>
+              <Text style={styles.categoryRowText}>{group.category.name.toUpperCase()}</Text>
             </View>
-          );
-        })}
+            {group.items.map((item) => (
+              <View key={item.id} style={styles.sheetRow}>
+                <Text numberOfLines={1} style={[styles.bodyCell, styles.personCell]}>
+                  {formatOwner(item.owner)}
+                </Text>
+                <Text numberOfLines={1} style={[styles.bodyCell, styles.categoryCell]}>
+                  {item.name}
+                </Text>
+                <Text style={styles.amountCell}>{formatMoney(item.budgetAmount)}</Text>
+                <Text style={styles.amountCell}>{formatMoney(item.spentAmount)}</Text>
+                <Text
+                  style={[
+                    styles.amountCell,
+                    Number(item.remainingAmount ?? 0) < 0 && styles.dangerText,
+                    Number(item.remainingAmount ?? 0) >= 0 && styles.positiveText,
+                  ]}
+                >
+                  {item.budgetAmount ? formatMoney(item.remainingAmount ?? 0) : "bez limitu"}
+                </Text>
+                {canUpdate || canDelete ? (
+                  <View style={styles.actionCell}>
+                    {canUpdate ? (
+                      <IconButton accessibilityLabel="Edytuj pozycję" onPress={() => onEdit(item)}>
+                        <Pencil color={theme.colors.textMuted} size={15} />
+                      </IconButton>
+                    ) : null}
+                    {canDelete ? (
+                      <IconButton
+                        accessibilityLabel="Usuń pozycję"
+                        disabled={deletingItemId === item.id}
+                        onPress={() => onDelete(item)}
+                      >
+                        <Trash2 color={theme.colors.danger} size={15} />
+                      </IconButton>
+                    ) : null}
+                  </View>
+                ) : null}
+              </View>
+            ))}
+            <View style={styles.sumRow}>
+              <Text style={[styles.sumCell, styles.personCell]}>Suma</Text>
+              <Text style={[styles.sumCell, styles.categoryCell]}>{group.category.name}</Text>
+              <Text style={styles.amountSumCell}>{formatMoney(group.planned)}</Text>
+              <Text style={styles.amountSumCell}>{formatMoney(group.spent)}</Text>
+              <Text style={[styles.amountSumCell, group.remaining < 0 && styles.dangerText]}>
+                {formatMoney(group.remaining)}
+              </Text>
+              {canUpdate || canDelete ? <View style={styles.actionSumCell} /> : null}
+            </View>
+          </View>
+        ))}
       </View>
     </ScrollView>
   );
@@ -851,6 +1511,97 @@ function ChoiceSelector({
   );
 }
 
+function applyFinanceFilters(
+  rows: BudgetItemWithCategory[],
+  filters: FinanceFilters,
+): BudgetItemWithCategory[] {
+  const normalizedSearch = filters.search.trim().toLocaleLowerCase("pl-PL");
+
+  const filtered = rows.filter((row) => {
+    const ownerId = row.owner?.memberId ?? "";
+    const searchable = `${row.name} ${row.category.name} ${formatOwner(row.owner)}`.toLocaleLowerCase("pl-PL");
+
+    if (filters.ownerMemberId && ownerId !== filters.ownerMemberId) {
+      return false;
+    }
+
+    if (filters.categoryId && row.category.id !== filters.categoryId) {
+      return false;
+    }
+
+    if (filters.onlyOverBudget && Number(row.remainingAmount ?? 0) >= 0) {
+      return false;
+    }
+
+    return !normalizedSearch || searchable.includes(normalizedSearch);
+  });
+
+  return filtered.sort((left, right) => compareFinanceRows(left, right, filters));
+}
+
+function compareFinanceRows(
+  left: BudgetItemWithCategory,
+  right: BudgetItemWithCategory,
+  filters: FinanceFilters,
+): number {
+  const direction = filters.sortDirection === "asc" ? 1 : -1;
+  const textCompare = (a: string, b: string) => a.localeCompare(b, "pl-PL") * direction;
+  const numberCompare = (a: number, b: number) => (a - b) * direction;
+
+  switch (filters.sortBy) {
+    case "budget":
+      return numberCompare(Number(left.budgetAmount ?? 0), Number(right.budgetAmount ?? 0));
+    case "spent":
+      return numberCompare(Number(left.spentAmount ?? 0), Number(right.spentAmount ?? 0));
+    case "remaining":
+      return numberCompare(Number(left.remainingAmount ?? 0), Number(right.remainingAmount ?? 0));
+    case "owner":
+      return textCompare(formatOwner(left.owner), formatOwner(right.owner));
+    case "name":
+      return textCompare(left.name, right.name);
+    case "category":
+    default:
+      return (
+        textCompare(left.category.name, right.category.name) ||
+        numberCompare(left.displayOrder, right.displayOrder) ||
+        textCompare(left.name, right.name)
+      );
+  }
+}
+
+function groupRowsByCategory(rows: BudgetItemWithCategory[]) {
+  const groups = new Map<
+    string,
+    {
+      category: BudgetCategoryWithItems;
+      items: BudgetItemWithCategory[];
+      planned: number;
+      remaining: number;
+      spent: number;
+    }
+  >();
+
+  rows.forEach((row) => {
+    const group =
+      groups.get(row.category.id) ??
+      {
+        category: row.category,
+        items: [],
+        planned: 0,
+        remaining: 0,
+        spent: 0,
+      };
+
+    group.items.push(row);
+    group.planned += Number(row.budgetAmount ?? 0);
+    group.spent += Number(row.spentAmount ?? 0);
+    group.remaining += Number(row.remainingAmount ?? 0);
+    groups.set(row.category.id, group);
+  });
+
+  return [...groups.values()];
+}
+
 function getCategoryItems(category: BudgetCategoryWithItems): BudgetItem[] {
   return Array.isArray(category.items) ? category.items : [];
 }
@@ -860,7 +1611,10 @@ function formatOwner(owner: BudgetItem["owner"] | null | undefined): string {
 }
 
 function parseMoney(value: string): number {
-  return Number(value.replace(",", ".").trim());
+  const normalized = value.replace(/\s/g, "").replace(",", ".").trim();
+  const parsed = Number(normalized);
+
+  return Number.isFinite(parsed) ? Math.round(parsed * 100) / 100 : Number.NaN;
 }
 
 function isValidMoney(value: string): boolean {
@@ -877,10 +1631,26 @@ function isPositiveMoney(value: string): boolean {
 
 function formatMoney(value: string | number | null | undefined): string {
   const amount = Number(value ?? 0);
+  const safeAmount = Number.isFinite(amount) ? amount : 0;
 
-  return `${(Number.isFinite(amount) ? amount : 0).toLocaleString("pl-PL", {
-    maximumFractionDigits: 0,
+  return `${safeAmount.toLocaleString("pl-PL", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: Number.isInteger(safeAmount) ? 0 : 2,
   })} zł`;
+}
+
+function formatMoneyInput(value: string | number | null | undefined): string {
+  const amount = Number(value ?? 0);
+
+  return Number.isFinite(amount) ? String(amount).replace(".", ",") : "";
+}
+
+function formatDateShort(value: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return value;
+  }
+
+  return `${value.slice(8, 10)}.${value.slice(5, 7)}`;
 }
 
 function formatMonthShort(month: BudgetMonth): string {
@@ -906,6 +1676,34 @@ function createStyles(colors: AppPalette) {
   return StyleSheet.create({
     actionPicker: {
       gap: spacing.sm,
+    },
+    actionCell: {
+      alignItems: "center",
+      borderColor: colors.line,
+      borderLeftWidth: 1,
+      flexDirection: "row",
+      gap: spacing.xs,
+      justifyContent: "center",
+      minHeight: 38,
+      width: 78,
+    },
+    actionHeaderCell: {
+      backgroundColor: colors.cardMuted,
+      borderColor: colors.line,
+      borderLeftWidth: 1,
+      color: colors.text,
+      fontSize: 10,
+      fontWeight: "900",
+      letterSpacing: 0,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 8,
+      textAlign: "center",
+      width: 78,
+    },
+    actionSumCell: {
+      borderColor: colors.line,
+      borderLeftWidth: 1,
+      width: 78,
     },
     amountCell: {
       borderColor: colors.line,
@@ -956,14 +1754,14 @@ function createStyles(colors: AppPalette) {
       width: 92,
     },
     categoryRow: {
-      backgroundColor: colors.primarySoft,
+      backgroundColor: colors.cardMuted,
       borderColor: colors.line,
       borderTopWidth: 1,
       paddingHorizontal: spacing.sm,
       paddingVertical: 6,
     },
     categoryRowText: {
-      color: colors.primaryDark,
+      color: colors.text,
       fontSize: 11,
       fontWeight: "900",
       letterSpacing: 0,
@@ -993,6 +1791,140 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
       lineHeight: 19,
     },
+    debtActions: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.xs,
+      justifyContent: "flex-end",
+    },
+    debtAmount: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: "900",
+      letterSpacing: 0,
+      textAlign: "right",
+    },
+    debtCard: {
+      alignItems: "flex-start",
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      padding: spacing.md,
+    },
+    debtCardSettled: {
+      backgroundColor: colors.cardMuted,
+      opacity: 0.82,
+    },
+    debtCardText: {
+      flex: 1,
+      gap: 3,
+      minWidth: 0,
+    },
+    debtList: {
+      gap: spacing.sm,
+    },
+    debtMeta: {
+      color: colors.textMuted,
+      fontSize: 12,
+      letterSpacing: 0,
+    },
+    debtNote: {
+      color: colors.textMuted,
+      fontSize: 12,
+      letterSpacing: 0,
+      lineHeight: 17,
+    },
+    debtSettledText: {
+      color: colors.textSubtle,
+      textDecorationLine: "line-through",
+    },
+    debtSide: {
+      alignItems: "flex-end",
+      gap: spacing.sm,
+      minWidth: 104,
+    },
+    debtSummary: {
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      gap: spacing.md,
+      padding: spacing.md,
+    },
+    debtSummaryLabel: {
+      color: colors.textMuted,
+      fontSize: 11,
+      fontWeight: "900",
+      letterSpacing: 0,
+      textTransform: "uppercase",
+    },
+    debtSummaryMeta: {
+      color: colors.textMuted,
+      fontSize: 12,
+      fontWeight: "800",
+      letterSpacing: 0,
+      textAlign: "right",
+    },
+    debtSummaryValue: {
+      color: colors.danger,
+      fontSize: 20,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    debtTitle: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    copyAmountInput: {
+      backgroundColor: colors.field,
+      borderColor: colors.border,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: "800",
+      minHeight: 38,
+      paddingHorizontal: spacing.sm,
+      textAlign: "right",
+      width: 92,
+    },
+    copyAmountList: {
+      gap: spacing.xs,
+    },
+    copyAmountMeta: {
+      color: colors.textMuted,
+      fontSize: 11,
+      letterSpacing: 0,
+    },
+    copyAmountRow: {
+      alignItems: "center",
+      backgroundColor: colors.cardMuted,
+      borderColor: colors.border,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      padding: spacing.sm,
+    },
+    copyAmountText: {
+      flex: 1,
+      gap: 2,
+      minWidth: 0,
+    },
+    copyAmountTitle: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
     fab: {
       alignItems: "center",
       alignSelf: "flex-end",
@@ -1007,6 +1939,80 @@ function createStyles(colors: AppPalette) {
       shadowOpacity: 0.26,
       shadowRadius: 18,
       width: 54,
+    },
+    filterChip: {
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      justifyContent: "center",
+      minHeight: 32,
+      paddingHorizontal: spacing.sm,
+    },
+    filterChipActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    filterChipRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: spacing.xs,
+      paddingRight: spacing.md,
+    },
+    filterChipText: {
+      color: colors.textMuted,
+      fontSize: 11,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    filterChipTextActive: {
+      color: colors.inverseText,
+    },
+    filterCount: {
+      color: colors.textMuted,
+      fontSize: 11,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    filterGroup: {
+      gap: spacing.xs,
+    },
+    filterHeader: {
+      alignItems: "center",
+      flexDirection: "row",
+      justifyContent: "space-between",
+    },
+    filterInput: {
+      backgroundColor: colors.field,
+      borderColor: colors.border,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      color: colors.text,
+      fontSize: 13,
+      minHeight: 40,
+      paddingHorizontal: spacing.sm,
+    },
+    filterLabel: {
+      color: colors.textMuted,
+      fontSize: 11,
+      fontWeight: "900",
+      letterSpacing: 0,
+      textTransform: "uppercase",
+    },
+    filterPanel: {
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      gap: spacing.sm,
+      padding: spacing.sm,
+    },
+    filterTitle: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: "900",
+      letterSpacing: 0,
     },
     headerCell: {
       backgroundColor: colors.cardMuted,
@@ -1162,7 +2168,7 @@ function createStyles(colors: AppPalette) {
       paddingVertical: 7,
     },
     sumRow: {
-      backgroundColor: colors.primarySoft,
+      backgroundColor: colors.warningSoft,
       borderColor: colors.line,
       borderTopWidth: 1,
       flexDirection: "row",

@@ -1,5 +1,6 @@
 param(
   [string]$ApiUrl = $env:EXPO_PUBLIC_API_URL,
+  [string]$GoogleOAuthClientId = $env:EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID,
   [switch]$UseLanApi,
   [string]$WorkDir
 )
@@ -36,6 +37,10 @@ if (-not $ApiUrl) {
   } else {
     $ApiUrl = $ProductionApiUrl
   }
+}
+
+if (-not $GoogleOAuthClientId) {
+  $GoogleOAuthClientId = $env:GOOGLE_OAUTH_CLIENT_ID
 }
 
 $repoRoot = Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')
@@ -90,6 +95,10 @@ Set-Content -LiteralPath (Join-Path $resolvedWorkDir.Path '.npmrc') -Value "node
 Push-Location $resolvedWorkDir.Path
 try {
   $env:EXPO_PUBLIC_API_URL = $ApiUrl
+  if ($GoogleOAuthClientId) {
+    $env:EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID = $GoogleOAuthClientId
+    $env:GOOGLE_OAUTH_CLIENT_ID = $GoogleOAuthClientId
+  }
 
   pnpm.cmd install
   pnpm.cmd --filter @homeapp/mobile typecheck
@@ -117,5 +126,6 @@ Copy-Item -LiteralPath $sourceApk -Destination $latestApk -Force
 Copy-Item -LiteralPath $sourceApk -Destination $stampedApk -Force
 
 Write-Host "Built standalone APK with EXPO_PUBLIC_API_URL=$ApiUrl"
+Write-Host ("Google OAuth client ID included: " + [string][bool]$GoogleOAuthClientId)
 Get-Item -LiteralPath $latestApk, $stampedApk |
   Select-Object FullName, Length, LastWriteTime

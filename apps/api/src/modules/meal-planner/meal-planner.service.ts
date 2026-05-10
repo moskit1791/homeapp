@@ -31,6 +31,16 @@ export class MealPlannerService {
     return this.getPlanDetail(householdId, plan.id);
   }
 
+  async getPlan(householdId: string, mealPlanId: string): Promise<MealPlanDetail | null> {
+    const plan = await this.findPlan(householdId, mealPlanId);
+
+    if (!plan) {
+      return null;
+    }
+
+    return this.getPlanDetail(householdId, plan.id);
+  }
+
   async listHistory(householdId: string): Promise<MealPlanSummary[]> {
     const result = await this.database.query<MealPlanSummaryRow>(
       `

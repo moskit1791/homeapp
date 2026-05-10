@@ -11,6 +11,7 @@ import {
   createCalendarEvent,
   createNote,
   createTodoItem,
+  deleteCalendarEvent,
   deleteNote,
   deleteTodoItem,
   listCalendarEvents,
@@ -19,6 +20,7 @@ import {
   listTodoItems,
   queryKeys,
   reopenTodoItem,
+  updateCalendarEvent,
   updateNote,
 } from "../../src/api";
 import { hasModuleRead, usePermissions } from "../../src/permissions/use-permissions";
@@ -65,6 +67,7 @@ export default function KalendarzScreen() {
   const [eventDate, setEventDate] = useState(todayIso());
   const [eventTime, setEventTime] = useState("");
   const [eventNote, setEventNote] = useState("");
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [eventModalVisible, setEventModalVisible] = useState(false);
   const permissions = permissionsQuery.data;
   const readableAgenda = agendaSegments.filter(
@@ -98,32 +101,75 @@ export default function KalendarzScreen() {
     (event) => event.eventDate === selectedDate,
   );
   const queryClient = useQueryClient();
-  const createEventMutation = useMutation({
+  const saveEventMutation = useMutation({
     mutationFn: () =>
-      createCalendarEvent(
-        {
-          eventDate,
-          eventTime: normalizeEventTime(eventTime),
-          note: eventNote.trim() || null,
-          scopeType: "household",
-          title: eventTitle.trim(),
-        },
-        { accessToken },
-      ),
+      editingEvent
+        ? updateCalendarEvent(
+            getEditableCalendarEventId(editingEvent),
+            {
+              eventDate,
+              eventTime: normalizeEventTime(eventTime),
+              note: eventNote.trim() || null,
+              scopeType: editingEvent.scopeType,
+              title: eventTitle.trim(),
+            },
+            { accessToken },
+          )
+        : createCalendarEvent(
+            {
+              eventDate,
+              eventTime: normalizeEventTime(eventTime),
+              note: eventNote.trim() || null,
+              scopeType: "household",
+              title: eventTitle.trim(),
+            },
+            { accessToken },
+          ),
     onSuccess: async () => {
-      setEventTitle("");
-      setEventTime("");
-      setEventNote("");
-      setEventModalVisible(false);
+      closeEventModal();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.calendar });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.start });
+    },
+  });
+  const deleteEventMutation = useMutation({
+    mutationFn: (event: CalendarEvent) =>
+      deleteCalendarEvent(getEditableCalendarEventId(event), { accessToken }),
+    onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.calendar });
       await queryClient.invalidateQueries({ queryKey: queryKeys.start });
     },
   });
   const canSaveEvent =
-    calendarPermission.canCreate &&
+    (editingEvent ? calendarPermission.canUpdate : calendarPermission.canCreate) &&
     Boolean(eventTitle.trim()) &&
     /^\d{4}-\d{2}-\d{2}$/.test(eventDate) &&
     isOptionalTimeInputValid(eventTime);
+
+  function openCreateEvent(date = selectedDate) {
+    setEditingEvent(null);
+    setEventTitle("");
+    setEventDate(date);
+    setEventTime("");
+    setEventNote("");
+    setEventModalVisible(true);
+  }
+
+  function openEditEvent(event: CalendarEvent) {
+    setEditingEvent(event);
+    setEventTitle(event.title);
+    setEventDate(event.eventDate);
+    setEventTime(event.eventTime?.slice(0, 5) ?? "");
+    setEventNote(event.note ?? "");
+    setEventModalVisible(true);
+  }
+
+  function closeEventModal() {
+    setEditingEvent(null);
+    setEventTitle("");
+    setEventTime("");
+    setEventNote("");
+    setEventModalVisible(false);
+  }
 
   if (permissionsQuery.isLoading) {
     return (
@@ -148,7 +194,7 @@ export default function KalendarzScreen() {
           {calendarPermission.canCreate ? (
             <IconButton
               accessibilityLabel="Dodaj wydarzenie"
-              onPress={() => setEventModalVisible(true)}
+              onPress={() => openCreateEvent()}
             >
               <CalendarPlus color={theme.colors.text} size={18} />
             </IconButton>
@@ -201,8 +247,13 @@ export default function KalendarzScreen() {
 
       {calendarPermission.canRead ? (
         <UpcomingEvents
+          canDelete={calendarPermission.canDelete}
+          canUpdate={calendarPermission.canUpdate}
           date={selectedDate}
+          deleting={deleteEventMutation.isPending}
           events={selectedDayEvents}
+          onDelete={(event) => deleteEventMutation.mutate(event)}
+          onEdit={openEditEvent}
           query={monthEventsQuery}
         />
       ) : null}
@@ -222,23 +273,23 @@ export default function KalendarzScreen() {
         footer={
           <View style={styles.modalFooter}>
             <ActionButton
-              onPress={() => setEventModalVisible(false)}
+              onPress={closeEventModal}
               style={styles.modalFooterButton}
               title="Anuluj"
               variant="secondary"
             />
             <ActionButton
               disabled={!canSaveEvent}
-              loading={createEventMutation.isPending}
-              onPress={() => createEventMutation.mutate()}
+              loading={saveEventMutation.isPending}
+              onPress={() => saveEventMutation.mutate()}
               style={styles.modalFooterButton}
-              title="Dodaj"
+              title={editingEvent ? "Zapisz" : "Dodaj"}
             />
           </View>
         }
-        onClose={() => setEventModalVisible(false)}
-        subtitle="Wpis trafi do kalendarza domowego."
-        title="Dodaj wydarzenie"
+        onClose={closeEventModal}
+        subtitle={editingEvent ? "Zmieniasz wpis w kalendarzu domowym." : "Wpis trafi do kalendarza domowego."}
+        title={editingEvent ? "Edytuj wydarzenie" : "Dodaj wydarzenie"}
         visible={eventModalVisible}
       >
         <TextInput
@@ -274,7 +325,7 @@ export default function KalendarzScreen() {
           style={[styles.input, styles.textArea]}
           value={eventNote}
         />
-        {createEventMutation.error ? (
+        {saveEventMutation.error ? (
           <InlineAlert text="Nie udało się dodać wydarzenia." tone="error" />
         ) : null}
       </FormModal>
@@ -362,12 +413,22 @@ function CalendarMonth({
 }
 
 function UpcomingEvents({
+  canDelete,
+  canUpdate,
   date,
+  deleting,
   events,
+  onDelete,
+  onEdit,
   query,
 }: {
+  canDelete: boolean;
+  canUpdate: boolean;
   date: string;
+  deleting: boolean;
   events: CalendarEvent[];
+  onDelete: (event: CalendarEvent) => void;
+  onEdit: (event: CalendarEvent) => void;
   query: { error: unknown; isLoading: boolean };
 }) {
   const theme = useAppTheme();
@@ -397,6 +458,24 @@ function UpcomingEvents({
               {[formatDate(event.eventDate), event.eventTime?.slice(0, 5)].filter(Boolean).join(" / ")}
             </Text>
           </View>
+          {canUpdate || canDelete ? (
+            <View style={styles.eventPillActions}>
+              {canUpdate ? (
+                <IconButton accessibilityLabel="Edytuj wydarzenie" onPress={() => onEdit(event)}>
+                  <Pencil color={theme.colors.textMuted} size={15} />
+                </IconButton>
+              ) : null}
+              {canDelete ? (
+                <IconButton
+                  accessibilityLabel="Usuń wydarzenie"
+                  disabled={deleting}
+                  onPress={() => onDelete(event)}
+                >
+                  <Trash2 color={theme.colors.danger} size={15} />
+                </IconButton>
+              ) : null}
+            </View>
+          ) : null}
         </View>
       ))}
     </View>
@@ -826,6 +905,10 @@ function normalizeEventTime(value: string): string | null {
   return trimmed ? trimmed : null;
 }
 
+function getEditableCalendarEventId(event: CalendarEvent): string {
+  return event.sourceEventId ?? event.id.split(":")[0] ?? event.id;
+}
+
 function formatDateTime(value: string): string {
   const date = new Date(value);
 
@@ -929,6 +1012,12 @@ function createStyles(colors: AppPalette) {
       gap: spacing.sm,
       minHeight: 52,
       padding: spacing.sm,
+    },
+    eventPillActions: {
+      alignItems: "center",
+      flexDirection: "row",
+      flexShrink: 0,
+      gap: spacing.xs,
     },
     eventPillText: {
       flex: 1,
