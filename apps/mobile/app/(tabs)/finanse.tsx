@@ -635,7 +635,7 @@ export default function FinanseScreen() {
         onChange={(value) => setActiveFinanceView(value as "budget" | "debts")}
         options={[
           { label: "Budżet", value: "budget" },
-          { label: "Pożyczki", value: "debts" },
+          { label: "Pożyczki/Debety", value: "debts" },
         ]}
         value={activeFinanceView}
       />

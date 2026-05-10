@@ -65,6 +65,7 @@ $excludedDirectories = @(
   (Join-Path $repoPath 'node_modules'),
   (Join-Path $repoPath '.git'),
   (Join-Path $repoPath '.turbo'),
+  '.tmp-apk-build-*',
   (Join-Path $repoPath 'apps\mobile\.expo'),
   (Join-Path $repoPath 'apps\mobile\android\build'),
   (Join-Path $repoPath 'apps\mobile\tmp-assets'),
