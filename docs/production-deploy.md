@@ -16,6 +16,10 @@ Nie commituj tu surowych hasel, tokenow Proxmox ani pliku `.env`; do deployu wys
 Proxmox jest potrzebny tylko awaryjnie, gdy trzeba sprawdzic konfiguracje kontenera albo odzyskac dostep SSH.
 Zwykly deploy idzie bezposrednio po SSH na `homeapp@192.168.100.246`.
 
+Uwaga z deployu 2026-05-13: `/opt/homeapp` na produkcji jest kopia plikow bez katalogu `.git`.
+Jesli ten stan sie nie zmieni, nie uzywaj tam `git pull`; przenies zmienione pliki backendu przez `scp`
+i dopiero potem przebuduj Compose.
+
 ## Szybki deploy z Windows
 
 Z katalogu repo na komputerze:
@@ -74,6 +78,24 @@ Oczekiwany wynik healthchecka:
 
 ```json
 {"status":"ok","service":"homeapp-api"}
+```
+
+## Deploy bez `.git` na produkcji
+
+Z lokalnego repo skopiuj zmienione pliki backendu, na przyklad:
+
+```powershell
+$key = "$env:USERPROFILE\.ssh\homeapp_prod_ed25519"
+scp -i $key apps/api/src/modules/calendar/calendar.service.ts homeapp@192.168.100.246:/opt/homeapp/apps/api/src/modules/calendar/calendar.service.ts
+```
+
+Potem na serwerze:
+
+```bash
+cd /opt/homeapp
+docker compose -f compose.prod.yml --env-file .env up -d --build
+docker compose -f compose.prod.yml --env-file .env ps
+curl -fsS http://127.0.0.1:3003/api/health
 ```
 
 ## Gdzie trzymac sekrety
