@@ -216,6 +216,25 @@ export interface BulkShoppingResult {
   moved?: number;
 }
 
+export interface ImportShoppingItemsWithAiRequest {
+  message: string;
+}
+
+export interface ShoppingAiSourceFragment {
+  id: string;
+  text: string;
+}
+
+export interface ImportShoppingItemsWithAiResponse {
+  ignoredSourceFragments: Array<{
+    id: string;
+    reason: string;
+  }>;
+  importedCount: number;
+  items: ShoppingItem[];
+  sourceFragments: ShoppingAiSourceFragment[];
+}
+
 export interface BudgetMonth {
   archivedAt: string | null;
   createdAt: string;

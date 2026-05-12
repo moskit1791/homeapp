@@ -51,3 +51,9 @@ export class MoveShoppingItemDto {
   @IsIn([...SHOPPING_LIST_TYPES])
   targetType!: ShoppingListType;
 }
+
+export class ImportShoppingItemsWithAiDto {
+  @IsString()
+  @Length(3, 5000)
+  message!: string;
+}

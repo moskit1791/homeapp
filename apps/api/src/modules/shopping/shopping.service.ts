@@ -2,8 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { PoolClient } from 'pg';
 import { DatabaseService } from '../database/database.service';
 import { RealtimeService } from '../realtime/realtime.service';
+import { ShoppingAiService, type ShoppingAiSourceFragment } from './shopping-ai.service';
 import {
   CreateShoppingItemDto,
+  ImportShoppingItemsWithAiDto,
   MoveShoppingItemDto,
   ShoppingListType,
   UpdateShoppingItemDto
@@ -13,7 +15,8 @@ import {
 export class ShoppingService {
   constructor(
     private readonly database: DatabaseService,
-    private readonly realtime: RealtimeService
+    private readonly realtime: RealtimeService,
+    private readonly shoppingAi: ShoppingAiService
   ) {}
 
   async listShoppingLists(householdId: string): Promise<ShoppingListRecord[]> {
@@ -83,68 +86,52 @@ export class ShoppingService {
 
     const item = await this.database.transaction(async (client) => {
       const listId = await this.getListId(client, householdId, type);
-      const existing = await this.findDuplicateUncheckedItem(
-        client,
-        listId,
-        normalizeProductName(dto.name)
-      );
 
-      if (existing) {
-        const result = await client.query<ShoppingItemRow>(
-          `
-            update shopping_list_items
-            set quantity = $2
-            where id = $1
-            returning
-              id,
-              shopping_list_id,
-              $3::uuid as household_id,
-              $4::shopping_list_type as type,
-              name,
-              quantity,
-              is_checked,
-              checked_at,
-              display_order,
-              created_at,
-              updated_at
-          `,
-          [existing.id, mergeQuantity(existing.quantity, dto.quantity), householdId, type]
-        );
-
-        return this.mapItemOrThrow(result.rows[0]);
-      }
-
-      const displayOrder = dto.displayOrder ?? (await this.nextDisplayOrder(client, listId));
-      const result = await client.query<ShoppingItemRow>(
-        `
-          insert into shopping_list_items (
-            shopping_list_id,
-            name,
-            quantity,
-            display_order
-          )
-          values ($1, $2, $3, $4)
-          returning
-            id,
-            shopping_list_id,
-            $5::uuid as household_id,
-            $6::shopping_list_type as type,
-            name,
-            quantity,
-            is_checked,
-            checked_at,
-            display_order,
-            created_at,
-            updated_at
-        `,
-        [listId, dto.name.trim(), dto.quantity?.trim() ?? '', displayOrder, householdId, type]
-      );
-
-      return this.mapItemOrThrow(result.rows[0]);
+      return this.upsertItemInList(client, householdId, type, listId, dto);
     });
     this.realtime.publish(householdId, 'shopping.changed', item.id);
 
     return item;
+  }
+
+  async importItemsWithAi(
+    householdId: string,
+    type: ShoppingListType,
+    dto: ImportShoppingItemsWithAiDto
+  ): Promise<ShoppingAiImportResult> {
+    const plan = await this.shoppingAi.planImport(dto.message);
+
+    await this.ensureShoppingState(householdId);
+
+    const items = await this.database.transaction(async (client) => {
+      const listId = await this.getListId(client, householdId, type);
+      let displayOrder = await this.nextDisplayOrder(client, listId);
+      const importedItems: ShoppingItemRecord[] = [];
+
+      for (const item of plan.items) {
+        importedItems.push(
+          await this.upsertItemInList(client, householdId, type, listId, {
+            displayOrder,
+            name: item.name,
+            quantity: item.quantity
+          })
+        );
+        displayOrder += 1;
+      }
+
+      return importedItems;
+    });
+
+    if (items.length > 0) {
+      this.realtime.publish(householdId, 'shopping.changed', 'ai-import');
+    }
+
+    return {
+      ignoredSourceFragments: plan.ignoredSourceFragments,
+      importedCount: items.length,
+      items,
+      sourceFragments: plan.sourceFragments
+    };
   }
 
   async updateItem(
@@ -366,6 +353,73 @@ export class ShoppingService {
     }
 
     return { moved };
+  }
+
+  private async upsertItemInList(
+    client: PoolClient,
+    householdId: string,
+    type: ShoppingListType,
+    listId: string,
+    dto: CreateShoppingItemDto
+  ): Promise<ShoppingItemRecord> {
+    const existing = await this.findDuplicateUncheckedItem(
+      client,
+      listId,
+      normalizeProductName(dto.name)
+    );
+
+    if (existing) {
+      const result = await client.query<ShoppingItemRow>(
+        `
+          update shopping_list_items
+          set quantity = $2
+          where id = $1
+          returning
+            id,
+            shopping_list_id,
+            $3::uuid as household_id,
+            $4::shopping_list_type as type,
+            name,
+            quantity,
+            is_checked,
+            checked_at,
+            display_order,
+            created_at,
+            updated_at
+        `,
+        [existing.id, mergeQuantity(existing.quantity, dto.quantity), householdId, type]
+      );
+
+      return this.mapItemOrThrow(result.rows[0]);
+    }
+
+    const displayOrder = dto.displayOrder ?? (await this.nextDisplayOrder(client, listId));
+    const result = await client.query<ShoppingItemRow>(
+      `
+        insert into shopping_list_items (
+          shopping_list_id,
+          name,
+          quantity,
+          display_order
+        )
+        values ($1, $2, $3, $4)
+        returning
+          id,
+          shopping_list_id,
+          $5::uuid as household_id,
+          $6::shopping_list_type as type,
+          name,
+          quantity,
+          is_checked,
+          checked_at,
+          display_order,
+          created_at,
+          updated_at
+      `,
+      [listId, dto.name.trim(), dto.quantity?.trim() ?? '', displayOrder, householdId, type]
+    );
+
+    return this.mapItemOrThrow(result.rows[0]);
   }
 
   private async findItem(householdId: string, id: string): Promise<ShoppingItemRecord | null> {
@@ -691,4 +745,14 @@ export interface ShoppingItemRecord {
   shoppingListId: string;
   type: ShoppingListType;
   updatedAt: string;
+}
+
+export interface ShoppingAiImportResult {
+  ignoredSourceFragments: Array<{
+    id: string;
+    reason: string;
+  }>;
+  importedCount: number;
+  items: ShoppingItemRecord[];
+  sourceFragments: ShoppingAiSourceFragment[];
 }

@@ -18,6 +18,7 @@ import { RequirePermission } from '../permissions/decorators/require-permission.
 import { PermissionGuard } from '../permissions/guards/permission.guard';
 import {
   CreateShoppingItemDto,
+  ImportShoppingItemsWithAiDto,
   MoveShoppingItemDto,
   ShoppingItemIdParamDto,
   ShoppingListTypeParamDto,
@@ -45,6 +46,20 @@ export class ShoppingController {
     return this.shoppingService.listItems(
       this.requireHousehold(household).householdId,
       params.type
+    );
+  }
+
+  @Post(':type/items/ai-import')
+  @RequirePermission('shopping', 'create')
+  importItemsWithAi(
+    @CurrentHousehold() household: HouseholdContext | undefined,
+    @Param() params: ShoppingListTypeParamDto,
+    @Body() dto: ImportShoppingItemsWithAiDto
+  ) {
+    return this.shoppingService.importItemsWithAi(
+      this.requireHousehold(household).householdId,
+      params.type,
+      dto
     );
   }
 

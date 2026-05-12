@@ -38,12 +38,14 @@ describe('loadEnv', () => {
   });
 
   it('treats blank optional integration variables as unset', () => {
+    vi.stubEnv('GEMINI_API_KEY', '');
     vi.stubEnv('GOOGLE_OAUTH_CLIENT_ID', '');
     vi.stubEnv('SMTP_HOST', '');
     vi.stubEnv('SMTP_PASSWORD', '');
     vi.stubEnv('SMTP_USER', '');
 
     expect(loadEnv()).toMatchObject({
+      GEMINI_API_KEY: undefined,
       GOOGLE_OAUTH_CLIENT_ID: undefined,
       SMTP_HOST: undefined,
       SMTP_PASSWORD: undefined,

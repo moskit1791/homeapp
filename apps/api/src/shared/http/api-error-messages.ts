@@ -107,6 +107,17 @@ const exactMessages: Record<string, string> = {
   "Request failed": "Zadanie nie powiodlo sie.",
   "Resource already exists": "Taki zasob juz istnieje.",
   "Shopping item not found": "Nie znaleziono produktu na liscie zakupow.",
+  "Shopping AI empty list": "Wklej liste zakupow do uporzadkowania.",
+  "Shopping AI is not configured":
+    "AI zakupow nie jest jeszcze skonfigurowane na backendzie.",
+  "Shopping AI needs clarification":
+    "Doprecyzuj liste zakupow, zebym niczego nie zgubil.",
+  "Shopping AI request failed":
+    "Nie udalo sie polaczyc z Gemini. Sprobuj ponownie za chwile.",
+  "Shopping AI request timed out":
+    "Gemini odpowiada za dlugo. Sprobuj ponownie za chwile.",
+  "Shopping AI returned invalid response":
+    "Gemini zwrocilo nieprawidlowa odpowiedz. Sprobuj ponownie.",
   "SMTP_HOST is not configured": "SMTP_HOST nie jest skonfigurowany.",
   "Source meal plan not found": "Nie znaleziono zrodlowego planu posilkow.",
   "Todo item not found": "Nie znaleziono zadania.",

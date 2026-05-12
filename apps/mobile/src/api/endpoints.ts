@@ -52,6 +52,8 @@ import type {
   GoogleLoginRequest,
   Income,
   IncomeSummary,
+  ImportShoppingItemsWithAiRequest,
+  ImportShoppingItemsWithAiResponse,
   LocalAttachmentUploadResponse,
   LoginRequest,
   LoginResponse,
@@ -1251,6 +1253,24 @@ export function createShoppingItem(
     method: 'POST',
     signal: requestOptions.signal
   });
+}
+
+export function importShoppingItemsWithAi(
+  type: ShoppingListType,
+  input: ImportShoppingItemsWithAiRequest,
+  options?: ApiCallOptionsInput
+): Promise<ImportShoppingItemsWithAiResponse> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<ImportShoppingItemsWithAiResponse, ImportShoppingItemsWithAiRequest>(
+    `/shopping-lists/${type}/items/ai-import`,
+    {
+      accessToken: requestOptions.accessToken,
+      body: input,
+      method: 'POST',
+      signal: requestOptions.signal
+    }
+  );
 }
 
 export function updateShoppingItem(

@@ -1,11 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import {
+  ApiError,
   checkShoppingItem,
   createShoppingItem,
   deleteShoppingItem,
+  importShoppingItemsWithAi,
   listShoppingItems,
   listShoppingLists,
   queryKeys,
@@ -25,7 +34,13 @@ import {
   InlineAlert,
   QueryState,
 } from "../../src/ui";
-import { Check, RefreshCcw, ShoppingCart, Trash2 } from "../../src/ui/icon";
+import {
+  Check,
+  RefreshCcw,
+  ShoppingCart,
+  Sparkles,
+  Trash2,
+} from "../../src/ui/icon";
 
 const listTypes: Array<{ label: string; value: ShoppingListType }> = [
   { label: "Dzisiaj", value: "daily" },
@@ -42,8 +57,10 @@ export default function ZakupyScreen() {
   const { canCreate, canDelete, canRead, canUpdate, permissionsQuery } =
     useModulePermission("shopping");
   const [activeType, setActiveType] = useState<ShoppingListType>("daily");
+  const [aiMessage, setAiMessage] = useState("");
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState("");
+  const [isAiVisible, setAiVisible] = useState(false);
   const [isCreateVisible, setCreateVisible] = useState(false);
   const [handledRouteAction, setHandledRouteAction] = useState<string | null>(null);
   const accessToken = session?.accessToken;
@@ -78,6 +95,22 @@ export default function ZakupyScreen() {
     },
   });
 
+  const aiImportMutation = useMutation({
+    mutationFn: () =>
+      importShoppingItemsWithAi(
+        activeType,
+        {
+          message: aiMessage.trim(),
+        },
+        { accessToken },
+      ),
+    onSuccess: async () => {
+      setAiMessage("");
+      setAiVisible(false);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.shopping });
+    },
+  });
+
   const checkMutation = useMutation({
     mutationFn: (id: string) => checkShoppingItem(id, { accessToken }),
     onSuccess: () =>
@@ -104,10 +137,18 @@ export default function ZakupyScreen() {
     currentList?.name ??
     (activeType === "daily" ? "Zakupy na dziś" : "Rzeczy na później");
   const canAdd = canCreate && Boolean(name.trim()) && !createMutation.isPending;
+  const canImportAi =
+    canCreate && Boolean(aiMessage.trim()) && !aiImportMutation.isPending;
 
   function handleAdd() {
     if (canAdd) {
       createMutation.mutate();
+    }
+  }
+
+  function handleAiImport() {
+    if (canImportAi) {
+      aiImportMutation.mutate();
     }
   }
 
@@ -150,11 +191,23 @@ export default function ZakupyScreen() {
       actions={
         <View style={styles.topActions}>
           {canCreate ? (
-            <ActionButton
-              onPress={() => setCreateVisible(true)}
-              size="small"
-              title="+ Dodaj"
-            />
+            <>
+              <IconButton
+                accessibilityLabel="AI do listy zakupów"
+                onPress={() => {
+                  aiImportMutation.reset();
+                  setAiVisible(true);
+                }}
+                style={styles.aiIconButton}
+              >
+                <Sparkles color={theme.colors.inverseText} size={19} />
+              </IconButton>
+              <ActionButton
+                onPress={() => setCreateVisible(true)}
+                size="small"
+                title="+ Dodaj"
+              />
+            </>
           ) : null}
           <IconButton
             disabled={itemsQuery.isFetching}
@@ -261,6 +314,76 @@ export default function ZakupyScreen() {
         footer={
           <View style={styles.modalFooter}>
             <ActionButton
+              disabled={aiImportMutation.isPending}
+              onPress={() => {
+                aiImportMutation.reset();
+                setAiVisible(false);
+              }}
+              style={styles.modalFooterButton}
+              title="Anuluj"
+              variant="secondary"
+            />
+            <ActionButton
+              disabled={!canImportAi}
+              loading={aiImportMutation.isPending}
+              onPress={handleAiImport}
+              style={styles.modalFooterButton}
+              title="Uporządkuj"
+            />
+          </View>
+        }
+        onClose={() => {
+          if (!aiImportMutation.isPending) {
+            aiImportMutation.reset();
+            setAiVisible(false);
+          }
+        }}
+        subtitle={
+          activeType === "daily"
+            ? "AI zapisze produkty na liście dzisiejszej."
+            : "AI zapisze produkty na liście długoterminowej."
+        }
+        title="AI zakupy"
+        visible={isAiVisible}
+      >
+        <View style={styles.aiStatus}>
+          {aiImportMutation.isPending ? (
+            <ActivityIndicator color={theme.colors.shopping} />
+          ) : (
+            <Sparkles color={theme.colors.shopping} size={19} />
+          )}
+          <Text style={styles.aiStatusText}>
+            {aiImportMutation.isPending
+              ? "Gemini porządkuje listę i sprawdza, czy nic nie zginęło."
+              : "Wklej listę tak, jak ją masz w głowie."}
+          </Text>
+        </View>
+        <TextInput
+          autoFocus
+          editable={!aiImportMutation.isPending}
+          multiline
+          onChangeText={(value) => {
+            if (aiImportMutation.error) {
+              aiImportMutation.reset();
+            }
+
+            setAiMessage(value);
+          }}
+          placeholder="Papryka, boczniaki, (kurczak), chleb tostowy..."
+          placeholderTextColor={theme.colors.textSubtle}
+          style={styles.aiInput}
+          textAlignVertical="top"
+          value={aiMessage}
+        />
+        {aiImportMutation.error ? (
+          <InlineAlert tone="error" text={getAiErrorMessage(aiImportMutation.error)} />
+        ) : null}
+      </FormModal>
+
+      <FormModal
+        footer={
+          <View style={styles.modalFooter}>
+            <ActionButton
               onPress={() => setCreateVisible(false)}
               style={styles.modalFooterButton}
               title="Anuluj"
@@ -307,6 +430,38 @@ export default function ZakupyScreen() {
       </FormModal>
     </AppScreen>
   );
+}
+
+function getAiErrorMessage(error: unknown): string {
+  const clarification = getAiClarificationMessage(error);
+
+  if (clarification) {
+    return clarification;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "Nie udało się uporządkować listy przez AI.";
+}
+
+function getAiClarificationMessage(error: unknown): string | undefined {
+  if (!(error instanceof ApiError) || !isRecord(error.details)) {
+    return undefined;
+  }
+
+  const details = error.details.details;
+
+  if (!isRecord(details) || typeof details.clarificationMessage !== "string") {
+    return undefined;
+  }
+
+  return details.clarificationMessage.trim() || undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 function ShoppingRow({
@@ -370,6 +525,42 @@ function createStyles(colors: AppPalette) {
     },
     addFabDisabled: {
       opacity: 0.42,
+    },
+    aiIconButton: {
+      backgroundColor: colors.shopping,
+      borderColor: colors.shopping,
+    },
+    aiInput: {
+      backgroundColor: colors.field,
+      borderColor: colors.border,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      color: colors.text,
+      fontSize: 15,
+      letterSpacing: 0,
+      lineHeight: 21,
+      minHeight: 170,
+      padding: spacing.md,
+    },
+    aiStatus: {
+      alignItems: "center",
+      backgroundColor: colors.shoppingSoft,
+      borderColor: colors.border,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      minHeight: 48,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+    },
+    aiStatusText: {
+      color: colors.text,
+      flex: 1,
+      fontSize: 13,
+      fontWeight: "700",
+      letterSpacing: 0,
+      lineHeight: 18,
     },
     checkBox: {
       alignItems: "center",

@@ -4,13 +4,14 @@ import { DatabaseModule } from '../database/database.module';
 import { HouseholdsModule } from '../households/households.module';
 import { PermissionsModule } from '../permissions/permissions.module';
 import { UsersModule } from '../users/users.module';
+import { ShoppingAiService } from './shopping-ai.service';
 import { ShoppingController } from './shopping.controller';
 import { ShoppingService } from './shopping.service';
 
 @Module({
   imports: [AuthModule, DatabaseModule, HouseholdsModule, PermissionsModule, UsersModule],
   controllers: [ShoppingController],
-  providers: [ShoppingService],
+  providers: [ShoppingAiService, ShoppingService],
   exports: [ShoppingService]
 })
 export class ShoppingModule {}

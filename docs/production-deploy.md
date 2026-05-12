@@ -78,7 +78,9 @@ Oczekiwany wynik healthchecka:
 
 ## Gdzie trzymac sekrety
 
-- `/opt/homeapp/.env` na produkcji zawiera sekrety API, DB, SMTP i OAuth.
+- `/opt/homeapp/.env` na produkcji zawiera sekrety API, DB, SMTP, OAuth i Gemini.
+- `GEMINI_API_KEY` ustawiaj tylko w backendowym `.env`; aplikacja mobilna nie powinna znac klucza Gemini.
+- Po pokazaniu klucza na screenie wygeneruj nowy klucz w Google AI Studio i usun stary.
 - `C:\Users\moski\.ssh\homeapp_prod_ed25519` daje dostep SSH do produkcji.
 - Lokalne notatki z tokenami lub haslami trzymaj w plikach pasujacych do `deploy/*.local.*`, bo sa ignorowane przez git.
 - Nie dodawaj do commita tokenow Proxmox, hasel ani prywatnych kluczy.
