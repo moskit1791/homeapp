@@ -1,6 +1,6 @@
 import { IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Min } from 'class-validator';
 
-export const SHOPPING_LIST_TYPES = ['daily', 'long_term'] as const;
+export const SHOPPING_LIST_TYPES = ['daily', 'tomorrow', 'long_term'] as const;
 
 export type ShoppingListType = (typeof SHOPPING_LIST_TYPES)[number];
 
@@ -45,4 +45,9 @@ export class UpdateShoppingItemDto {
   @IsInt()
   @Min(0)
   displayOrder?: number;
+}
+
+export class MoveShoppingItemDto {
+  @IsIn([...SHOPPING_LIST_TYPES])
+  targetType!: ShoppingListType;
 }

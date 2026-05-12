@@ -12,7 +12,9 @@ import {
 } from "../../src/api";
 import {
   clearStoredNotifications,
+  listUnreadStoredNotifications,
   listStoredNotifications,
+  markStoredNotificationsRead,
   type StoredNotification,
 } from "../../src/notifications/notification-center";
 import { useModulePermission } from "../../src/permissions/use-permissions";
@@ -43,6 +45,7 @@ export default function DzisiajScreen() {
   const accessToken = session?.accessToken;
   const [notificationsVisible, setNotificationsVisible] = useState(false);
   const [pushNotifications, setPushNotifications] = useState<StoredNotification[]>([]);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
   const shoppingPermission = useModulePermission("shopping");
   const notesPermission = useModulePermission("notes");
@@ -66,9 +69,10 @@ export default function DzisiajScreen() {
   const dashboard = dashboardQuery.data;
   const upcomingEvents = dashboard?.upcomingEvents ?? [];
   const todayEvents = upcomingEvents.filter(isTodayEvent);
+  const tomorrowEvents = upcomingEvents.filter(isTomorrowEvent);
   const nextEvent = todayEvents[0] ?? upcomingEvents[0];
   const mealEntries = dashboard?.mealPlan?.entries ?? [];
-  const nextMeal = mealEntries[0];
+  const nextMeal = mealEntries.find((entry) => entry.weekday === todayWeekday());
   const openShopping = (shoppingQuery.data ?? []).filter(
     (item) => !item.isChecked,
   );
@@ -83,16 +87,33 @@ export default function DzisiajScreen() {
     setNotificationsVisible(false);
     router.push({ pathname: "/(tabs)/dom", params: { settings: "1" } } as never);
   }, [router]);
+  const refreshNotificationCenter = useCallback(async (markRead: boolean) => {
+    const stored = await listStoredNotifications();
 
-  useEffect(() => {
-    if (!notificationsVisible) {
+    setPushNotifications(stored);
+
+    if (markRead && stored.length > 0) {
+      await markStoredNotificationsRead(stored.map((item) => item.id));
+      setUnreadNotificationsCount(0);
       return;
     }
 
-    listStoredNotifications()
-      .then(setPushNotifications)
-      .catch(() => setPushNotifications([]));
-  }, [notificationsVisible]);
+    const unread = await listUnreadStoredNotifications();
+    setUnreadNotificationsCount(unread.length);
+  }, []);
+
+  useEffect(() => {
+    refreshNotificationCenter(false).catch(() => {
+      setPushNotifications([]);
+      setUnreadNotificationsCount(0);
+    });
+  }, [refreshNotificationCenter]);
+
+  useEffect(() => {
+    if (notificationsVisible) {
+      refreshNotificationCenter(true).catch(() => setPushNotifications([]));
+    }
+  }, [notificationsVisible, refreshNotificationCenter]);
 
   function showToast(message: string) {
     setToast(message);
@@ -149,8 +170,8 @@ export default function DzisiajScreen() {
             onPress={() => setNotificationsVisible(true)}
           >
             <View style={styles.bellWrap}>
-              <Bell color={theme.colors.text} size={19} />
-              {notificationItems.length > 0 ? <View style={styles.bellDot} /> : null}
+              <Bell color={unreadNotificationsCount > 0 ? theme.colors.warning : theme.colors.text} size={19} />
+              {unreadNotificationsCount > 0 ? <View style={styles.bellDot} /> : null}
             </View>
           </IconButton>
         </View>
@@ -160,16 +181,14 @@ export default function DzisiajScreen() {
           <AccountCircle color={theme.colors.text} size={27} />
         </View>
       }
-      subtitle="Masz wszystko pod kontrolą."
       title="Dzisiaj"
       titleAlign="center"
     >
-      <AppToast text={toast} />
+      <AppToast offsetTop={74} text={toast} />
       <QueryState error={dashboardQuery.error} isLoading={dashboardQuery.isLoading} />
 
       <View style={styles.greeting}>
-        <Text style={styles.greetingTitle}>Dzień dobry!</Text>
-        <Text style={styles.greetingText}>Najważniejsze rzeczy są teraz 1-2 tapnięcia stąd.</Text>
+        <Text style={styles.greetingTitle}>{greetingTitle()}</Text>
       </View>
 
       <View style={styles.tileList}>
@@ -180,6 +199,14 @@ export default function DzisiajScreen() {
           onPress={() => router.push("/(tabs)/kalendarz" as never)}
           title="Wydarzenia dzisiaj"
           value={String(todayEvents.length || upcomingEvents.length)}
+        />
+        <HomeTile
+          accent={theme.colors.calendar}
+          icon={<CalendarDays color={theme.colors.calendar} size={24} />}
+          meta={tomorrowEvents[0] ? eventMeta(tomorrowEvents[0]) : "Brak planu na jutro"}
+          onPress={() => router.push({ pathname: "/(tabs)/zadania", params: { segment: "notes" } } as never)}
+          title="Wydarzenia jutro"
+          value={String(tomorrowEvents.length)}
         />
         <HomeTile
           accent={theme.colors.warning}
@@ -193,7 +220,7 @@ export default function DzisiajScreen() {
           accent={theme.colors.shopping}
           icon={<ShoppingCart color={theme.colors.shopping} size={24} />}
           meta={openShopping.length === 1 ? "1 pozycja czeka" : `${openShopping.length} pozycji czeka`}
-          onPress={() => router.push("/(tabs)/lista" as never)}
+          onPress={() => router.push({ pathname: "/(tabs)/lista", params: { segment: "shopping" } } as never)}
           title="Zakupy do zrobienia"
           value={`${openShopping.length} pozycji`}
         />
@@ -201,7 +228,7 @@ export default function DzisiajScreen() {
           accent={theme.colors.food}
           icon={<Utensils color={theme.colors.food} size={24} />}
           meta={nextMeal ? formatMealMeta(nextMeal.weekday, nextMeal.slotIndex) : "Ułóż plan posiłków"}
-          onPress={() => router.push("/(tabs)/lista" as never)}
+          onPress={() => router.push({ pathname: "/(tabs)/lista", params: { segment: "meals" } } as never)}
           title="Dzisiejszy posiłek"
           value={nextMeal?.mealName ?? "Brak planu"}
         />
@@ -215,7 +242,7 @@ export default function DzisiajScreen() {
           color={theme.colors.warning}
           icon={<NotePlus color={theme.colors.warning} size={21} />}
           label="Dodaj notatkę"
-          onPress={() => router.push({ pathname: "/(tabs)/plan", params: { action: "note" } } as never)}
+          onPress={() => router.push({ pathname: "/(tabs)/zadania", params: { action: "note", segment: "notes" } } as never)}
         />
         <QuickAction
           color={theme.colors.finance}
@@ -229,13 +256,13 @@ export default function DzisiajScreen() {
           color={theme.colors.shopping}
           icon={<CartPlus color={theme.colors.shopping} size={21} />}
           label="Dodaj zakupy"
-          onPress={() => router.push({ pathname: "/(tabs)/zakupy", params: { action: "item" } } as never)}
+          onPress={() => router.push({ pathname: "/(tabs)/lista", params: { action: "addShopping", segment: "shopping" } } as never)}
         />
         <QuickAction
           color={theme.colors.food}
           icon={<Utensils color={theme.colors.food} size={21} />}
           label="Dodaj posiłek"
-          onPress={() => router.push({ pathname: "/(tabs)/plan", params: { action: "meal" } } as never)}
+          onPress={() => router.push({ pathname: "/(tabs)/lista", params: { action: "addMeal", segment: "meals" } } as never)}
         />
       </View>
 
@@ -261,6 +288,7 @@ export default function DzisiajScreen() {
                 clearStoredNotifications()
                   .then(() => {
                     setPushNotifications([]);
+                    setUnreadNotificationsCount(0);
                     showToast("Powiadomienia wyczyszczone");
                   })
                   .catch(() => showToast("Nie udało się wyczyścić powiadomień"));
@@ -417,8 +445,35 @@ function isTodayEvent(event: StartCalendarEvent): boolean {
   return event.eventDate === todayIso();
 }
 
+function isTomorrowEvent(event: StartCalendarEvent): boolean {
+  return event.eventDate === offsetIsoDate(1);
+}
+
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  return isoFromDate(new Date());
+}
+
+function offsetIsoDate(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+
+  return isoFromDate(date);
+}
+
+function isoFromDate(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function todayWeekday(): number {
+  const weekday = new Date().getDay();
+
+  return weekday === 0 ? 7 : weekday;
+}
+
+function greetingTitle(): string {
+  const hour = new Date().getHours();
+
+  return hour >= 18 || hour < 5 ? "Dobry wieczor" : "Dzien dobry";
 }
 
 function formatMealMeta(weekday: number, slotIndex: number): string {

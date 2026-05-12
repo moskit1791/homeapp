@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PoolClient } from 'pg';
 import { DatabaseService } from '../../database/database.service';
 import { RealtimeService } from '../../realtime/realtime.service';
+import { CreateBudgetMonthDto } from '../dto/finance.dto';
 
 @Injectable()
 export class BudgetMonthsService {
@@ -83,6 +84,82 @@ export class BudgetMonthsService {
     );
 
     return result.rows.map((row) => this.mapMonth(row));
+  }
+
+  async createMonth(
+    householdId: string,
+    dto: CreateBudgetMonthDto
+  ): Promise<BudgetMonthRecord> {
+    if (dto.month < 1 || dto.month > 12) {
+      throw new BadRequestException('Budget month must be between 1 and 12');
+    }
+
+    const created = await this.database.transaction(async (client) => {
+      await client.query(
+        `
+          select pg_advisory_xact_lock(hashtext('homeapp.finance.month'), hashtext($1))
+        `,
+        [householdId]
+      );
+      const existing = await client.query<{ id: string }>(
+        `
+          select id
+          from budget_months
+          where household_id = $1
+            and year = $2
+            and month = $3
+          limit 1
+        `,
+        [householdId, dto.year, dto.month]
+      );
+
+      if (existing.rows[0]) {
+        throw new BadRequestException('Budget month already exists');
+      }
+
+      if (dto.sourceBudgetMonthId) {
+        await this.getMonthForUpdate(client, householdId, dto.sourceBudgetMonthId);
+      }
+
+      const result = await client.query<BudgetMonthRow>(
+        `
+          insert into budget_months (
+            household_id,
+            year,
+            month,
+            source_budget_month_id,
+            is_current
+          )
+          values ($1, $2, $3, $4, false)
+          returning
+            id,
+            household_id,
+            year,
+            month,
+            source_budget_month_id,
+            is_current,
+            generated_at,
+            archived_at,
+            created_at,
+            updated_at
+        `,
+        [householdId, dto.year, dto.month, dto.sourceBudgetMonthId ?? null]
+      );
+      const month = this.mapMonthOrThrow(result.rows[0], 'Expected generated budget month');
+
+      if (dto.sourceBudgetMonthId) {
+        await this.copyBudgetItems(client, dto.sourceBudgetMonthId, month.id);
+      }
+
+      await this.createZeroIncomesForActiveMembers(client, householdId, month.id);
+
+      return month;
+    });
+
+    this.realtime.publish(householdId, 'finance.month.generated', created.id);
+    this.realtime.publish(householdId, 'finance.changed', created.id);
+
+    return created;
   }
 
   async deleteMonth(householdId: string, monthId: string): Promise<boolean> {
@@ -352,6 +429,28 @@ export class BudgetMonthsService {
       `,
       [sourceBudgetMonthId, targetBudgetMonthId]
     );
+  }
+
+  private async getMonthForUpdate(
+    client: PoolClient,
+    householdId: string,
+    monthId: string
+  ): Promise<void> {
+    const result = await client.query<{ id: string }>(
+      `
+        select id
+        from budget_months
+        where household_id = $1
+          and id = $2
+        limit 1
+        for update
+      `,
+      [householdId, monthId]
+    );
+
+    if (!result.rows[0]) {
+      throw new BadRequestException('Source budget month not found');
+    }
   }
 
   private async createZeroIncomesForActiveMembers(

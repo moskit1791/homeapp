@@ -4,6 +4,7 @@ import { DatabaseService } from '../database/database.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import {
   CreateShoppingItemDto,
+  MoveShoppingItemDto,
   ShoppingListType,
   UpdateShoppingItemDto
 } from './dto/shopping.dto';
@@ -16,6 +17,8 @@ export class ShoppingService {
   ) {}
 
   async listShoppingLists(householdId: string): Promise<ShoppingListRecord[]> {
+    await this.ensureShoppingState(householdId);
+
     const result = await this.database.query<ShoppingListRow>(
       `
         select id, household_id, type, name, created_at, updated_at
@@ -24,8 +27,9 @@ export class ShoppingService {
         order by
           case type
             when 'daily' then 0
-            when 'long_term' then 1
-            else 2
+            when 'tomorrow' then 1
+            when 'long_term' then 2
+            else 3
           end,
           name asc
       `,
@@ -39,6 +43,8 @@ export class ShoppingService {
     householdId: string,
     type: ShoppingListType
   ): Promise<ShoppingItemRecord[]> {
+    await this.ensureShoppingState(householdId);
+
     const result = await this.database.query<ShoppingItemRow>(
       `
         select
@@ -73,24 +79,42 @@ export class ShoppingService {
     type: ShoppingListType,
     dto: CreateShoppingItemDto
   ): Promise<ShoppingItemRecord> {
-    const item = await this.database.transaction(async (client) => {
-      const listResult = await client.query<{ id: string }>(
-        `
-          select id
-          from shopping_lists
-          where household_id = $1
-            and type = $2
-          limit 1
-        `,
-        [householdId, type]
-      );
-      const list = listResult.rows[0];
+    await this.ensureShoppingState(householdId);
 
-      if (!list) {
-        throw new Error('Expected shopping list for household');
+    const item = await this.database.transaction(async (client) => {
+      const listId = await this.getListId(client, householdId, type);
+      const existing = await this.findDuplicateUncheckedItem(
+        client,
+        listId,
+        normalizeProductName(dto.name)
+      );
+
+      if (existing) {
+        const result = await client.query<ShoppingItemRow>(
+          `
+            update shopping_list_items
+            set quantity = $2
+            where id = $1
+            returning
+              id,
+              shopping_list_id,
+              $3::uuid as household_id,
+              $4::shopping_list_type as type,
+              name,
+              quantity,
+              is_checked,
+              checked_at,
+              display_order,
+              created_at,
+              updated_at
+          `,
+          [existing.id, mergeQuantity(existing.quantity, dto.quantity), householdId, type]
+        );
+
+        return this.mapItemOrThrow(result.rows[0]);
       }
 
-      const displayOrder = dto.displayOrder ?? (await this.nextDisplayOrder(client, list.id));
+      const displayOrder = dto.displayOrder ?? (await this.nextDisplayOrder(client, listId));
       const result = await client.query<ShoppingItemRow>(
         `
           insert into shopping_list_items (
@@ -113,16 +137,10 @@ export class ShoppingService {
             created_at,
             updated_at
         `,
-        [list.id, dto.name.trim(), dto.quantity?.trim() ?? '', displayOrder, householdId, type]
+        [listId, dto.name.trim(), dto.quantity?.trim() ?? '', displayOrder, householdId, type]
       );
 
-      const item = result.rows[0];
-
-      if (!item) {
-        throw new Error('Expected shopping item record');
-      }
-
-      return this.mapItem(item);
+      return this.mapItemOrThrow(result.rows[0]);
     });
     this.realtime.publish(householdId, 'shopping.changed', item.id);
 
@@ -193,7 +211,6 @@ export class ShoppingService {
       `,
       [householdId, id]
     );
-
     const deleted = Boolean(result.rowCount && result.rowCount > 0);
 
     if (deleted) {
@@ -204,12 +221,16 @@ export class ShoppingService {
   }
 
   async checkItem(householdId: string, id: string): Promise<ShoppingItemRecord | null> {
+    return this.toggleItem(householdId, id);
+  }
+
+  async toggleItem(householdId: string, id: string): Promise<ShoppingItemRecord | null> {
     const result = await this.database.query<ShoppingItemRow>(
       `
         update shopping_list_items sli
         set
-          is_checked = true,
-          checked_at = now()
+          is_checked = not sli.is_checked,
+          checked_at = case when sli.is_checked then null else now() end
         from shopping_lists sl
         where sl.id = sli.shopping_list_id
           and sl.household_id = $1
@@ -229,7 +250,6 @@ export class ShoppingService {
       `,
       [householdId, id]
     );
-
     const item = result.rows[0] ? this.mapItem(result.rows[0]) : null;
 
     if (item) {
@@ -237,6 +257,115 @@ export class ShoppingService {
     }
 
     return item;
+  }
+
+  async clearList(householdId: string, type: ShoppingListType): Promise<{ deleted: number }> {
+    await this.ensureShoppingState(householdId);
+
+    const result = await this.database.query(
+      `
+        delete from shopping_list_items sli
+        using shopping_lists sl
+        where sl.id = sli.shopping_list_id
+          and sl.household_id = $1
+          and sl.type = $2
+      `,
+      [householdId, type]
+    );
+    const deleted = result.rowCount ?? 0;
+
+    if (deleted > 0) {
+      this.realtime.publish(householdId, 'shopping.changed', type);
+    }
+
+    return { deleted };
+  }
+
+  async moveItem(
+    householdId: string,
+    id: string,
+    dto: MoveShoppingItemDto
+  ): Promise<ShoppingItemRecord | null> {
+    await this.ensureShoppingState(householdId);
+
+    const item = await this.database.transaction(async (client) => {
+      const targetListId = await this.getListId(client, householdId, dto.targetType);
+      const displayOrder = await this.nextDisplayOrder(client, targetListId);
+      const result = await client.query<ShoppingItemRow>(
+        `
+          update shopping_list_items sli
+          set
+            shopping_list_id = $3,
+            is_checked = false,
+            checked_at = null,
+            display_order = $4
+          from shopping_lists current_list
+          where current_list.id = sli.shopping_list_id
+            and current_list.household_id = $1
+            and sli.id = $2
+          returning
+            sli.id,
+            sli.shopping_list_id,
+            current_list.household_id,
+            $5::shopping_list_type as type,
+            sli.name,
+            sli.quantity,
+            sli.is_checked,
+            sli.checked_at,
+            sli.display_order,
+            sli.created_at,
+            sli.updated_at
+        `,
+        [householdId, id, targetListId, displayOrder, dto.targetType]
+      );
+
+      return result.rows[0] ? this.mapItem(result.rows[0]) : null;
+    });
+
+    if (item) {
+      this.realtime.publish(householdId, 'shopping.changed', item.id);
+    }
+
+    return item;
+  }
+
+  async moveUncheckedToTomorrow(householdId: string): Promise<{ moved: number }> {
+    await this.ensureShoppingState(householdId);
+
+    const moved = await this.database.transaction(async (client) => {
+      const dailyListId = await this.getListId(client, householdId, 'daily');
+      const tomorrowListId = await this.getListId(client, householdId, 'tomorrow');
+      const baseOrder = await this.nextDisplayOrder(client, tomorrowListId);
+      const result = await client.query(
+        `
+          with moved as (
+            select
+              id,
+              row_number() over (order by display_order asc, created_at asc) - 1 as offset_order
+            from shopping_list_items
+            where shopping_list_id = $1
+              and is_checked = false
+          )
+          update shopping_list_items item
+          set
+            shopping_list_id = $2,
+            display_order = $3 + moved.offset_order,
+            is_checked = false,
+            checked_at = null
+          from moved
+          where item.id = moved.id
+        `,
+        [dailyListId, tomorrowListId, baseOrder]
+      );
+
+      return result.rowCount ?? 0;
+    });
+
+    if (moved > 0) {
+      this.realtime.publish(householdId, 'shopping.changed', 'move-unchecked');
+    }
+
+    return { moved };
   }
 
   private async findItem(householdId: string, id: string): Promise<ShoppingItemRecord | null> {
@@ -266,6 +395,149 @@ export class ShoppingService {
     return result.rows[0] ? this.mapItem(result.rows[0]) : null;
   }
 
+  private async ensureShoppingState(householdId: string): Promise<void> {
+    await this.database.transaction(async (client) => {
+      await client.query(
+        `
+          insert into shopping_lists (household_id, type, name)
+          values
+            ($1, 'daily', 'Dzisiaj'),
+            ($1, 'tomorrow', 'Jutro'),
+            ($1, 'long_term', 'Na później')
+          on conflict (household_id, type) do nothing
+        `,
+        [householdId]
+      );
+      const today = await this.getWarsawDate(client);
+      const rolloverResult = await client.query<{ last_rollover_date: string }>(
+        `
+          insert into shopping_rollovers (household_id, last_rollover_date)
+          values ($1, $2)
+          on conflict (household_id) do update
+          set household_id = excluded.household_id
+          returning last_rollover_date
+        `,
+        [householdId, today]
+      );
+      const lastRolloverDate = this.formatDateOnly(
+        rolloverResult.rows[0]?.last_rollover_date ?? today
+      );
+
+      if (lastRolloverDate >= today) {
+        return;
+      }
+
+      const dailyListId = await this.getListId(client, householdId, 'daily');
+      const tomorrowListId = await this.getListId(client, householdId, 'tomorrow');
+      const dailyStats = await client.query<{ checked_count: string; total_count: string }>(
+        `
+          select
+            count(*)::text as total_count,
+            count(*) filter (where is_checked = true)::text as checked_count
+          from shopping_list_items
+          where shopping_list_id = $1
+        `,
+        [dailyListId]
+      );
+      const total = Number(dailyStats.rows[0]?.total_count ?? 0);
+      const checked = Number(dailyStats.rows[0]?.checked_count ?? 0);
+
+      if (total > 0 && total === checked) {
+        await client.query('delete from shopping_list_items where shopping_list_id = $1', [
+          dailyListId
+        ]);
+      }
+
+      const baseOrder = await this.nextDisplayOrder(client, dailyListId);
+      await client.query(
+        `
+          with moved as (
+            select
+              id,
+              row_number() over (order by display_order asc, created_at asc) - 1 as offset_order
+            from shopping_list_items
+            where shopping_list_id = $1
+          )
+          update shopping_list_items item
+          set
+            shopping_list_id = $2,
+            display_order = $3 + moved.offset_order,
+            is_checked = false,
+            checked_at = null
+          from moved
+          where item.id = moved.id
+        `,
+        [tomorrowListId, dailyListId, baseOrder]
+      );
+      await client.query(
+        `
+          update shopping_rollovers
+          set last_rollover_date = $2
+          where household_id = $1
+        `,
+        [householdId, today]
+      );
+    });
+  }
+
+  private async getListId(
+    client: PoolClient,
+    householdId: string,
+    type: ShoppingListType
+  ): Promise<string> {
+    const listResult = await client.query<{ id: string }>(
+      `
+        select id
+        from shopping_lists
+        where household_id = $1
+          and type = $2
+        limit 1
+      `,
+      [householdId, type]
+    );
+    const list = listResult.rows[0];
+
+    if (!list) {
+      throw new Error('Expected shopping list for household');
+    }
+
+    return list.id;
+  }
+
+  private async findDuplicateUncheckedItem(
+    client: PoolClient,
+    shoppingListId: string,
+    normalizedName: string
+  ): Promise<ShoppingItemRow | null> {
+    const result = await client.query<ShoppingItemRow>(
+      `
+        select
+          sli.id,
+          sli.shopping_list_id,
+          sl.household_id,
+          sl.type,
+          sli.name,
+          sli.quantity,
+          sli.is_checked,
+          sli.checked_at,
+          sli.display_order,
+          sli.created_at,
+          sli.updated_at
+        from shopping_list_items sli
+        join shopping_lists sl on sl.id = sli.shopping_list_id
+        where sli.shopping_list_id = $1
+          and sli.is_checked = false
+        order by sli.display_order asc, sli.created_at asc
+      `,
+      [shoppingListId]
+    );
+
+    return (
+      result.rows.find((row) => normalizeProductName(row.name) === normalizedName) ??
+      null
+    );
+  }
+
   private async nextDisplayOrder(client: PoolClient, shoppingListId: string): Promise<number> {
     const result = await client.query<{ next_display_order: number }>(
       `
@@ -277,6 +549,14 @@ export class ShoppingService {
     );
 
     return result.rows[0]?.next_display_order ?? 0;
+  }
+
+  private async getWarsawDate(client: PoolClient): Promise<string> {
+    const result = await client.query<{ today: string }>(
+      "select timezone('Europe/Warsaw', now())::date::text as today"
+    );
+
+    return this.formatDateOnly(result.rows[0]?.today ?? new Date().toISOString());
   }
 
   private mapList(row: ShoppingListRow): ShoppingListRecord {
@@ -305,6 +585,66 @@ export class ShoppingService {
       updatedAt: row.updated_at
     };
   }
+
+  private mapItemOrThrow(row: ShoppingItemRow | undefined): ShoppingItemRecord {
+    if (!row) {
+      throw new Error('Expected shopping item record');
+    }
+
+    return this.mapItem(row);
+  }
+
+  private formatDateOnly(value: Date | string): string {
+    if (typeof value === 'string') {
+      return value.slice(0, 10);
+    }
+
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
+  }
+}
+
+function mergeQuantity(current: string, next: string | undefined): string {
+  const normalizedNext = next?.trim();
+
+  if (!normalizedNext || current.trim()) {
+    return current;
+  }
+
+  return normalizedNext;
+}
+
+function normalizeProductName(value: string): string {
+  return value
+    .trim()
+    .toLocaleLowerCase('pl-PL')
+    .replace(/ł/g, 'l')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(singularizeToken)
+    .join(' ');
+}
+
+function singularizeToken(value: string): string {
+  if (value.endsWith('lka')) {
+    return `${value.slice(0, -2)}ko`;
+  }
+
+  if (value.endsWith('ka')) {
+    return `${value.slice(0, -2)}ko`;
+  }
+
+  if (value.endsWith('ki') || value.endsWith('y')) {
+    return value.slice(0, -1);
+  }
+
+  return value;
 }
 
 interface ShoppingListRow {

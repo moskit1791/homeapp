@@ -207,6 +207,15 @@ export interface UpdateShoppingItemRequest {
   quantity?: string;
 }
 
+export interface MoveShoppingItemRequest {
+  targetType: ShoppingListType;
+}
+
+export interface BulkShoppingResult {
+  deleted?: number;
+  moved?: number;
+}
+
 export interface BudgetMonth {
   archivedAt: string | null;
   createdAt: string;
@@ -217,6 +226,12 @@ export interface BudgetMonth {
   month: number;
   sourceBudgetMonthId: string | null;
   updatedAt: string;
+  year: number;
+}
+
+export interface CreateBudgetMonthRequest {
+  month: number;
+  sourceBudgetMonthId?: string | null;
   year: number;
 }
 
@@ -345,6 +360,7 @@ export interface Expense {
 
 export interface UpsertIncomeRequest {
   amount: number;
+  budgetMonthId?: string;
 }
 
 export interface Income {
@@ -480,6 +496,8 @@ export interface CalendarEvent {
   note: string | null;
   ownerMemberId: string | null;
   recurrenceRule: string | null;
+  reminderOffsetMinutes: number | null;
+  reminderSentAt?: string | null;
   scopeType: ScopeType;
   sourceEventId?: string;
   title: string;
@@ -491,6 +509,7 @@ export interface CreateCalendarEventRequest {
   note?: string | null;
   ownerMemberId?: string | null;
   recurrenceRule?: string | null;
+  reminderOffsetMinutes?: number | null;
   scopeType: ScopeType;
   title: string;
 }

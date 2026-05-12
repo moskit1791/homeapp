@@ -219,6 +219,54 @@ export class NotificationsService {
     }
   }
 
+  async sendCalendarEventReminder(input: {
+    eventDate: string;
+    eventTime: string | null;
+    householdId: string;
+    title: string;
+  }): Promise<PushSendResult> {
+    const recipients = await this.listEnabledTokensForHouseholdEvent(
+      input.householdId,
+      'calendar.changed'
+    );
+
+    if (recipients.length === 0) {
+      return { sent: 0, tickets: [] };
+    }
+
+    const time = input.eventTime ? ` o ${input.eventTime.slice(0, 5)}` : '';
+    const messages = recipients.map((token) => ({
+      body: `${input.eventDate}${time}: ${input.title}`,
+      data: {
+        eventType: 'calendar.changed',
+        kind: 'calendar-reminder'
+      },
+      sound: 'default' as const,
+      title: 'Nadchodzące wydarzenie',
+      to: token.expoPushToken
+    }));
+
+    try {
+      const tickets = await this.sendExpoMessages(messages);
+
+      await Promise.all(
+        tickets.map((ticket, index) =>
+          ticket.status === 'error' && ticket.details?.error === 'DeviceNotRegistered'
+            ? this.disableToken(recipients[index]!.expoPushToken)
+            : undefined
+        )
+      );
+
+      return {
+        sent: messages.length,
+        tickets
+      };
+    } catch (error) {
+      this.logger.warn('Failed to send calendar reminder push notification', error);
+      return { sent: 0, tickets: [] };
+    }
+  }
+
   private async listEnabledTokensForMember(
     householdId: string,
     householdMemberId: string
@@ -251,7 +299,7 @@ export class NotificationsService {
   private async listEnabledTokensForHouseholdEvent(
     householdId: string,
     eventType: RealtimeEventType,
-    actorMemberId: string
+    actorMemberId?: string
   ): Promise<PushTokenRecord[]> {
     const result = await this.database.query<PushTokenRow>(
       `
@@ -272,11 +320,11 @@ export class NotificationsService {
           on np.household_member_id = pt.household_member_id
           and np.event_type = $2
         where pt.household_id = $1
-          and pt.household_member_id <> $3
+          and ($3::uuid is null or pt.household_member_id <> $3)
           and pt.enabled = true
           and coalesce(np.enabled, true) = true
       `,
-      [householdId, eventType, actorMemberId]
+      [householdId, eventType, actorMemberId ?? null]
     );
 
     return result.rows.map((row) => this.mapPushToken(row));

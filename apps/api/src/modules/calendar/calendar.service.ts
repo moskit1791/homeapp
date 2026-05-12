@@ -1,5 +1,12 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit
+} from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import {
   CalendarScopeType,
@@ -8,11 +15,35 @@ import {
 } from './dto/calendar.dto';
 
 @Injectable()
-export class CalendarService {
+export class CalendarService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(CalendarService.name);
+  private reminderTimer: NodeJS.Timeout | null = null;
+
   constructor(
     private readonly database: DatabaseService,
+    private readonly notifications: NotificationsService,
     private readonly realtime: RealtimeService
   ) {}
+
+  onModuleInit(): void {
+    this.reminderTimer = setInterval(() => {
+      this.dispatchDueReminders().catch((error) => {
+        this.logger.warn('Failed to dispatch calendar reminders', error);
+      });
+    }, 60_000);
+    this.reminderTimer.unref?.();
+
+    this.dispatchDueReminders().catch((error) => {
+      this.logger.warn('Failed to dispatch calendar reminders', error);
+    });
+  }
+
+  onModuleDestroy(): void {
+    if (this.reminderTimer) {
+      clearInterval(this.reminderTimer);
+      this.reminderTimer = null;
+    }
+  }
 
   async listEvents(
     householdId: string,
@@ -47,11 +78,12 @@ export class CalendarService {
           event_date,
           event_time,
           note,
-          recurrence_rule
+          recurrence_rule,
+          reminder_offset_minutes
         )
-        values ($1, $2, $3, $4, $5, $6, $7, $8)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         returning id, household_id, scope_type, owner_member_id, title, event_date, event_time,
-          note, recurrence_rule, created_at, updated_at
+          note, recurrence_rule, reminder_offset_minutes, reminder_sent_at, created_at, updated_at
       `,
       [
         householdId,
@@ -61,7 +93,10 @@ export class CalendarService {
         dto.eventDate,
         this.normalizeNullableText(dto.eventTime),
         this.normalizeNullableText(dto.note),
-        this.normalizeRecurrenceRule(dto.recurrenceRule)
+        this.normalizeRecurrenceRule(dto.recurrenceRule),
+        dto.reminderOffsetMinutes === undefined
+          ? 1440
+          : this.normalizeReminderOffset(dto.reminderOffsetMinutes)
       ]
     );
 
@@ -82,6 +117,7 @@ export class CalendarService {
       dto.eventTime === undefined &&
       dto.note === undefined &&
       dto.recurrenceRule === undefined &&
+      dto.reminderOffsetMinutes === undefined &&
       dto.scopeType === undefined &&
       dto.ownerMemberId === undefined
     ) {
@@ -110,11 +146,19 @@ export class CalendarService {
           event_date = $6,
           event_time = $7,
           note = $8,
-          recurrence_rule = $9
+          recurrence_rule = $9,
+          reminder_offset_minutes = $10,
+          reminder_sent_at = case
+            when $6 <> event_date
+              or $7 is distinct from event_time
+              or $10 is distinct from reminder_offset_minutes
+            then null
+            else reminder_sent_at
+          end
         where household_id = $1
           and id = $2
         returning id, household_id, scope_type, owner_member_id, title, event_date, event_time,
-          note, recurrence_rule, created_at, updated_at
+          note, recurrence_rule, reminder_offset_minutes, reminder_sent_at, created_at, updated_at
       `,
       [
         householdId,
@@ -127,7 +171,10 @@ export class CalendarService {
         dto.note === undefined ? current.note : this.normalizeNullableText(dto.note),
         dto.recurrenceRule === undefined
           ? current.recurrenceRule
-          : this.normalizeRecurrenceRule(dto.recurrenceRule)
+          : this.normalizeRecurrenceRule(dto.recurrenceRule),
+        dto.reminderOffsetMinutes === undefined
+          ? current.reminderOffsetMinutes
+          : this.normalizeReminderOffset(dto.reminderOffsetMinutes)
       ]
     );
 
@@ -168,7 +215,7 @@ export class CalendarService {
     const result = await this.database.query<CalendarEventRow>(
       `
         select id, household_id, scope_type, owner_member_id, title, event_date, event_time,
-          note, recurrence_rule, created_at, updated_at
+          note, recurrence_rule, reminder_offset_minutes, reminder_sent_at, created_at, updated_at
         from calendar_events
         where household_id = $1
           and id = $2
@@ -189,7 +236,7 @@ export class CalendarService {
     const result = await this.database.query<CalendarEventRow>(
       `
         select id, household_id, scope_type, owner_member_id, title, event_date, event_time,
-          note, recurrence_rule, created_at, updated_at
+          note, recurrence_rule, reminder_offset_minutes, reminder_sent_at, created_at, updated_at
         from calendar_events
         where household_id = $1
           and event_date <= $3
@@ -339,6 +386,71 @@ export class CalendarService {
     return parts.join(';');
   }
 
+  private normalizeReminderOffset(value: number | null | undefined): number | null {
+    if (value === undefined || value === null) {
+      return null;
+    }
+
+    if (![15, 60, 1440].includes(value)) {
+      throw new BadRequestException('Invalid reminder offset');
+    }
+
+    return value;
+  }
+
+  private async dispatchDueReminders(): Promise<void> {
+    const dueEvents = await this.database.transaction(async (client) => {
+      const result = await client.query<CalendarEventRow>(
+        `
+          with due as (
+            select id
+            from calendar_events
+            where reminder_offset_minutes is not null
+              and reminder_sent_at is null
+              and (
+                event_date::timestamp + coalesce(event_time, time '09:00')
+                  - (reminder_offset_minutes * interval '1 minute')
+              ) <= timezone('Europe/Warsaw', now())
+            order by event_date asc, event_time asc nulls first, created_at asc
+            limit 50
+            for update skip locked
+          )
+          update calendar_events ce
+          set reminder_sent_at = now()
+          from due
+          where ce.id = due.id
+          returning
+            ce.id,
+            ce.household_id,
+            ce.scope_type,
+            ce.owner_member_id,
+            ce.title,
+            ce.event_date,
+            ce.event_time,
+            ce.note,
+            ce.recurrence_rule,
+            ce.reminder_offset_minutes,
+            ce.reminder_sent_at,
+            ce.created_at,
+            ce.updated_at
+        `
+      );
+
+      return result.rows.map((row) => this.mapEvent(row));
+    });
+
+    await Promise.all(
+      dueEvents.map((event) =>
+        this.notifications.sendCalendarEventReminder({
+          eventDate: event.eventDate,
+          eventTime: event.eventTime,
+          householdId: event.householdId,
+          title: event.title
+        })
+      )
+    );
+  }
+
   private parseRecurrenceRule(rule: string): RecurrenceRule {
     const values = new Map<string, string>();
 
@@ -481,6 +593,8 @@ export class CalendarService {
       note: row.note,
       ownerMemberId: row.owner_member_id,
       recurrenceRule: row.recurrence_rule,
+      reminderOffsetMinutes: row.reminder_offset_minutes,
+      reminderSentAt: row.reminder_sent_at,
       scopeType: row.scope_type,
       title: row.title,
       updatedAt: row.updated_at
@@ -509,6 +623,8 @@ interface CalendarEventRow {
   note: string | null;
   owner_member_id: string | null;
   recurrence_rule: string | null;
+  reminder_offset_minutes: number | null;
+  reminder_sent_at: string | null;
   scope_type: CalendarScopeType;
   title: string;
   updated_at: string;
@@ -523,6 +639,8 @@ export interface CalendarEventRecord {
   note: string | null;
   ownerMemberId: string | null;
   recurrenceRule: string | null;
+  reminderOffsetMinutes: number | null;
+  reminderSentAt: string | null;
   scopeType: CalendarScopeType;
   sourceEventId?: string;
   title: string;

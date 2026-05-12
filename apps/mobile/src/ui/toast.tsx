@@ -3,11 +3,12 @@ import { radii, spacing } from "../theme/tokens";
 import { useAppTheme, type AppPalette } from "../theme/use-app-theme";
 
 type AppToastProps = {
+  offsetTop?: number;
   text: string | null;
   tone?: "info" | "success" | "error";
 };
 
-export function AppToast({ text, tone = "success" }: AppToastProps) {
+export function AppToast({ offsetTop, text, tone = "success" }: AppToastProps) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
 
@@ -16,7 +17,7 @@ export function AppToast({ text, tone = "success" }: AppToastProps) {
   }
 
   return (
-    <View style={[styles.toast, styles[tone]]}>
+    <View style={[styles.toast, offsetTop !== undefined && { top: offsetTop }, styles[tone]]}>
       <Text style={[styles.text, tone === "error" && styles.errorText]}>{text}</Text>
     </View>
   );

@@ -21,6 +21,7 @@ builds/*.apk
 .env.*
 !.env.example
 !.env.*.example
+deploy/*.local.*
 
 apps/mobile/.expo/
 apps/mobile/tmp-*

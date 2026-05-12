@@ -1,4 +1,4 @@
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsIn,
   IsInt,
@@ -63,6 +63,12 @@ export class CreateCalendarEventDto {
   @MaxLength(500)
   recurrenceRule?: string | null;
 
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(15)
+  reminderOffsetMinutes?: number | null;
+
   @IsIn([...CALENDAR_SCOPE_TYPES])
   scopeType!: CalendarScopeType;
 
@@ -94,6 +100,12 @@ export class UpdateCalendarEventDto {
   @IsString()
   @MaxLength(500)
   recurrenceRule?: string | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(15)
+  reminderOffsetMinutes?: number | null;
 
   @IsOptional()
   @IsIn([...CALENDAR_SCOPE_TYPES])

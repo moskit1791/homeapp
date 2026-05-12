@@ -51,7 +51,7 @@ export function FormModal({
             <View style={styles.handle} />
             <View style={styles.header}>
               <View style={styles.headerText}>
-                <Text style={styles.title}>{title}</Text>
+                <Text numberOfLines={2} style={styles.title}>{title}</Text>
                 {subtitle ? (
                   <Text style={styles.subtitle}>{subtitle}</Text>
                 ) : null}
@@ -113,6 +113,7 @@ function createStyles(colors: AppPalette) {
     headerText: {
       flex: 1,
       gap: spacing.xs,
+      minWidth: 0,
     },
     keyboard: {
       flex: 1,
@@ -127,7 +128,8 @@ function createStyles(colors: AppPalette) {
       borderTopLeftRadius: radii.card,
       borderTopRightRadius: radii.card,
       borderTopWidth: 1,
-      maxHeight: "88%",
+      marginHorizontal: spacing.xs,
+      maxHeight: "94%",
       overflow: "hidden",
       ...shadows.card,
     },

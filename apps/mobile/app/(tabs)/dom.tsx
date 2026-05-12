@@ -58,13 +58,12 @@ import {
 import {
   Broom,
   ChartBar,
-  Check,
   ChevronRight,
   Cog,
   Database,
+  Download,
   FileText,
   Folder,
-  Eye,
   Pencil,
   RefreshCcw,
   Trash2,
@@ -313,6 +312,7 @@ function CleaningPanel() {
   const [name, setName] = useState("");
   const [frequencyDays, setFrequencyDays] = useState("7");
   const [nextDueAt, setNextDueAt] = useState(todayIso());
+  const [completionNotice, setCompletionNotice] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
   const tasksQuery = useQuery({
     enabled: permission.canRead && Boolean(accessToken),
@@ -340,7 +340,11 @@ function CleaningPanel() {
   const completeMutation = useMutation({
     mutationFn: (id: string) =>
       completeCleaningTask(id, { completedAt: todayIso() }, { accessToken }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.cleaning }),
+    onSuccess: async () => {
+      setCompletionNotice("Zadanie oznaczone jako wykonane. Termin został przeliczony.");
+      setTimeout(() => setCompletionNotice(""), 2200);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.cleaning });
+    },
   });
   const tasks = tasksQuery.data ?? [];
   const overdue = tasks.filter((task) => task.isOverdue).length;
@@ -359,6 +363,7 @@ function CleaningPanel() {
       subtitle={`${tasks.length} zadań / ${overdue} po terminie`}
       title="Sprzątanie"
     >
+      {completionNotice ? <InlineAlert text={completionNotice} /> : null}
       <QueryState
         emptyText="Brak zadań sprzątania."
         error={tasksQuery.error}
@@ -443,6 +448,10 @@ function AnnualCostsPanel() {
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
   const [nextDueDate, setNextDueDate] = useState(todayIso());
+  const [paymentCost, setPaymentCost] = useState<AnnualCost | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentDate, setPaymentDate] = useState(todayIso());
+  const [paymentNotice, setPaymentNotice] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
   const year = new Date().getFullYear();
   const costsQuery = useQuery({
@@ -473,20 +482,40 @@ function AnnualCostsPanel() {
     },
   });
   const completeMutation = useMutation({
-    mutationFn: (cost: AnnualCost) =>
-      completeAnnualCost(
-        cost.id,
+    mutationFn: () => {
+      if (!paymentCost) {
+        throw new Error("Missing annual cost");
+      }
+
+      return completeAnnualCost(
+        paymentCost.id,
         {
-          amount: parseOptionalNumber(String(cost.defaultAmount ?? "")),
-          executedAt: todayIso(),
+          amount: parseOptionalNumber(paymentAmount),
+          executedAt: paymentDate,
         },
         { accessToken },
-      ),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.annualCosts }),
+      );
+    },
+    onSuccess: async () => {
+      setPaymentCost(null);
+      setPaymentNotice("Koszt oznaczony jako opłacony. Następny termin został odświeżony.");
+      setTimeout(() => setPaymentNotice(""), 2200);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.annualCosts });
+    },
   });
   const costs = costsQuery.data ?? [];
   const history = historyQuery.data ?? [];
   const canAdd = permission.canCreate && Boolean(name.trim()) && !createMutation.isPending;
+  const canSavePayment =
+    Boolean(paymentCost) &&
+    /^\d{4}-\d{2}-\d{2}$/.test(paymentDate) &&
+    !completeMutation.isPending;
+
+  function openPaymentModal(cost: AnnualCost) {
+    setPaymentCost(cost);
+    setPaymentAmount(String(cost.defaultAmount ?? ""));
+    setPaymentDate(todayIso());
+  }
 
   return (
     <ModulePanel
@@ -504,6 +533,7 @@ function AnnualCostsPanel() {
       subtitle={`${costs.length} kosztów / ${history.length} wpisów w ${year}`}
       title="Koszty roczne"
     >
+      {paymentNotice ? <InlineAlert text={paymentNotice} /> : null}
       <QueryState
         emptyText="Brak kosztów rocznych."
         error={costsQuery.error}
@@ -518,7 +548,7 @@ function AnnualCostsPanel() {
             completing={completeMutation.isPending}
             cost={cost}
             key={cost.id}
-            onComplete={() => completeMutation.mutate(cost)}
+            onComplete={() => openPaymentModal(cost)}
           />
         ))}
       </View>
@@ -571,6 +601,50 @@ function AnnualCostsPanel() {
         </View>
         {createMutation.error ? (
           <InlineAlert tone="error" text="Nie udało się dodać kosztu." />
+        ) : null}
+      </FormModal>
+      <FormModal
+        footer={
+          <View style={styles.modalFooter}>
+            <ActionButton
+              onPress={() => setPaymentCost(null)}
+              style={styles.modalFooterButton}
+              title="Anuluj"
+              variant="secondary"
+            />
+            <ActionButton
+              disabled={!canSavePayment}
+              loading={completeMutation.isPending}
+              onPress={() => completeMutation.mutate()}
+              style={styles.modalFooterButton}
+              title="Opłacone"
+            />
+          </View>
+        }
+        onClose={() => setPaymentCost(null)}
+        subtitle="Potwierdź datę i kwotę, bo koszt roczny może się różnić."
+        title={paymentCost?.name ?? "Opłać koszt"}
+        visible={Boolean(paymentCost)}
+      >
+        <View style={styles.formRow}>
+          <TextInput
+            keyboardType="decimal-pad"
+            onChangeText={setPaymentAmount}
+            placeholder="Kwota"
+            placeholderTextColor={theme.colors.textSubtle}
+            style={[styles.input, styles.flexInput]}
+            value={paymentAmount}
+          />
+          <TextInput
+            onChangeText={setPaymentDate}
+            placeholder="YYYY-MM-DD"
+            placeholderTextColor={theme.colors.textSubtle}
+            style={[styles.input, styles.dateInput]}
+            value={paymentDate}
+          />
+        </View>
+        {completeMutation.error ? (
+          <InlineAlert tone="error" text="Nie udało się zapisać opłaconego kosztu." />
         ) : null}
       </FormModal>
     </ModulePanel>
@@ -712,6 +786,8 @@ function AttachmentsPanel() {
   const [previewError, setPreviewError] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
   const [openingAttachment, setOpeningAttachment] = useState(false);
+  const [downloadingAttachmentId, setDownloadingAttachmentId] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState("");
   const [uploadError, setUploadError] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
   const attachmentsQuery = useQuery({
@@ -825,6 +901,19 @@ function AttachmentsPanel() {
     }
   }
 
+  async function handleDownloadAttachment(attachment: Attachment) {
+    setDownloadError("");
+    setDownloadingAttachmentId(attachment.id);
+
+    try {
+      await shareAttachmentFile(attachment, accessToken);
+    } catch {
+      setDownloadError("Nie udało się pobrać pliku na telefon.");
+    } finally {
+      setDownloadingAttachmentId(null);
+    }
+  }
+
   async function handlePickPhoto() {
     setUploadError("");
 
@@ -890,13 +979,16 @@ function AttachmentsPanel() {
             canDelete={permission.canDelete}
             canUpdate={permission.canUpdate}
             deleting={deleteMutation.isPending}
+            downloading={downloadingAttachmentId === attachment.id}
             key={attachment.id}
             onDelete={() => deleteMutation.mutate(attachment.id)}
+            onDownload={() => handleDownloadAttachment(attachment)}
             onEdit={() => openEditAttachment(attachment)}
             onPreview={() => openPreviewAttachment(attachment)}
           />
         ))}
       </View>
+      {downloadError ? <InlineAlert tone="error" text={downloadError} /> : null}
       <FormModal
         footer={
           <View style={styles.modalFooter}>
@@ -1265,8 +1357,16 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
   const notificationPreferencesMutation = useMutation({
     mutationFn: (preferences: NotificationPreference[]) =>
       updateNotificationPreferences({ preferences }, { accessToken }),
-    onSuccess: async () => {
-      showToast("Ustawienia powiadomień zapisane");
+    onMutate: async (preferences) => {
+      await queryClient.cancelQueries({
+        queryKey: [...queryKeys.permissions, "notification-preferences"],
+      });
+      queryClient.setQueryData(
+        [...queryKeys.permissions, "notification-preferences"],
+        preferences,
+      );
+    },
+    onSettled: async () => {
       await queryClient.invalidateQueries({
         queryKey: [...queryKeys.permissions, "notification-preferences"],
       });
@@ -1314,12 +1414,6 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
             onPress={() => setSettingsVisible(false)}
             style={styles.modalFooterButton}
             title="Zamknij"
-            variant="secondary"
-          />
-          <ActionButton
-            onPress={handleLogout}
-            style={styles.modalFooterButton}
-            title="Wyloguj się"
             variant="secondary"
           />
         </View>
@@ -1423,9 +1517,6 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
           ) : null}
           <View style={styles.notificationPreferencesHeader}>
             <Text style={styles.inputLabel}>Powiadamiaj mnie, gdy inny domownik zmieni:</Text>
-            {notificationPreferencesMutation.isPending ? (
-              <Text style={styles.settingsMeta}>Zapisywanie...</Text>
-            ) : null}
           </View>
           <QueryState
             error={notificationPreferencesQuery.error}
@@ -1443,7 +1534,6 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
                   </View>
                   <View style={styles.notificationPreferenceSwitch}>
                     <Switch
-                      disabled={notificationPreferencesMutation.isPending}
                       onValueChange={(enabled) =>
                         toggleNotificationPreference(preference.eventType, enabled)
                       }
@@ -1463,6 +1553,12 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
             <InlineAlert tone="error" text="Nie udało się zapisać ustawień powiadomień." />
           ) : null}
         </View>
+        <ActionButton
+          labelStyle={styles.logoutButtonLabel}
+          onPress={handleLogout}
+          style={styles.logoutButton}
+          title="Wyloguj się"
+        />
         <View style={[styles.settingsPanelRow, styles.dangerPanel]}>
           <Text style={styles.settingsPanelTitle}>Usuwanie konta</Text>
           <Text style={styles.settingsPanelMeta}>
@@ -1590,9 +1686,13 @@ function CleaningRow({
         <Text style={styles.itemName}>{task.name}</Text>
         <Text style={styles.itemMeta}>Termin: {task.nextDueAt} / co {task.frequencyDays} dni</Text>
       </View>
-      <IconButton disabled={!canUpdate || completing} onPress={onComplete}>
-        <Check color={accent.color} size={17} />
-      </IconButton>
+      <ActionButton
+        disabled={!canUpdate || completing}
+        onPress={onComplete}
+        size="small"
+        title="Wykonane"
+        variant="secondary"
+      />
     </View>
   );
 }
@@ -1620,9 +1720,13 @@ function CostRow({
         <Text style={styles.itemName}>{cost.name}</Text>
         <Text style={styles.itemMeta}>{cost.nextDueDate} / {formatMoney(cost.defaultAmount)}</Text>
       </View>
-      <IconButton disabled={!canUpdate || completing} onPress={onComplete}>
-        <Check color={accent.color} size={17} />
-      </IconButton>
+      <ActionButton
+        disabled={!canUpdate || completing}
+        onPress={onComplete}
+        size="small"
+        title="Opłacone"
+        variant="secondary"
+      />
     </View>
   );
 }
@@ -1666,7 +1770,9 @@ function AttachmentRow({
   canDelete,
   canUpdate,
   deleting,
+  downloading,
   onDelete,
+  onDownload,
   onEdit,
   onPreview,
 }: {
@@ -1676,7 +1782,9 @@ function AttachmentRow({
   canDelete: boolean;
   canUpdate: boolean;
   deleting: boolean;
+  downloading: boolean;
   onDelete: () => void;
+  onDownload: () => void;
   onEdit: () => void;
   onPreview: () => void;
 }) {
@@ -1716,8 +1824,8 @@ function AttachmentRow({
           </Text>
         </View>
       </Pressable>
-      <IconButton accessibilityLabel={`Podgląd pliku ${attachment.fileName}`} onPress={onPreview}>
-        <Eye color={theme.colors.primary} size={17} />
+      <IconButton accessibilityLabel={`Pobierz plik ${attachment.fileName}`} disabled={downloading} onPress={onDownload}>
+        <Download color={theme.colors.primary} size={17} />
       </IconButton>
       {canUpdate ? (
         <IconButton onPress={onEdit}>
@@ -2093,11 +2201,21 @@ function createStyles(colors: AppPalette) {
       gap: 2,
       minWidth: 0,
     },
+    logoutButton: {
+      alignSelf: "stretch",
+      backgroundColor: colors.danger,
+      borderColor: colors.danger,
+      width: "100%",
+    },
+    logoutButtonLabel: {
+      color: colors.inverseText,
+      fontWeight: "900",
+    },
     notificationPreferenceList: {
       gap: spacing.xs,
     },
     notificationPreferenceRow: {
-      alignItems: "flex-start",
+      alignItems: "center",
       backgroundColor: colors.card,
       borderColor: colors.border,
       borderRadius: radii.control,
@@ -2110,9 +2228,10 @@ function createStyles(colors: AppPalette) {
     },
     notificationPreferenceSwitch: {
       alignSelf: "center",
+      alignItems: "flex-end",
       flexShrink: 0,
       justifyContent: "center",
-      minWidth: 56,
+      width: 52,
     },
     notificationPreferencesHeader: {
       gap: 2,

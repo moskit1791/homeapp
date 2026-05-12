@@ -41,6 +41,22 @@ export class FinanceDebtIdParamDto {
   id!: string;
 }
 
+export class CreateBudgetMonthDto {
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  month!: number;
+
+  @IsOptional()
+  @IsUUID()
+  sourceBudgetMonthId?: string | null;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(2000)
+  year!: number;
+}
+
 export class CreateBudgetCategoryDto {
   @IsString()
   @Length(1, 120)
@@ -143,6 +159,10 @@ export class CreateExpenseDto {
 }
 
 export class UpsertIncomeDto {
+  @IsOptional()
+  @IsUUID()
+  budgetMonthId?: string;
+
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)

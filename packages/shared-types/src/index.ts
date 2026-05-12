@@ -24,7 +24,7 @@ export type HouseholdMemberRole = 'owner' | 'member';
 
 export type ScopeType = 'household' | 'member';
 
-export type ShoppingListType = 'daily' | 'long_term';
+export type ShoppingListType = 'daily' | 'tomorrow' | 'long_term';
 
 export type TodoStatus = 'todo' | 'done';
 

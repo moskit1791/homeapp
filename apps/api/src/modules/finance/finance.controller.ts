@@ -20,6 +20,7 @@ import { PermissionGuard } from '../permissions/guards/permission.guard';
 import {
   CreateBudgetCategoryDto,
   CreateBudgetItemDto,
+  CreateBudgetMonthDto,
   CreateExpenseDto,
   CreateFinanceDebtDto,
   FinanceBudgetItemIdParamDto,
@@ -72,6 +73,23 @@ export class FinanceController {
     return this.financeSummaryService.getMonthDetail(
       this.requireHousehold(household).householdId,
       generated.id
+    );
+  }
+
+  @Post('months')
+  @RequirePermission('finances', 'create')
+  async createMonth(
+    @CurrentHousehold() household: HouseholdContext | undefined,
+    @Body() dto: CreateBudgetMonthDto
+  ) {
+    const created = await this.budgetMonthsService.createMonth(
+      this.requireHousehold(household).householdId,
+      dto
+    );
+
+    return this.financeSummaryService.getMonthDetail(
+      this.requireHousehold(household).householdId,
+      created.id
     );
   }
 

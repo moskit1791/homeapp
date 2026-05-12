@@ -18,6 +18,7 @@ import { RequirePermission } from '../permissions/decorators/require-permission.
 import { PermissionGuard } from '../permissions/guards/permission.guard';
 import {
   CreateShoppingItemDto,
+  MoveShoppingItemDto,
   ShoppingItemIdParamDto,
   ShoppingListTypeParamDto,
   UpdateShoppingItemDto
@@ -99,6 +100,46 @@ export class ShoppingController {
     return { ok: true };
   }
 
+  @Delete(':type/items')
+  @RequirePermission('shopping', 'delete')
+  clearList(
+    @CurrentHousehold() household: HouseholdContext | undefined,
+    @Param() params: ShoppingListTypeParamDto
+  ) {
+    return this.shoppingService.clearList(
+      this.requireHousehold(household).householdId,
+      params.type
+    );
+  }
+
+  @Post('items/:id/move')
+  @RequirePermission('shopping', 'update')
+  async moveItem(
+    @CurrentHousehold() household: HouseholdContext | undefined,
+    @Param() params: ShoppingItemIdParamDto,
+    @Body() dto: MoveShoppingItemDto
+  ) {
+    const item = await this.shoppingService.moveItem(
+      this.requireHousehold(household).householdId,
+      params.id,
+      dto
+    );
+
+    if (!item) {
+      throw new NotFoundException('Shopping item not found');
+    }
+
+    return item;
+  }
+
+  @Post('daily/move-unchecked-to-tomorrow')
+  @RequirePermission('shopping', 'update')
+  moveUncheckedToTomorrow(@CurrentHousehold() household: HouseholdContext | undefined) {
+    return this.shoppingService.moveUncheckedToTomorrow(
+      this.requireHousehold(household).householdId
+    );
+  }
+
   @Post('items/:id/check')
   @RequirePermission('shopping', 'update')
   async checkItem(
@@ -106,6 +147,24 @@ export class ShoppingController {
     @Param() params: ShoppingItemIdParamDto
   ) {
     const item = await this.shoppingService.checkItem(
+      this.requireHousehold(household).householdId,
+      params.id
+    );
+
+    if (!item) {
+      throw new NotFoundException('Shopping item not found');
+    }
+
+    return item;
+  }
+
+  @Post('items/:id/toggle')
+  @RequirePermission('shopping', 'update')
+  async toggleItem(
+    @CurrentHousehold() household: HouseholdContext | undefined,
+    @Param() params: ShoppingItemIdParamDto
+  ) {
+    const item = await this.shoppingService.toggleItem(
       this.requireHousehold(household).householdId,
       params.id
     );

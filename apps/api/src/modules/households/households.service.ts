@@ -570,8 +570,17 @@ export class HouseholdsService {
       `
         insert into shopping_lists (household_id, type, name)
         values
-          ($1, 'daily', 'Codzienne'),
-          ($1, 'long_term', 'Długoterminowe')
+          ($1, 'daily', 'Dzisiaj'),
+          ($1, 'tomorrow', 'Jutro'),
+          ($1, 'long_term', 'Na później')
+      `,
+      [householdId]
+    );
+    await client.query(
+      `
+        insert into shopping_rollovers (household_id, last_rollover_date)
+        values ($1, timezone('Europe/Warsaw', now())::date)
+        on conflict (household_id) do nothing
       `,
       [householdId]
     );

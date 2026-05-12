@@ -14,6 +14,7 @@ import type {
   BudgetItemSummary,
   BudgetMonth,
   BudgetMonthDetail,
+  BulkShoppingResult,
   CalendarEvent,
   CleaningTask,
   CompleteAnnualCostRequest,
@@ -24,6 +25,7 @@ import type {
   CreateAttachmentRequest,
   CreateBudgetCategoryRequest,
   CreateBudgetItemRequest,
+  CreateBudgetMonthRequest,
   CreateCalendarEventRequest,
   CreateCleaningTaskRequest,
   CreateDataEntryRequest,
@@ -59,6 +61,7 @@ import type {
   MealPlanSummary,
   MealRandomizeRequest,
   MealRandomizeResult,
+  MoveShoppingItemRequest,
   Note,
   NotificationPreference,
   OkResponse,
@@ -442,6 +445,20 @@ export function generateNextBudgetMonth(
 
   return apiRequest<BudgetMonthDetail>('/finance/months/generate-next', {
     accessToken: requestOptions.accessToken,
+    method: 'POST',
+    signal: requestOptions.signal
+  });
+}
+
+export function createBudgetMonth(
+  input: CreateBudgetMonthRequest,
+  options?: ApiCallOptionsInput
+): Promise<BudgetMonthDetail> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<BudgetMonthDetail, CreateBudgetMonthRequest>('/finance/months', {
+    accessToken: requestOptions.accessToken,
+    body: input,
     method: 'POST',
     signal: requestOptions.signal
   });
@@ -1258,6 +1275,59 @@ export function checkShoppingItem(
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<ShoppingItem>(`/shopping-lists/items/${id}/check`, {
+    accessToken: requestOptions.accessToken,
+    method: 'POST',
+    signal: requestOptions.signal
+  });
+}
+
+export function toggleShoppingItem(
+  id: string,
+  options?: ApiCallOptionsInput
+): Promise<ShoppingItem> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<ShoppingItem>(`/shopping-lists/items/${id}/toggle`, {
+    accessToken: requestOptions.accessToken,
+    method: 'POST',
+    signal: requestOptions.signal
+  });
+}
+
+export function moveShoppingItem(
+  id: string,
+  input: MoveShoppingItemRequest,
+  options?: ApiCallOptionsInput
+): Promise<ShoppingItem> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<ShoppingItem, MoveShoppingItemRequest>(`/shopping-lists/items/${id}/move`, {
+    accessToken: requestOptions.accessToken,
+    body: input,
+    method: 'POST',
+    signal: requestOptions.signal
+  });
+}
+
+export function clearShoppingList(
+  type: ShoppingListType,
+  options?: ApiCallOptionsInput
+): Promise<BulkShoppingResult> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<BulkShoppingResult>(`/shopping-lists/${type}/items`, {
+    accessToken: requestOptions.accessToken,
+    method: 'DELETE',
+    signal: requestOptions.signal
+  });
+}
+
+export function moveUncheckedShoppingToTomorrow(
+  options?: ApiCallOptionsInput
+): Promise<BulkShoppingResult> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<BulkShoppingResult>('/shopping-lists/daily/move-unchecked-to-tomorrow', {
     accessToken: requestOptions.accessToken,
     method: 'POST',
     signal: requestOptions.signal

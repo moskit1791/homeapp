@@ -1,6 +1,6 @@
 import type { ModuleKey } from "@homeapp/shared-types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import {
   CalendarEvent,
@@ -47,11 +47,19 @@ import {
   Trash2,
 } from "../../src/ui/icon";
 
-type AgendaSegment = "notes" | "todo";
+type _AgendaSegment = "notes" | "todo";
+type ReminderValue = "none" | "15" | "60" | "1440";
 
-const agendaSegments: Array<{ label: string; moduleKey: ModuleKey; value: AgendaSegment }> = [
+const _agendaSegments: Array<{ label: string; moduleKey: ModuleKey; value: _AgendaSegment }> = [
   { label: "Notatki", moduleKey: "notes", value: "notes" },
   { label: "To-do", moduleKey: "todo", value: "todo" },
+];
+
+const reminderOptions: Array<{ label: string; value: ReminderValue }> = [
+  { label: "Brak", value: "none" },
+  { label: "15 min", value: "15" },
+  { label: "1 h", value: "60" },
+  { label: "Dzień wcześniej", value: "1440" },
 ];
 
 export default function KalendarzScreen() {
@@ -62,30 +70,17 @@ export default function KalendarzScreen() {
   const accessToken = session?.accessToken;
   const [visibleMonth, setVisibleMonth] = useState(() => monthAnchor(new Date()));
   const [selectedDate, setSelectedDate] = useState(todayIso());
-  const [activeSegment, setActiveSegment] = useState<AgendaSegment>("notes");
   const [eventTitle, setEventTitle] = useState("");
   const [eventDate, setEventDate] = useState(todayIso());
   const [eventTime, setEventTime] = useState("");
   const [eventNote, setEventNote] = useState("");
+  const [eventReminder, setEventReminder] = useState<ReminderValue>("1440");
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [eventModalVisible, setEventModalVisible] = useState(false);
   const permissions = permissionsQuery.data;
-  const readableAgenda = agendaSegments.filter(
-    (segment) => getPermission(permissions, segment.moduleKey).canRead,
-  );
   const calendarPermission = getPermission(permissions, "calendar");
-  const canUseScreen = hasModuleRead(permissions, ["calendar", "notes", "todo"]);
+  const canUseScreen = hasModuleRead(permissions, ["calendar"]);
   const range = useMemo(() => getMonthRange(visibleMonth), [visibleMonth]);
-
-  useEffect(() => {
-    if (!permissionsQuery.isSuccess || readableAgenda.length === 0) {
-      return;
-    }
-
-    if (!readableAgenda.some((segment) => segment.value === activeSegment)) {
-      setActiveSegment(readableAgenda[0]!.value);
-    }
-  }, [activeSegment, permissionsQuery.isSuccess, readableAgenda]);
 
   const monthEventsQuery = useQuery({
     enabled: calendarPermission.canRead && Boolean(accessToken),
@@ -110,6 +105,7 @@ export default function KalendarzScreen() {
               eventDate,
               eventTime: normalizeEventTime(eventTime),
               note: eventNote.trim() || null,
+              reminderOffsetMinutes: reminderValueToMinutes(eventReminder),
               scopeType: editingEvent.scopeType,
               title: eventTitle.trim(),
             },
@@ -120,6 +116,7 @@ export default function KalendarzScreen() {
               eventDate,
               eventTime: normalizeEventTime(eventTime),
               note: eventNote.trim() || null,
+              reminderOffsetMinutes: reminderValueToMinutes(eventReminder),
               scopeType: "household",
               title: eventTitle.trim(),
             },
@@ -151,6 +148,7 @@ export default function KalendarzScreen() {
     setEventDate(date);
     setEventTime("");
     setEventNote("");
+    setEventReminder("1440");
     setEventModalVisible(true);
   }
 
@@ -160,6 +158,7 @@ export default function KalendarzScreen() {
     setEventDate(event.eventDate);
     setEventTime(event.eventTime?.slice(0, 5) ?? "");
     setEventNote(event.note ?? "");
+    setEventReminder(minutesToReminderValue(event.reminderOffsetMinutes));
     setEventModalVisible(true);
   }
 
@@ -168,6 +167,7 @@ export default function KalendarzScreen() {
     setEventTitle("");
     setEventTime("");
     setEventNote("");
+    setEventReminder("1440");
     setEventModalVisible(false);
   }
 
@@ -258,17 +258,6 @@ export default function KalendarzScreen() {
         />
       ) : null}
 
-      {readableAgenda.length > 0 ? (
-        <SegmentedControl
-          onChange={setActiveSegment}
-          options={readableAgenda.map(({ label, value }) => ({ label, value }))}
-          value={activeSegment}
-        />
-      ) : null}
-
-      {activeSegment === "notes" ? <NotesBoard accessToken={accessToken} /> : null}
-      {activeSegment === "todo" ? <TodoBoard accessToken={accessToken} /> : null}
-
       <FormModal
         footer={
           <View style={styles.modalFooter}>
@@ -325,6 +314,10 @@ export default function KalendarzScreen() {
           style={[styles.input, styles.textArea]}
           value={eventNote}
         />
+        <View style={styles.formGroup}>
+          <Text style={styles.formLabel}>Przypomnienie</Text>
+          <SegmentedControl onChange={setEventReminder} options={reminderOptions} value={eventReminder} />
+        </View>
         {saveEventMutation.error ? (
           <InlineAlert text="Nie udało się dodać wydarzenia." tone="error" />
         ) : null}
@@ -482,7 +475,7 @@ function UpcomingEvents({
   );
 }
 
-function NotesBoard({ accessToken }: { accessToken?: string | null }) {
+function _NotesBoard({ accessToken }: { accessToken?: string | null }) {
   const queryClient = useQueryClient();
   const permission = useModulePermission("notes");
   const theme = useAppTheme();
@@ -630,7 +623,7 @@ function NotesBoard({ accessToken }: { accessToken?: string | null }) {
   );
 }
 
-function TodoBoard({ accessToken }: { accessToken?: string | null }) {
+function _TodoBoard({ accessToken }: { accessToken?: string | null }) {
   const queryClient = useQueryClient();
   const permission = useModulePermission("todo");
   const theme = useAppTheme();
@@ -905,6 +898,18 @@ function normalizeEventTime(value: string): string | null {
   return trimmed ? trimmed : null;
 }
 
+function reminderValueToMinutes(value: ReminderValue): number | null {
+  return value === "none" ? null : Number(value);
+}
+
+function minutesToReminderValue(value: number | null | undefined): ReminderValue {
+  if (value === 15 || value === 60 || value === 1440) {
+    return String(value) as ReminderValue;
+  }
+
+  return "none";
+}
+
 function getEditableCalendarEventId(event: CalendarEvent): string {
   return event.sourceEventId ?? event.id.split(":")[0] ?? event.id;
 }
@@ -1036,6 +1041,16 @@ function createStyles(colors: AppPalette) {
     },
     flexInput: {
       flex: 1,
+    },
+    formGroup: {
+      gap: spacing.xs,
+    },
+    formLabel: {
+      color: colors.textMuted,
+      fontSize: 11,
+      fontWeight: "900",
+      letterSpacing: 0,
+      textTransform: "uppercase",
     },
     formRow: {
       flexDirection: "row",

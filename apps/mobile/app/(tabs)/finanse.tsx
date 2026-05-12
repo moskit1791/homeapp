@@ -18,6 +18,7 @@ import {
 import {
   createBudgetCategory,
   createBudgetItem,
+  createBudgetMonth,
   createExpense,
   createFinanceDebt,
   deleteBudgetItem,
@@ -65,6 +66,7 @@ type FinanceFormValues = {
   incomeAmount: string;
   itemAmount: string;
   itemName: string;
+  monthInput: string;
 };
 
 type BudgetItem = BudgetCategoryWithItems["items"][number];
@@ -72,7 +74,17 @@ type BudgetItemWithCategory = BudgetItem & {
   category: BudgetCategoryWithItems;
 };
 
-type FinanceModal = "menu" | "income" | "category" | "item" | "editItem" | "expense" | "copyAmounts" | "debt" | null;
+type FinanceModal =
+  | "menu"
+  | "income"
+  | "category"
+  | "item"
+  | "editItem"
+  | "expense"
+  | "copyAmounts"
+  | "debt"
+  | "month"
+  | null;
 type FinanceSortKey = "category" | "owner" | "name" | "budget" | "spent" | "remaining";
 type FinanceSortDirection = "asc" | "desc";
 
@@ -126,6 +138,7 @@ export default function FinanseScreen() {
       incomeAmount: "",
       itemAmount: "",
       itemName: "",
+      monthInput: "",
     },
   });
 
@@ -133,6 +146,7 @@ export default function FinanseScreen() {
   const categoryName = watch("categoryName");
   const itemName = watch("itemName");
   const itemAmount = watch("itemAmount");
+  const monthInput = watch("monthInput");
   const expenseAmount = watch("expenseAmount");
   const debtAmount = watch("debtAmount");
   const debtDueDate = watch("debtDueDate");
@@ -153,6 +167,7 @@ export default function FinanseScreen() {
   const [copyAmountInputs, setCopyAmountInputs] = useState<Record<string, string>>({});
   const [financeFilters, setFinanceFilters] = useState<FinanceFilters>(defaultFinanceFilters);
   const [financeFiltersLoaded, setFinanceFiltersLoaded] = useState(false);
+  const [financeFiltersExpanded, setFinanceFiltersExpanded] = useState(false);
   const [deleteMonthConfirmVisible, setDeleteMonthConfirmVisible] = useState(false);
   const [handledRouteAction, setHandledRouteAction] = useState<string | null>(null);
 
@@ -192,9 +207,8 @@ export default function FinanseScreen() {
       ? selectedArchiveQuery.data
       : currentSummary;
   const totals = summary?.summary;
-  const incomes = currentSummary?.incomes ?? [];
+  const incomes = summary?.incomes ?? [];
   const categories = summary?.categories ?? [];
-  const currentCategories = currentSummary?.categories ?? [];
   const visibleFlatItems = useMemo<BudgetItemWithCategory[]>(
     () =>
       categories.flatMap((category) =>
@@ -202,13 +216,7 @@ export default function FinanseScreen() {
       ),
     [categories],
   );
-  const flatItems = useMemo<BudgetItemWithCategory[]>(
-    () =>
-      currentCategories.flatMap((category) =>
-        getCategoryItems(category).map((item) => ({ ...item, category })),
-      ),
-    [currentCategories],
-  );
+  const flatItems = visibleFlatItems;
   const currentMonth = currentSummary?.month;
   const visibleMonth = summary?.month;
   const budgetAmount = Number(totals?.totalBudgetAmount ?? 0);
@@ -225,14 +233,13 @@ export default function FinanseScreen() {
     months.forEach((month) => unique.set(month.id, month));
 
     return [...unique.values()]
-      .sort((left, right) => left.year - right.year || left.month - right.month)
-      .slice(-5);
+      .sort((left, right) => left.year - right.year || left.month - right.month);
   }, [archiveQuery.data, currentMonth]);
   const selectedMonthIndex = monthTabs.findIndex((month) => month.id === selectedMonthId);
   const selectedMonth = monthTabs.find((month) => month.id === selectedMonthId) ?? visibleMonth;
   const showingArchiveMonth = Boolean(selectedMonthId) && selectedMonthId !== currentSummary?.month.id;
-  const canEditVisibleMonth = canUpdate && Boolean(selectedMonthId) && selectedMonthId === currentSummary?.month.id;
-  const canDeleteVisibleMonthItems = canDelete && Boolean(selectedMonthId) && selectedMonthId === currentSummary?.month.id;
+  const canEditVisibleMonth = canUpdate && Boolean(visibleMonth?.id);
+  const canDeleteVisibleMonthItems = canDelete && Boolean(visibleMonth?.id);
   const canGoPreviousMonth = selectedMonthIndex > 0;
   const canGoNextMonth = selectedMonthIndex >= 0 && selectedMonthIndex < monthTabs.length - 1;
   const copiedMonthItems = useMemo<BudgetItemWithCategory[]>(
@@ -329,12 +336,12 @@ export default function FinanseScreen() {
   }, [incomes, selectedItemOwnerId]);
 
   useEffect(() => {
-    const firstCategoryId = categoriesQuery.data?.[0]?.id ?? currentCategories[0]?.id;
+    const firstCategoryId = categories[0]?.id ?? categoriesQuery.data?.[0]?.id;
 
     if (!selectedItemCategoryId && firstCategoryId) {
       setSelectedItemCategoryId(firstCategoryId);
     }
-  }, [categoriesQuery.data, currentCategories, selectedItemCategoryId]);
+  }, [categories, categoriesQuery.data, selectedItemCategoryId]);
 
   useEffect(() => {
     if (!selectedExpenseItemId && flatItems[0]) {
@@ -347,7 +354,7 @@ export default function FinanseScreen() {
     mutationFn: () =>
       upsertIncome(
         selectedIncomeMemberId,
-        { amount: parseMoney(incomeAmount) },
+        { amount: parseMoney(incomeAmount), budgetMonthId: visibleMonth?.id },
         { accessToken },
       ),
     onSuccess: async () => {
@@ -377,7 +384,7 @@ export default function FinanseScreen() {
       createBudgetItem(
         {
           budgetAmount: itemAmount.trim() ? parseMoney(itemAmount) : null,
-          budgetMonthId: currentMonth?.id ?? "",
+          budgetMonthId: visibleMonth?.id ?? "",
           categoryId: selectedItemCategoryId,
           name: itemName.trim(),
           ownerMemberId: selectedItemOwnerId,
@@ -489,6 +496,39 @@ export default function FinanseScreen() {
       await queryClient.invalidateQueries({ queryKey: queryKeys.start });
     },
   });
+  const createMonthMutation = useMutation({
+    mutationFn: () => {
+      const parsed = parseMonthInput(monthInput);
+
+      if (!parsed) {
+        throw new Error("Invalid month");
+      }
+
+      return createBudgetMonth(
+        {
+          month: parsed.month,
+          sourceBudgetMonthId: visibleMonth?.id ?? null,
+          year: parsed.year,
+        },
+        { accessToken },
+      );
+    },
+    onSuccess: async (createdMonth) => {
+      setValue("monthInput", "");
+      setSelectedMonthId(createdMonth.month.id);
+      setCopiedMonthDetail(createdMonth);
+      setCopyAmountInputs(
+        Object.fromEntries(
+          createdMonth.categories.flatMap((category) =>
+            getCategoryItems(category).map((item) => [item.id, item.budgetAmount ?? ""]),
+          ),
+        ),
+      );
+      await invalidateFinance();
+      await queryClient.invalidateQueries({ queryKey: queryKeys.start });
+      setFinanceModal(createdMonth.categories.some((category) => getCategoryItems(category).length > 0) ? "copyAmounts" : null);
+    },
+  });
   const copyAmountsMutation = useMutation({
     mutationFn: async () => {
       await Promise.all(
@@ -576,7 +616,7 @@ export default function FinanseScreen() {
   const canSaveCategory = canCreate && Boolean(categoryName.trim());
   const canSaveItem =
     canCreate &&
-    Boolean(currentMonth?.id) &&
+    Boolean(visibleMonth?.id) &&
     Boolean(itemName.trim()) &&
     Boolean(selectedItemCategoryId) &&
     Boolean(selectedItemOwnerId) &&
@@ -605,6 +645,7 @@ export default function FinanseScreen() {
     });
   const canRemoveSelectedMonth =
     canDelete && Boolean(selectedMonthId) && monthTabs.length > 1 && !deleteMonthMutation.isPending;
+  const canCreateMonth = canCreate && Boolean(parseMonthInput(monthInput)) && !createMonthMutation.isPending;
 
   if (permissionsQuery.isLoading) {
     return (
@@ -706,42 +747,19 @@ export default function FinanseScreen() {
             />
           </View>
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={styles.monthTabs}>
-              {monthTabs.map((month) => {
-                const active = month.id === selectedMonthId;
-
-                return (
-                  <Pressable
-                    key={month.id}
-                    onPress={() => setSelectedMonthId(month.id)}
-                    style={[styles.monthTab, active && styles.monthTabActive]}
-                  >
-                    <Text style={[styles.monthTabText, active && styles.monthTabTextActive]}>
-                      {formatMonthShort(month)}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </ScrollView>
-
           <FinanceFiltersPanel
             categories={categories}
+            expanded={financeFiltersExpanded}
             filters={financeFilters}
             onChange={updateFinanceFilters}
+            onToggleExpanded={() => setFinanceFiltersExpanded((value) => !value)}
             owners={financeOwnerOptions}
             resultCount={filteredRows.length}
             totalCount={visibleFlatItems.length}
           />
 
           <FinanceSheet
-            canDelete={canDeleteVisibleMonthItems}
             canUpdate={canEditVisibleMonth}
-            deletingItemId={
-              deleteItemMutation.isPending ? String(deleteItemMutation.variables ?? "") : null
-            }
-            onDelete={(item) => deleteItemMutation.mutate(item.id)}
             onEdit={openEditBudgetItem}
             rows={filteredRows}
           />
@@ -772,6 +790,7 @@ export default function FinanseScreen() {
                 <ActionButton onPress={() => setFinanceModal("income")} title="Zmień dochód" variant="secondary" />
               ) : null}
               <ActionButton onPress={() => setFinanceModal("category")} title="Dodaj kategorię" variant="secondary" />
+              <ActionButton onPress={() => setFinanceModal("month")} title="Dodaj miesiac" variant="secondary" />
               <ActionButton
                 onPress={() => {
                   setEditingBudgetItem(null);
@@ -801,6 +820,40 @@ export default function FinanseScreen() {
                 <InlineAlert tone="error" text="Nie udało się usunąć miesiąca." />
               ) : null}
             </View>
+          </FormModal>
+
+          <FormModal
+            footer={
+              <View style={styles.modalFooter}>
+                <ActionButton
+                  onPress={closeFinanceModal}
+                  style={styles.modalFooterButton}
+                  title="Anuluj"
+                  variant="secondary"
+                />
+                <ActionButton
+                  disabled={!canCreateMonth}
+                  loading={createMonthMutation.isPending}
+                  onPress={() => createMonthMutation.mutate()}
+                  style={styles.modalFooterButton}
+                  title="Dodaj"
+                />
+              </View>
+            }
+            onClose={closeFinanceModal}
+            subtitle="Struktura pozycji zostanie skopiowana z wybranego miesiaca bez kwot."
+            title="Dodaj miesiac"
+            visible={financeModal === "month"}
+          >
+            <TextField
+              control={control}
+              label="Miesiac"
+              name="monthInput"
+              placeholder="YYYY-MM"
+            />
+            {createMonthMutation.error ? (
+              <InlineAlert tone="error" text="Podaj miesiac w formacie YYYY-MM, ktory jeszcze nie istnieje." />
+            ) : null}
           </FormModal>
 
           <FormModal
@@ -967,7 +1020,7 @@ export default function FinanseScreen() {
             />
             <ChoiceSelector
               emptyText="Brak kategorii do wyboru."
-              items={(categoriesQuery.data ?? currentCategories).map((category) => ({
+              items={(categoriesQuery.data ?? categories).map((category) => ({
                 id: category.id,
                 label: category.name,
               }))}
@@ -983,6 +1036,22 @@ export default function FinanseScreen() {
               onSelect={setSelectedItemOwnerId}
               selectedId={selectedItemOwnerId}
             />
+            {editingBudgetItem && canDeleteVisibleMonthItems ? (
+              <ActionButton
+                disabled={deleteItemMutation.isPending}
+                loading={deleteItemMutation.isPending}
+                onPress={() => {
+                  deleteItemMutation.mutate(editingBudgetItem.id, {
+                    onSuccess: () => closeFinanceModal(),
+                  });
+                }}
+                title="Usun pozycje"
+                variant="ghost"
+              />
+            ) : null}
+            {deleteItemMutation.error ? (
+              <InlineAlert tone="error" text="Nie udalo sie usunac pozycji." />
+            ) : null}
             {itemMutation.error || updateItemMutation.error ? (
               <InlineAlert tone="error" text="Nie udało się zapisać pozycji." />
             ) : null}
@@ -1261,21 +1330,26 @@ function FinanceDebtsList({
 
 function FinanceFiltersPanel({
   categories,
+  expanded,
   filters,
   onChange,
+  onToggleExpanded,
   owners,
   resultCount,
   totalCount,
 }: {
   categories: BudgetCategoryWithItems[];
+  expanded: boolean;
   filters: FinanceFilters;
   onChange: (filters: Partial<FinanceFilters>) => void;
+  onToggleExpanded: () => void;
   owners: Array<{ id: string; label: string }>;
   resultCount: number;
   totalCount: number;
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
+  const summary = describeFinanceFilters(filters, resultCount, totalCount);
 
   return (
     <View style={styles.filterPanel}>
@@ -1283,6 +1357,14 @@ function FinanceFiltersPanel({
         <Text style={styles.filterTitle}>Widok budżetu</Text>
         <Text style={styles.filterCount}>{resultCount}/{totalCount}</Text>
       </View>
+      <Pressable accessibilityRole="button" onPress={onToggleExpanded} style={styles.filterToggleButton}>
+        <Text numberOfLines={1} style={styles.filterSummary}>
+          {summary}
+        </Text>
+        <Text style={styles.filterToggle}>{expanded ? "Zwin" : "Rozwin"}</Text>
+      </Pressable>
+      {expanded ? (
+        <>
       <TextInput
         onChangeText={(search) => onChange({ search })}
         placeholder="Szukaj pozycji"
@@ -1347,6 +1429,8 @@ function FinanceFiltersPanel({
           />
         </View>
       </View>
+        </>
+      ) : null}
     </View>
   );
 }
@@ -1373,22 +1457,19 @@ function FilterChip({
 }
 
 function FinanceSheet({
-  canDelete,
   canUpdate,
-  deletingItemId,
-  onDelete,
   onEdit,
   rows,
 }: {
-  canDelete: boolean;
   canUpdate: boolean;
-  deletingItemId: string | null;
-  onDelete: (item: BudgetItemWithCategory) => void;
   onEdit: (item: BudgetItemWithCategory) => void;
   rows: BudgetItemWithCategory[];
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
+  const canDelete = false;
+  const deletingItemId: string | null = null;
+  const onDelete = (_item: BudgetItemWithCategory) => undefined;
 
   if (rows.length === 0) {
     return <InlineAlert text="Brak pozycji pasujących do filtrów." />;
@@ -1405,7 +1486,7 @@ function FinanceSheet({
           <Text style={styles.amountHeaderCell}>Budżet</Text>
           <Text style={styles.amountHeaderCell}>Wydano</Text>
           <Text style={styles.amountHeaderCell}>Zostaje</Text>
-          {canUpdate || canDelete ? <Text style={styles.actionHeaderCell}>Akcje</Text> : null}
+          {canUpdate ? <Text style={styles.actionHeaderCell}>Akcje</Text> : null}
         </View>
         {groups.map((group) => (
           <View key={group.category.id}>
@@ -1431,7 +1512,7 @@ function FinanceSheet({
                 >
                   {item.budgetAmount ? formatMoney(item.remainingAmount ?? 0) : "bez limitu"}
                 </Text>
-                {canUpdate || canDelete ? (
+                {canUpdate ? (
                   <View style={styles.actionCell}>
                     {canUpdate ? (
                       <IconButton accessibilityLabel="Edytuj pozycję" onPress={() => onEdit(item)}>
@@ -1459,7 +1540,7 @@ function FinanceSheet({
               <Text style={[styles.amountSumCell, group.remaining < 0 && styles.dangerText]}>
                 {formatMoney(group.remaining)}
               </Text>
-              {canUpdate || canDelete ? <View style={styles.actionSumCell} /> : null}
+              {canUpdate ? <View style={styles.actionSumCell} /> : null}
             </View>
           </View>
         ))}
@@ -1569,6 +1650,30 @@ function compareFinanceRows(
   }
 }
 
+function describeFinanceFilters(filters: FinanceFilters, resultCount: number, totalCount: number): string {
+  const active: string[] = [`${resultCount}/${totalCount} pozycji`];
+
+  if (filters.search.trim()) {
+    active.push(`szukaj: ${filters.search.trim()}`);
+  }
+
+  if (filters.ownerMemberId) {
+    active.push("osoba");
+  }
+
+  if (filters.categoryId) {
+    active.push("kategoria");
+  }
+
+  if (filters.onlyOverBudget) {
+    active.push("po limicie");
+  }
+
+  active.push(filters.sortDirection === "asc" ? "rosnaco" : "malejaco");
+
+  return active.join(" / ");
+}
+
 function groupRowsByCategory(rows: BudgetItemWithCategory[]) {
   const groups = new Map<
     string,
@@ -1617,6 +1722,23 @@ function parseMoney(value: string): number {
   return Number.isFinite(parsed) ? Math.round(parsed * 100) / 100 : Number.NaN;
 }
 
+function parseMonthInput(value: string): { month: number; year: number } | null {
+  const match = value.trim().match(/^(\d{4})-(\d{2})$/);
+
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+
+  if (!Number.isInteger(year) || !Number.isInteger(month) || year < 2000 || year > 2100 || month < 1 || month > 12) {
+    return null;
+  }
+
+  return { month, year };
+}
+
 function isValidMoney(value: string): boolean {
   const parsed = parseMoney(value);
 
@@ -1651,15 +1773,6 @@ function formatDateShort(value: string): string {
   }
 
   return `${value.slice(8, 10)}.${value.slice(5, 7)}`;
-}
-
-function formatMonthShort(month: BudgetMonth): string {
-  const date = new Date(month.year, month.month - 1, 1);
-  const label = new Intl.DateTimeFormat("pl-PL", {
-    month: "short",
-  }).format(date);
-
-  return `${label.replace(".", "")} ${String(month.year).slice(2)}`;
 }
 
 function formatMonthLong(month: BudgetMonth): string {
@@ -1974,6 +2087,32 @@ function createStyles(colors: AppPalette) {
       fontSize: 11,
       fontWeight: "900",
       letterSpacing: 0,
+    },
+    filterSummary: {
+      color: colors.textMuted,
+      flex: 1,
+      fontSize: 11,
+      fontWeight: "800",
+      letterSpacing: 0,
+      minWidth: 0,
+    },
+    filterToggle: {
+      color: colors.primaryDark,
+      fontSize: 11,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    filterToggleButton: {
+      alignItems: "center",
+      backgroundColor: colors.cardMuted,
+      borderColor: colors.border,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      justifyContent: "space-between",
+      minHeight: 36,
+      paddingHorizontal: spacing.sm,
     },
     filterGroup: {
       gap: spacing.xs,

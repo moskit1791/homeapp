@@ -33,6 +33,7 @@ export const Close = createIcon("close");
 export const Cog = createIcon("cog-outline");
 export const Database = createIcon("database-outline");
 export const DotsVertical = createIcon("dots-vertical");
+export const Download = createIcon("download-outline");
 export const Eye = createIcon("eye-outline");
 export const EyeOff = createIcon("eye-off-outline");
 export const FileText = createIcon("file-document-outline");

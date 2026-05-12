@@ -15,7 +15,9 @@ export class IncomesService {
     memberId: string,
     dto: UpsertIncomeDto
   ): Promise<IncomeRecord> {
-    const budgetMonthId = await this.getCurrentBudgetMonthId(householdId);
+    const budgetMonthId = dto.budgetMonthId
+      ? await this.ensureBudgetMonth(householdId, dto.budgetMonthId)
+      : await this.getCurrentBudgetMonthId(householdId);
     await this.ensureActiveMember(householdId, memberId);
 
     const result = await this.database.query<IncomeRow>(
@@ -37,6 +39,25 @@ export class IncomesService {
     this.realtime.publish(householdId, 'finance.changed', income.id);
 
     return income;
+  }
+
+  private async ensureBudgetMonth(householdId: string, budgetMonthId: string): Promise<string> {
+    const result = await this.database.query<{ id: string }>(
+      `
+        select id
+        from budget_months
+        where household_id = $1
+          and id = $2
+        limit 1
+      `,
+      [householdId, budgetMonthId]
+    );
+
+    if (!result.rows[0]) {
+      throw new BadRequestException('Budget month not found');
+    }
+
+    return budgetMonthId;
   }
 
   private async getCurrentBudgetMonthId(householdId: string): Promise<string> {

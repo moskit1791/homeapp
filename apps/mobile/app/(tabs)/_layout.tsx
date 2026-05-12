@@ -8,6 +8,7 @@ import {
   Home,
   ListChecks,
   MoreHorizontal,
+  NotebookText,
   ShoppingCart,
   Utensils,
   WalletCards,
@@ -101,7 +102,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="kalendarz"
         options={{
-          href: shouldShow(["calendar", "notes", "todo"]) ? undefined : null,
+          href: shouldShow(["calendar"]) ? undefined : null,
           title: "Kalendarz",
           tabBarIcon: ({ color }) => <CalendarDays color={color} size={20} />,
         }}
@@ -120,6 +121,14 @@ export default function TabsLayout() {
           href: shouldShow(["shopping", "meal_planner"]) ? undefined : null,
           title: "Lista",
           tabBarIcon: ({ color }) => <ListChecks color={color} size={20} />,
+        }}
+      />
+      <Tabs.Screen
+        name="zadania"
+        options={{
+          href: shouldShow(["notes", "todo"]) ? undefined : null,
+          title: "Zadania",
+          tabBarIcon: ({ color }) => <NotebookText color={color} size={20} />,
         }}
       />
       <Tabs.Screen
