@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import {
   clearShoppingList,
   createMealPlan,
+  deleteMealSlot,
   createShoppingItem,
   deleteShoppingItem,
   getCurrentMealPlanWeek,
@@ -40,6 +41,7 @@ import {
 import {
   Check,
   ChevronRight,
+  Pencil,
   Plus,
   Trash2,
   Utensils,
@@ -341,7 +343,7 @@ function MealsBoard({ action }: { action?: string }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
   const accessToken = session?.accessToken;
-  const [selectedWeekId, setSelectedWeekId] = useState<string | null>(null);
+  const [selectedWeekStartDate, setSelectedWeekStartDate] = useState(currentWeekStart());
   const [didInitCurrentWeek, setDidInitCurrentWeek] = useState(false);
   const [weekday, setWeekday] = useState(weekdayFromIsoDate(todayIso()));
   const [slotIndex, setSlotIndex] = useState(0);
@@ -349,6 +351,7 @@ function MealsBoard({ action }: { action?: string }) {
   const [mealName, setMealName] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
   const [note, setNote] = useState("");
+  const [mealDrafts, setMealDrafts] = useState<Record<string, MealDraft>>({});
   const [modalVisible, setModalVisible] = useState(false);
   const householdQuery = useQuery({
     enabled: Boolean(accessToken),
@@ -365,6 +368,10 @@ function MealsBoard({ action }: { action?: string }) {
     queryFn: () => listMealPlanHistory({ accessToken }),
     queryKey: [...queryKeys.meal, "history"],
   });
+  const historyWeeks = mergeMealHistory(currentQuery.data?.week, historyQuery.data ?? []);
+  const weekOptions = buildMealWeekOptions(historyWeeks);
+  const selectedWeek = historyWeeks.find((week) => week.weekStartDate === selectedWeekStartDate);
+  const selectedWeekId = selectedWeek?.id ?? null;
   const selectedPlanQuery = useQuery({
     enabled:
       permission.canRead &&
@@ -372,34 +379,40 @@ function MealsBoard({ action }: { action?: string }) {
       Boolean(selectedWeekId) &&
       selectedWeekId !== currentQuery.data?.week.id,
     queryFn: () => getMealPlanWeek(selectedWeekId!, { accessToken }),
-    queryKey: [...queryKeys.meal, selectedWeekId],
+    queryKey: [...queryKeys.meal, "detail", selectedWeekId],
   });
 
   useEffect(() => {
-    if (currentQuery.data?.week.id && !didInitCurrentWeek) {
-      setSelectedWeekId(currentQuery.data.week.id);
+    if (currentQuery.data?.week.weekStartDate && !didInitCurrentWeek) {
+      setSelectedWeekStartDate(currentQuery.data.week.weekStartDate);
       setDidInitCurrentWeek(true);
     }
-  }, [currentQuery.data?.week.id, didInitCurrentWeek]);
+  }, [currentQuery.data?.week.weekStartDate, didInitCurrentWeek]);
 
   useEffect(() => {
     if (action === "addMeal") {
       const nextDate = todayIso();
+      const nextWeekStart = weekStartFromIsoDate(nextDate) ?? currentWeekStart();
 
+      setSelectedWeekStartDate(nextWeekStart);
       setMealDate(nextDate);
       setWeekday(weekdayFromIsoDate(nextDate));
+      setSlotIndex(0);
       setModalVisible(true);
     }
   }, [action]);
 
   const activePlan =
-    selectedWeekId && selectedWeekId !== currentQuery.data?.week.id
-      ? selectedPlanQuery.data
-      : currentQuery.data;
+    selectedWeekId === currentQuery.data?.week.id
+      ? currentQuery.data
+      : selectedWeekId
+        ? selectedPlanQuery.data
+        : null;
+  const selectedDraftKey = mealDraftKey(selectedWeekStartDate, weekday, slotIndex);
 
   const upsertMutation = useMutation({
     mutationFn: async () => {
-      const targetWeekStartDate = weekStartFromIsoDate(mealDate) ?? currentWeekStart();
+      const targetWeekStartDate = selectedWeekStartDate;
       const targetPlan = await getOrCreateMealPlanForDate({
         accessToken,
         activePlan,
@@ -417,22 +430,39 @@ function MealsBoard({ action }: { action?: string }) {
         weekId,
         [
           {
-            linkUrl: linkUrl.trim() || null,
+            linkUrl: normalizeOptionalMealUrl(linkUrl),
             mealName: mealName.trim(),
             note: note.trim() || null,
             slotIndex,
-            weekday: weekdayFromIsoDate(mealDate),
+            weekday,
           },
         ],
         { accessToken },
       );
     },
     onSuccess: async (updatedPlan) => {
-      setSelectedWeekId(updatedPlan.week.id);
+      setSelectedWeekStartDate(updatedPlan.week.weekStartDate);
       setMealName("");
       setLinkUrl("");
       setNote("");
+      setMealDrafts({});
       setModalVisible(false);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.meal });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.start });
+    },
+  });
+  const deleteMealMutation = useMutation({
+    mutationFn: (entry: MealPlanEntry) =>
+      deleteMealSlot(
+        entry.mealPlanWeekId,
+        {
+          slotIndex: entry.slotIndex,
+          weekday: entry.weekday,
+        },
+        { accessToken },
+      ),
+    onSuccess: async (updatedPlan) => {
+      setSelectedWeekStartDate(updatedPlan.week.weekStartDate);
       await queryClient.invalidateQueries({ queryKey: queryKeys.meal });
       await queryClient.invalidateQueries({ queryKey: queryKeys.start });
     },
@@ -442,12 +472,83 @@ function MealsBoard({ action }: { action?: string }) {
   );
   const groupedEntries = groupMeals(entries);
   const mealSlots = buildMealSlotIndexes(householdQuery.data?.mealSlotsPerDay);
-  const historyWeeks = mergeMealHistory(currentQuery.data?.week, historyQuery.data ?? []);
   const canSave =
     permission.canUpdate &&
     Boolean(mealName.trim()) &&
-    Boolean(weekStartFromIsoDate(mealDate)) &&
+    /^\d{4}-\d{2}-\d{2}$/.test(selectedWeekStartDate) &&
     !upsertMutation.isPending;
+
+  useEffect(() => {
+    if (!modalVisible) {
+      return;
+    }
+
+    const draft =
+      mealDrafts[selectedDraftKey] ??
+      findMealDraftForSelection(activePlan, selectedWeekStartDate, weekday, slotIndex);
+
+    setMealDate(dateForWeekday(selectedWeekStartDate, weekday));
+    setMealName(draft.mealName);
+    setLinkUrl(draft.linkUrl);
+    setNote(draft.note);
+  }, [
+    activePlan?.week.id,
+    mealDrafts,
+    modalVisible,
+    selectedDraftKey,
+    selectedWeekStartDate,
+    slotIndex,
+    weekday,
+  ]);
+
+  function openCreateMealModal() {
+    const nextDate = todayIso();
+    const nextWeekStart = weekStartFromIsoDate(nextDate) ?? currentWeekStart();
+
+    setSelectedWeekStartDate(nextWeekStart);
+    setWeekday(weekdayFromIsoDate(nextDate));
+    setSlotIndex(0);
+    setMealDate(nextDate);
+    setModalVisible(true);
+  }
+
+  function openEditMealModal(entry: MealPlanEntry) {
+    const weekStart = activePlan?.week.weekStartDate ?? selectedWeekStartDate;
+    const key = mealDraftKey(weekStart, entry.weekday, entry.slotIndex);
+
+    setMealDrafts((current) => ({
+      ...current,
+      [key]: mealDraftFromEntry(entry),
+    }));
+    setSelectedWeekStartDate(weekStart);
+    setWeekday(entry.weekday);
+    setSlotIndex(entry.slotIndex);
+    setMealDate(dateForWeekday(weekStart, entry.weekday));
+    setModalVisible(true);
+  }
+
+  function selectWeekStart(weekStart: string) {
+    setSelectedWeekStartDate(weekStart);
+    setMealDate(dateForWeekday(weekStart, weekday));
+  }
+
+  function selectWeekday(day: number) {
+    setWeekday(day);
+    setMealDate(dateForWeekday(selectedWeekStartDate, day));
+  }
+
+  function updateMealDraft(field: keyof MealDraft, value: string) {
+    const base = mealDrafts[selectedDraftKey] ??
+      findMealDraftForSelection(activePlan, selectedWeekStartDate, weekday, slotIndex);
+
+    setMealDrafts((current) => ({
+      ...current,
+      [selectedDraftKey]: {
+        ...base,
+        [field]: value,
+      },
+    }));
+  }
 
   return (
     <>
@@ -457,38 +558,20 @@ function MealsBoard({ action }: { action?: string }) {
         </View>
         <View style={styles.mealHeroText}>
           <Text style={styles.sectionTitle}>Plan posiłków</Text>
-          <Text style={styles.sectionMeta}>
-            {activePlan?.week.weekStartDate ? formatWeekRange(activePlan.week.weekStartDate) : formatMealPlanSummary(entries.length)}
-          </Text>
+          <Text style={styles.sectionMeta}>{formatWeekRange(selectedWeekStartDate)}</Text>
         </View>
         {permission.canUpdate ? (
-          <Pressable
-            onPress={() => {
-              const nextDate = todayIso();
-
-              setMealDate(nextDate);
-              setWeekday(weekdayFromIsoDate(nextDate));
-              setModalVisible(true);
-            }}
-            style={styles.fabInline}
-          >
+          <Pressable onPress={openCreateMealModal} style={styles.fabInline}>
             <Plus color={theme.colors.card} size={22} />
           </Pressable>
         ) : null}
       </View>
 
-      {historyWeeks.length > 0 ? (
-        <View style={styles.chips}>
-          {historyWeeks.map((week) => (
-            <Chip
-              active={selectedWeekId === week.id}
-              key={week.id}
-              onPress={() => setSelectedWeekId(week.id)}
-              title={formatWeekChip(week.weekStartDate)}
-            />
-          ))}
-        </View>
-      ) : null}
+      <WeekCalendarPicker
+        onSelect={selectWeekStart}
+        selectedWeekStartDate={selectedWeekStartDate}
+        weeks={weekOptions}
+      />
 
       <QueryState
         emptyText="Brak posiłków w planie."
@@ -519,6 +602,22 @@ function MealsBoard({ action }: { action?: string }) {
                     <ChevronRight color={theme.colors.food} size={17} />
                   </IconButton>
                 ) : null}
+                <View style={styles.mealRowActions}>
+                  {permission.canUpdate ? (
+                    <IconButton accessibilityLabel="Edytuj posilek" onPress={() => openEditMealModal(entry)}>
+                      <Pencil color={theme.colors.primary} size={16} />
+                    </IconButton>
+                  ) : null}
+                  {permission.canDelete ? (
+                    <IconButton
+                      accessibilityLabel="Usun posilek"
+                      disabled={deleteMealMutation.isPending}
+                      onPress={() => deleteMealMutation.mutate(entry)}
+                    >
+                      <Trash2 color={theme.colors.danger} size={16} />
+                    </IconButton>
+                  ) : null}
+                </View>
               </View>
             ))}
           </View>
@@ -544,40 +643,38 @@ function MealsBoard({ action }: { action?: string }) {
           </View>
         }
         onClose={() => setModalVisible(false)}
-        subtitle="Wybierz date, numer posilku i wpisz nazwe."
+        subtitle="Wybierz tydzien z kalendarza, dzien i numer posilku."
         title="Dodaj posiłek"
         visible={modalVisible}
       >
-        <TextInput
-          onChangeText={(value) => {
-            setMealDate(value);
-            setWeekday(weekdayFromIsoDate(value));
-          }}
-          placeholder="Data posilku, np. 2026-05-12"
-          placeholderTextColor={theme.colors.textSubtle}
-          style={styles.input}
-          value={mealDate}
+        <Text style={styles.inputLabel}>Tydzien</Text>
+        <WeekCalendarPicker
+          onSelect={selectWeekStart}
+          selectedWeekStartDate={selectedWeekStartDate}
+          weeks={weekOptions}
         />
+        <Text style={styles.inputLabel}>Dzien</Text>
         <View style={styles.chips}>
           {[1, 2, 3, 4, 5, 6, 7].map((day) => (
             <Chip
               active={weekday === day}
               key={day}
-              onPress={() => {
-                setWeekday(day);
-                setMealDate(dateForWeekday(activePlan?.week.weekStartDate ?? currentWeekStart(), day));
-              }}
+              onPress={() => selectWeekday(day)}
               title={weekdayShort(day)}
             />
           ))}
         </View>
+        <Text style={styles.inputLabel}>Numer posilku</Text>
         <View style={styles.chips}>
           {mealSlots.map((slot) => (
             <Chip active={slotIndex === slot} key={slot} onPress={() => setSlotIndex(slot)} title={`Posiłek ${slot + 1}`} />
           ))}
         </View>
         <TextInput
-          onChangeText={setMealName}
+          onChangeText={(value) => {
+            setMealName(value);
+            updateMealDraft("mealName", value);
+          }}
           placeholder="Nazwa posiłku"
           placeholderTextColor={theme.colors.textSubtle}
           style={styles.input}
@@ -585,7 +682,10 @@ function MealsBoard({ action }: { action?: string }) {
         />
         <TextInput
           multiline
-          onChangeText={setNote}
+          onChangeText={(value) => {
+            setNote(value);
+            updateMealDraft("note", value);
+          }}
           placeholder="Notatka"
           placeholderTextColor={theme.colors.textSubtle}
           style={[styles.input, styles.textArea]}
@@ -593,13 +693,18 @@ function MealsBoard({ action }: { action?: string }) {
         />
         <TextInput
           autoCapitalize="none"
+          autoCorrect={false}
           keyboardType="url"
-          onChangeText={setLinkUrl}
-          placeholder="Link URL"
+          onChangeText={(value) => {
+            setLinkUrl(value);
+            updateMealDraft("linkUrl", value);
+          }}
+          placeholder="Link URL, np. przepisy.pl/obiad"
           placeholderTextColor={theme.colors.textSubtle}
           style={styles.input}
           value={linkUrl}
         />
+        <Text style={styles.itemMeta}>Wybrana data: {mealDate}</Text>
         {upsertMutation.error ? (
           <InlineAlert text="Nie udało się zapisać posiłku." tone="error" />
         ) : null}
@@ -743,6 +848,45 @@ function Chip({
   );
 }
 
+function WeekCalendarPicker({
+  onSelect,
+  selectedWeekStartDate,
+  weeks,
+}: {
+  onSelect: (weekStartDate: string) => void;
+  selectedWeekStartDate: string;
+  weeks: MealWeekOption[];
+}) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      <View style={styles.weekCalendar}>
+        {weeks.map((week) => (
+          <Chip
+            active={selectedWeekStartDate === week.weekStartDate}
+            key={week.weekStartDate}
+            onPress={() => onSelect(week.weekStartDate)}
+            title={formatWeekOptionLabel(week)}
+          />
+        ))}
+      </View>
+    </ScrollView>
+  );
+}
+
+type MealDraft = {
+  linkUrl: string;
+  mealName: string;
+  note: string;
+};
+
+type MealWeekOption = {
+  entriesCount?: number;
+  weekStartDate: string;
+};
+
 type ShoppingGroup = {
   emoji: string;
   items: ShoppingItem[];
@@ -840,6 +984,75 @@ function normalizeShoppingName(value: string): string {
     .replace(/ł/g, "l");
 }
 
+function mealDraftKey(weekStartDate: string, weekday: number, slotIndex: number): string {
+  return `${weekStartDate}:${weekday}:${slotIndex}`;
+}
+
+function mealDraftFromEntry(entry: MealPlanEntry | undefined): MealDraft {
+  return {
+    linkUrl: entry?.linkUrl ?? "",
+    mealName: entry?.mealName ?? "",
+    note: entry?.note ?? "",
+  };
+}
+
+function findMealDraftForSelection(
+  plan: MealPlanDetail | null | undefined,
+  weekStartDate: string,
+  weekday: number,
+  slotIndex: number,
+): MealDraft {
+  if (plan?.week.weekStartDate !== weekStartDate) {
+    return mealDraftFromEntry(undefined);
+  }
+
+  return mealDraftFromEntry(
+    plan.entries.find((entry) => entry.weekday === weekday && entry.slotIndex === slotIndex),
+  );
+}
+
+function normalizeOptionalMealUrl(value: string): string | null {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  return /^[a-z][a-z\d+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
+function buildMealWeekOptions(
+  history: Array<{ entriesCount?: number; id: string; weekStartDate: string }>,
+): MealWeekOption[] {
+  const weeks = new Map<string, MealWeekOption>();
+  const current = currentWeekStart();
+
+  for (let offset = -4; offset <= 6; offset += 1) {
+    const weekStartDate = addWeeks(current, offset);
+    weeks.set(weekStartDate, { weekStartDate });
+  }
+
+  history.forEach((week) => {
+    weeks.set(week.weekStartDate, {
+      entriesCount: week.entriesCount,
+      weekStartDate: week.weekStartDate,
+    });
+  });
+
+  return [...weeks.values()].sort((left, right) =>
+    left.weekStartDate.localeCompare(right.weekStartDate),
+  );
+}
+
+function formatWeekOptionLabel(week: MealWeekOption): string {
+  const label =
+    week.weekStartDate === currentWeekStart()
+      ? "Ten tydzien"
+      : formatWeekRangeShort(week.weekStartDate);
+
+  return week.entriesCount ? `${label} (${week.entriesCount})` : label;
+}
+
 function mergeMealHistory(
   currentWeek: MealPlanDetail["week"] | undefined,
   history: MealPlanSummary[],
@@ -925,6 +1138,13 @@ function currentWeekStart(): string {
   return isoFromDate(from);
 }
 
+function addWeeks(weekStartDate: string, offset: number): string {
+  const date = new Date(`${weekStartDate}T12:00:00`);
+  date.setDate(date.getDate() + offset * 7);
+
+  return isoFromDate(date);
+}
+
 function todayIso(): string {
   return isoFromDate(new Date());
 }
@@ -969,16 +1189,20 @@ function isoFromDate(date: Date): string {
   ).padStart(2, "0")}`;
 }
 
-function formatWeekChip(weekStartDate: string): string {
-  return weekStartDate === currentWeekStart() ? "Ten tydzien" : `od ${weekStartDate.slice(5)}`;
-}
-
 function formatWeekRange(weekStartDate: string): string {
   const from = new Date(`${weekStartDate}T12:00:00`);
   const to = new Date(from);
   to.setDate(from.getDate() + 6);
 
   return `Tydzien ${formatDateShort(from)} - ${formatDateShort(to)}`;
+}
+
+function formatWeekRangeShort(weekStartDate: string): string {
+  const from = new Date(`${weekStartDate}T12:00:00`);
+  const to = new Date(from);
+  to.setDate(from.getDate() + 6);
+
+  return `${formatDateShort(from)}-${formatDateShort(to)}`;
 }
 
 function formatDateShort(date: Date): string {
@@ -1102,6 +1326,13 @@ function createStyles(colors: AppPalette) {
       minHeight: 46,
       paddingHorizontal: spacing.md,
     },
+    inputLabel: {
+      color: colors.text,
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 0,
+      marginBottom: -spacing.xs,
+    },
     itemDone: {
       color: colors.textMuted,
       textDecorationLine: "line-through",
@@ -1207,6 +1438,11 @@ function createStyles(colors: AppPalette) {
       flexDirection: "row",
       gap: spacing.sm,
     },
+    mealRowActions: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.xs,
+    },
     mealSlot: {
       alignItems: "center",
       backgroundColor: colors.primarySoft,
@@ -1260,6 +1496,11 @@ function createStyles(colors: AppPalette) {
       minHeight: 84,
       paddingTop: spacing.md,
       textAlignVertical: "top",
+    },
+    weekCalendar: {
+      flexDirection: "row",
+      gap: spacing.sm,
+      paddingRight: spacing.md,
     },
   });
 }

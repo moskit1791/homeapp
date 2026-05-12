@@ -20,6 +20,19 @@ export class MealPlanIdParamDto {
   id!: string;
 }
 
+export class MealPlanEntryTargetDto {
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(7)
+  weekday!: number;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  slotIndex!: number;
+}
+
 export class MealIdeaIdParamDto {
   @IsUUID()
   id!: string;

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import {
@@ -33,6 +33,7 @@ const taskSegments: Array<{ label: string; value: TaskSegment }> = [
 export default function ZadaniaScreen() {
   const { session } = useSession();
   const params = useLocalSearchParams<{ action?: string; segment?: TaskSegment }>();
+  const router = useRouter();
   const permissionsQuery = usePermissions();
   const notesPermission = useModulePermission("notes");
   const todoPermission = useModulePermission("todo");
@@ -74,14 +75,41 @@ export default function ZadaniaScreen() {
 
   return (
     <AppScreen title="Zadania">
-      <SegmentedControl onChange={setActiveSegment} options={availableSegments} value={activeSegment} />
-      {activeSegment === "notes" ? <NotesBoard action={params.action} accessToken={session?.accessToken} /> : null}
-      {activeSegment === "todo" ? <TodoBoard action={params.action} accessToken={session?.accessToken} /> : null}
+      <SegmentedControl
+        onChange={(segment) => {
+          setActiveSegment(segment);
+          router.setParams({ action: undefined, segment });
+        }}
+        options={availableSegments}
+        value={activeSegment}
+      />
+      {activeSegment === "notes" ? (
+        <NotesBoard
+          accessToken={session?.accessToken}
+          action={params.segment === "notes" ? params.action : undefined}
+          onRouteActionHandled={() => router.setParams({ action: undefined })}
+        />
+      ) : null}
+      {activeSegment === "todo" ? (
+        <TodoBoard
+          accessToken={session?.accessToken}
+          action={params.segment === "todo" ? params.action : undefined}
+          onRouteActionHandled={() => router.setParams({ action: undefined })}
+        />
+      ) : null}
     </AppScreen>
   );
 }
 
-function NotesBoard({ accessToken, action }: { accessToken?: string | null; action?: string }) {
+function NotesBoard({
+  accessToken,
+  action,
+  onRouteActionHandled,
+}: {
+  accessToken?: string | null;
+  action?: string;
+  onRouteActionHandled: () => void;
+}) {
   const queryClient = useQueryClient();
   const permission = useModulePermission("notes");
   const theme = useAppTheme();
@@ -126,8 +154,9 @@ function NotesBoard({ accessToken, action }: { accessToken?: string | null; acti
   useEffect(() => {
     if (action === "note" && permission.canCreate) {
       setModalVisible(true);
+      onRouteActionHandled();
     }
-  }, [action, permission.canCreate]);
+  }, [action, onRouteActionHandled, permission.canCreate]);
 
   function reset() {
     setTitle("");
@@ -207,7 +236,15 @@ function NotesBoard({ accessToken, action }: { accessToken?: string | null; acti
   );
 }
 
-function TodoBoard({ accessToken, action }: { accessToken?: string | null; action?: string }) {
+function TodoBoard({
+  accessToken,
+  action,
+  onRouteActionHandled,
+}: {
+  accessToken?: string | null;
+  action?: string;
+  onRouteActionHandled: () => void;
+}) {
   const queryClient = useQueryClient();
   const permission = useModulePermission("todo");
   const theme = useAppTheme();
@@ -257,8 +294,9 @@ function TodoBoard({ accessToken, action }: { accessToken?: string | null; actio
   useEffect(() => {
     if (action === "todo" && permission.canCreate) {
       setModalVisible(true);
+      onRouteActionHandled();
     }
-  }, [action, permission.canCreate]);
+  }, [action, onRouteActionHandled, permission.canCreate]);
 
   return (
     <>

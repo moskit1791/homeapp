@@ -41,6 +41,7 @@ import type {
   CreateTodoItemRequest,
   DataEntry,
   DeleteAccountResponse,
+  DeleteMealSlotRequest,
   EffectivePermission,
   Expense,
   Household,
@@ -87,6 +88,7 @@ import type {
   UpdateCalendarEventRequest,
   UpdateAttachmentRequest,
   UpdateBudgetItemRequest,
+  UpdateCleaningTaskRequest,
   UpdateFinanceDebtRequest,
   UpdateHouseholdRequest,
   UpdateMealPlanRequest,
@@ -716,6 +718,21 @@ export function deleteMealPlanWeek(
   });
 }
 
+export function deleteMealSlot(
+  planId: string,
+  input: DeleteMealSlotRequest,
+  options?: ApiCallOptionsInput
+): Promise<MealPlanDetail> {
+  const requestOptions = normalizeApiCallOptions(options);
+  const query = `weekday=${encodeURIComponent(input.weekday)}&slotIndex=${encodeURIComponent(input.slotIndex)}`;
+
+  return apiRequest<MealPlanDetail>(`/meal-plans/${planId}/entries?${query}`, {
+    accessToken: requestOptions.accessToken,
+    method: 'DELETE',
+    signal: requestOptions.signal
+  });
+}
+
 export function upsertMealSlot(
   planId: string,
   entries: MealPlanEntryRequest[],
@@ -1000,6 +1017,34 @@ export function completeCleaningTask(
     accessToken: requestOptions.accessToken,
     body: input,
     method: 'POST',
+    signal: requestOptions.signal
+  });
+}
+
+export function updateCleaningTask(
+  taskId: string,
+  input: UpdateCleaningTaskRequest,
+  options?: ApiCallOptionsInput
+): Promise<CleaningTask> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<CleaningTask, UpdateCleaningTaskRequest>(`/cleaning/${taskId}`, {
+    accessToken: requestOptions.accessToken,
+    body: input,
+    method: 'PATCH',
+    signal: requestOptions.signal
+  });
+}
+
+export function deleteCleaningTask(
+  taskId: string,
+  options?: ApiCallOptionsInput
+): Promise<OkResponse> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<OkResponse>(`/cleaning/${taskId}`, {
+    accessToken: requestOptions.accessToken,
+    method: 'DELETE',
     signal: requestOptions.signal
   });
 }

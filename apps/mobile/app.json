@@ -19,6 +19,11 @@
     "android": {
       "package": "com.homeapp.mobile",
       "versionCode": 55,
+      "permissions": [
+        "POST_NOTIFICATIONS",
+        "READ_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"

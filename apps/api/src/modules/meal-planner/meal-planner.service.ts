@@ -6,6 +6,7 @@ import {
   CreateMealIdeaDto,
   CreateMealPlanDto,
   MealPlanEntryDto,
+  MealPlanEntryTargetDto,
   RandomizeMealPlanDto,
   UpdateMealIdeaDto,
   UpdateMealPlanDto
@@ -237,6 +238,33 @@ export class MealPlannerService {
     }
 
     return deleted;
+  }
+
+  async deletePlanEntry(
+    householdId: string,
+    mealPlanId: string,
+    dto: MealPlanEntryTargetDto
+  ): Promise<MealPlanDetail | null> {
+    const plan = await this.findPlan(householdId, mealPlanId);
+
+    if (!plan) {
+      return null;
+    }
+
+    await this.database.query(
+      `
+        delete from meal_plan_entries
+        where meal_plan_week_id = $1
+          and weekday = $2
+          and slot_index = $3
+      `,
+      [mealPlanId, dto.weekday, dto.slotIndex]
+    );
+
+    const updated = await this.getPlanDetail(householdId, mealPlanId);
+    this.realtime.publish(householdId, 'meal.changed', mealPlanId);
+
+    return updated;
   }
 
   async randomize(householdId: string, dto: RandomizeMealPlanDto): Promise<MealRandomizeResult> {

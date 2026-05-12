@@ -409,6 +409,9 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
               and reminder_sent_at is null
               and (
                 event_date::timestamp + coalesce(event_time, time '09:00')
+              ) >= timezone('Europe/Warsaw', now()) - interval '2 hours'
+              and (
+                event_date::timestamp + coalesce(event_time, time '09:00')
                   - (reminder_offset_minutes * interval '1 minute')
               ) <= timezone('Europe/Warsaw', now())
             order by event_date asc, event_time asc nulls first, created_at asc

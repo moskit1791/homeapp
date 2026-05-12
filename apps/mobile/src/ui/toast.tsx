@@ -17,7 +17,7 @@ export function AppToast({ offsetTop, text, tone = "success" }: AppToastProps) {
   }
 
   return (
-    <View style={[styles.toast, offsetTop !== undefined && { top: offsetTop }, styles[tone]]}>
+    <View style={[styles.toast, offsetTop !== undefined && { marginTop: spacing.sm }, styles[tone]]}>
       <Text style={[styles.text, tone === "error" && styles.errorText]}>{text}</Text>
     </View>
   );
@@ -50,13 +50,9 @@ function createStyles(colors: AppPalette) {
     toast: {
       borderRadius: radii.control,
       borderWidth: 1,
-      left: spacing.md,
+      marginBottom: spacing.sm,
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.sm,
-      position: "absolute",
-      right: spacing.md,
-      top: spacing.md,
-      zIndex: 20,
     },
   });
 }

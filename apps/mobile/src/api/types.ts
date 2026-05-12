@@ -463,6 +463,11 @@ export interface MealPlanEntryRequest {
   weekday: number;
 }
 
+export interface DeleteMealSlotRequest {
+  slotIndex: number;
+  weekday: number;
+}
+
 export interface UpdateMealPlanRequest {
   entries: MealPlanEntryRequest[];
 }
@@ -599,6 +604,8 @@ export interface CreateCleaningTaskRequest {
   name: string;
   nextDueAt: string;
 }
+
+export type UpdateCleaningTaskRequest = Partial<CreateCleaningTaskRequest>;
 
 export interface CompleteCleaningTaskRequest {
   completedAt?: string;

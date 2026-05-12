@@ -5,7 +5,7 @@ import { registerPushToken, type PushPlatform } from "../api";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldPlaySound: false,
+    shouldPlaySound: true,
     shouldSetBadge: false,
     shouldShowAlert: true,
   }),
@@ -14,7 +14,7 @@ Notifications.setNotificationHandler({
 export async function registerForPushNotifications(accessToken: string): Promise<string | null> {
   if (Platform.OS === "android") {
     await Notifications.setNotificationChannelAsync("default", {
-      importance: Notifications.AndroidImportance.DEFAULT,
+      importance: Notifications.AndroidImportance.HIGH,
       name: "Domyślne",
     });
   }

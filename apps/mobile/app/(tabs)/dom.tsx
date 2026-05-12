@@ -5,7 +5,7 @@ import { useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import * as Sharing from "expo-sharing";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ActivityIndicator, Image, Pressable, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, StyleSheet, Switch, Text, TextInput, View, useWindowDimensions } from "react-native";
 import {
   completeAnnualCost,
   completeCleaningTask,
@@ -15,8 +15,9 @@ import {
   createCleaningTask,
   createDataEntry,
   deleteAttachment,
-  deleteMyAccount,
+  deleteCleaningTask,
   deleteDataEntry,
+  deleteMyAccount,
   getAttachmentFileRequest,
   getMyHousehold,
   inviteHouseholdMember,
@@ -31,6 +32,7 @@ import {
   removeHouseholdMember,
   sendTestPush,
   updateAttachment,
+  updateCleaningTask,
   updateMyHousehold,
   updateNotificationPreferences,
   uploadAttachmentFile,
@@ -312,6 +314,7 @@ function CleaningPanel() {
   const [name, setName] = useState("");
   const [frequencyDays, setFrequencyDays] = useState("7");
   const [nextDueAt, setNextDueAt] = useState(todayIso());
+  const [editingTask, setEditingTask] = useState<CleaningTask | null>(null);
   const [completionNotice, setCompletionNotice] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
   const tasksQuery = useQuery({
@@ -346,16 +349,73 @@ function CleaningPanel() {
       await queryClient.invalidateQueries({ queryKey: queryKeys.cleaning });
     },
   });
+  const updateMutation = useMutation({
+    mutationFn: () => {
+      if (!editingTask) {
+        throw new Error("Missing cleaning task");
+      }
+
+      return updateCleaningTask(
+        editingTask.id,
+        {
+          completionWindowDays: editingTask.completionWindowDays,
+          frequencyDays: Number(frequencyDays) || 1,
+          frequencyMode: editingTask.frequencyMode,
+          name: name.trim(),
+          nextDueAt,
+        },
+        { accessToken },
+      );
+    },
+    onSuccess: async () => {
+      setName("");
+      setEditingTask(null);
+      setModalVisible(false);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.cleaning });
+    },
+  });
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteCleaningTask(id, { accessToken }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.cleaning });
+    },
+  });
   const tasks = tasksQuery.data ?? [];
   const overdue = tasks.filter((task) => task.isOverdue).length;
-  const canAdd = permission.canCreate && Boolean(name.trim()) && !createMutation.isPending;
+  const canSave =
+    (editingTask ? permission.canUpdate : permission.canCreate) &&
+    Boolean(name.trim()) &&
+    /^\d{4}-\d{2}-\d{2}$/.test(nextDueAt) &&
+    !createMutation.isPending &&
+    !updateMutation.isPending;
+
+  function openCreateTask() {
+    setEditingTask(null);
+    setName("");
+    setFrequencyDays("7");
+    setNextDueAt(todayIso());
+    setModalVisible(true);
+  }
+
+  function openEditTask(task: CleaningTask) {
+    setEditingTask(task);
+    setName(task.name);
+    setFrequencyDays(String(task.frequencyDays));
+    setNextDueAt(task.nextDueAt);
+    setModalVisible(true);
+  }
+
+  function closeTaskModal() {
+    setEditingTask(null);
+    setModalVisible(false);
+  }
 
   return (
     <ModulePanel
       accent={accent}
       action={
         permission.canCreate ? (
-          <ActionButton onPress={() => setModalVisible(true)} size="small" title="+ Dodaj" />
+          <ActionButton onPress={openCreateTask} size="small" title="+ Dodaj" />
         ) : undefined
       }
       icon={<Broom color={accent.color} size={18} />}
@@ -374,10 +434,14 @@ function CleaningPanel() {
         {tasks.map((task) => (
           <CleaningRow
             accent={accent}
+            canDelete={permission.canDelete}
             canUpdate={permission.canUpdate}
             completing={completeMutation.isPending}
+            deleting={deleteMutation.isPending}
             key={task.id}
             onComplete={() => completeMutation.mutate(task.id)}
+            onDelete={() => deleteMutation.mutate(task.id)}
+            onEdit={() => openEditTask(task)}
             task={task}
           />
         ))}
@@ -386,21 +450,21 @@ function CleaningPanel() {
         footer={
           <View style={styles.modalFooter}>
             <ActionButton
-              onPress={() => setModalVisible(false)}
+              onPress={closeTaskModal}
               style={styles.modalFooterButton}
               title="Anuluj"
               variant="secondary"
             />
             <ActionButton
-              disabled={!canAdd}
-              loading={createMutation.isPending}
-              onPress={() => createMutation.mutate()}
+              disabled={!canSave}
+              loading={createMutation.isPending || updateMutation.isPending}
+              onPress={() => (editingTask ? updateMutation.mutate() : createMutation.mutate())}
               style={styles.modalFooterButton}
-              title="Dodaj"
+              title={editingTask ? "Zapisz" : "Dodaj"}
             />
           </View>
         }
-        onClose={() => setModalVisible(false)}
+        onClose={closeTaskModal}
         subtitle="Dodajesz cykliczne zadanie domowe z następnym terminem."
         title="Nowe zadanie sprzątania"
         visible={modalVisible}
@@ -429,6 +493,9 @@ function CleaningPanel() {
             value={nextDueAt}
           />
         </View>
+        {updateMutation.error ? (
+          <InlineAlert tone="error" text="Nie udalo sie zapisac zadania." />
+        ) : null}
         {createMutation.error ? (
           <InlineAlert tone="error" text="Nie udało się dodać zadania." />
         ) : null}
@@ -505,6 +572,7 @@ function AnnualCostsPanel() {
   });
   const costs = costsQuery.data ?? [];
   const history = historyQuery.data ?? [];
+  const paidCostIds = new Set(history.map((item) => item.annualCostId));
   const canAdd = permission.canCreate && Boolean(name.trim()) && !createMutation.isPending;
   const canSavePayment =
     Boolean(paymentCost) &&
@@ -549,6 +617,7 @@ function AnnualCostsPanel() {
             cost={cost}
             key={cost.id}
             onComplete={() => openPaymentModal(cost)}
+            paidThisYear={paidCostIds.has(cost.id)}
           />
         ))}
       </View>
@@ -774,6 +843,7 @@ function AttachmentsPanel() {
   const permission = useModulePermission("attachments");
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
+  const windowDimensions = useWindowDimensions();
   const accessToken = session?.accessToken;
   const accent = getSegmentAccent(theme.colors, "attachments");
   const [search, setSearch] = useState("");
@@ -785,9 +855,11 @@ function AttachmentsPanel() {
   const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null);
   const [previewError, setPreviewError] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewZoom, setPreviewZoom] = useState(1);
   const [openingAttachment, setOpeningAttachment] = useState(false);
   const [downloadingAttachmentId, setDownloadingAttachmentId] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState("");
+  const [downloadNotice, setDownloadNotice] = useState("");
   const [uploadError, setUploadError] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
   const attachmentsQuery = useQuery({
@@ -864,6 +936,9 @@ function AttachmentsPanel() {
   });
   const attachments = attachmentsQuery.data ?? [];
   const canAdd = permission.canCreate && Boolean(pickedPhoto) && !createMutation.isPending;
+  const previewBaseWidth = Math.max(260, Math.min(720, windowDimensions.width - 56));
+  const previewWidth = previewBaseWidth * previewZoom;
+  const previewHeight = Math.max(320, previewBaseWidth * 1.18) * previewZoom;
 
   function openEditAttachment(attachment: Attachment) {
     setEditingAttachment(attachment);
@@ -874,6 +949,7 @@ function AttachmentsPanel() {
   function openPreviewAttachment(attachment: Attachment) {
     setPreviewAttachment(attachment);
     setPreviewError("");
+    setPreviewZoom(1);
     setPreviewLoading(attachment.mimeType.startsWith("image/"));
   }
 
@@ -881,6 +957,7 @@ function AttachmentsPanel() {
     setPreviewAttachment(null);
     setPreviewError("");
     setPreviewLoading(false);
+    setPreviewZoom(1);
     setOpeningAttachment(false);
   }
 
@@ -903,10 +980,12 @@ function AttachmentsPanel() {
 
   async function handleDownloadAttachment(attachment: Attachment) {
     setDownloadError("");
+    setDownloadNotice("");
     setDownloadingAttachmentId(attachment.id);
 
     try {
-      await shareAttachmentFile(attachment, accessToken);
+      await downloadAttachmentFile(attachment, accessToken);
+      setDownloadNotice("Plik zapisany w wybranym folderze.");
     } catch {
       setDownloadError("Nie udało się pobrać pliku na telefon.");
     } finally {
@@ -918,6 +997,13 @@ function AttachmentsPanel() {
     setUploadError("");
 
     try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (!permissionResult.granted) {
+        setUploadError("Nadaj dostep do galerii zdjec, zeby dodac zalacznik.");
+        return;
+      }
+
       const result = await ImagePicker.launchImageLibraryAsync({
         allowsEditing: false,
         mediaTypes: ["images"],
@@ -988,6 +1074,7 @@ function AttachmentsPanel() {
           />
         ))}
       </View>
+      {downloadNotice ? <InlineAlert text={downloadNotice} /> : null}
       {downloadError ? <InlineAlert tone="error" text={downloadError} /> : null}
       <FormModal
         footer={
@@ -1109,6 +1196,23 @@ function AttachmentsPanel() {
         {previewError ? <InlineAlert tone="error" text={previewError} /> : null}
         {previewAttachment?.mimeType.startsWith("image/") ? (
           <View style={styles.attachmentPreviewShell}>
+            <View style={styles.zoomControls}>
+              <ActionButton
+                disabled={previewZoom <= 1}
+                onPress={() => setPreviewZoom((value) => Math.max(1, Number((value - 0.25).toFixed(2))))}
+                size="small"
+                title="-"
+                variant="secondary"
+              />
+              <Text style={styles.zoomValue}>{Math.round(previewZoom * 100)}%</Text>
+              <ActionButton
+                disabled={previewZoom >= 3}
+                onPress={() => setPreviewZoom((value) => Math.min(3, Number((value + 0.25).toFixed(2))))}
+                size="small"
+                title="+"
+                variant="secondary"
+              />
+            </View>
             <Image
               onError={() => {
                 setPreviewError("Nie udało się wczytać zdjęcia.");
@@ -1118,7 +1222,13 @@ function AttachmentsPanel() {
               onLoadStart={() => setPreviewLoading(true)}
               resizeMode="contain"
               source={getAttachmentFileRequest(previewAttachment.id, { accessToken })}
-              style={styles.attachmentPreviewImage}
+              style={[
+                styles.attachmentPreviewImage,
+                {
+                  height: previewHeight,
+                  width: previewWidth,
+                },
+              ]}
             />
             {previewLoading ? (
               <View style={styles.attachmentPreviewLoader}>
@@ -1537,6 +1647,7 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
                       onValueChange={(enabled) =>
                         toggleNotificationPreference(preference.eventType, enabled)
                       }
+                      style={styles.notificationSwitchControl}
                       thumbColor={preference.enabled ? theme.colors.primary : theme.colors.textSubtle}
                       trackColor={{
                         false: theme.colors.border,
@@ -1557,6 +1668,7 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
           labelStyle={styles.logoutButtonLabel}
           onPress={handleLogout}
           style={styles.logoutButton}
+          variant="secondary"
           title="Wyloguj się"
         />
         <View style={[styles.settingsPanelRow, styles.dangerPanel]}>
@@ -1665,15 +1777,23 @@ function ModulePanel({
 
 function CleaningRow({
   accent,
+  canDelete,
   canUpdate,
   completing,
+  deleting,
   onComplete,
+  onDelete,
+  onEdit,
   task,
 }: {
   accent: Accent;
+  canDelete: boolean;
   canUpdate: boolean;
   completing: boolean;
+  deleting: boolean;
   onComplete: () => void;
+  onDelete: () => void;
+  onEdit: () => void;
   task: CleaningTask;
 }) {
   const theme = useAppTheme();
@@ -1693,6 +1813,16 @@ function CleaningRow({
         title="Wykonane"
         variant="secondary"
       />
+      {canUpdate ? (
+        <IconButton accessibilityLabel="Edytuj sprzatanie" onPress={onEdit}>
+          <Pencil color={theme.colors.primary} size={17} />
+        </IconButton>
+      ) : null}
+      {canDelete ? (
+        <IconButton accessibilityLabel="Usun sprzatanie" disabled={deleting} onPress={onDelete}>
+          <Trash2 color={theme.colors.danger} size={17} />
+        </IconButton>
+      ) : null}
     </View>
   );
 }
@@ -1703,12 +1833,14 @@ function CostRow({
   completing,
   cost,
   onComplete,
+  paidThisYear,
 }: {
   accent: Accent;
   canUpdate: boolean;
   completing: boolean;
   cost: AnnualCost;
   onComplete: () => void;
+  paidThisYear: boolean;
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
@@ -1720,10 +1852,16 @@ function CostRow({
         <Text style={styles.itemName}>{cost.name}</Text>
         <Text style={styles.itemMeta}>{cost.nextDueDate} / {formatMoney(cost.defaultAmount)}</Text>
       </View>
+      {paidThisYear ? (
+        <View style={styles.paidBadge}>
+          <Text style={styles.paidBadgeText}>Oplacone w tym roku</Text>
+        </View>
+      ) : null}
       <ActionButton
-        disabled={!canUpdate || completing}
+        disabled={paidThisYear || !canUpdate || completing}
         onPress={onComplete}
         size="small"
+        style={paidThisYear ? styles.hidden : undefined}
         title="Opłacone"
         variant="secondary"
       />
@@ -2036,6 +2174,45 @@ async function shareAttachmentFile(attachment: Attachment, accessToken?: string 
   });
 }
 
+async function downloadAttachmentFile(attachment: Attachment, accessToken?: string | null): Promise<void> {
+  const cacheDirectory = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
+
+  if (!cacheDirectory) {
+    throw new Error("File cache is unavailable");
+  }
+
+  const request = getAttachmentFileRequest(attachment.id, { accessToken });
+  const fileName = sanitizeCacheFileName(attachment.fileName);
+  const localUri = `${cacheDirectory}${attachment.id}-${fileName}`;
+  const result = await FileSystem.downloadAsync(request.uri, localUri, {
+    headers: request.headers,
+  });
+
+  if (result.status < 200 || result.status >= 300) {
+    throw new Error(`Attachment download failed with status ${result.status}`);
+  }
+
+  const storageAccess = FileSystem.StorageAccessFramework;
+  const permissions = await storageAccess.requestDirectoryPermissionsAsync();
+
+  if (!permissions.granted) {
+    throw new Error("Download directory permission was denied");
+  }
+
+  const content = await FileSystem.readAsStringAsync(result.uri, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+  const targetUri = await storageAccess.createFileAsync(
+    permissions.directoryUri,
+    fileName,
+    attachment.mimeType,
+  );
+
+  await FileSystem.writeAsStringAsync(targetUri, content, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+}
+
 function sanitizeCacheFileName(fileName: string): string {
   const sanitized = fileName.replace(/[^\w.-]+/g, "_").replace(/^_+|_+$/g, "");
 
@@ -2104,6 +2281,8 @@ function createStyles(colors: AppPalette) {
     },
     attachmentPreviewShell: {
       borderRadius: radii.control,
+      alignItems: "center",
+      gap: spacing.sm,
       overflow: "hidden",
       position: "relative",
     },
@@ -2144,6 +2323,9 @@ function createStyles(colors: AppPalette) {
       fontSize: 14,
       fontWeight: "900",
       letterSpacing: 0,
+    },
+    hidden: {
+      display: "none",
     },
     input: {
       backgroundColor: colors.field,
@@ -2203,12 +2385,12 @@ function createStyles(colors: AppPalette) {
     },
     logoutButton: {
       alignSelf: "stretch",
-      backgroundColor: colors.danger,
-      borderColor: colors.danger,
+      backgroundColor: colors.surfaceMuted,
+      borderColor: colors.border,
       width: "100%",
     },
     logoutButtonLabel: {
-      color: colors.inverseText,
+      color: colors.text,
       fontWeight: "900",
     },
     notificationPreferenceList: {
@@ -2223,15 +2405,20 @@ function createStyles(colors: AppPalette) {
       flexDirection: "row",
       gap: spacing.sm,
       minHeight: 64,
-      paddingHorizontal: spacing.sm,
+      paddingLeft: spacing.sm,
+      paddingRight: spacing.md,
       paddingVertical: spacing.xs,
     },
     notificationPreferenceSwitch: {
-      alignSelf: "center",
       alignItems: "flex-end",
+      alignSelf: "center",
       flexShrink: 0,
       justifyContent: "center",
-      width: 52,
+      overflow: "visible",
+      width: 68,
+    },
+    notificationSwitchControl: {
+      transform: [{ scaleX: 0.86 }, { scaleY: 0.86 }],
     },
     notificationPreferencesHeader: {
       gap: 2,
@@ -2378,6 +2565,20 @@ function createStyles(colors: AppPalette) {
       fontWeight: "900",
       letterSpacing: 0,
     },
+    paidBadge: {
+      backgroundColor: colors.softGreen,
+      borderColor: `${colors.primary}33`,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
+    },
+    paidBadgeText: {
+      color: colors.primaryDark,
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
     photoMeta: {
       gap: 2,
       paddingHorizontal: spacing.xs,
@@ -2494,6 +2695,21 @@ function createStyles(colors: AppPalette) {
     },
     warningRow: {
       backgroundColor: colors.warningSoft,
+    },
+    zoomControls: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.sm,
+      justifyContent: "center",
+      width: "100%",
+    },
+    zoomValue: {
+      color: colors.textMuted,
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 0,
+      minWidth: 52,
+      textAlign: "center",
     },
   });
 }

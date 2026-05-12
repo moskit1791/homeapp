@@ -79,7 +79,7 @@ export default function DzisiajScreen() {
   const latestNote = [...(notesQuery.data ?? [])].sort((left, right) =>
     right.updatedAt.localeCompare(left.updatedAt),
   )[0];
-  const openFromNotification = useCallback((route: "/(tabs)/kalendarz" | "/(tabs)/finanse" | "/(tabs)/lista" | "/(tabs)/dom") => {
+  const openFromNotification = useCallback((route: "/(tabs)/kalendarz" | "/(tabs)/finanse" | "/(tabs)/lista" | "/(tabs)/dom" | "/(tabs)/zadania") => {
     setNotificationsVisible(false);
     router.push(route as never);
   }, [router]);
@@ -204,7 +204,7 @@ export default function DzisiajScreen() {
           accent={theme.colors.calendar}
           icon={<CalendarDays color={theme.colors.calendar} size={24} />}
           meta={tomorrowEvents[0] ? eventMeta(tomorrowEvents[0]) : "Brak planu na jutro"}
-          onPress={() => router.push({ pathname: "/(tabs)/zadania", params: { segment: "notes" } } as never)}
+          onPress={() => router.push("/(tabs)/kalendarz" as never)}
           title="Wydarzenia jutro"
           value={String(tomorrowEvents.length)}
         />
@@ -212,7 +212,7 @@ export default function DzisiajScreen() {
           accent={theme.colors.warning}
           icon={<NotebookText color={theme.colors.warning} size={24} />}
           meta={latestNote ? `Zaktualizowano ${formatShortDate(latestNote.updatedAt)}` : "Dodaj pierwszą notatkę"}
-          onPress={() => router.push("/(tabs)/kalendarz" as never)}
+          onPress={() => router.push({ pathname: "/(tabs)/zadania", params: { segment: "notes" } } as never)}
           title="Ostatnia notatka"
           value={latestNote?.title ?? "Notatki"}
         />

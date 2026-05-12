@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UnauthorizedException,
   UseGuards
 } from '@nestjs/common';
@@ -20,6 +21,7 @@ import {
   CopyMealPlanDto,
   CreateMealIdeaDto,
   CreateMealPlanDto,
+  MealPlanEntryTargetDto,
   MealIdeaIdParamDto,
   MealPlanIdParamDto,
   RandomizeMealPlanDto,
@@ -131,6 +133,26 @@ export class MealPlannerController {
     }
 
     return { ok: true };
+  }
+
+  @Delete('meal-plans/:id/entries')
+  @RequirePermission('meal_planner', 'delete')
+  async deletePlanEntry(
+    @CurrentHousehold() household: HouseholdContext | undefined,
+    @Param() params: MealPlanIdParamDto,
+    @Query() query: MealPlanEntryTargetDto
+  ) {
+    const plan = await this.mealPlannerService.deletePlanEntry(
+      this.requireHousehold(household).householdId,
+      params.id,
+      query
+    );
+
+    if (!plan) {
+      throw new NotFoundException('Meal plan not found');
+    }
+
+    return plan;
   }
 
   @Post('meal-plans/randomize')

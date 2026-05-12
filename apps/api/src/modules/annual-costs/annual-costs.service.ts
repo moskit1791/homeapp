@@ -126,6 +126,25 @@ export class AnnualCostsService {
     dto: CompleteAnnualCostDto
   ): Promise<AnnualCostCompletionRecord | null> {
     const completion = await this.database.transaction(async (client) => {
+      const executedYear = Number(dto.executedAt.slice(0, 4));
+      const existingHistory = await client.query<{ id: string }>(
+        `
+          select ach.id
+          from annual_cost_history ach
+          join annual_costs ac on ac.id = ach.annual_cost_id
+          where ac.household_id = $1
+            and ach.annual_cost_id = $2
+            and ach.executed_at >= make_date($3::integer, 1, 1)
+            and ach.executed_at < make_date(($3::integer + 1), 1, 1)
+          limit 1
+        `,
+        [householdId, costId, executedYear]
+      );
+
+      if (existingHistory.rows[0]) {
+        throw new BadRequestException('Annual cost already completed for this year');
+      }
+
       const cost = await this.updateNextDueDate(client, householdId, costId, dto.executedAt);
 
       if (!cost) {
