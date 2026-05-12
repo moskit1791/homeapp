@@ -9,6 +9,16 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $ProductionApiUrl = 'https://app.porabkihome.pl/api'
 
+function Assert-LastExitCode {
+  param(
+    [string]$Step
+  )
+
+  if ($LASTEXITCODE -ne 0) {
+    throw "$Step failed with exit code $LASTEXITCODE"
+  }
+}
+
 function Get-DefaultLanIp {
   $configs = Get-NetIPConfiguration |
     Where-Object { $_.IPv4DefaultGateway -and $_.IPv4Address -and $_.NetAdapter.Status -eq 'Up' }
@@ -97,18 +107,27 @@ Push-Location $resolvedWorkDir.Path
 try {
   $env:EXPO_PUBLIC_API_URL = $ApiUrl
   if ($GoogleOAuthClientId) {
+    $env:EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID = $GoogleOAuthClientId
     $env:EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID = $GoogleOAuthClientId
     $env:GOOGLE_OAUTH_CLIENT_ID = $GoogleOAuthClientId
   }
 
   pnpm.cmd install
+  Assert-LastExitCode 'pnpm install'
+  pnpm.cmd --filter @homeapp/shared-types build
+  Assert-LastExitCode 'shared-types build'
+  pnpm.cmd --filter @homeapp/shared-validation build
+  Assert-LastExitCode 'shared-validation build'
   pnpm.cmd --filter @homeapp/mobile typecheck
+  Assert-LastExitCode 'mobile typecheck'
   pnpm.cmd --filter @homeapp/mobile lint
+  Assert-LastExitCode 'mobile lint'
 
   Push-Location (Join-Path $resolvedWorkDir.Path 'apps\mobile\android')
   try {
     $env:NODE_ENV = 'production'
     .\gradlew.bat clean assembleRelease --max-workers=1
+    Assert-LastExitCode 'Gradle release build'
   } finally {
     Pop-Location
   }
