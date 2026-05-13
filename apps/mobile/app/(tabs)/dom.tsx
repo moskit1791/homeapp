@@ -7,7 +7,7 @@ import * as MediaLibrary from "expo-media-library";
 import * as Sharing from "expo-sharing";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import {
   completeAnnualCost,
@@ -1286,7 +1286,7 @@ function ZoomableImageModal({
       savedX.value = 0;
       savedY.value = 0;
     });
-  const composedGesture = Gesture.Simultaneous(pinchGesture, panGesture, doubleTapGesture);
+  const composedGesture = Gesture.Exclusive(doubleTapGesture, Gesture.Simultaneous(pinchGesture, panGesture));
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
       { translateX: translateX.value },
@@ -1297,7 +1297,8 @@ function ZoomableImageModal({
 
   return (
     <Modal animationType="fade" onRequestClose={onClose} transparent visible={visible}>
-      <View style={styles.zoomModal}>
+      <GestureHandlerRootView style={styles.zoomGestureRoot}>
+        <View style={styles.zoomModal}>
         <View style={styles.zoomHeader}>
           <Text numberOfLines={1} style={styles.zoomTitle}>
             {title}
@@ -1340,7 +1341,8 @@ function ZoomableImageModal({
           {error ? <InlineAlert tone="error" text={error} /> : null}
         </View>
         <Text style={styles.zoomHint}>Uszczypnij, przesuń albo stuknij dwa razy.</Text>
-      </View>
+        </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
@@ -2821,6 +2823,9 @@ function createStyles(colors: AppPalette) {
       paddingHorizontal: spacing.md,
       paddingTop: spacing.md,
       width: "100%",
+    },
+    zoomGestureRoot: {
+      flex: 1,
     },
     zoomHint: {
       color: colors.textMuted,
