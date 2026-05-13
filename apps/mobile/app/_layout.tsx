@@ -4,6 +4,7 @@ import * as Notifications from 'expo-notifications';
 import * as SplashScreen from 'expo-splash-screen';
 import { Component, PropsWithChildren, ReactNode, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { registerForPushNotifications } from '../src/notifications/register-push-notifications';
@@ -15,6 +16,7 @@ import { useAppTheme, type AppPalette } from '../src/theme/use-app-theme';
 export default function RootLayout() {
   const [queryClient] = useState(() => new QueryClient());
   const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
 
   useEffect(() => {
     hideSplashScreen();
@@ -22,16 +24,18 @@ export default function RootLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <SafeAreaProvider>
-        <RootErrorBoundary>
-          <SessionProvider>
-            <PushNotificationBootstrap />
-            <NotificationCenterBootstrap />
-            <StatusBar style={theme.isDark ? 'light' : 'dark'} />
-            <Stack screenOptions={{ headerShown: false }} />
-          </SessionProvider>
-        </RootErrorBoundary>
-      </SafeAreaProvider>
+      <GestureHandlerRootView style={styles.gestureRoot}>
+        <SafeAreaProvider>
+          <RootErrorBoundary>
+            <SessionProvider>
+              <PushNotificationBootstrap />
+              <NotificationCenterBootstrap />
+              <StatusBar style={theme.isDark ? 'light' : 'dark'} />
+              <Stack screenOptions={{ headerShown: false }} />
+            </SessionProvider>
+          </RootErrorBoundary>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
     </QueryClientProvider>
   );
 }
@@ -133,6 +137,9 @@ function createStyles(colors: AppPalette) {
     fontSize: 20,
     fontWeight: '800',
     letterSpacing: 0
+  },
+  gestureRoot: {
+    flex: 1
   }
 });
 }

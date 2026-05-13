@@ -3,9 +3,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as FileSystem from "expo-file-system";
 import { useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
+import * as MediaLibrary from "expo-media-library";
 import * as Sharing from "expo-sharing";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ActivityIndicator, Image, Pressable, StyleSheet, Switch, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import {
   completeAnnualCost,
   completeCleaningTask,
@@ -61,6 +64,7 @@ import {
   Broom,
   ChartBar,
   ChevronRight,
+  Close,
   Cog,
   Database,
   Download,
@@ -843,7 +847,6 @@ function AttachmentsPanel() {
   const permission = useModulePermission("attachments");
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
-  const windowDimensions = useWindowDimensions();
   const accessToken = session?.accessToken;
   const accent = getSegmentAccent(theme.colors, "attachments");
   const [search, setSearch] = useState("");
@@ -854,8 +857,6 @@ function AttachmentsPanel() {
   const [pickedPhoto, setPickedPhoto] = useState<PickedAttachmentPhoto | null>(null);
   const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null);
   const [previewError, setPreviewError] = useState("");
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewZoom, setPreviewZoom] = useState(1);
   const [openingAttachment, setOpeningAttachment] = useState(false);
   const [downloadingAttachmentId, setDownloadingAttachmentId] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState("");
@@ -936,9 +937,6 @@ function AttachmentsPanel() {
   });
   const attachments = attachmentsQuery.data ?? [];
   const canAdd = permission.canCreate && Boolean(pickedPhoto) && !createMutation.isPending;
-  const previewBaseWidth = Math.max(260, Math.min(720, windowDimensions.width - 56));
-  const previewWidth = previewBaseWidth * previewZoom;
-  const previewHeight = Math.max(320, previewBaseWidth * 1.18) * previewZoom;
 
   function openEditAttachment(attachment: Attachment) {
     setEditingAttachment(attachment);
@@ -949,15 +947,11 @@ function AttachmentsPanel() {
   function openPreviewAttachment(attachment: Attachment) {
     setPreviewAttachment(attachment);
     setPreviewError("");
-    setPreviewZoom(1);
-    setPreviewLoading(attachment.mimeType.startsWith("image/"));
   }
 
   function closePreviewAttachment() {
     setPreviewAttachment(null);
     setPreviewError("");
-    setPreviewLoading(false);
-    setPreviewZoom(1);
     setOpeningAttachment(false);
   }
 
@@ -984,8 +978,8 @@ function AttachmentsPanel() {
     setDownloadingAttachmentId(attachment.id);
 
     try {
-      await downloadAttachmentFile(attachment, accessToken);
-      setDownloadNotice("Plik zapisany w wybranym folderze.");
+      const target = await downloadAttachmentFile(attachment, accessToken);
+      setDownloadNotice(target === "gallery" ? "Zdjecie zapisane w galerii." : "Plik zapisany w pamieci aplikacji.");
     } catch {
       setDownloadError("Nie udało się pobrać pliku na telefon.");
     } finally {
@@ -1169,6 +1163,16 @@ function AttachmentsPanel() {
           <InlineAlert tone="error" text="Nie udało się zapisać opisu pliku." />
         ) : null}
       </FormModal>
+      <ZoomableImageModal
+        onClose={closePreviewAttachment}
+        source={
+          previewAttachment?.mimeType.startsWith("image/")
+            ? getAttachmentFileRequest(previewAttachment.id, { accessToken })
+            : undefined
+        }
+        title={previewAttachment?.fileName ?? "Zdjecie"}
+        visible={Boolean(previewAttachment?.mimeType.startsWith("image/"))}
+      />
       <FormModal
         footer={
           <View style={styles.modalFooter}>
@@ -1191,60 +1195,153 @@ function AttachmentsPanel() {
         onClose={closePreviewAttachment}
         subtitle={previewAttachment?.caption || "Podgląd pliku z domowego folderu."}
         title={previewAttachment?.fileName ?? "Podgląd pliku"}
-        visible={Boolean(previewAttachment)}
+        visible={Boolean(previewAttachment && !previewAttachment.mimeType.startsWith("image/"))}
       >
         {previewError ? <InlineAlert tone="error" text={previewError} /> : null}
-        {previewAttachment?.mimeType.startsWith("image/") ? (
-          <View style={styles.attachmentPreviewShell}>
-            <View style={styles.zoomControls}>
-              <ActionButton
-                disabled={previewZoom <= 1}
-                onPress={() => setPreviewZoom((value) => Math.max(1, Number((value - 0.25).toFixed(2))))}
-                size="small"
-                title="-"
-                variant="secondary"
-              />
-              <Text style={styles.zoomValue}>{Math.round(previewZoom * 100)}%</Text>
-              <ActionButton
-                disabled={previewZoom >= 3}
-                onPress={() => setPreviewZoom((value) => Math.min(3, Number((value + 0.25).toFixed(2))))}
-                size="small"
-                title="+"
-                variant="secondary"
-              />
-            </View>
-            <Image
-              onError={() => {
-                setPreviewError("Nie udało się wczytać zdjęcia.");
-                setPreviewLoading(false);
-              }}
-              onLoadEnd={() => setPreviewLoading(false)}
-              onLoadStart={() => setPreviewLoading(true)}
-              resizeMode="contain"
-              source={getAttachmentFileRequest(previewAttachment.id, { accessToken })}
-              style={[
-                styles.attachmentPreviewImage,
-                {
-                  height: previewHeight,
-                  width: previewWidth,
-                },
-              ]}
-            />
-            {previewLoading ? (
-              <View style={styles.attachmentPreviewLoader}>
-                <ActivityIndicator color={theme.colors.primary} />
-              </View>
-            ) : null}
-          </View>
-        ) : (
-          <View style={styles.attachmentPreviewPlaceholder}>
-            <FileText color={accent.color} size={32} />
-            <Text style={styles.itemName}>Ten plik nie jest zdjęciem.</Text>
-            <Text style={styles.itemMeta}>Możesz otworzyć go w aplikacji obsługującej ten typ pliku.</Text>
-          </View>
-        )}
+        <View style={styles.attachmentPreviewPlaceholder}>
+          <FileText color={accent.color} size={32} />
+          <Text style={styles.itemName}>Ten plik nie jest zdjęciem.</Text>
+          <Text style={styles.itemMeta}>Możesz otworzyć go w aplikacji obsługującej ten typ pliku.</Text>
+        </View>
       </FormModal>
     </ModulePanel>
+  );
+}
+
+function ZoomableImageModal({
+  onClose,
+  source,
+  title,
+  visible,
+}: {
+  onClose: () => void;
+  source?: { headers?: Record<string, string>; uri: string };
+  title: string;
+  visible: boolean;
+}) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+  const { height, width } = useWindowDimensions();
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const scale = useSharedValue(1);
+  const savedScale = useSharedValue(1);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const savedX = useSharedValue(0);
+  const savedY = useSharedValue(0);
+
+  useEffect(() => {
+    if (!visible) {
+      return;
+    }
+
+    scale.value = 1;
+    savedScale.value = 1;
+    translateX.value = 0;
+    translateY.value = 0;
+    savedX.value = 0;
+    savedY.value = 0;
+    setError("");
+    setLoading(Boolean(source));
+  }, [savedScale, savedX, savedY, scale, source, translateX, translateY, visible]);
+
+  const pinchGesture = Gesture.Pinch()
+    .onUpdate((event) => {
+      scale.value = Math.min(Math.max(savedScale.value * event.scale, 1), 4);
+    })
+    .onEnd(() => {
+      savedScale.value = scale.value;
+
+      if (scale.value <= 1.02) {
+        scale.value = withTiming(1);
+        savedScale.value = 1;
+        translateX.value = withTiming(0);
+        translateY.value = withTiming(0);
+        savedX.value = 0;
+        savedY.value = 0;
+      }
+    });
+  const panGesture = Gesture.Pan()
+    .onUpdate((event) => {
+      if (scale.value <= 1) {
+        return;
+      }
+
+      translateX.value = savedX.value + event.translationX;
+      translateY.value = savedY.value + event.translationY;
+    })
+    .onEnd(() => {
+      savedX.value = translateX.value;
+      savedY.value = translateY.value;
+    });
+  const doubleTapGesture = Gesture.Tap()
+    .numberOfTaps(2)
+    .onEnd(() => {
+      const shouldReset = scale.value > 1;
+      scale.value = withTiming(shouldReset ? 1 : 2);
+      savedScale.value = shouldReset ? 1 : 2;
+      translateX.value = withTiming(0);
+      translateY.value = withTiming(0);
+      savedX.value = 0;
+      savedY.value = 0;
+    });
+  const composedGesture = Gesture.Simultaneous(pinchGesture, panGesture, doubleTapGesture);
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: scale.value },
+    ],
+  }));
+
+  return (
+    <Modal animationType="fade" onRequestClose={onClose} transparent visible={visible}>
+      <View style={styles.zoomModal}>
+        <View style={styles.zoomHeader}>
+          <Text numberOfLines={1} style={styles.zoomTitle}>
+            {title}
+          </Text>
+          <IconButton
+            accessibilityLabel="Zamknij podglad zdjecia"
+            onPress={onClose}
+          >
+            <Close color={theme.colors.text} size={20} />
+          </IconButton>
+        </View>
+        <View style={styles.zoomCanvas}>
+          {source ? (
+            <GestureDetector gesture={composedGesture}>
+              <Animated.Image
+                onError={() => {
+                  setError("Nie udalo sie wczytac zdjecia.");
+                  setLoading(false);
+                }}
+                onLoadEnd={() => setLoading(false)}
+                onLoadStart={() => setLoading(true)}
+                resizeMode="contain"
+                source={source}
+                style={[
+                  styles.zoomImage,
+                  {
+                    height: height * 0.78,
+                    width,
+                  },
+                  animatedStyle,
+                ]}
+              />
+            </GestureDetector>
+          ) : null}
+          {loading ? (
+            <View style={styles.zoomLoader}>
+              <ActivityIndicator color={theme.colors.primary} />
+            </View>
+          ) : null}
+          {error ? <InlineAlert tone="error" text={error} /> : null}
+        </View>
+        <Text style={styles.zoomHint}>Uszczypnij, przesun albo stuknij dwa razy.</Text>
+      </View>
+    </Modal>
   );
 }
 
@@ -1521,6 +1618,13 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
       footer={
         <View style={styles.modalFooter}>
           <ActionButton
+            labelStyle={styles.logoutButtonLabel}
+            onPress={handleLogout}
+            style={[styles.modalFooterButton, styles.logoutButton]}
+            title="Wyloguj sie"
+            variant="secondary"
+          />
+          <ActionButton
             onPress={() => setSettingsVisible(false)}
             style={styles.modalFooterButton}
             title="Zamknij"
@@ -1643,18 +1747,22 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
                     <Text style={styles.itemMeta}>{copy.meta}</Text>
                   </View>
                   <View style={styles.notificationPreferenceSwitch}>
-                    <Switch
-                      onValueChange={(enabled) =>
-                        toggleNotificationPreference(preference.eventType, enabled)
-                      }
-                      style={styles.notificationSwitchControl}
-                      thumbColor={preference.enabled ? theme.colors.primary : theme.colors.textSubtle}
-                      trackColor={{
-                        false: theme.colors.border,
-                        true: theme.colors.softGreen,
-                      }}
-                      value={preference.enabled}
-                    />
+                    <Pressable
+                      accessibilityRole="switch"
+                      accessibilityState={{ checked: preference.enabled }}
+                      onPress={() => toggleNotificationPreference(preference.eventType, !preference.enabled)}
+                      style={[
+                        styles.preferenceToggle,
+                        preference.enabled && styles.preferenceToggleActive,
+                      ]}
+                    >
+                      <View
+                        style={[
+                          styles.preferenceToggleThumb,
+                          preference.enabled && styles.preferenceToggleThumbActive,
+                        ]}
+                      />
+                    </Pressable>
                   </View>
                 </View>
               );
@@ -1664,13 +1772,6 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
             <InlineAlert tone="error" text="Nie udało się zapisać ustawień powiadomień." />
           ) : null}
         </View>
-        <ActionButton
-          labelStyle={styles.logoutButtonLabel}
-          onPress={handleLogout}
-          style={styles.logoutButton}
-          variant="secondary"
-          title="Wyloguj się"
-        />
         <View style={[styles.settingsPanelRow, styles.dangerPanel]}>
           <Text style={styles.settingsPanelTitle}>Usuwanie konta</Text>
           <Text style={styles.settingsPanelMeta}>
@@ -2174,7 +2275,10 @@ async function shareAttachmentFile(attachment: Attachment, accessToken?: string 
   });
 }
 
-async function downloadAttachmentFile(attachment: Attachment, accessToken?: string | null): Promise<void> {
+async function downloadAttachmentFile(
+  attachment: Attachment,
+  accessToken?: string | null,
+): Promise<"app" | "gallery"> {
   const cacheDirectory = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
 
   if (!cacheDirectory) {
@@ -2192,25 +2296,38 @@ async function downloadAttachmentFile(attachment: Attachment, accessToken?: stri
     throw new Error(`Attachment download failed with status ${result.status}`);
   }
 
-  const storageAccess = FileSystem.StorageAccessFramework;
-  const permissions = await storageAccess.requestDirectoryPermissionsAsync();
+  if (attachment.mimeType.startsWith("image/")) {
+    const isAvailable = await MediaLibrary.isAvailableAsync();
 
-  if (!permissions.granted) {
-    throw new Error("Download directory permission was denied");
+    if (!isAvailable) {
+      throw new Error("Media library is unavailable");
+    }
+
+    const permissions = await MediaLibrary.requestPermissionsAsync(true, ["photo"]);
+
+    if (!permissions.granted) {
+      throw new Error("Media library permission was denied");
+    }
+
+    await MediaLibrary.saveToLibraryAsync(result.uri);
+
+    return "gallery";
   }
 
-  const content = await FileSystem.readAsStringAsync(result.uri, {
-    encoding: FileSystem.EncodingType.Base64,
-  });
-  const targetUri = await storageAccess.createFileAsync(
-    permissions.directoryUri,
-    fileName,
-    attachment.mimeType,
-  );
+  const documentsDirectory = FileSystem.documentDirectory;
 
-  await FileSystem.writeAsStringAsync(targetUri, content, {
-    encoding: FileSystem.EncodingType.Base64,
+  if (!documentsDirectory) {
+    throw new Error("Document directory is unavailable");
+  }
+
+  const downloadsDirectory = `${documentsDirectory}downloads/`;
+  await FileSystem.makeDirectoryAsync(downloadsDirectory, { intermediates: true });
+  await FileSystem.copyAsync({
+    from: result.uri,
+    to: `${downloadsDirectory}${attachment.id}-${fileName}`,
   });
+
+  return "app";
 }
 
 function sanitizeCacheFileName(fileName: string): string {
@@ -2250,24 +2367,6 @@ function createStyles(colors: AppPalette) {
       gap: spacing.sm,
       minWidth: 0,
     },
-    attachmentPreviewImage: {
-      alignSelf: "center",
-      backgroundColor: colors.cardMuted,
-      borderRadius: radii.control,
-      height: 430,
-      maxHeight: 430,
-      width: "100%",
-    },
-    attachmentPreviewLoader: {
-      alignItems: "center",
-      backgroundColor: `${colors.card}CC`,
-      bottom: 0,
-      justifyContent: "center",
-      left: 0,
-      position: "absolute",
-      right: 0,
-      top: 0,
-    },
     attachmentPreviewPlaceholder: {
       alignItems: "center",
       backgroundColor: colors.cardMuted,
@@ -2278,13 +2377,6 @@ function createStyles(colors: AppPalette) {
       minHeight: 220,
       justifyContent: "center",
       padding: spacing.lg,
-    },
-    attachmentPreviewShell: {
-      borderRadius: radii.control,
-      alignItems: "center",
-      gap: spacing.sm,
-      overflow: "hidden",
-      position: "relative",
     },
     dateInput: {
       minWidth: 132,
@@ -2385,12 +2477,11 @@ function createStyles(colors: AppPalette) {
     },
     logoutButton: {
       alignSelf: "stretch",
-      backgroundColor: colors.surfaceMuted,
-      borderColor: colors.border,
-      width: "100%",
+      backgroundColor: colors.primarySoft,
+      borderColor: colors.primary,
     },
     logoutButtonLabel: {
-      color: colors.text,
+      color: colors.primaryDark,
       fontWeight: "900",
     },
     notificationPreferenceList: {
@@ -2404,21 +2495,18 @@ function createStyles(colors: AppPalette) {
       borderWidth: 1,
       flexDirection: "row",
       gap: spacing.sm,
+      justifyContent: "space-between",
       minHeight: 64,
       paddingLeft: spacing.sm,
-      paddingRight: spacing.md,
+      paddingRight: spacing.sm,
       paddingVertical: spacing.xs,
     },
     notificationPreferenceSwitch: {
-      alignItems: "flex-end",
+      alignItems: "center",
       alignSelf: "center",
       flexShrink: 0,
       justifyContent: "center",
-      overflow: "visible",
-      width: 68,
-    },
-    notificationSwitchControl: {
-      transform: [{ scaleX: 0.86 }, { scaleY: 0.86 }],
+      width: 48,
     },
     notificationPreferencesHeader: {
       gap: 2,
@@ -2429,6 +2517,28 @@ function createStyles(colors: AppPalette) {
       gap: 2,
       minWidth: 0,
       paddingRight: spacing.xs,
+    },
+    preferenceToggle: {
+      alignItems: "center",
+      backgroundColor: colors.border,
+      borderRadius: 999,
+      height: 26,
+      justifyContent: "center",
+      padding: 2,
+      width: 46,
+    },
+    preferenceToggleActive: {
+      backgroundColor: colors.primary,
+    },
+    preferenceToggleThumb: {
+      alignSelf: "flex-start",
+      backgroundColor: colors.card,
+      borderRadius: 999,
+      height: 22,
+      width: 22,
+    },
+    preferenceToggleThumbActive: {
+      alignSelf: "flex-end",
     },
     memberAvatars: {
       flexDirection: "row",
@@ -2696,20 +2806,52 @@ function createStyles(colors: AppPalette) {
     warningRow: {
       backgroundColor: colors.warningSoft,
     },
-    zoomControls: {
+    zoomCanvas: {
+      alignItems: "center",
+      flex: 1,
+      justifyContent: "center",
+      overflow: "hidden",
+      width: "100%",
+    },
+    zoomHeader: {
       alignItems: "center",
       flexDirection: "row",
       gap: spacing.sm,
-      justifyContent: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.md,
       width: "100%",
     },
-    zoomValue: {
+    zoomHint: {
       color: colors.textMuted,
       fontSize: 12,
+      letterSpacing: 0,
+      paddingBottom: spacing.md,
+      textAlign: "center",
+    },
+    zoomImage: {
+      backgroundColor: colors.background,
+    },
+    zoomLoader: {
+      alignItems: "center",
+      backgroundColor: `${colors.background}CC`,
+      bottom: 0,
+      justifyContent: "center",
+      left: 0,
+      position: "absolute",
+      right: 0,
+      top: 0,
+    },
+    zoomModal: {
+      backgroundColor: colors.background,
+      flex: 1,
+    },
+    zoomTitle: {
+      color: colors.text,
+      flex: 1,
+      fontSize: 14,
       fontWeight: "900",
       letterSpacing: 0,
-      minWidth: 52,
-      textAlign: "center",
     },
   });
 }

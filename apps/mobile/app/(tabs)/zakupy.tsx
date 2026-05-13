@@ -203,6 +203,16 @@ export default function ZakupyScreen() {
                 <Sparkles color={theme.colors.inverseText} size={19} />
               </IconButton>
               <ActionButton
+                onPress={() => {
+                  aiImportMutation.reset();
+                  setAiVisible(true);
+                }}
+                size="small"
+                style={styles.aiTextButton}
+                title="AI"
+                variant="secondary"
+              />
+              <ActionButton
                 onPress={() => setCreateVisible(true)}
                 size="small"
                 title="+ Dodaj"
@@ -529,6 +539,10 @@ function createStyles(colors: AppPalette) {
     aiIconButton: {
       backgroundColor: colors.shopping,
       borderColor: colors.shopping,
+    },
+    aiTextButton: {
+      borderColor: colors.shopping,
+      minWidth: 48,
     },
     aiInput: {
       backgroundColor: colors.field,

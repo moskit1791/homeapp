@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Calendar, LocaleConfig, type DateData } from "react-native-calendars";
 import {
   clearShoppingList,
   createMealPlan,
@@ -11,6 +12,7 @@ import {
   getCurrentMealPlanWeek,
   getMealPlanWeek,
   getMyHousehold,
+  importShoppingItemsWithAi,
   listMealPlanHistory,
   listShoppingItems,
   listShoppingLists,
@@ -43,6 +45,7 @@ import {
   ChevronRight,
   Pencil,
   Plus,
+  Sparkles,
   Trash2,
   Utensils,
 } from "../../src/ui/icon";
@@ -54,6 +57,28 @@ const listTypes: Array<{ label: string; value: ShoppingListType }> = [
   { label: "Jutro", value: "tomorrow" },
   { label: "Na później", value: "long_term" },
 ];
+
+LocaleConfig.locales.pl = {
+  dayNames: ["Niedziela", "Poniedzialek", "Wtorek", "Sroda", "Czwartek", "Piatek", "Sobota"],
+  dayNamesShort: ["Nd", "Pn", "Wt", "Sr", "Cz", "Pt", "So"],
+  monthNames: [
+    "Styczen",
+    "Luty",
+    "Marzec",
+    "Kwiecien",
+    "Maj",
+    "Czerwiec",
+    "Lipiec",
+    "Sierpien",
+    "Wrzesien",
+    "Pazdziernik",
+    "Listopad",
+    "Grudzien",
+  ],
+  monthNamesShort: ["Sty", "Lut", "Mar", "Kwi", "Maj", "Cze", "Lip", "Sie", "Wrz", "Paz", "Lis", "Gru"],
+  today: "Dzisiaj",
+};
+LocaleConfig.defaultLocale = "pl";
 
 export default function ListaScreen() {
   const params = useLocalSearchParams<{ action?: string; segment?: MainSegment }>();
@@ -126,6 +151,9 @@ function ShoppingBoard({ action, onOpenMealPlan }: { action?: string; onOpenMeal
   const [activeType, setActiveType] = useState<ShoppingListType>("daily");
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState("");
+  const [aiMessage, setAiMessage] = useState("");
+  const [aiNotice, setAiNotice] = useState("");
+  const [aiModalVisible, setAiModalVisible] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
 
   useEffect(() => {
@@ -183,6 +211,17 @@ function ShoppingBoard({ action, onOpenMealPlan }: { action?: string; onOpenMeal
     mutationFn: () => moveUncheckedShoppingToTomorrow({ accessToken }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.shopping }),
   });
+  const aiImportMutation = useMutation({
+    mutationFn: () => importShoppingItemsWithAi(activeType, { message: aiMessage.trim() }, { accessToken }),
+    onSuccess: async (result) => {
+      setAiMessage("");
+      setAiModalVisible(false);
+      setAiNotice(`AI dodalo ${result.importedCount} pozycji do listy.`);
+      setTimeout(() => setAiNotice(""), 2600);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.shopping });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.start });
+    },
+  });
 
   const items = itemsQuery.data ?? [];
   const uncheckedItems = items.filter((item) => !item.isChecked);
@@ -192,6 +231,8 @@ function ShoppingBoard({ action, onOpenMealPlan }: { action?: string; onOpenMeal
     listsQuery.data?.find((list) => list.type === activeType)?.name ??
     (activeType === "daily" ? "Zakupy na dzis" : activeType === "tomorrow" ? "Zakupy na jutro" : "Lista na pozniej");
   const canAdd = permission.canCreate && Boolean(name.trim()) && !createMutation.isPending;
+  const canImportWithAi =
+    permission.canCreate && aiMessage.trim().length >= 3 && !aiImportMutation.isPending;
 
   return (
     <>
@@ -214,6 +255,15 @@ function ShoppingBoard({ action, onOpenMealPlan }: { action?: string; onOpenMeal
       </View>
 
       <View style={styles.quickActions}>
+        {permission.canCreate ? (
+          <ActionButton
+            loading={aiImportMutation.isPending}
+            onPress={() => setAiModalVisible(true)}
+            size="small"
+            title="AI"
+            variant="secondary"
+          />
+        ) : null}
         {activeType === "daily" && uncheckedItems.length > 0 && permission.canUpdate ? (
           <ActionButton
             disabled={moveUncheckedMutation.isPending}
@@ -235,6 +285,7 @@ function ShoppingBoard({ action, onOpenMealPlan }: { action?: string; onOpenMeal
           />
         ) : null}
       </View>
+      {aiNotice ? <InlineAlert text={aiNotice} /> : null}
 
       {!itemsQuery.isLoading && uncheckedItems.length === 0 && checkedItems.length === 0 ? (
         <InlineAlert text="Lista jest pusta. Dodaj produkt, żeby zacząć planowanie." />
@@ -332,6 +383,47 @@ function ShoppingBoard({ action, onOpenMealPlan }: { action?: string; onOpenMeal
           <InlineAlert tone="error" text="Nie udało się dodać produktu." />
         ) : null}
       </FormModal>
+      <FormModal
+        footer={
+          <View style={styles.modalFooter}>
+            <ActionButton
+              onPress={() => setAiModalVisible(false)}
+              style={styles.modalFooterButton}
+              title="Anuluj"
+              variant="secondary"
+            />
+            <ActionButton
+              disabled={!canImportWithAi}
+              loading={aiImportMutation.isPending}
+              onPress={() => aiImportMutation.mutate()}
+              style={styles.modalFooterButton}
+              title="Dodaj z AI"
+            />
+          </View>
+        }
+        onClose={() => setAiModalVisible(false)}
+        subtitle="Wklej wiadomosc, przepis albo luźną liste, a AI rozbije ją na produkty."
+        title="AI lista zakupow"
+        visible={aiModalVisible}
+      >
+        <View style={styles.aiHeader}>
+          <View style={styles.aiIcon}>
+            <Sparkles color={theme.colors.primary} size={20} />
+          </View>
+          <Text style={styles.sectionMeta}>Produkty trafia do aktualnie wybranej listy.</Text>
+        </View>
+        <TextInput
+          multiline
+          onChangeText={setAiMessage}
+          placeholder="Np. zrob grilla: kielbasa, pieczywo czosnkowe, papryka, cos do salatki"
+          placeholderTextColor={theme.colors.textSubtle}
+          style={[styles.input, styles.textArea]}
+          value={aiMessage}
+        />
+        {aiImportMutation.error ? (
+          <InlineAlert tone="error" text="AI nie dodalo produktow. Sprawdz konfiguracje albo tresc listy." />
+        ) : null}
+      </FormModal>
     </>
   );
 }
@@ -369,7 +461,6 @@ function MealsBoard({ action }: { action?: string }) {
     queryKey: [...queryKeys.meal, "history"],
   });
   const historyWeeks = mergeMealHistory(currentQuery.data?.week, historyQuery.data ?? []);
-  const weekOptions = buildMealWeekOptions(historyWeeks);
   const selectedWeek = historyWeeks.find((week) => week.weekStartDate === selectedWeekStartDate);
   const selectedWeekId = selectedWeek?.id ?? null;
   const selectedPlanQuery = useQuery({
@@ -567,10 +658,10 @@ function MealsBoard({ action }: { action?: string }) {
         ) : null}
       </View>
 
-      <WeekCalendarPicker
+      <CalendarWeekPicker
+        mealWeeks={historyWeeks}
         onSelect={selectWeekStart}
         selectedWeekStartDate={selectedWeekStartDate}
-        weeks={weekOptions}
       />
 
       <QueryState
@@ -648,10 +739,10 @@ function MealsBoard({ action }: { action?: string }) {
         visible={modalVisible}
       >
         <Text style={styles.inputLabel}>Tydzien</Text>
-        <WeekCalendarPicker
+        <CalendarWeekPicker
+          mealWeeks={historyWeeks}
           onSelect={selectWeekStart}
           selectedWeekStartDate={selectedWeekStartDate}
-          weeks={weekOptions}
         />
         <Text style={styles.inputLabel}>Dzien</Text>
         <View style={styles.chips}>
@@ -848,31 +939,51 @@ function Chip({
   );
 }
 
-function WeekCalendarPicker({
+function CalendarWeekPicker({
+  mealWeeks,
   onSelect,
   selectedWeekStartDate,
-  weeks,
 }: {
+  mealWeeks: Array<{ entriesCount?: number; id: string; weekStartDate: string }>;
   onSelect: (weekStartDate: string) => void;
   selectedWeekStartDate: string;
-  weeks: MealWeekOption[];
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
+  const markedDates = useMemo(
+    () => buildMarkedMealWeekDates(selectedWeekStartDate, mealWeeks, theme.colors),
+    [mealWeeks, selectedWeekStartDate, theme.colors],
+  );
 
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-      <View style={styles.weekCalendar}>
-        {weeks.map((week) => (
-          <Chip
-            active={selectedWeekStartDate === week.weekStartDate}
-            key={week.weekStartDate}
-            onPress={() => onSelect(week.weekStartDate)}
-            title={formatWeekOptionLabel(week)}
-          />
-        ))}
-      </View>
-    </ScrollView>
+    <View style={styles.calendarPicker}>
+      <Calendar
+        current={selectedWeekStartDate}
+        enableSwipeMonths
+        firstDay={1}
+        markedDates={markedDates}
+        markingType="period"
+        onDayPress={(day: DateData) => {
+          const weekStart = weekStartFromIsoDate(day.dateString);
+
+          if (weekStart) {
+            onSelect(weekStart);
+          }
+        }}
+        theme={{
+          arrowColor: theme.colors.primary,
+          calendarBackground: theme.colors.card,
+          dayTextColor: theme.colors.text,
+          monthTextColor: theme.colors.text,
+          selectedDayBackgroundColor: theme.colors.primary,
+          selectedDayTextColor: theme.colors.inverseText,
+          textDisabledColor: theme.colors.textSubtle,
+          textSectionTitleColor: theme.colors.textMuted,
+          todayTextColor: theme.colors.primary,
+        }}
+      />
+      <Text style={styles.calendarPickerMeta}>Wybrany tydzien: {formatWeekRange(selectedWeekStartDate)}</Text>
+    </View>
   );
 }
 
@@ -880,11 +991,6 @@ type MealDraft = {
   linkUrl: string;
   mealName: string;
   note: string;
-};
-
-type MealWeekOption = {
-  entriesCount?: number;
-  weekStartDate: string;
 };
 
 type ShoppingGroup = {
@@ -1021,36 +1127,43 @@ function normalizeOptionalMealUrl(value: string): string | null {
   return /^[a-z][a-z\d+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
 }
 
-function buildMealWeekOptions(
-  history: Array<{ entriesCount?: number; id: string; weekStartDate: string }>,
-): MealWeekOption[] {
-  const weeks = new Map<string, MealWeekOption>();
-  const current = currentWeekStart();
+function buildMarkedMealWeekDates(
+  selectedWeekStartDate: string,
+  mealWeeks: Array<{ entriesCount?: number; id: string; weekStartDate: string }>,
+  colors: AppPalette,
+) {
+  const marked: Record<
+    string,
+    {
+      color?: string;
+      dotColor?: string;
+      endingDay?: boolean;
+      marked?: boolean;
+      startingDay?: boolean;
+      textColor?: string;
+    }
+  > = {};
 
-  for (let offset = -4; offset <= 6; offset += 1) {
-    const weekStartDate = addWeeks(current, offset);
-    weeks.set(weekStartDate, { weekStartDate });
-  }
-
-  history.forEach((week) => {
-    weeks.set(week.weekStartDate, {
-      entriesCount: week.entriesCount,
-      weekStartDate: week.weekStartDate,
-    });
+  mealWeeks.forEach((week) => {
+    marked[week.weekStartDate] = {
+      dotColor: colors.food,
+      marked: Boolean(week.entriesCount),
+    };
   });
 
-  return [...weeks.values()].sort((left, right) =>
-    left.weekStartDate.localeCompare(right.weekStartDate),
-  );
-}
+  for (let day = 1; day <= 7; day += 1) {
+    const date = dateForWeekday(selectedWeekStartDate, day);
 
-function formatWeekOptionLabel(week: MealWeekOption): string {
-  const label =
-    week.weekStartDate === currentWeekStart()
-      ? "Ten tydzien"
-      : formatWeekRangeShort(week.weekStartDate);
+    marked[date] = {
+      ...marked[date],
+      color: colors.primary,
+      endingDay: day === 7,
+      startingDay: day === 1,
+      textColor: colors.inverseText,
+    };
+  }
 
-  return week.entriesCount ? `${label} (${week.entriesCount})` : label;
+  return marked;
 }
 
 function mergeMealHistory(
@@ -1138,13 +1251,6 @@ function currentWeekStart(): string {
   return isoFromDate(from);
 }
 
-function addWeeks(weekStartDate: string, offset: number): string {
-  const date = new Date(`${weekStartDate}T12:00:00`);
-  date.setDate(date.getDate() + offset * 7);
-
-  return isoFromDate(date);
-}
-
 function todayIso(): string {
   return isoFromDate(new Date());
 }
@@ -1197,14 +1303,6 @@ function formatWeekRange(weekStartDate: string): string {
   return `Tydzien ${formatDateShort(from)} - ${formatDateShort(to)}`;
 }
 
-function formatWeekRangeShort(weekStartDate: string): string {
-  const from = new Date(`${weekStartDate}T12:00:00`);
-  const to = new Date(from);
-  to.setDate(from.getDate() + 6);
-
-  return `${formatDateShort(from)}-${formatDateShort(to)}`;
-}
-
 function formatDateShort(date: Date): string {
   return `${String(date.getDate()).padStart(2, "0")}.${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
@@ -1238,6 +1336,36 @@ function createStyles(colors: AppPalette) {
       height: 22,
       justifyContent: "center",
       width: 22,
+    },
+    aiHeader: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.sm,
+    },
+    aiIcon: {
+      alignItems: "center",
+      backgroundColor: colors.primarySoft,
+      borderRadius: radii.control,
+      height: 38,
+      justifyContent: "center",
+      width: 38,
+    },
+    calendarPicker: {
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      overflow: "hidden",
+    },
+    calendarPickerMeta: {
+      borderColor: colors.border,
+      borderTopWidth: 1,
+      color: colors.textMuted,
+      fontSize: 12,
+      fontWeight: "800",
+      letterSpacing: 0,
+      padding: spacing.sm,
+      textAlign: "center",
     },
     checkBoxDone: {
       backgroundColor: colors.primary,
@@ -1496,11 +1624,6 @@ function createStyles(colors: AppPalette) {
       minHeight: 84,
       paddingTop: spacing.md,
       textAlignVertical: "top",
-    },
-    weekCalendar: {
-      flexDirection: "row",
-      gap: spacing.sm,
-      paddingRight: spacing.md,
     },
   });
 }
