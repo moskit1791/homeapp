@@ -157,37 +157,36 @@ export class ShoppingAiService {
       throw new BadRequestException('Shopping AI empty list');
     }
 
-    const responseText = await this.callGemini(this.buildPrompt(input, sourceFragments));
-    const parsed = this.repairShoppingAiResponse(
-      this.parseResponse(responseText),
-      sourceFragments
-    );
-    const coverage = this.verifyCoverage(parsed, sourceFragments);
+    try {
+      const responseText = await this.callGemini(this.buildPrompt(input, sourceFragments));
+      const parsed = this.repairShoppingAiResponse(
+        this.parseResponse(responseText),
+        sourceFragments
+      );
+      const coverage = this.verifyCoverage(parsed, sourceFragments);
 
-    if (coverage.needsClarification) {
-      throw new BadRequestException({
-        code: 'SHOPPING_AI_NEEDS_CLARIFICATION',
-        details: {
-          clarificationMessage: coverage.clarificationMessage,
-          ignoredSourceFragments: parsed.ignoredSourceFragments,
-          missingSourceFragments: coverage.missingSourceFragments,
-          unresolvedSourceFragments: parsed.unresolvedSourceFragments
-        },
-        message: 'Shopping AI needs clarification'
-      });
+      if (!coverage.needsClarification) {
+        const items = this.normalizeItems(parsed.items, sourceFragments);
+
+        if (items.length > 0) {
+          return {
+            ignoredSourceFragments: parsed.ignoredSourceFragments,
+            items,
+            sourceFragments
+          };
+        }
+      }
+
+      this.logger.warn('Gemini shopping import needed fallback coverage repair');
+    } catch (error) {
+      this.logger.warn(
+        `Gemini shopping import fallback used: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
     }
 
-    const items = this.normalizeItems(parsed.items, sourceFragments);
-
-    if (items.length === 0) {
-      throw new ServiceUnavailableException('Shopping AI returned invalid response');
-    }
-
-    return {
-      ignoredSourceFragments: parsed.ignoredSourceFragments,
-      items,
-      sourceFragments
-    };
+    return this.buildFallbackImportPlan(sourceFragments);
   }
 
   private async callGemini(prompt: string): Promise<string> {
@@ -414,6 +413,48 @@ export class ShoppingAiService {
     };
   }
 
+  private buildFallbackImportPlan(
+    sourceFragments: ShoppingAiSourceFragment[]
+  ): ShoppingAiImportPlan {
+    const hasMultipleFragments = sourceFragments.length > 1;
+    const ignoredSourceFragments: ShoppingAiResponse['ignoredSourceFragments'] = [];
+    const fallbackItems: ShoppingAiResponse['items'] = [];
+
+    for (const fragment of sourceFragments) {
+      if (hasMultipleFragments && isIgnorableShoppingContext(fragment.text)) {
+        ignoredSourceFragments.push({
+          id: fragment.id,
+          reason: 'Kontekst listy zakupów.'
+        });
+        continue;
+      }
+
+      fallbackItems.push(...createFallbackItems(fragment));
+    }
+
+    const repaired = this.repairShoppingAiResponse(
+      {
+        clarificationMessage: '',
+        ignoredSourceFragments,
+        items: fallbackItems,
+        status: 'ready',
+        unresolvedSourceFragments: []
+      },
+      sourceFragments
+    );
+    const items = this.normalizeItems(repaired.items, sourceFragments);
+
+    if (items.length === 0) {
+      throw new ServiceUnavailableException('Shopping AI returned invalid response');
+    }
+
+    return {
+      ignoredSourceFragments: repaired.ignoredSourceFragments,
+      items,
+      sourceFragments
+    };
+  }
+
   private buildClarificationMessage(
     response: ShoppingAiResponse,
     missingSourceFragments: ShoppingAiSourceFragment[],
@@ -501,12 +542,17 @@ export function extractShoppingSourceFragments(input: string): ShoppingAiSourceF
   }
 
   return fragments
+    .flatMap(splitQuestionSeparatedFragments)
     .map(cleanFragment)
     .filter((fragment) => fragment.length > 0)
     .map((text, index) => ({
       id: `f${index + 1}`,
       text
     }));
+}
+
+function splitQuestionSeparatedFragments(value: string): string[] {
+  return value.split(/(?<=\?)\s+(?=[A-ZĄĆĘŁŃÓŚŹŻ])/u);
 }
 
 function extractParentheticalFragments(value: string): string[] {
@@ -616,13 +662,146 @@ function trimToLength(value: string, maxLength: number): string {
 }
 
 function createFallbackItem(fragment: ShoppingAiSourceFragment): ShoppingAiResponse['items'][number] {
-  return {
+  return createFallbackItems(fragment)[0] ?? {
     category: 'Inne',
     name: fragment.text,
     note: '',
     quantity: '',
     sourceFragmentIds: [fragment.id]
   };
+}
+
+function createFallbackItems(fragment: ShoppingAiSourceFragment): ShoppingAiResponse['items'] {
+  return splitFallbackProducts(fragment.text)
+    .map((text) => createFallbackProduct(fragment.id, text))
+    .filter((item) => item.name.trim().length > 0);
+}
+
+function createFallbackProduct(
+  sourceFragmentId: string,
+  rawText: string
+): ShoppingAiResponse['items'][number] {
+  const { name, quantity } = extractFallbackQuantity(rawText);
+
+  return {
+    category: categorizeFallbackProduct(name),
+    name,
+    note: '',
+    quantity,
+    sourceFragmentIds: [sourceFragmentId]
+  };
+}
+
+function splitFallbackProducts(value: string): string[] {
+  return value
+    .split(/(?<=\?)\s+(?=[A-ZĄĆĘŁŃÓŚŹŻ])/u)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function extractFallbackQuantity(value: string): { name: string; quantity: string } {
+  const quantityParts: string[] = [];
+  let name = value.trim();
+  const uncertain = /\?$/.test(name);
+
+  if (uncertain) {
+    quantityParts.push('?');
+    name = name.replace(/\?+$/g, '').trim();
+  }
+
+  name = name.replace(/\b[xX]\s*(\d+)\b/g, (_match, count: string) => {
+    quantityParts.push(`x${count}`);
+    return '';
+  });
+  name = name.replace(
+    /\b(\d+(?:[,.]\d+)?)\s*(kg|g|dag|l|ml|szt|szt\.|opak|op|paczki|paczka)\b/giu,
+    (match) => {
+      quantityParts.push(match.trim());
+      return '';
+    }
+  );
+
+  return {
+    name: formatFallbackName(name),
+    quantity: quantityParts.join(' | ')
+  };
+}
+
+function formatFallbackName(value: string): string {
+  const normalized = value.replace(/\s+/g, ' ').replace(/^[\s,;:.-]+|[\s,;:.-]+$/g, '').trim();
+
+  if (!normalized) {
+    return '';
+  }
+
+  return `${normalized.charAt(0).toLocaleUpperCase('pl-PL')}${normalized.slice(1)}`;
+}
+
+function categorizeFallbackProduct(value: string): ShoppingAiCategory {
+  const normalized = normalizeFallbackText(value);
+
+  if (isUnclearShoppingWish(value)) {
+    return 'Inne';
+  }
+
+  if (/(jabl|granat|pomidor|pomidork|pieczark|papryk|owoc|warzyw|ogork|cebula|marchew|banan|cytryn|ziemniak|salat)/.test(normalized)) {
+    return 'Owoce i warzywa';
+  }
+
+  if (/(chleb|pieczyw|bulka|bulki|grzank|bagiet)/.test(normalized)) {
+    return 'Pieczywo';
+  }
+
+  if (/(mleko|maslo|feta|burrat|ser|jogurt|smietan|parmezan|mozzarell|jajka|jajko)/.test(normalized)) {
+    return 'Nabial';
+  }
+
+  if (/(prosciutto|salami|kielbas|szynk|kurczak|mieso|wedlin|boczek)/.test(normalized)) {
+    return 'Mieso i wedliny';
+  }
+
+  if (/(ryba|losos|tunczyk|krewet)/.test(normalized)) {
+    return 'Ryby i owoce morza';
+  }
+
+  if (/(mrozon|lody)/.test(normalized)) {
+    return 'Mrozonki';
+  }
+
+  if (/(makaron|tortill|ryz|kasz|maka|cukier|platki|barilla)/.test(normalized)) {
+    return 'Produkty suche i spizarnia';
+  }
+
+  if (/(pesto|sos|ketchup|majonez|musztard)/.test(normalized)) {
+    return 'Sosy i dodatki';
+  }
+
+  if (/(slodk|czekolad|ciast|chips|przekask)/.test(normalized)) {
+    return 'Przekaski i slodycze';
+  }
+
+  if (/(napoj|woda|sok|cola|piwo)/.test(normalized)) {
+    return 'Napoje';
+  }
+
+  if (/(papier|folia|worki|chemia|plyn|proszek)/.test(normalized)) {
+    return 'Chemia i dom';
+  }
+
+  if (/(grill|wegiel|brykiet|podpalk|wyposazenie grilla)/.test(normalized)) {
+    return 'Grill i ogrod';
+  }
+
+  return 'Inne';
+}
+
+function normalizeFallbackText(value: string): string {
+  return value
+    .replace(/ł/g, 'l')
+    .replace(/Ł/g, 'L')
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase();
 }
 
 function isUnclearShoppingWish(value: string): boolean {

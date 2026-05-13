@@ -19,6 +19,7 @@ describe('extractShoppingSourceFragments', () => {
       [
         'Papryka, boczniaki, (Kurczak) chleb tostowy, coś do mikołaja',
         'Lista zakupów:',
+        'prosciutto? Salami',
         'grill (kiełbasa, Pieczywo czosnkowe, wyposażenie grilla), pesto barilla x2'
       ].join('\n')
     );
@@ -29,6 +30,8 @@ describe('extractShoppingSourceFragments', () => {
     expect(texts).toContain('Kurczak');
     expect(texts).toContain('chleb tostowy');
     expect(texts).toContain('coś do mikołaja');
+    expect(texts).toContain('prosciutto?');
+    expect(texts).toContain('Salami');
     expect(texts).toContain('grill');
     expect(texts).toContain('kiełbasa');
     expect(texts).toContain('Pieczywo czosnkowe');
@@ -118,7 +121,7 @@ describe('ShoppingAiService', () => {
     expect(plan.items).toEqual([
       expect.objectContaining({
         category: 'Inne',
-        name: 'coś do mikołaja',
+        name: 'Coś do mikołaja',
         quantity: '',
         sourceFragmentIds: ['f1']
       })
@@ -176,7 +179,7 @@ describe('ShoppingAiService', () => {
       }),
       expect.objectContaining({
         category: 'Inne',
-        name: 'coś do obiadu',
+        name: 'Coś do obiadu',
         quantity: ''
       })
     ]);
@@ -230,5 +233,65 @@ describe('ShoppingAiService', () => {
         reason: 'Kontekst listy zakupów.'
       }
     ]);
+  });
+
+  it('falls back to a deterministic parser when Gemini quota is exhausted', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 429,
+      text: async () =>
+        JSON.stringify({
+          error: {
+            code: 429,
+            message: 'Quota exceeded',
+            status: 'RESOURCE_EXHAUSTED'
+          }
+        })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const plan = await new ShoppingAiService().planImport(
+      'Jabłka, granat, pomidor X2, pomidorki, Pieczarki, papryka czerwona, prosciutto? Salami, feta, grill (kiełbasa, Pieczywo czosnkowe, wyposażenie grilla), tortille, pesto barilla x2'
+    );
+
+    expect(plan.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: 'Owoce i warzywa',
+          name: 'Jabłka'
+        }),
+        expect.objectContaining({
+          category: 'Owoce i warzywa',
+          name: 'Pomidor',
+          quantity: 'x2'
+        }),
+        expect.objectContaining({
+          category: 'Mieso i wedliny',
+          name: 'Prosciutto',
+          quantity: '?'
+        }),
+        expect.objectContaining({
+          category: 'Mieso i wedliny',
+          name: 'Salami'
+        }),
+        expect.objectContaining({
+          category: 'Nabial',
+          name: 'Feta'
+        }),
+        expect.objectContaining({
+          category: 'Produkty suche i spizarnia',
+          name: 'Pesto barilla',
+          quantity: 'x2'
+        })
+      ])
+    );
+    expect(plan.ignoredSourceFragments).toEqual(
+      expect.arrayContaining([
+        {
+          id: expect.any(String),
+          reason: 'Kontekst listy zakupów.'
+        }
+      ])
+    );
   });
 });
