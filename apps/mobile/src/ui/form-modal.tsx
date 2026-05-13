@@ -61,9 +61,10 @@ export function FormModal({
               </IconButton>
             </View>
             <ScrollView
-              contentContainerStyle={styles.body}
+              contentContainerStyle={[styles.body, footer ? styles.bodyWithFooter : null]}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
+              style={styles.scroll}
             >
               {children}
             </ScrollView>
@@ -86,9 +87,13 @@ function createStyles(colors: AppPalette) {
       padding: spacing.lg,
       paddingBottom: spacing.xl,
     },
+    bodyWithFooter: {
+      paddingBottom: spacing.xxl + spacing.xl,
+    },
     footer: {
       borderColor: colors.border,
       borderTopWidth: 1,
+      flexShrink: 0,
       gap: spacing.sm,
       padding: spacing.lg,
       paddingTop: spacing.md,
@@ -107,7 +112,8 @@ function createStyles(colors: AppPalette) {
       borderBottomWidth: 1,
       flexDirection: "row",
       gap: spacing.md,
-      padding: spacing.lg,
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.lg,
       paddingBottom: spacing.md,
     },
     headerText: {
@@ -123,15 +129,20 @@ function createStyles(colors: AppPalette) {
       flex: 1,
     },
     sheet: {
+      alignSelf: "stretch",
       backgroundColor: colors.card,
       borderColor: colors.border,
       borderTopLeftRadius: radii.card,
       borderTopRightRadius: radii.card,
       borderTopWidth: 1,
-      marginHorizontal: spacing.xs,
-      maxHeight: "94%",
+      flexShrink: 1,
+      marginHorizontal: spacing.md,
+      maxHeight: "92%",
       overflow: "hidden",
       ...shadows.card,
+    },
+    scroll: {
+      flexShrink: 1,
     },
     subtitle: {
       color: colors.textMuted,
