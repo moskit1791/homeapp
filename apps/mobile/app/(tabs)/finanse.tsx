@@ -156,6 +156,8 @@ export default function FinanseScreen() {
   const [selectedIncomeMemberId, setSelectedIncomeMemberId] = useState("");
   const [selectedItemCategoryId, setSelectedItemCategoryId] = useState("");
   const [selectedItemOwnerId, setSelectedItemOwnerId] = useState("");
+  const [selectedExpenseOwnerId, setSelectedExpenseOwnerId] = useState("");
+  const [selectedExpenseCategoryId, setSelectedExpenseCategoryId] = useState("");
   const [selectedExpenseItemId, setSelectedExpenseItemId] = useState("");
   const [copyCategory, setCopyCategory] = useState(true);
   const [activeFinanceView, setActiveFinanceView] = useState<"budget" | "debts">("budget");
@@ -216,7 +218,6 @@ export default function FinanseScreen() {
       ),
     [categories],
   );
-  const flatItems = visibleFlatItems;
   const currentMonth = currentSummary?.month;
   const visibleMonth = summary?.month;
   const budgetAmount = Number(totals?.totalBudgetAmount ?? 0);
@@ -261,6 +262,38 @@ export default function FinanseScreen() {
 
     return [...owners.entries()].map(([id, label]) => ({ id, label }));
   }, [incomes, visibleFlatItems]);
+  const expenseOwnerOptions = useMemo(() => {
+    const itemOwnerIds = new Set(
+      visibleFlatItems
+        .map((item) => item.owner?.memberId)
+        .filter((ownerId): ownerId is string => Boolean(ownerId)),
+    );
+
+    return financeOwnerOptions.filter((owner) => itemOwnerIds.has(owner.id));
+  }, [financeOwnerOptions, visibleFlatItems]);
+  const expenseCategoryOptions = useMemo(() => {
+    if (!selectedExpenseOwnerId) {
+      return [];
+    }
+
+    return categories
+      .map((category) => ({
+        category,
+        items: getCategoryItems(category)
+          .filter((item) => item.owner?.memberId === selectedExpenseOwnerId)
+          .map((item) => ({ ...item, category })),
+      }))
+      .filter((option) => option.items.length > 0);
+  }, [categories, selectedExpenseOwnerId]);
+  const expenseItems = useMemo(
+    () =>
+      expenseCategoryOptions.find((option) => option.category.id === selectedExpenseCategoryId)?.items ?? [],
+    [expenseCategoryOptions, selectedExpenseCategoryId],
+  );
+  const selectedExpenseItem = useMemo(
+    () => expenseItems.find((item) => item.id === selectedExpenseItemId),
+    [expenseItems, selectedExpenseItemId],
+  );
   const filteredRows = useMemo(
     () => applyFinanceFilters(visibleFlatItems, financeFilters),
     [financeFilters, visibleFlatItems],
@@ -318,6 +351,10 @@ export default function FinanseScreen() {
       return;
     }
 
+    setSelectedExpenseOwnerId("");
+    setSelectedExpenseCategoryId("");
+    setSelectedExpenseItemId("");
+    setValue("expenseAmount", "");
     setFinanceModal("expense");
     setHandledRouteAction(params.action);
     router.setParams({ action: undefined });
@@ -344,10 +381,77 @@ export default function FinanseScreen() {
   }, [categories, categoriesQuery.data, selectedItemCategoryId]);
 
   useEffect(() => {
-    if (!selectedExpenseItemId && flatItems[0]) {
-      setSelectedExpenseItemId(flatItems[0].id);
+    if (financeModal !== "expense") {
+      return;
     }
-  }, [flatItems, selectedExpenseItemId]);
+
+    if (!selectedExpenseOwnerId) {
+      return;
+    }
+
+    const ownerIds = new Set(expenseOwnerOptions.map((owner) => owner.id));
+
+    if (ownerIds.has(selectedExpenseOwnerId)) {
+      return;
+    }
+
+    setSelectedExpenseOwnerId("");
+    setSelectedExpenseCategoryId("");
+    setSelectedExpenseItemId("");
+  }, [expenseOwnerOptions, financeModal, selectedExpenseOwnerId]);
+
+  useEffect(() => {
+    if (financeModal !== "expense") {
+      return;
+    }
+
+    if (!selectedExpenseOwnerId) {
+      setSelectedExpenseCategoryId("");
+      setSelectedExpenseItemId("");
+      return;
+    }
+
+    if (!selectedExpenseCategoryId) {
+      return;
+    }
+
+    const categoryIds = new Set(expenseCategoryOptions.map((option) => option.category.id));
+
+    if (categoryIds.has(selectedExpenseCategoryId)) {
+      return;
+    }
+
+    setSelectedExpenseCategoryId("");
+    setSelectedExpenseItemId("");
+  }, [
+    expenseCategoryOptions,
+    financeModal,
+    selectedExpenseCategoryId,
+    selectedExpenseOwnerId,
+  ]);
+
+  useEffect(() => {
+    if (financeModal !== "expense") {
+      return;
+    }
+
+    if (!selectedExpenseCategoryId) {
+      setSelectedExpenseItemId("");
+      return;
+    }
+
+    if (!selectedExpenseItemId) {
+      return;
+    }
+
+    const itemIds = new Set(expenseItems.map((item) => item.id));
+
+    if (itemIds.has(selectedExpenseItemId)) {
+      return;
+    }
+
+    setSelectedExpenseItemId("");
+  }, [expenseItems, financeModal, selectedExpenseCategoryId, selectedExpenseItemId]);
 
   const invalidateFinance = () => queryClient.invalidateQueries({ queryKey: queryKeys.finances });
   const incomeMutation = useMutation({
@@ -574,6 +678,14 @@ export default function FinanseScreen() {
     setEditingDebt(null);
   }
 
+  function openExpenseModal() {
+    setSelectedExpenseOwnerId("");
+    setSelectedExpenseCategoryId("");
+    setSelectedExpenseItemId("");
+    setValue("expenseAmount", "");
+    setFinanceModal("expense");
+  }
+
   function openEditBudgetItem(item: BudgetItemWithCategory) {
     setEditingBudgetItem(item);
     setSelectedItemCategoryId(item.categoryId);
@@ -629,7 +741,7 @@ export default function FinanseScreen() {
     Boolean(selectedItemOwnerId) &&
     (!itemAmount.trim() || isValidMoney(itemAmount));
   const canSaveExpense =
-    canCreate && Boolean(selectedExpenseItemId) && isPositiveMoney(expenseAmount);
+    canCreate && Boolean(selectedExpenseItem) && isPositiveMoney(expenseAmount);
   const canSaveDebt =
     (editingDebt ? canUpdate : canCreate) &&
     Boolean(debtLenderName.trim()) &&
@@ -800,7 +912,7 @@ export default function FinanseScreen() {
                 }}
                 title="Dodaj pozycję budżetu"
               />
-              <ActionButton onPress={() => setFinanceModal("expense")} title="Dodaj wydatek" variant="secondary" />
+              <ActionButton onPress={openExpenseModal} title="Dodaj wydatek" variant="secondary" />
               <ActionButton
                 disabled={nextMonthMutation.isPending}
                 loading={nextMonthMutation.isPending}
@@ -1076,26 +1188,63 @@ export default function FinanseScreen() {
               </View>
             }
             onClose={() => setFinanceModal(null)}
-            subtitle="Wybierz pozycję budżetu i zaksięguj wydatek."
+            subtitle="Najpierw wybierz osobę, potem kategorię, pozycję i kwotę."
             title="Dodaj wydatek"
             visible={financeModal === "expense"}
           >
-            <ChoiceSelector
-              emptyText="Brak pozycji do wyboru."
-              items={flatItems.map((item) => ({
-                id: item.id,
-                label: `${item.name} - ${formatOwner(item.owner)}`,
-              }))}
-              onSelect={setSelectedExpenseItemId}
-              selectedId={selectedExpenseItemId}
-            />
-            <TextField
-              control={control}
-              keyboardType="decimal-pad"
-              label="Kwota wydatku"
-              name="expenseAmount"
-              placeholder="0,00"
-            />
+            <View style={styles.selectorGroup}>
+              <Text style={styles.selectorLabel}>Osoba</Text>
+              <ChoiceSelector
+                emptyText="Brak osób z pozycjami budżetu."
+                items={expenseOwnerOptions}
+                onSelect={(ownerId) => {
+                  setSelectedExpenseOwnerId(ownerId);
+                  setSelectedExpenseCategoryId("");
+                  setSelectedExpenseItemId("");
+                }}
+                selectedId={selectedExpenseOwnerId}
+              />
+            </View>
+            {selectedExpenseOwnerId ? (
+              <View style={styles.selectorGroup}>
+                <Text style={styles.selectorLabel}>Kategoria</Text>
+                <ChoiceSelector
+                  emptyText="Ta osoba nie ma kategorii z pozycjami budżetu."
+                  items={expenseCategoryOptions.map((option) => ({
+                    id: option.category.id,
+                    label: option.category.name,
+                  }))}
+                  onSelect={(categoryId) => {
+                    setSelectedExpenseCategoryId(categoryId);
+                    setSelectedExpenseItemId("");
+                  }}
+                  selectedId={selectedExpenseCategoryId}
+                />
+              </View>
+            ) : null}
+            {selectedExpenseCategoryId ? (
+              <View style={styles.selectorGroup}>
+                <Text style={styles.selectorLabel}>Pozycja</Text>
+                <ChoiceSelector
+                  emptyText="Ta kategoria nie ma pozycji dla wybranej osoby."
+                  items={expenseItems.map((item) => ({
+                    id: item.id,
+                    label: item.name,
+                  }))}
+                  onSelect={setSelectedExpenseItemId}
+                  selectedId={selectedExpenseItemId}
+                />
+              </View>
+            ) : null}
+            {selectedExpenseItem ? (
+              <TextField
+                control={control}
+                keyboardType="decimal-pad"
+                label="Kwota wydatku"
+                name="expenseAmount"
+                placeholder="0,00"
+              />
+            ) : null}
             {expenseMutation.error ? (
               <InlineAlert tone="error" text="Nie udało się dodać wydatku." />
             ) : null}
@@ -1883,6 +2032,16 @@ function createStyles(colors: AppPalette) {
       flexDirection: "row",
       flexWrap: "wrap",
       gap: spacing.sm,
+    },
+    selectorGroup: {
+      gap: spacing.xs,
+    },
+    selectorLabel: {
+      color: colors.textMuted,
+      fontSize: 11,
+      fontWeight: "900",
+      letterSpacing: 0,
+      textTransform: "uppercase",
     },
     dangerText: {
       color: colors.danger,
