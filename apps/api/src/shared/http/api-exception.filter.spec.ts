@@ -82,7 +82,7 @@ describe("API exception filter and validation pipe", () => {
 
     expect(response.body).toMatchObject({
       code: "VALIDATION_ERROR",
-      message: "Dane sa nieprawidlowe.",
+      message: "Dane są nieprawidłowe.",
       path: "/api/qa-errors/validation",
       statusCode: 400,
     });
@@ -102,7 +102,7 @@ describe("API exception filter and validation pipe", () => {
 
     expect(response.body).toMatchObject({
       code: "FORBIDDEN",
-      message: "Brak dostepu.",
+      message: "Brak dostępu.",
       path: "/api/qa-errors/forbidden",
       statusCode: 403,
     });
@@ -119,7 +119,7 @@ describe("API exception filter and validation pipe", () => {
         constraint: "users_email_key",
         table: "users",
       },
-      message: "Taki zasob juz istnieje.",
+      message: "Taki zasób już istnieje.",
       statusCode: 409,
     });
   });

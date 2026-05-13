@@ -59,23 +59,23 @@ const listTypes: Array<{ label: string; value: ShoppingListType }> = [
 ];
 
 LocaleConfig.locales.pl = {
-  dayNames: ["Niedziela", "Poniedzialek", "Wtorek", "Sroda", "Czwartek", "Piatek", "Sobota"],
-  dayNamesShort: ["Nd", "Pn", "Wt", "Sr", "Cz", "Pt", "So"],
+  dayNames: ["Niedziela", "Poniedziałek", "Wtorek", "Środa", "Czwartek", "Piątek", "Sobota"],
+  dayNamesShort: ["Nd", "Pn", "Wt", "Śr", "Cz", "Pt", "So"],
   monthNames: [
-    "Styczen",
+    "Styczeń",
     "Luty",
     "Marzec",
-    "Kwiecien",
+    "Kwiecień",
     "Maj",
     "Czerwiec",
     "Lipiec",
-    "Sierpien",
-    "Wrzesien",
-    "Pazdziernik",
+    "Sierpień",
+    "Wrzesień",
+    "Październik",
     "Listopad",
-    "Grudzien",
+    "Grudzień",
   ],
-  monthNamesShort: ["Sty", "Lut", "Mar", "Kwi", "Maj", "Cze", "Lip", "Sie", "Wrz", "Paz", "Lis", "Gru"],
+  monthNamesShort: ["Sty", "Lut", "Mar", "Kwi", "Maj", "Cze", "Lip", "Sie", "Wrz", "Paź", "Lis", "Gru"],
   today: "Dzisiaj",
 };
 LocaleConfig.defaultLocale = "pl";
@@ -85,7 +85,10 @@ export default function ListaScreen() {
   const permissionsQuery = usePermissions();
   const shoppingPermission = useModulePermission("shopping");
   const mealPermission = useModulePermission("meal_planner");
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
   const [activeSegment, setActiveSegment] = useState<MainSegment>("shopping");
+  const [shoppingAiOpenRequest, setShoppingAiOpenRequest] = useState(0);
   const availableSegments = useMemo(
     () =>
       [
@@ -126,7 +129,20 @@ export default function ListaScreen() {
   }
 
   return (
-    <AppScreen title="Lista">
+    <AppScreen
+      actions={
+        activeSegment === "shopping" && shoppingPermission.canCreate ? (
+          <IconButton
+            accessibilityLabel="AI do listy zakupów"
+            onPress={() => setShoppingAiOpenRequest((value) => value + 1)}
+            style={styles.aiHeaderButton}
+          >
+            <Sparkles color={theme.colors.inverseText} size={22} />
+          </IconButton>
+        ) : undefined
+      }
+      title="Lista"
+    >
       <SegmentedControl
         onChange={setActiveSegment}
         options={availableSegments}
@@ -134,14 +150,26 @@ export default function ListaScreen() {
       />
 
       {activeSegment === "shopping" ? (
-        <ShoppingBoard action={params.action} onOpenMealPlan={() => setActiveSegment("meals")} />
+        <ShoppingBoard
+          action={params.action}
+          aiOpenRequest={shoppingAiOpenRequest}
+          onOpenMealPlan={() => setActiveSegment("meals")}
+        />
       ) : null}
       {activeSegment === "meals" ? <MealsBoard action={params.action} /> : null}
     </AppScreen>
   );
 }
 
-function ShoppingBoard({ action, onOpenMealPlan }: { action?: string; onOpenMealPlan: () => void }) {
+function ShoppingBoard({
+  action,
+  aiOpenRequest,
+  onOpenMealPlan,
+}: {
+  action?: string;
+  aiOpenRequest: number;
+  onOpenMealPlan: () => void;
+}) {
   const { session } = useSession();
   const queryClient = useQueryClient();
   const permission = useModulePermission("shopping");
@@ -161,6 +189,12 @@ function ShoppingBoard({ action, onOpenMealPlan }: { action?: string; onOpenMeal
       setModalVisible(true);
     }
   }, [action]);
+
+  useEffect(() => {
+    if (aiOpenRequest > 0) {
+      setAiModalVisible(true);
+    }
+  }, [aiOpenRequest]);
 
   const listsQuery = useQuery({
     enabled: permission.canRead && Boolean(accessToken),
@@ -216,7 +250,7 @@ function ShoppingBoard({ action, onOpenMealPlan }: { action?: string; onOpenMeal
     onSuccess: async (result) => {
       setAiMessage("");
       setAiModalVisible(false);
-      setAiNotice(`AI dodalo ${result.importedCount} pozycji do listy.`);
+      setAiNotice(`AI dodało ${result.importedCount} pozycji do listy.`);
       setTimeout(() => setAiNotice(""), 2600);
       await queryClient.invalidateQueries({ queryKey: queryKeys.shopping });
       await queryClient.invalidateQueries({ queryKey: queryKeys.start });
@@ -229,7 +263,7 @@ function ShoppingBoard({ action, onOpenMealPlan }: { action?: string; onOpenMeal
   const groups = groupShoppingItems(uncheckedItems);
   const currentList =
     listsQuery.data?.find((list) => list.type === activeType)?.name ??
-    (activeType === "daily" ? "Zakupy na dzis" : activeType === "tomorrow" ? "Zakupy na jutro" : "Lista na pozniej");
+    (activeType === "daily" ? "Zakupy na dziś" : activeType === "tomorrow" ? "Zakupy na jutro" : "Lista na później");
   const canAdd = permission.canCreate && Boolean(name.trim()) && !createMutation.isPending;
   const canImportWithAi =
     permission.canCreate && aiMessage.trim().length >= 3 && !aiImportMutation.isPending;
@@ -255,15 +289,6 @@ function ShoppingBoard({ action, onOpenMealPlan }: { action?: string; onOpenMeal
       </View>
 
       <View style={styles.quickActions}>
-        {permission.canCreate ? (
-          <ActionButton
-            loading={aiImportMutation.isPending}
-            onPress={() => setAiModalVisible(true)}
-            size="small"
-            title="AI"
-            variant="secondary"
-          />
-        ) : null}
         {activeType === "daily" && uncheckedItems.length > 0 && permission.canUpdate ? (
           <ActionButton
             disabled={moveUncheckedMutation.isPending}
@@ -350,10 +375,10 @@ function ShoppingBoard({ action, onOpenMealPlan }: { action?: string; onOpenMeal
         onClose={() => setModalVisible(false)}
         subtitle={
           activeType === "daily"
-            ? "Dodajesz produkt na dzis."
+            ? "Dodajesz produkt na dziś."
             : activeType === "tomorrow"
               ? "Dodajesz produkt na jutro."
-              : "Dodajesz produkt na pozniej."
+              : "Dodajesz produkt na później."
         }
         title="Dodaj produkt"
         visible={modalVisible}
@@ -402,26 +427,26 @@ function ShoppingBoard({ action, onOpenMealPlan }: { action?: string; onOpenMeal
           </View>
         }
         onClose={() => setAiModalVisible(false)}
-        subtitle="Wklej wiadomosc, przepis albo luźną liste, a AI rozbije ją na produkty."
-        title="AI lista zakupow"
+        subtitle="Wklej wiadomość, przepis albo luźną listę, a AI rozbije ją na produkty."
+        title="AI lista zakupów"
         visible={aiModalVisible}
       >
         <View style={styles.aiHeader}>
           <View style={styles.aiIcon}>
             <Sparkles color={theme.colors.primary} size={20} />
           </View>
-          <Text style={styles.sectionMeta}>Produkty trafia do aktualnie wybranej listy.</Text>
+          <Text style={styles.sectionMeta}>Produkty trafią do aktualnie wybranej listy.</Text>
         </View>
         <TextInput
           multiline
           onChangeText={setAiMessage}
-          placeholder="Np. zrob grilla: kielbasa, pieczywo czosnkowe, papryka, cos do salatki"
+          placeholder="Np. zrób grilla: kiełbasa, pieczywo czosnkowe, papryka, coś do sałatki"
           placeholderTextColor={theme.colors.textSubtle}
           style={[styles.input, styles.textArea]}
           value={aiMessage}
         />
         {aiImportMutation.error ? (
-          <InlineAlert tone="error" text="AI nie dodalo produktow. Sprawdz konfiguracje albo tresc listy." />
+          <InlineAlert tone="error" text="AI nie dodało produktów. Sprawdź konfigurację albo treść listy." />
         ) : null}
       </FormModal>
     </>
@@ -695,13 +720,13 @@ function MealsBoard({ action }: { action?: string }) {
                 ) : null}
                 <View style={styles.mealRowActions}>
                   {permission.canUpdate ? (
-                    <IconButton accessibilityLabel="Edytuj posilek" onPress={() => openEditMealModal(entry)}>
+                    <IconButton accessibilityLabel="Edytuj posiłek" onPress={() => openEditMealModal(entry)}>
                       <Pencil color={theme.colors.primary} size={16} />
                     </IconButton>
                   ) : null}
                   {permission.canDelete ? (
                     <IconButton
-                      accessibilityLabel="Usun posilek"
+                      accessibilityLabel="Usuń posiłek"
                       disabled={deleteMealMutation.isPending}
                       onPress={() => deleteMealMutation.mutate(entry)}
                     >
@@ -734,17 +759,17 @@ function MealsBoard({ action }: { action?: string }) {
           </View>
         }
         onClose={() => setModalVisible(false)}
-        subtitle="Wybierz tydzien z kalendarza, dzien i numer posilku."
+        subtitle="Wybierz tydzień z kalendarza, dzień i numer posiłku."
         title="Dodaj posiłek"
         visible={modalVisible}
       >
-        <Text style={styles.inputLabel}>Tydzien</Text>
+        <Text style={styles.inputLabel}>Tydzień</Text>
         <CalendarWeekPicker
           mealWeeks={historyWeeks}
           onSelect={selectWeekStart}
           selectedWeekStartDate={selectedWeekStartDate}
         />
-        <Text style={styles.inputLabel}>Dzien</Text>
+        <Text style={styles.inputLabel}>Dzień</Text>
         <View style={styles.chips}>
           {[1, 2, 3, 4, 5, 6, 7].map((day) => (
             <Chip
@@ -755,7 +780,7 @@ function MealsBoard({ action }: { action?: string }) {
             />
           ))}
         </View>
-        <Text style={styles.inputLabel}>Numer posilku</Text>
+        <Text style={styles.inputLabel}>Numer posiłku</Text>
         <View style={styles.chips}>
           {mealSlots.map((slot) => (
             <Chip active={slotIndex === slot} key={slot} onPress={() => setSlotIndex(slot)} title={`Posiłek ${slot + 1}`} />
@@ -1300,7 +1325,7 @@ function formatWeekRange(weekStartDate: string): string {
   const to = new Date(from);
   to.setDate(from.getDate() + 6);
 
-  return `Tydzien ${formatDateShort(from)} - ${formatDateShort(to)}`;
+  return `Tydzień ${formatDateShort(from)} - ${formatDateShort(to)}`;
 }
 
 function formatDateShort(date: Date): string {
@@ -1341,6 +1366,15 @@ function createStyles(colors: AppPalette) {
       alignItems: "center",
       flexDirection: "row",
       gap: spacing.sm,
+    },
+    aiHeaderButton: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primaryDark,
+      elevation: 8,
+      shadowColor: colors.primary,
+      shadowOffset: { height: 8, width: 0 },
+      shadowOpacity: 0.28,
+      shadowRadius: 14,
     },
     aiIcon: {
       alignItems: "center",

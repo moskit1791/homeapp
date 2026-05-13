@@ -80,6 +80,23 @@ Oczekiwany wynik healthchecka:
 {"status":"ok","service":"homeapp-api"}
 ```
 
+## Kontrola AI zakupów
+
+AI listy zakupów działa tylko wtedy, gdy `/opt/homeapp/.env` zawiera poprawny `GEMINI_API_KEY`.
+Jeśli endpoint zwraca komunikat o konfiguracji albo Gemini, sprawdź logi:
+
+```bash
+cd /opt/homeapp
+docker compose -f compose.prod.yml --env-file .env logs --tail=100 api | grep Gemini
+```
+
+Komunikat `API_KEY_INVALID` oznacza, że klucz Gemini w produkcyjnym `.env` trzeba wymienić i zrestartować API:
+
+```bash
+cd /opt/homeapp
+docker compose -f compose.prod.yml --env-file .env up -d --build
+```
+
 ## Deploy bez `.git` na produkcji
 
 Z lokalnego repo skopiuj zmienione pliki backendu, na przyklad:

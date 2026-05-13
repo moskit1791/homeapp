@@ -8,7 +8,7 @@ export function createValidationException(
   return new BadRequestException({
     code: "VALIDATION_ERROR",
     details: flattenValidationErrors(errors),
-    message: "Dane sa nieprawidlowe.",
+    message: "Dane są nieprawidłowe.",
   });
 }
 

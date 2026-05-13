@@ -68,7 +68,7 @@ export default function ZadaniaScreen() {
   if (!hasModuleRead(permissionsQuery.data, ["notes", "todo"])) {
     return (
       <AppScreen title="Zadania">
-        <InlineAlert text="Nie masz dostepu do notatek ani zadan." />
+        <InlineAlert text="Nie masz dostępu do notatek ani zadań." />
       </AppScreen>
     );
   }
@@ -199,13 +199,13 @@ function NotesBoard({
             </View>
             <View style={styles.rowActions}>
               {permission.canUpdate ? (
-                <IconButton accessibilityLabel="Edytuj notatke" onPress={() => openEdit(note)}>
+                <IconButton accessibilityLabel="Edytuj notatkę" onPress={() => openEdit(note)}>
                   <Pencil color={theme.colors.primary} size={17} />
                 </IconButton>
               ) : null}
               {permission.canDelete ? (
                 <IconButton
-                  accessibilityLabel="Usun notatke"
+                  accessibilityLabel="Usuń notatkę"
                   disabled={deleteMutation.isPending}
                   onPress={() => deleteMutation.mutate(note.id)}
                 >
@@ -305,7 +305,7 @@ function TodoBoard({
         {permission.canCreate ? <ActionButton onPress={() => setModalVisible(true)} size="small" title="Dodaj" /> : null}
       </View>
       <QueryState
-        emptyText="Brak zadan."
+        emptyText="Brak zadań."
         error={todoQuery.error}
         isEmpty={!todoQuery.isLoading && todos.length === 0}
         isLoading={todoQuery.isLoading}
@@ -333,7 +333,7 @@ function TodoBoard({
               </View>
               {permission.canDelete ? (
                 <IconButton
-                  accessibilityLabel="Usun zadanie"
+                  accessibilityLabel="Usuń zadanie"
                   disabled={deleteMutation.isPending}
                   onPress={() => deleteMutation.mutate(todo.id)}
                 >
@@ -364,13 +364,13 @@ function TodoBoard({
           </View>
         }
         onClose={() => setModalVisible(false)}
-        subtitle="Zadanie pojawi sie na wspolnej liscie domowej."
+        subtitle="Zadanie pojawi się na wspólnej liście domowej."
         title="Nowe zadanie"
         visible={modalVisible}
       >
         <TextInput
           onChangeText={setTitle}
-          placeholder="Tytul"
+          placeholder="Tytuł"
           placeholderTextColor={theme.colors.textSubtle}
           style={styles.input}
           value={title}
@@ -383,7 +383,7 @@ function TodoBoard({
           style={[styles.input, styles.textArea]}
           value={description}
         />
-        {createMutation.error ? <InlineAlert text="Nie udalo sie dodac zadania." tone="error" /> : null}
+        {createMutation.error ? <InlineAlert text="Nie udało się dodać zadania." tone="error" /> : null}
       </FormModal>
     </>
   );
@@ -430,13 +430,13 @@ function NoteModal({
         </View>
       }
       onClose={onClose}
-      subtitle={isEditing ? "Edytujesz zapisana notatke." : "Nowa notatka bedzie w zakladce Zadania."}
-      title={isEditing ? "Edytuj notatke" : "Nowa notatka"}
+      subtitle={isEditing ? "Edytujesz zapisaną notatkę." : "Nowa notatka będzie w zakładce Zadania."}
+      title={isEditing ? "Edytuj notatkę" : "Nowa notatka"}
       visible={visible}
     >
       <TextInput
         onChangeText={onTitleChange}
-        placeholder="Tytul"
+        placeholder="Tytuł"
         placeholderTextColor={theme.colors.textSubtle}
         style={styles.input}
         value={title}
@@ -444,12 +444,12 @@ function NoteModal({
       <TextInput
         multiline
         onChangeText={onDescriptionChange}
-        placeholder="Tresc"
+        placeholder="Treść"
         placeholderTextColor={theme.colors.textSubtle}
         style={[styles.input, styles.textArea]}
         value={description}
       />
-      {error ? <InlineAlert text="Nie udalo sie zapisac notatki." tone="error" /> : null}
+      {error ? <InlineAlert text="Nie udało się zapisać notatki." tone="error" /> : null}
     </FormModal>
   );
 }

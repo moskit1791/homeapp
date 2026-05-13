@@ -3,7 +3,7 @@
     "name": "HomeApp",
     "slug": "homeapp",
     "scheme": "homeapp",
-    "version": "0.1.56",
+    "version": "0.1.57",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "icon": "./assets/icon.png",
@@ -18,7 +18,7 @@
     },
     "android": {
       "package": "com.homeapp.mobile",
-      "versionCode": 56,
+      "versionCode": 57,
       "permissions": [
         "POST_NOTIFICATIONS",
         "READ_EXTERNAL_STORAGE",
@@ -42,8 +42,8 @@
       [
         "expo-media-library",
         {
-          "photosPermission": "HomeApp potrzebuje dostepu do galerii, zeby zapisac zdjecie na telefonie.",
-          "savePhotosPermission": "HomeApp potrzebuje uprawnienia do zapisywania zdjec w galerii."
+          "photosPermission": "HomeApp potrzebuje dostępu do galerii, żeby zapisać zdjęcie na telefonie.",
+          "savePhotosPermission": "HomeApp potrzebuje uprawnienia do zapisywania zdjęć w galerii."
         }
       ],
       [

@@ -42,14 +42,14 @@ export class MailService {
         `<p>Czesc ${escapeHtml(input.displayName)},</p>`,
         '<p>Otrzymalismy prosbe o reset hasla do HomeApp.</p>',
         this.buttonLink(link, 'Ustaw nowe haslo'),
-        '<p>Link wygasa po 1 godzinie. Jesli to nie Ty, zignoruj ta wiadomosc.</p>',
+        '<p>Link wygasa po 1 godzinie. Jeśli to nie Ty, zignoruj tę wiadomość.</p>',
         `<p>Jesli przycisk nie dziala, skopiuj ten link: ${escapeHtml(link)}</p>`
       ].join(''),
       subject: 'Reset hasla HomeApp',
       text: [
         `Czesc ${input.displayName},`,
         'Otrzymalismy prosbe o reset hasla do HomeApp.',
-        'Link wygasa po 1 godzinie. Jesli to nie Ty, zignoruj ta wiadomosc.',
+        'Link wygasa po 1 godzinie. Jeśli to nie Ty, zignoruj tę wiadomość.',
         link
       ].join('\n\n'),
       to: input.email

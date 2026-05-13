@@ -498,7 +498,7 @@ function CleaningPanel() {
           />
         </View>
         {updateMutation.error ? (
-          <InlineAlert tone="error" text="Nie udalo sie zapisac zadania." />
+          <InlineAlert tone="error" text="Nie udało się zapisać zadania." />
         ) : null}
         {createMutation.error ? (
           <InlineAlert tone="error" text="Nie udało się dodać zadania." />
@@ -979,7 +979,7 @@ function AttachmentsPanel() {
 
     try {
       const target = await downloadAttachmentFile(attachment, accessToken);
-      setDownloadNotice(target === "gallery" ? "Zdjecie zapisane w galerii." : "Plik zapisany w pamieci aplikacji.");
+      setDownloadNotice(target === "gallery" ? "Zdjęcie zapisane w galerii." : "Plik zapisany w pamięci aplikacji.");
     } catch {
       setDownloadError("Nie udało się pobrać pliku na telefon.");
     } finally {
@@ -994,7 +994,7 @@ function AttachmentsPanel() {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
       if (!permissionResult.granted) {
-        setUploadError("Nadaj dostep do galerii zdjec, zeby dodac zalacznik.");
+        setUploadError("Nadaj dostęp do galerii zdjęć, żeby dodać załącznik.");
         return;
       }
 
@@ -1170,7 +1170,7 @@ function AttachmentsPanel() {
             ? getAttachmentFileRequest(previewAttachment.id, { accessToken })
             : undefined
         }
-        title={previewAttachment?.fileName ?? "Zdjecie"}
+        title={previewAttachment?.fileName ?? "Zdjęcie"}
         visible={Boolean(previewAttachment?.mimeType.startsWith("image/"))}
       />
       <FormModal
@@ -1303,7 +1303,7 @@ function ZoomableImageModal({
             {title}
           </Text>
           <IconButton
-            accessibilityLabel="Zamknij podglad zdjecia"
+            accessibilityLabel="Zamknij podgląd zdjęcia"
             onPress={onClose}
           >
             <Close color={theme.colors.text} size={20} />
@@ -1314,7 +1314,7 @@ function ZoomableImageModal({
             <GestureDetector gesture={composedGesture}>
               <Animated.Image
                 onError={() => {
-                  setError("Nie udalo sie wczytac zdjecia.");
+                  setError("Nie udało się wczytać zdjęcia.");
                   setLoading(false);
                 }}
                 onLoadEnd={() => setLoading(false)}
@@ -1339,7 +1339,7 @@ function ZoomableImageModal({
           ) : null}
           {error ? <InlineAlert tone="error" text={error} /> : null}
         </View>
-        <Text style={styles.zoomHint}>Uszczypnij, przesun albo stuknij dwa razy.</Text>
+        <Text style={styles.zoomHint}>Uszczypnij, przesuń albo stuknij dwa razy.</Text>
       </View>
     </Modal>
   );
@@ -1621,7 +1621,7 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
             labelStyle={styles.logoutButtonLabel}
             onPress={handleLogout}
             style={[styles.modalFooterButton, styles.logoutButton]}
-            title="Wyloguj sie"
+            title="Wyloguj się"
             variant="secondary"
           />
           <ActionButton
@@ -2194,7 +2194,7 @@ function normalizePickedFileName(
     return normalized;
   }
 
-  return `zdjecie-${Date.now()}.${extensionForMimeType(mimeType)}`;
+  return `zdjęcie-${Date.now()}.${extensionForMimeType(mimeType)}`;
 }
 
 function extensionForMimeType(mimeType: ImageAttachmentMimeType): string {

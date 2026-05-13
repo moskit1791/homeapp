@@ -790,7 +790,7 @@ export default function FinanseScreen() {
                 <ActionButton onPress={() => setFinanceModal("income")} title="Zmień dochód" variant="secondary" />
               ) : null}
               <ActionButton onPress={() => setFinanceModal("category")} title="Dodaj kategorię" variant="secondary" />
-              <ActionButton onPress={() => setFinanceModal("month")} title="Dodaj miesiac" variant="secondary" />
+              <ActionButton onPress={() => setFinanceModal("month")} title="Dodaj miesiąc" variant="secondary" />
               <ActionButton
                 onPress={() => {
                   setEditingBudgetItem(null);
@@ -841,18 +841,18 @@ export default function FinanseScreen() {
               </View>
             }
             onClose={closeFinanceModal}
-            subtitle="Struktura pozycji zostanie skopiowana z wybranego miesiaca bez kwot."
-            title="Dodaj miesiac"
+            subtitle="Struktura pozycji zostanie skopiowana z wybranego miesiąca bez kwot."
+            title="Dodaj miesiąc"
             visible={financeModal === "month"}
           >
             <TextField
               control={control}
-              label="Miesiac"
+              label="Miesiąc"
               name="monthInput"
               placeholder="YYYY-MM"
             />
             {createMonthMutation.error ? (
-              <InlineAlert tone="error" text="Podaj miesiac w formacie YYYY-MM, ktory jeszcze nie istnieje." />
+              <InlineAlert tone="error" text="Podaj miesiąc w formacie YYYY-MM, który jeszcze nie istnieje." />
             ) : null}
           </FormModal>
 
@@ -1050,7 +1050,7 @@ export default function FinanseScreen() {
               />
             ) : null}
             {deleteItemMutation.error ? (
-              <InlineAlert tone="error" text="Nie udalo sie usunac pozycji." />
+              <InlineAlert tone="error" text="Nie udało się usunąć pozycji." />
             ) : null}
             {itemMutation.error || updateItemMutation.error ? (
               <InlineAlert tone="error" text="Nie udało się zapisać pozycji." />

@@ -473,7 +473,7 @@ function todayWeekday(): number {
 function greetingTitle(): string {
   const hour = new Date().getHours();
 
-  return hour >= 18 || hour < 5 ? "Dobry wieczor" : "Dzien dobry";
+  return hour >= 18 || hour < 5 ? "Dobry wieczór" : "Dzień dobry";
 }
 
 function formatMealMeta(weekday: number, slotIndex: number): string {

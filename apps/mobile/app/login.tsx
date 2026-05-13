@@ -403,7 +403,7 @@ export default function Index() {
     }
 
     if (!googleRequest) {
-      setNotice('Google OAuth jeszcze sie inicjalizuje. Sprobuj ponownie za chwile.');
+      setNotice('Google OAuth jeszcze się inicjalizuje. Spróbuj ponownie za chwilę.');
       return;
     }
 

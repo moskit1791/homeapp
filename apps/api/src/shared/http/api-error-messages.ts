@@ -3,137 +3,138 @@ import { HttpStatus } from "@nestjs/common";
 const exactMessages: Record<string, string> = {
   "Account is banned": "Konto jest zablokowane.",
   "Active invitation already exists for this email":
-    "Aktywne zaproszenie dla tego adresu e-mail juz istnieje.",
-  "Annual cost name is required": "Podaj nazwe kosztu rocznego.",
+    "Aktywne zaproszenie dla tego adresu e-mail już istnieje.",
+  "Annual cost name is required": "Podaj nazwę kosztu rocznego.",
   "Annual cost not found": "Nie znaleziono kosztu rocznego.",
-  "Attachment fileName is required": "Podaj nazwe pliku.",
-  "Attachment not found": "Nie znaleziono zalacznika.",
-  "Bad request": "Nieprawidlowe zadanie.",
+  "Attachment fileName is required": "Podaj nazwę pliku.",
+  "Attachment not found": "Nie znaleziono załącznika.",
+  "Bad request": "Nieprawidłowe zadanie.",
   "Budget category is not active in household":
-    "Kategoria budzetowa nie jest aktywna w tym domu.",
-  "Budget category name is required": "Podaj nazwe kategorii budzetu.",
-  "Budget category not found": "Nie znaleziono kategorii budzetu.",
+    "Kategoria budżetowa nie jest aktywna w tym domu.",
+  "Budget category name is required": "Podaj nazwę kategorii budżetu.",
+  "Budget category not found": "Nie znaleziono kategorii budżetu.",
   "Budget item is not editable in current month":
-    "Tej pozycji budzetu nie mozna edytowac w aktualnym miesiacu.",
-  "Budget item name is required": "Podaj nazwe pozycji budzetu.",
-  "Budget item not found": "Nie znaleziono pozycji budzetu.",
-  "Budget month is not current": "Wybrany miesiac budzetu nie jest aktualny.",
+    "Tej pozycji budżetu nie można edytować w aktualnym miesiącu.",
+  "Budget item name is required": "Podaj nazwę pozycji budżetu.",
+  "Budget item not found": "Nie znaleziono pozycji budżetu.",
+  "Budget month is not current": "Wybrany miesiąc budżetu nie jest aktualny.",
   "Budget owner member is not active in household":
-    "Wybrany wlasciciel budzetu nie jest aktywnym domownikiem.",
+    "Wybrany właściciel budżetu nie jest aktywnym domownikiem.",
   "Calendar event not found": "Nie znaleziono wydarzenia.",
-  "Calendar event title is required": "Podaj tytul wydarzenia.",
-  "Cleaning task name is required": "Podaj nazwe zadania sprzatania.",
-  "Cleaning task not found": "Nie znaleziono zadania sprzatania.",
+  "Calendar event title is required": "Podaj tytuł wydarzenia.",
+  "Cleaning task name is required": "Podaj nazwę zadania sprzątania.",
+  "Cleaning task not found": "Nie znaleziono zadania sprzątania.",
   "Cannot delete the only budget month":
-    "Nie mozna usunac jedynego miesiaca budzetowego.",
+    "Nie można usunąć jedynego miesiąca budżetowego.",
   "Current budget month not found":
-    "Nie znaleziono aktualnego miesiaca budzetowego.",
-  "Data entry title is required": "Podaj tytul wpisu.",
+    "Nie znaleziono aktualnego miesiąca budżetowego.",
+  "Data entry title is required": "Podaj tytuł wpisu.",
   "Data entry not found": "Nie znaleziono wpisu danych.",
-  "Dane sa nieprawidlowe.": "Dane sa nieprawidlowe.",
-  "Database validation failed": "Dane nie spelniaja ograniczen bazy.",
-  "Email delivery failed": "Nie udalo sie wyslac wiadomosci e-mail.",
-  "Email is not verified": "Adres e-mail nie zostal potwierdzony.",
-  Forbidden: "Brak uprawnien.",
+  "Dane sa nieprawidlowe.": "Dane są nieprawidłowe.",
+  "Dane są nieprawidłowe.": "Dane są nieprawidłowe.",
+  "Database validation failed": "Dane nie spełniają ograniczeń bazy.",
+  "Email delivery failed": "Nie udało się wysłać wiadomości e-mail.",
+  "Email is not verified": "Adres e-mail nie został potwierdzony.",
+  Forbidden: "Brak uprawnień.",
   "Google OAuth requires GOOGLE_OAUTH_CLIENT_ID":
     "Logowanie Google nie jest jeszcze skonfigurowane.",
   "Household not found": "Nie znaleziono domu.",
   "Income owner member is not active in household":
-    "Wybrany wlasciciel dochodu nie jest aktywnym domownikiem.",
-  "Internal server error": "Wystapil wewnetrzny blad serwera.",
-  "Invalid access token": "Token dostepu jest nieprawidlowy.",
-  "Invalid attachment storage path": "Sciezka zalacznika jest nieprawidlowa.",
-  "Invalid credentials": "Nieprawidlowy e-mail lub haslo.",
-  "Invalid date": "Data jest nieprawidlowa.",
-  "Invalid Google token": "Token Google jest nieprawidlowy.",
-  "Invalid invitation token": "Token zaproszenia jest nieprawidlowy.",
+    "Wybrany właściciel dochodu nie jest aktywnym domownikiem.",
+  "Internal server error": "Wystąpił wewnętrzny błąd serwera.",
+  "Invalid access token": "Token dostępu jest nieprawidłowy.",
+  "Invalid attachment storage path": "Ścieżka załącznika jest nieprawidłowa.",
+  "Invalid credentials": "Nieprawidłowy e-mail lub hasło.",
+  "Invalid date": "Data jest nieprawidłowa.",
+  "Invalid Google token": "Token Google jest nieprawidłowy.",
+  "Invalid invitation token": "Token zaproszenia jest nieprawidłowy.",
   "Invalid or expired reset token":
-    "Token resetu jest nieprawidlowy albo wygasl.",
+    "Token resetu jest nieprawidłowy albo wygasł.",
   "Invalid or expired verification token":
-    "Token weryfikacji jest nieprawidlowy albo wygasl.",
-  "Invalid recurrence rule": "Regula powtarzania jest nieprawidlowa.",
-  "Invalid refresh token": "Token odswiezania jest nieprawidlowy.",
+    "Token weryfikacji jest nieprawidłowy albo wygasł.",
+  "Invalid recurrence rule": "Reguła powtarzania jest nieprawidłowa.",
+  "Invalid refresh token": "Token odświeżania jest nieprawidłowy.",
   "Invitation belongs to another email address":
     "Zaproszenie jest przypisane do innego adresu e-mail.",
   "Invitation has already been accepted":
-    "Zaproszenie zostalo juz zaakceptowane.",
-  "Invitation has expired": "Zaproszenie wygaslo.",
-  "Meal idea not found": "Nie znaleziono pomyslu na posilek.",
-  "Meal plan not found": "Nie znaleziono planu posilkow.",
+    "Zaproszenie zostało już zaakceptowane.",
+  "Invitation has expired": "Zaproszenie wygasło.",
+  "Meal idea not found": "Nie znaleziono pomysłu na posiłek.",
+  "Meal plan not found": "Nie znaleziono planu posiłków.",
   "Meal plan week already exists":
-    "Plan posilkow dla tego tygodnia juz istnieje.",
+    "Plan posiłków dla tego tygodnia już istnieje.",
   "Meal plan week must start on Monday":
-    "Tydzien planu posilkow musi zaczynac sie w poniedzialek.",
+    "Tydzień planu posiłków musi zaczynać się w poniedziałek.",
   "Meal slot index exceeds household meal slots per day":
-    "Wybrany slot posilku przekracza limit slotow w domu.",
+    "Wybrany slot posiłku przekracza limit slotów w domu.",
   "Member not found": "Nie znaleziono domownika.",
   "Missing bearer token": "Brak tokenu autoryzacji.",
   "Missing household context": "Brak aktywnego domu.",
-  "Missing module permission": "Brak uprawnienia do modulu.",
-  "Missing user context": "Brak kontekstu uzytkownika.",
-  "Next budget month already exists": "Kolejny miesiac budzetowy juz istnieje.",
-  "No access": "Brak dostepu.",
+  "Missing module permission": "Brak uprawnienia do modułu.",
+  "Missing user context": "Brak kontekstu użytkownika.",
+  "Next budget month already exists": "Kolejny miesiąc budżetowy już istnieje.",
+  "No access": "Brak dostępu.",
   "No annual cost fields to update":
     "Brak danych kosztu rocznego do aktualizacji.",
-  "No attachment fields to update": "Brak danych zalacznika do aktualizacji.",
+  "No attachment fields to update": "Brak danych załącznika do aktualizacji.",
   "No budget category fields to update":
-    "Brak danych kategorii budzetu do aktualizacji.",
+    "Brak danych kategorii budżetu do aktualizacji.",
   "No budget item fields to update":
-    "Brak danych pozycji budzetu do aktualizacji.",
+    "Brak danych pozycji budżetu do aktualizacji.",
   "No calendar event fields to update":
     "Brak danych wydarzenia do aktualizacji.",
   "No cleaning task fields to update":
-    "Brak danych zadania sprzatania do aktualizacji.",
+    "Brak danych zadania sprzątania do aktualizacji.",
   "No data entry fields to update": "Brak danych wpisu do aktualizacji.",
   "No meal idea fields to update":
-    "Brak danych pomyslu na posilek do aktualizacji.",
+    "Brak danych pomysłu na posiłek do aktualizacji.",
   "Note not found": "Nie znaleziono notatki.",
   "Not found": "Nie znaleziono zasobu.",
   "Only the household owner can invite members":
-    "Tylko wlasciciel domu moze zapraszac domownikow.",
+    "Tylko właściciel domu może zapraszać domowników.",
   "Owner member must be an active household member":
-    "Wlasciciel musi byc aktywnym domownikiem.",
+    "Właściciel musi być aktywnym domownikiem.",
   "Owner permissions are implicit and cannot be edited":
-    "Uprawnienia wlasciciela sa domyslne i nie mozna ich edytowac.",
+    "Uprawnienia właściciela są domyślne i nie można ich edytować.",
   "Owner account cannot be deleted while other household members exist":
-    "Nie mozna usunac konta wlasciciela, gdy w domu sa inni domownicy.",
-  "Recurrence COUNT is too large": "Liczba powtorzen jest zbyt duza.",
-  "Recurrence INTERVAL is too large": "Interwal powtarzania jest zbyt duzy.",
+    "Nie można usunąć konta właściciela, gdy w domu są inni domownicy.",
+  "Recurrence COUNT is too large": "Liczba powtórzeń jest zbyt duża.",
+  "Recurrence INTERVAL is too large": "Interwał powtarzania jest zbyt duży.",
   "Recurrence rule requires FREQ=DAILY, WEEKLY or MONTHLY":
-    "Regula powtarzania wymaga FREQ=DAILY, WEEKLY albo MONTHLY.",
+    "Reguła powtarzania wymaga FREQ=DAILY, WEEKLY albo MONTHLY.",
   "Recurrence UNTIL must be YYYY-MM-DD":
-    "Data konca powtarzania musi miec format YYYY-MM-DD.",
-  "Referenced resource does not exist": "Powiazany zasob nie istnieje.",
-  "Request failed": "Zadanie nie powiodlo sie.",
-  "Resource already exists": "Taki zasob juz istnieje.",
-  "Shopping item not found": "Nie znaleziono produktu na liscie zakupow.",
-  "Shopping AI empty list": "Wklej liste zakupow do uporzadkowania.",
+    "Data końca powtarzania musi mieć format YYYY-MM-DD.",
+  "Referenced resource does not exist": "Powiązany zasób nie istnieje.",
+  "Request failed": "Zadanie nie powiodło się.",
+  "Resource already exists": "Taki zasób już istnieje.",
+  "Shopping item not found": "Nie znaleziono produktu na liście zakupów.",
+  "Shopping AI empty list": "Wklej listę zakupów do uporządkowania.",
   "Shopping AI is not configured":
-    "AI zakupow nie jest jeszcze skonfigurowane na backendzie.",
+    "AI zakupów nie jest jeszcze skonfigurowane na backendzie.",
   "Shopping AI needs clarification":
-    "Doprecyzuj liste zakupow, zebym niczego nie zgubil.",
+    "Doprecyzuj listę zakupów, żebym niczego nie zgubił.",
   "Shopping AI request failed":
-    "Nie udalo sie polaczyc z Gemini. Sprobuj ponownie za chwile.",
+    "Nie udało się połączyć z Gemini. Spróbuj ponownie za chwilę.",
   "Shopping AI request timed out":
-    "Gemini odpowiada za dlugo. Sprobuj ponownie za chwile.",
+    "Gemini odpowiada za długo. Spróbuj ponownie za chwilę.",
   "Shopping AI returned invalid response":
-    "Gemini zwrocilo nieprawidlowa odpowiedz. Sprobuj ponownie.",
+    "Gemini zwróciło nieprawidłową odpowiedź. Spróbuj ponownie.",
   "SMTP_HOST is not configured": "SMTP_HOST nie jest skonfigurowany.",
-  "Source meal plan not found": "Nie znaleziono zrodlowego planu posilkow.",
+  "Source meal plan not found": "Nie znaleziono źródłowego planu posiłków.",
   "Todo item not found": "Nie znaleziono zadania.",
   "Too many auth requests. Try again later.":
-    "Zbyt wiele prob logowania. Sprobuj ponownie pozniej.",
-  "Too many requests": "Zbyt wiele zadan. Sprobuj ponownie pozniej.",
+    "Zbyt wiele prób logowania. Spróbuj ponownie później.",
+  "Too many requests": "Zbyt wiele zadań. Spróbuj ponownie później.",
   Unauthorized: "Brak autoryzacji.",
-  "User already belongs to a household": "Uzytkownik nalezy juz do domu.",
-  "User has no active household": "Uzytkownik nie ma aktywnego domu.",
+  "User already belongs to a household": "Użytkownik należy już do domu.",
+  "User has no active household": "Użytkownik nie ma aktywnego domu.",
   "User is already an active household member":
-    "Uzytkownik jest juz aktywnym domownikiem.",
+    "Użytkownik jest już aktywnym domownikiem.",
   "User is not registered locally":
-    "Uzytkownik nie jest zarejestrowany lokalnie.",
-  "Validation failed": "Dane sa nieprawidlowe.",
+    "Użytkownik nie jest zarejestrowany lokalnie.",
+  "Validation failed": "Dane są nieprawidłowe.",
   "weekday and slotIndex must be provided together":
-    "Dzien tygodnia i slot posilku musza byc podane razem.",
+    "Dzień tygodnia i slot posiłku muszą być podane razem.",
 };
 
 export function translateApiMessage(
@@ -204,22 +205,22 @@ export function defaultPolishMessageForStatus(
 ): string | undefined {
   switch (statusCode) {
     case HttpStatus.BAD_REQUEST:
-      return "Nieprawidlowe zadanie.";
+      return "Nieprawidłowe zadanie.";
     case HttpStatus.UNAUTHORIZED:
       return "Brak autoryzacji.";
     case HttpStatus.FORBIDDEN:
-      return "Brak uprawnien.";
+      return "Brak uprawnień.";
     case HttpStatus.NOT_FOUND:
       return "Nie znaleziono zasobu.";
     case HttpStatus.CONFLICT:
       return "Konflikt danych.";
     case HttpStatus.UNPROCESSABLE_ENTITY:
-      return "Nie mozna przetworzyc danych.";
+      return "Nie można przetworzyć danych.";
     case HttpStatus.TOO_MANY_REQUESTS:
-      return "Zbyt wiele zadan. Sprobuj ponownie pozniej.";
+      return "Zbyt wiele zadań. Spróbuj ponownie później.";
     default:
       return statusCode && statusCode >= 500
-        ? "Wystapil wewnetrzny blad serwera."
+        ? "Wystąpił wewnętrzny błąd serwera."
         : undefined;
   }
 }

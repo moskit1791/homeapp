@@ -217,12 +217,8 @@ export class ShoppingAiService {
             }
           ],
           generationConfig: {
-            responseFormat: {
-              text: {
-                mimeType: 'application/json',
-                schema: shoppingAiResponseJsonSchema
-              }
-            },
+            responseMimeType: 'application/json',
+            responseSchema: shoppingAiResponseJsonSchema,
             temperature: 0.1
           }
         }),
@@ -276,26 +272,26 @@ export class ShoppingAiService {
 
   private buildPrompt(input: string, fragments: ShoppingAiSourceFragment[]): string {
     return [
-      'Jestes backendowym parserem listy zakupow dla polskiej aplikacji domowej.',
-      'Zadanie: zamien chaotyczny tekst uzytkownika na produkty do zapisania w bazie.',
+      'Jesteś backendowym parserem listy zakupów dla polskiej aplikacji domowej.',
+      'Zadanie: zamień chaotyczny tekst użytkownika na produkty do zapisania w bazie.',
       '',
       'Zasady:',
-      '- Odpowiadasz wylacznie JSON-em zgodnym ze schematem.',
-      '- Uzyj dokladnie kategorii podanych nizej i uloz produkty wedlug tej kolejnosci kategorii.',
-      '- Nie gub zadnego fragmentu zrodlowego. Kazdy fragment musi trafic do items.sourceFragmentIds, unresolvedSourceFragments albo ignoredSourceFragments.',
-      '- Frazy typu "cos do kogos", "jakies rzeczy", "prezent" bez konkretu oznacz jako unresolvedSourceFragments.',
-      '- Znane produkty z pytajnikiem, np. "prosciutto?", nadal dodaj jako produkt, a pytajnik przenies do quantity albo note.',
-      '- Naglowki, okazje i kontekst bez produktu, np. "lista zakupow", "grill", "praca", mozesz oznaczyc jako ignoredSourceFragments.',
-      '- Jesli nawias opisuje danie lub okazje, nie tworz z niego produktu, chyba ze w nawiasie sa konkretne produkty.',
-      '- Nazwa produktu ma byc krotka, bez ilosci. Ilosc, mnoznik i dopiski typu "do pracy" zapisz w quantity lub note.',
-      '- Nie wymyslaj nowych produktow. Nie usuwaj konkretnych produktow.',
+      '- Odpowiadasz wyłącznie JSON-em zgodnym ze schematem.',
+      '- Użyj dokładnie kategorii podanych niżej i ułóż produkty według tej kolejności kategorii.',
+      '- Nie gub żadnego fragmentu źródłowego. Każdy fragment musi trafić do items.sourceFragmentIds, unresolvedSourceFragments albo ignoredSourceFragments.',
+      '- Frazy typu "coś do kogoś", "jakieś rzeczy", "prezent" bez konkretu oznacz jako unresolvedSourceFragments.',
+      '- Znane produkty z pytajnikiem, np. "prosciutto?", nadal dodaj jako produkt, a pytajnik przenieś do quantity albo note.',
+      '- Nagłówki, okazje i kontekst bez produktu, np. "lista zakupów", "grill", "praca", możesz oznaczyć jako ignoredSourceFragments.',
+      '- Jeśli nawias opisuje danie lub okazję, nie twórz z niego produktu, chyba że w nawiasie są konkretne produkty.',
+      '- Nazwa produktu ma być krótka, bez ilości. Ilość, mnożnik i dopiski typu "do pracy" zapisz w quantity lub note.',
+      '- Nie wymyślaj nowych produktów. Nie usuwaj konkretnych produktów.',
       '',
-      `Kategorie w kolejnosci: ${SHOPPING_AI_CATEGORIES.join(', ')}`,
+      `Kategorie w kolejności: ${SHOPPING_AI_CATEGORIES.join(', ')}`,
       '',
-      'Fragmenty zrodlowe do pokrycia:',
+      'Fragmenty źródłowe do pokrycia:',
       ...fragments.map((fragment) => `${fragment.id}: ${fragment.text}`),
       '',
-      'Oryginalny tekst uzytkownika:',
+      'Oryginalny tekst użytkownika:',
       input
     ].join('\n');
   }
@@ -383,16 +379,16 @@ export class ShoppingAiService {
     }
 
     if (missingSourceFragments.length > 0) {
-      return `Doprecyzuj prosze te fragmenty: ${missingSourceFragments
+      return `Doprecyzuj proszę te fragmenty: ${missingSourceFragments
         .map((fragment) => fragment.text)
         .join(', ')}.`;
     }
 
     if (unknownIds.size > 0) {
-      return 'AI zwrocilo nieprawidlowe odniesienia do listy. Sprobuj wkleic liste jeszcze raz.';
+      return 'AI zwróciło nieprawidłowe odniesienia do listy. Spróbuj wkleić listę jeszcze raz.';
     }
 
-    return 'Doprecyzuj prosze liste zakupow, zebym niczego nie dopisal ani nie zgubil.';
+    return 'Doprecyzuj proszę listę zakupów, żebym niczego nie dopisał ani nie zgubił.';
   }
 
   private normalizeItems(items: ShoppingAiResponse['items']): ShoppingAiPlannedItem[] {
