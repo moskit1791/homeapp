@@ -172,8 +172,8 @@ const notificationPreferenceLabels: Record<RealtimeEventType, { label: string; m
     meta: "Tygodnie, posiłki i inspiracje kulinarne.",
   },
   "note.changed": {
-    label: "Notatki",
-    meta: "Notatki dodane lub zmienione przez domowników.",
+    label: "Notatki prywatne",
+    meta: "Prywatne notatki nie wysyłają powiadomień domownikom.",
   },
   "permissions.changed": {
     label: "Uprawnienia",
@@ -184,8 +184,8 @@ const notificationPreferenceLabels: Record<RealtimeEventType, { label: string; m
     meta: "Produkty dodane, odhaczone lub usunięte z list.",
   },
   "todo.changed": {
-    label: "To-do",
-    meta: "Zadania dodane, zamknięte lub przywrócone.",
+    label: "Do zrobienia",
+    meta: "Wspólne rzeczy dodane, zamknięte lub przywrócone.",
   },
 };
 
@@ -1739,7 +1739,9 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
             isLoading={notificationPreferencesQuery.isLoading}
           />
           <View style={styles.notificationPreferenceList}>
-            {(notificationPreferencesQuery.data ?? []).map((preference) => {
+            {(notificationPreferencesQuery.data ?? [])
+              .filter((preference) => preference.eventType !== "note.changed")
+              .map((preference) => {
               const copy = notificationPreferenceLabels[preference.eventType];
 
               return (

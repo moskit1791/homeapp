@@ -10,21 +10,23 @@ export class NotesService {
     private readonly realtime: RealtimeService,
   ) {}
 
-  async listNotes(householdId: string): Promise<NoteRecord[]> {
+  async listNotes(householdId: string, ownerMemberId: string): Promise<NoteRecord[]> {
     const result = await this.database.query<NoteRow>(
       `
         select
           id,
           household_id,
+          owner_member_id,
           title,
           description,
           created_at,
           updated_at
         from note_items
         where household_id = $1
-        order by created_at desc
+          and owner_member_id = $2
+        order by updated_at desc
       `,
-      [householdId],
+      [householdId, ownerMemberId],
     );
 
     return result.rows.map((row) => this.mapNote(row));
@@ -32,25 +34,28 @@ export class NotesService {
 
   async createNote(
     householdId: string,
+    ownerMemberId: string,
     dto: CreateNoteDto,
   ): Promise<NoteRecord> {
     const result = await this.database.query<NoteRow>(
       `
         insert into note_items (
           household_id,
+          owner_member_id,
           title,
           description
         )
-        values ($1, $2, $3)
+        values ($1, $2, $3, $4)
         returning
           id,
           household_id,
+          owner_member_id,
           title,
           description,
           created_at,
           updated_at
       `,
-      [householdId, dto.title.trim(), dto.description?.trim() ?? ""],
+      [householdId, ownerMemberId, dto.title.trim(), dto.description?.trim() ?? ""],
     );
 
     const note = result.rows[0];
@@ -67,10 +72,11 @@ export class NotesService {
 
   async updateNote(
     householdId: string,
+    ownerMemberId: string,
     id: string,
     dto: UpdateNoteDto,
   ): Promise<NoteRecord | null> {
-    const current = await this.findNote(householdId, id);
+    const current = await this.findNote(householdId, ownerMemberId, id);
 
     if (!current) {
       return null;
@@ -80,13 +86,15 @@ export class NotesService {
       `
         update note_items
         set
-          title = $3,
-          description = $4
+          title = $4,
+          description = $5
         where household_id = $1
           and id = $2
+          and owner_member_id = $3
         returning
           id,
           household_id,
+          owner_member_id,
           title,
           description,
           created_at,
@@ -95,6 +103,7 @@ export class NotesService {
       [
         householdId,
         id,
+        ownerMemberId,
         dto.title?.trim() ?? current.title,
         dto.description?.trim() ?? current.description,
       ],
@@ -109,14 +118,15 @@ export class NotesService {
     return note;
   }
 
-  async deleteNote(householdId: string, id: string): Promise<boolean> {
+  async deleteNote(householdId: string, ownerMemberId: string, id: string): Promise<boolean> {
     const result = await this.database.query(
       `
         delete from note_items
         where household_id = $1
           and id = $2
+          and owner_member_id = $3
       `,
-      [householdId, id],
+      [householdId, id, ownerMemberId],
     );
 
     const deleted = Boolean(result.rowCount && result.rowCount > 0);
@@ -130,6 +140,7 @@ export class NotesService {
 
   private async findNote(
     householdId: string,
+    ownerMemberId: string,
     id: string,
   ): Promise<NoteRecord | null> {
     const result = await this.database.query<NoteRow>(
@@ -137,6 +148,7 @@ export class NotesService {
         select
           id,
           household_id,
+          owner_member_id,
           title,
           description,
           created_at,
@@ -144,9 +156,10 @@ export class NotesService {
         from note_items
         where household_id = $1
           and id = $2
+          and owner_member_id = $3
         limit 1
       `,
-      [householdId, id],
+      [householdId, id, ownerMemberId],
     );
 
     return result.rows[0] ? this.mapNote(result.rows[0]) : null;
@@ -158,6 +171,7 @@ export class NotesService {
       description: row.description,
       householdId: row.household_id,
       id: row.id,
+      ownerMemberId: row.owner_member_id,
       title: row.title,
       updatedAt: row.updated_at,
     };
@@ -169,6 +183,7 @@ interface NoteRow {
   description: string;
   household_id: string;
   id: string;
+  owner_member_id: string;
   title: string;
   updated_at: string;
 }
@@ -178,6 +193,7 @@ export interface NoteRecord {
   description: string;
   householdId: string;
   id: string;
+  ownerMemberId: string;
   title: string;
   updatedAt: string;
 }

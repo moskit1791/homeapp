@@ -211,10 +211,10 @@ export default function DzisiajScreen() {
         <HomeTile
           accent={theme.colors.warning}
           icon={<NotebookText color={theme.colors.warning} size={24} />}
-          meta={latestNote ? `Zaktualizowano ${formatShortDate(latestNote.updatedAt)}` : "Dodaj pierwszą notatkę"}
+          meta={latestNote ? `Prywatna / ${formatShortDate(latestNote.updatedAt)}` : "Dodaj pierwszą prywatną notatkę"}
           onPress={() => router.push({ pathname: "/(tabs)/zadania", params: { segment: "notes" } } as never)}
-          title="Ostatnia notatka"
-          value={latestNote?.title ?? "Notatki"}
+          title="Moja ostatnia notatka"
+          value={latestNote?.title ?? "Prywatne notatki"}
         />
         <HomeTile
           accent={theme.colors.shopping}
@@ -241,7 +241,7 @@ export default function DzisiajScreen() {
         <QuickAction
           color={theme.colors.warning}
           icon={<NotePlus color={theme.colors.warning} size={21} />}
-          label="Dodaj notatkę"
+          label="Dodaj prywatną notatkę"
           onPress={() => router.push({ pathname: "/(tabs)/zadania", params: { action: "note", segment: "notes" } } as never)}
         />
         <QuickAction

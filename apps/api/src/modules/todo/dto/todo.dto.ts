@@ -5,11 +5,10 @@ import {
   IsString,
   IsUUID,
   Length,
-  ValidateIf,
 } from "class-validator";
 
 export const TODO_STATUSES = ["todo", "done"] as const;
-export const TODO_SCOPE_TYPES = ["household", "member"] as const;
+export const TODO_SCOPE_TYPES = ["household"] as const;
 
 export class TodoItemIdParamDto {
   @IsUUID()
@@ -33,11 +32,7 @@ export class CreateTodoItemDto {
   description?: string;
 
   @IsIn([...TODO_SCOPE_TYPES])
-  scopeType!: ScopeType;
-
-  @ValidateIf((dto: CreateTodoItemDto) => dto.scopeType === "member")
-  @IsUUID()
-  ownerMemberId?: string;
+  scopeType!: Extract<ScopeType, "household">;
 }
 
 export class UpdateTodoItemDto {
@@ -53,11 +48,7 @@ export class UpdateTodoItemDto {
 
   @IsOptional()
   @IsIn([...TODO_SCOPE_TYPES])
-  scopeType?: ScopeType;
-
-  @IsOptional()
-  @IsUUID()
-  ownerMemberId?: string;
+  scopeType?: Extract<ScopeType, "household">;
 
   @IsOptional()
   @IsIn([...TODO_STATUSES])

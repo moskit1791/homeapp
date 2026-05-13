@@ -579,11 +579,11 @@ function moduleLabel(moduleKey: ModuleKey): string {
     finances: "Finanse",
     household_members: "Członkowie",
     meal_planner: "Plan jedzenia",
-    notes: "Notatki",
+    notes: "Notatki prywatne",
     permissions: "Uprawnienia",
     shopping: "Zakupy",
     start: "Start",
-    todo: "To-do",
+    todo: "Do zrobienia",
   };
 
   return labels[moduleKey];

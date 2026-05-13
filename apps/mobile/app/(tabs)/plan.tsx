@@ -70,7 +70,7 @@ const segments: Array<{
 }> = [
   { key: "food", label: "Jedzenie", moduleKey: "meal_planner" },
   { key: "calendar", label: "Kalendarz", moduleKey: "calendar" },
-  { key: "todo", label: "Zadania", moduleKey: "todo" },
+  { key: "todo", label: "Do zrobienia", moduleKey: "todo" },
   { key: "notes", label: "Notatki", moduleKey: "notes" },
 ];
 
@@ -161,7 +161,7 @@ export default function PlanScreen() {
 
   return (
     <AppScreen
-      subtitle="Jedzenie, kalendarz, zadania i notatki w jednym miejscu."
+      subtitle="Jedzenie, kalendarz, wspólne do zrobienia i prywatne notatki."
       title="Plan"
     >
       <View style={styles.moduleStrip}>
@@ -889,14 +889,15 @@ function TodoSegment({
           ) : undefined
         }
         onRefresh={() => todoQuery.refetch()}
-        title="Zadania"
+        title="Do zrobienia"
       />
       <SectionCard
         icon={<CheckCircle2 color={theme.colors.primary} size={18} />}
+        subtitle="Wspólna lista dla całego domu."
         title="Do zrobienia"
       >
         <QueryState
-          emptyText="Brak zadań."
+          emptyText="Brak rzeczy do zrobienia."
           error={todoQuery.error}
           isEmpty={!todoQuery.isLoading && items.length === 0}
           isLoading={todoQuery.isLoading}
@@ -935,8 +936,8 @@ function TodoSegment({
           </View>
         }
         onClose={() => setTodoModalVisible(false)}
-        subtitle="Zadanie pojawi się na wspólnej liście domowej."
-        title="Nowe zadanie"
+        subtitle="Po zapisaniu będzie widoczne dla wszystkich domowników."
+        title="Nowe do zrobienia"
         visible={todoModalVisible}
       >
         <TextInput
@@ -955,7 +956,7 @@ function TodoSegment({
           value={description}
         />
         {createMutation.error ? (
-          <InlineAlert text="Nie udało się dodać zadania." tone="error" />
+          <InlineAlert text="Nie udało się dodać rzeczy do zrobienia." tone="error" />
         ) : null}
       </FormModal>
     </>
@@ -1064,11 +1065,12 @@ function NotesSegment({
           ) : undefined
         }
         onRefresh={() => notesQuery.refetch()}
-        title="Notatki"
+        title="Notatki prywatne"
       />
       <SectionCard
         icon={<NotebookText color={theme.colors.shopping} size={18} />}
-        title="Lista notatek"
+        subtitle="Widoczne tylko dla Ciebie."
+        title="Moje notatki"
       >
         <QueryState
           emptyText="Brak notatek."
@@ -1113,8 +1115,8 @@ function NotesSegment({
         onClose={closeNoteModal}
         subtitle={
           isEditing
-            ? "Zmieniasz istniejącą notatkę."
-            : "Nowa notatka trafi do listy domowej."
+            ? "Edytujesz swoją prywatną notatkę."
+            : "Nowa notatka będzie widoczna tylko dla Ciebie."
         }
         title={isEditing ? "Edytuj notatkę" : "Nowa notatka"}
         visible={noteModalVisible}

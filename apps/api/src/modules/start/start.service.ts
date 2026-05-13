@@ -129,6 +129,7 @@ export class StartService {
         select id, title, scope_type, owner_member_id, created_at
         from todo_items
         where household_id = $1
+          and scope_type = 'household'
           and status = 'todo'
         order by created_at desc
         limit 5

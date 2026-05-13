@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import { ScopeType, TodoStatus } from "@homeapp/shared-types";
 import { DatabaseService } from "../database/database.service";
 import { RealtimeService } from "../realtime/realtime.service";
@@ -29,6 +29,7 @@ export class TodoService {
           updated_at
         from todo_items
         where household_id = $1
+          and scope_type = 'household'
           and ($2::todo_status is null or status = $2)
         order by
           status asc,
@@ -44,11 +45,7 @@ export class TodoService {
     householdId: string,
     dto: CreateTodoItemDto,
   ): Promise<TodoItemRecord> {
-    const ownerMemberId = await this.resolveOwnerMemberId(
-      householdId,
-      dto.scopeType,
-      dto.ownerMemberId,
-    );
+    const scopeType: ScopeType = "household";
 
     const result = await this.database.query<TodoItemRow>(
       `
@@ -73,8 +70,8 @@ export class TodoService {
       `,
       [
         householdId,
-        dto.scopeType,
-        ownerMemberId,
+        scopeType,
+        null,
         dto.title.trim(),
         dto.description?.trim() ?? "",
       ],
@@ -103,16 +100,7 @@ export class TodoService {
       return null;
     }
 
-    const scopeType = dto.scopeType ?? current.scopeType;
-    const requestedOwnerMemberId =
-      dto.ownerMemberId === undefined
-        ? current.ownerMemberId
-        : dto.ownerMemberId;
-    const ownerMemberId = await this.resolveOwnerMemberId(
-      householdId,
-      scopeType,
-      requestedOwnerMemberId,
-    );
+    const scopeType: ScopeType = "household";
 
     const result = await this.database.query<TodoItemRow>(
       `
@@ -140,7 +128,7 @@ export class TodoService {
         householdId,
         id,
         scopeType,
-        ownerMemberId,
+        null,
         dto.title?.trim() ?? current.title,
         dto.description?.trim() ?? current.description,
         dto.status ?? current.status,
@@ -167,6 +155,7 @@ export class TodoService {
         set status = $3
         where household_id = $1
           and id = $2
+          and scope_type = 'household'
         returning
           id,
           household_id,
@@ -196,6 +185,7 @@ export class TodoService {
         delete from todo_items
         where household_id = $1
           and id = $2
+          and scope_type = 'household'
       `,
       [householdId, id],
     );
@@ -228,54 +218,13 @@ export class TodoService {
         from todo_items
         where household_id = $1
           and id = $2
+          and scope_type = 'household'
         limit 1
       `,
       [householdId, id],
     );
 
     return result.rows[0] ? this.mapItem(result.rows[0]) : null;
-  }
-
-  private async resolveOwnerMemberId(
-    householdId: string,
-    scopeType: ScopeType,
-    ownerMemberId: string | null | undefined,
-  ): Promise<string | null> {
-    if (scopeType === "household") {
-      return null;
-    }
-
-    if (!ownerMemberId) {
-      throw new BadRequestException(
-        "Owner member is required for member-scoped todo item",
-      );
-    }
-
-    await this.ensureActiveMember(householdId, ownerMemberId);
-    return ownerMemberId;
-  }
-
-  private async ensureActiveMember(
-    householdId: string,
-    memberId: string,
-  ): Promise<void> {
-    const result = await this.database.query<{ id: string }>(
-      `
-        select id
-        from household_members
-        where household_id = $1
-          and id = $2
-          and is_active = true
-        limit 1
-      `,
-      [householdId, memberId],
-    );
-
-    if (!result.rows[0]) {
-      throw new BadRequestException(
-        "Todo owner member is not active in household",
-      );
-    }
   }
 
   private mapItem(row: TodoItemRow): TodoItemRecord {

@@ -57,6 +57,5 @@ export const createShoppingItemSchema = z.object({
 export const createTodoSchema = z.object({
   title: nonEmptyTextSchema,
   description: optionalLongTextSchema,
-  scopeType: z.enum(['household', 'member']),
-  ownerMemberId: uuidSchema.nullable().optional()
+  scopeType: z.literal('household')
 });

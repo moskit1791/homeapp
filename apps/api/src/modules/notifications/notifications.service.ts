@@ -9,6 +9,10 @@ import {
   UpdateNotificationPreferencesDto
 } from './dto/notifications.dto';
 
+const HOUSEHOLD_NOTIFICATION_EVENTS: RealtimeEventType[] = REALTIME_EVENTS.filter(
+  (eventType) => eventType !== 'note.changed'
+);
+
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
@@ -125,7 +129,7 @@ export class NotificationsService {
     );
     const rowsByType = new Map(result.rows.map((row) => [row.event_type, row.enabled]));
 
-    return REALTIME_EVENTS.map((eventType) => ({
+    return HOUSEHOLD_NOTIFICATION_EVENTS.map((eventType) => ({
       enabled: rowsByType.get(eventType) ?? true,
       eventType
     }));
@@ -171,6 +175,10 @@ export class NotificationsService {
     resourceId?: string;
   }): Promise<PushSendResult> {
     if (!input.actorMemberId) {
+      return { sent: 0, tickets: [] };
+    }
+
+    if (input.eventType === 'note.changed') {
       return { sent: 0, tickets: [] };
     }
 
@@ -460,8 +468,8 @@ function buildNotificationCopy(
       title: 'Zakupy'
     },
     'todo.changed': {
-      body: `${actor} zmienił zadania.`,
-      title: 'To-do'
+      body: `${actor} zmienił listę do zrobienia.`,
+      title: 'Do zrobienia'
     }
   };
 

@@ -52,7 +52,7 @@ type ReminderValue = "none" | "15" | "60" | "1440";
 
 const _agendaSegments: Array<{ label: string; moduleKey: ModuleKey; value: _AgendaSegment }> = [
   { label: "Notatki", moduleKey: "notes", value: "notes" },
-  { label: "To-do", moduleKey: "todo", value: "todo" },
+  { label: "Do zrobienia", moduleKey: "todo", value: "todo" },
 ];
 
 const reminderOptions: Array<{ label: string; value: ReminderValue }> = [
@@ -530,7 +530,7 @@ function _NotesBoard({ accessToken }: { accessToken?: string | null }) {
   return (
     <>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Notatki</Text>
+        <Text style={styles.sectionTitle}>Notatki prywatne</Text>
         {permission.canCreate ? (
           <ActionButton onPress={() => setModalVisible(true)} size="small" title="+ Dodaj" />
         ) : null}
@@ -596,7 +596,7 @@ function _NotesBoard({ accessToken }: { accessToken?: string | null }) {
           reset();
           setModalVisible(false);
         }}
-        subtitle={isEditing ? "Edytujesz zapisaną notatkę." : "Nowa notatka zostanie pod ręką w kalendarzu."}
+        subtitle={isEditing ? "Edytujesz swoją prywatną notatkę." : "Nowa notatka będzie widoczna tylko dla Ciebie."}
         title={isEditing ? "Edytuj notatkę" : "Nowa notatka"}
         visible={modalVisible}
       >
@@ -738,8 +738,8 @@ function _TodoBoard({ accessToken }: { accessToken?: string | null }) {
           </View>
         }
         onClose={() => setModalVisible(false)}
-        subtitle="Zadanie pojawi się na wspólnej liście domowej."
-        title="Nowe zadanie"
+        subtitle="Po zapisaniu będzie widoczne dla wszystkich domowników."
+        title="Nowe do zrobienia"
         visible={modalVisible}
       >
         <TextInput
@@ -758,7 +758,7 @@ function _TodoBoard({ accessToken }: { accessToken?: string | null }) {
           value={description}
         />
         {createMutation.error ? (
-          <InlineAlert text="Nie udało się dodać zadania." tone="error" />
+          <InlineAlert text="Nie udało się dodać rzeczy do zrobienia." tone="error" />
         ) : null}
       </FormModal>
     </>

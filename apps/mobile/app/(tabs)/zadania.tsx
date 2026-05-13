@@ -27,7 +27,7 @@ type TaskSegment = "notes" | "todo";
 
 const taskSegments: Array<{ label: string; value: TaskSegment }> = [
   { label: "Notatki", value: "notes" },
-  { label: "To-do", value: "todo" },
+  { label: "Do zrobienia", value: "todo" },
 ];
 
 export default function ZadaniaScreen() {
@@ -59,7 +59,7 @@ export default function ZadaniaScreen() {
 
   if (permissionsQuery.isLoading) {
     return (
-      <AppScreen title="Zadania">
+      <AppScreen title="Notatki i do zrobienia">
         <QueryState isLoading />
       </AppScreen>
     );
@@ -67,14 +67,14 @@ export default function ZadaniaScreen() {
 
   if (!hasModuleRead(permissionsQuery.data, ["notes", "todo"])) {
     return (
-      <AppScreen title="Zadania">
-        <InlineAlert text="Nie masz dostępu do notatek ani zadań." />
+      <AppScreen title="Notatki i do zrobienia">
+        <InlineAlert text="Nie masz dostępu do notatek ani listy do zrobienia." />
       </AppScreen>
     );
   }
 
   return (
-    <AppScreen title="Zadania">
+    <AppScreen title="Notatki i do zrobienia">
       <SegmentedControl
         onChange={(segment) => {
           setActiveSegment(segment);
@@ -174,7 +174,10 @@ function NotesBoard({
   return (
     <>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Notatki</Text>
+        <View style={styles.sectionHeaderText}>
+          <Text style={styles.sectionTitle}>Notatki prywatne</Text>
+          <Text style={styles.sectionSubtitle}>Widoczne tylko dla Ciebie.</Text>
+        </View>
         {permission.canCreate ? <ActionButton onPress={() => setModalVisible(true)} size="small" title="Dodaj" /> : null}
       </View>
       <QueryState
@@ -301,11 +304,14 @@ function TodoBoard({
   return (
     <>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>To-do</Text>
+        <View style={styles.sectionHeaderText}>
+          <Text style={styles.sectionTitle}>Do zrobienia</Text>
+          <Text style={styles.sectionSubtitle}>Wspólne dla całego domu.</Text>
+        </View>
         {permission.canCreate ? <ActionButton onPress={() => setModalVisible(true)} size="small" title="Dodaj" /> : null}
       </View>
       <QueryState
-        emptyText="Brak zadań."
+        emptyText="Brak rzeczy do zrobienia."
         error={todoQuery.error}
         isEmpty={!todoQuery.isLoading && todos.length === 0}
         isLoading={todoQuery.isLoading}
@@ -364,8 +370,8 @@ function TodoBoard({
           </View>
         }
         onClose={() => setModalVisible(false)}
-        subtitle="Zadanie pojawi się na wspólnej liście domowej."
-        title="Nowe zadanie"
+        subtitle="Po zapisaniu będzie widoczne dla wszystkich domowników."
+        title="Nowe do zrobienia"
         visible={modalVisible}
       >
         <TextInput
@@ -383,7 +389,7 @@ function TodoBoard({
           style={[styles.input, styles.textArea]}
           value={description}
         />
-        {createMutation.error ? <InlineAlert text="Nie udało się dodać zadania." tone="error" /> : null}
+        {createMutation.error ? <InlineAlert text="Nie udało się dodać rzeczy do zrobienia." tone="error" /> : null}
       </FormModal>
     </>
   );
@@ -430,7 +436,7 @@ function NoteModal({
         </View>
       }
       onClose={onClose}
-      subtitle={isEditing ? "Edytujesz zapisaną notatkę." : "Nowa notatka będzie w zakładce Zadania."}
+      subtitle={isEditing ? "Edytujesz swoją prywatną notatkę." : "Nowa notatka będzie widoczna tylko dla Ciebie."}
       title={isEditing ? "Edytuj notatkę" : "Nowa notatka"}
       visible={visible}
     >
@@ -537,7 +543,19 @@ function createStyles(colors: AppPalette) {
     sectionHeader: {
       alignItems: "center",
       flexDirection: "row",
+      gap: spacing.md,
       justifyContent: "space-between",
+    },
+    sectionHeaderText: {
+      flex: 1,
+      gap: 2,
+      minWidth: 0,
+    },
+    sectionSubtitle: {
+      color: colors.textMuted,
+      fontSize: 12,
+      letterSpacing: 0,
+      lineHeight: 17,
     },
     sectionTitle: {
       color: colors.text,

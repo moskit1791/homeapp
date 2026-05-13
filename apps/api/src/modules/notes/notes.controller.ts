@@ -27,8 +27,11 @@ export class NotesController {
   @Get()
   @RequirePermission("notes", "read")
   listNotes(@CurrentHousehold() household: HouseholdContext | undefined) {
+    const context = this.requireHousehold(household);
+
     return this.notesService.listNotes(
-      this.requireHousehold(household).householdId,
+      context.householdId,
+      context.memberId,
     );
   }
 
@@ -38,8 +41,11 @@ export class NotesController {
     @CurrentHousehold() household: HouseholdContext | undefined,
     @Body() dto: CreateNoteDto,
   ) {
+    const context = this.requireHousehold(household);
+
     return this.notesService.createNote(
-      this.requireHousehold(household).householdId,
+      context.householdId,
+      context.memberId,
       dto,
     );
   }
@@ -51,8 +57,10 @@ export class NotesController {
     @Param() params: NoteIdParamDto,
     @Body() dto: UpdateNoteDto,
   ) {
+    const context = this.requireHousehold(household);
     const note = await this.notesService.updateNote(
-      this.requireHousehold(household).householdId,
+      context.householdId,
+      context.memberId,
       params.id,
       dto,
     );
@@ -70,8 +78,10 @@ export class NotesController {
     @CurrentHousehold() household: HouseholdContext | undefined,
     @Param() params: NoteIdParamDto,
   ) {
+    const context = this.requireHousehold(household);
     const deleted = await this.notesService.deleteNote(
-      this.requireHousehold(household).householdId,
+      context.householdId,
+      context.memberId,
       params.id,
     );
 

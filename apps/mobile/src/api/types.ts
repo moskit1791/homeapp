@@ -147,7 +147,7 @@ export interface StartCalendarEvent {
   eventTime: string | null;
   id: string;
   ownerMemberId: string | null;
-  scopeType: ScopeType;
+  scopeType: 'household';
   title: string;
 }
 
@@ -558,15 +558,13 @@ export interface TodoItem {
 
 export interface CreateTodoItemRequest {
   description?: string;
-  ownerMemberId?: string;
   scopeType: ScopeType;
   title: string;
 }
 
 export interface UpdateTodoItemRequest {
   description?: string;
-  ownerMemberId?: string;
-  scopeType?: ScopeType;
+  scopeType?: 'household';
   status?: 'todo' | 'done';
   title?: string;
 }
@@ -576,6 +574,7 @@ export interface Note {
   description: string | null;
   householdId: string;
   id: string;
+  ownerMemberId: string;
   title: string;
   updatedAt: string;
 }
