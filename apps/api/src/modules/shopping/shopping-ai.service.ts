@@ -497,19 +497,27 @@ export class ShoppingAiService {
     const fragmentById = new Map(fragments.map((fragment) => [fragment.id, fragment]));
 
     return items
-      .map((item, index) => ({
-        category: item.sourceFragmentIds.some((id) => {
+      .map((item, index) => {
+        const forcedFallbackCategory = categorizeShoppingProduct(item.name);
+        const isUnclearItem = item.sourceFragmentIds.some((id) => {
           const fragment = fragmentById.get(id);
 
           return fragment ? isUnclearShoppingWish(fragment.text) : false;
-        })
+        });
+        const category = isUnclearItem
           ? 'Inne'
-          : item.category,
-        name: trimToLength(item.name, 180),
-        orderIndex: index,
-        quantity: trimToLength(formatQuantity(item.quantity, item.note), 80),
-        sourceFragmentIds: item.sourceFragmentIds
-      }))
+          : forcedFallbackCategory === 'Inne'
+            ? item.category
+            : forcedFallbackCategory;
+
+        return {
+          category,
+          name: trimToLength(item.name, 180),
+          orderIndex: index,
+          quantity: trimToLength(formatQuantity(item.quantity, item.note), 80),
+          sourceFragmentIds: item.sourceFragmentIds
+        };
+      })
       .filter((item) => item.name.length > 0)
       .sort((left, right) => {
         const categoryDiff = (order.get(left.category) ?? 999) - (order.get(right.category) ?? 999);
@@ -684,7 +692,7 @@ function createFallbackProduct(
   const { name, quantity } = extractFallbackQuantity(rawText);
 
   return {
-    category: categorizeFallbackProduct(name),
+    category: categorizeShoppingProduct(name),
     name,
     note: '',
     quantity,
@@ -737,14 +745,14 @@ function formatFallbackName(value: string): string {
   return `${normalized.charAt(0).toLocaleUpperCase('pl-PL')}${normalized.slice(1)}`;
 }
 
-function categorizeFallbackProduct(value: string): ShoppingAiCategory {
+export function categorizeShoppingProduct(value: string): ShoppingAiCategory {
   const normalized = normalizeFallbackText(value);
 
   if (isUnclearShoppingWish(value)) {
     return 'Inne';
   }
 
-  if (/(jabl|granat|pomidor|pomidork|pieczark|papryk|owoc|warzyw|ogork|cebula|marchew|banan|cytryn|ziemniak|salat)/.test(normalized)) {
+  if (/(jabl|granat|pomidor|pomidork|pieczark|papryk|owoc|warzyw|ogork|cebula|marchew|banan|cytryn|ziemniak|salat|boczniak|rukol|szpinak|por\b|porr|czosnek|cukini|brokul|kalafior|kapust|awokado|truskawk|malin|borowk|winogron|pomarancz|mandarynk|kiwi)/.test(normalized)) {
     return 'Owoce i warzywa';
   }
 
@@ -752,7 +760,7 @@ function categorizeFallbackProduct(value: string): ShoppingAiCategory {
     return 'Pieczywo';
   }
 
-  if (/(mleko|maslo|feta|burrat|ser|jogurt|smietan|parmezan|mozzarell|jajka|jajko)/.test(normalized)) {
+  if (/(mleko|maslo|feta|burrat|buratt|ser|jogurt|smietan|parmezan|mozzarell|jajka|jajko|twarog|serek|kefir|skyr|maslank)/.test(normalized)) {
     return 'Nabial';
   }
 

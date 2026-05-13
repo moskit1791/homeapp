@@ -182,6 +182,7 @@ export interface ShoppingList {
 }
 
 export interface ShoppingItem {
+  category: string | null;
   checkedAt: string | null;
   createdAt: string;
   displayOrder: number;
@@ -196,12 +197,14 @@ export interface ShoppingItem {
 }
 
 export interface CreateShoppingItemRequest {
+  category?: string | null;
   displayOrder?: number;
   name: string;
   quantity?: string;
 }
 
 export interface UpdateShoppingItemRequest {
+  category?: string | null;
   displayOrder?: number;
   name?: string;
   quantity?: string;

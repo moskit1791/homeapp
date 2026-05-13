@@ -1033,17 +1033,17 @@ type ShoppingCategoryRule = {
 const shoppingCategoryRules: ShoppingCategoryRule[] = [
   {
     emoji: "🥦",
-    keywords: /pomidor|ogorek|ogor|salat|papryk|marchew|ziemni|cebula|czosn|warzyw|brokul|kalaf|kapust|cukini|awokado/,
+    keywords: /pomidor|ogorek|ogor|salat|papryk|marchew|ziemni|cebula|czosn|warzyw|brokul|kalaf|kapust|cukini|awokado|pieczark|boczniak|rukol|szpinak/,
     title: "Warzywa",
   },
   {
     emoji: "🍎",
-    keywords: /banan|jablko|grusz|cytryn|limonk|owoc|truskawk|malin|borow|winogron|pomarancz|mandaryn|kiwi/,
+    keywords: /banan|jabl|granat|grusz|cytryn|limonk|owoc|truskawk|malin|borow|winogron|pomarancz|mandaryn|kiwi/,
     title: "Owoce",
   },
   {
     emoji: "🧀",
-    keywords: /mleko|jogurt|kefir|maslank|ser|twarog|serek|maslo|smietan|mozzarell|feta|skyr|jajk/,
+    keywords: /mleko|jogurt|kefir|maslank|ser|twarog|serek|maslo|smietan|mozzarell|feta|burrat|buratt|skyr|jajk/,
     title: "Nabiał i jajka",
   },
   {
@@ -1098,10 +1098,9 @@ function groupShoppingItems(items: ShoppingItem[]): ShoppingGroup[] {
 
   items.forEach((item) => {
     const name = normalizeShoppingName(item.name);
-    const targetRule = shoppingCategoryRules.find((rule) => rule.keywords.test(name));
-    const target = groups.get(targetRule?.title ?? "Pozostałe");
+    const target = groups.get(resolveShoppingGroupTitle(item, name));
 
-    target?.items.push(item);
+    (target ?? groups.get("Pozostałe"))?.items.push(item);
   });
 
   return [...groups.values()].filter((group) => group.items.length > 0);
@@ -1110,9 +1109,41 @@ function groupShoppingItems(items: ShoppingItem[]): ShoppingGroup[] {
 function normalizeShoppingName(value: string): string {
   return value
     .toLowerCase()
+    .replace(/ł/g, "l")
+    .replace(/Ł/g, "L")
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/ł/g, "l");
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function resolveShoppingGroupTitle(item: ShoppingItem, normalizedName: string): string {
+  const keywordRule = shoppingCategoryRules.find((rule) => rule.keywords.test(normalizedName));
+
+  if (keywordRule) {
+    return keywordRule.title;
+  }
+
+  switch (item.category) {
+    case "Nabial":
+      return "Nabiał i jajka";
+    case "Mieso i wedliny":
+    case "Ryby i owoce morza":
+      return "Mięso i ryby";
+    case "Pieczywo":
+      return "Pieczywo";
+    case "Mrozonki":
+      return "Mrożonki";
+    case "Produkty suche i spizarnia":
+    case "Sosy i dodatki":
+      return "Spiżarnia";
+    case "Przekaski i slodycze":
+      return "Słodycze i przekąski";
+    case "Napoje":
+      return "Napoje";
+    case "Chemia i dom":
+      return "Chemia i sprzątanie";
+    default:
+      return "Pozostałe";
+  }
 }
 
 function mealDraftKey(weekStartDate: string, weekday: number, slotIndex: number): string {

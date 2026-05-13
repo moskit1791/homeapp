@@ -2,7 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { PoolClient } from 'pg';
 import { DatabaseService } from '../database/database.service';
 import { RealtimeService } from '../realtime/realtime.service';
-import { ShoppingAiService, type ShoppingAiSourceFragment } from './shopping-ai.service';
+import {
+  SHOPPING_AI_CATEGORIES,
+  ShoppingAiService,
+  type ShoppingAiCategory,
+  type ShoppingAiSourceFragment
+} from './shopping-ai.service';
 import {
   CreateShoppingItemDto,
   ImportShoppingItemsWithAiDto,
@@ -57,6 +62,7 @@ export class ShoppingService {
           sl.type,
           sli.name,
           sli.quantity,
+          sli.category,
           sli.is_checked,
           sli.checked_at,
           sli.display_order,
@@ -113,6 +119,7 @@ export class ShoppingService {
           await this.upsertItemInList(client, householdId, type, listId, {
             displayOrder,
             name: item.name,
+            category: item.category,
             quantity: item.quantity
           })
         );
@@ -151,7 +158,8 @@ export class ShoppingService {
         set
           name = $3,
           quantity = $4,
-          display_order = $5
+          display_order = $5,
+          category = $6
         from shopping_lists sl
         where sl.id = sli.shopping_list_id
           and sl.household_id = $1
@@ -163,6 +171,7 @@ export class ShoppingService {
           sl.type,
           sli.name,
           sli.quantity,
+          sli.category,
           sli.is_checked,
           sli.checked_at,
           sli.display_order,
@@ -174,7 +183,8 @@ export class ShoppingService {
         id,
         dto.name?.trim() ?? current.name,
         dto.quantity?.trim() ?? current.quantity,
-        dto.displayOrder ?? current.displayOrder
+        dto.displayOrder ?? current.displayOrder,
+        normalizeShoppingCategory(dto.category) ?? current.category
       ]
     );
 
@@ -229,6 +239,7 @@ export class ShoppingService {
           sl.type,
           sli.name,
           sli.quantity,
+          sli.category,
           sli.is_checked,
           sli.checked_at,
           sli.display_order,
@@ -297,6 +308,7 @@ export class ShoppingService {
             $5::shopping_list_type as type,
             sli.name,
             sli.quantity,
+            sli.category,
             sli.is_checked,
             sli.checked_at,
             sli.display_order,
@@ -372,7 +384,9 @@ export class ShoppingService {
       const result = await client.query<ShoppingItemRow>(
         `
           update shopping_list_items
-          set quantity = $2
+          set
+            quantity = $2,
+            category = coalesce($5, category)
           where id = $1
           returning
             id,
@@ -381,13 +395,20 @@ export class ShoppingService {
             $4::shopping_list_type as type,
             name,
             quantity,
+            category,
             is_checked,
             checked_at,
             display_order,
             created_at,
             updated_at
         `,
-        [existing.id, mergeQuantity(existing.quantity, dto.quantity), householdId, type]
+        [
+          existing.id,
+          mergeQuantity(existing.quantity, dto.quantity),
+          householdId,
+          type,
+          normalizeShoppingCategory(dto.category)
+        ]
       );
 
       return this.mapItemOrThrow(result.rows[0]);
@@ -400,23 +421,33 @@ export class ShoppingService {
           shopping_list_id,
           name,
           quantity,
+          category,
           display_order
         )
-        values ($1, $2, $3, $4)
+        values ($1, $2, $3, $4, $5)
         returning
           id,
           shopping_list_id,
-          $5::uuid as household_id,
-          $6::shopping_list_type as type,
+          $6::uuid as household_id,
+          $7::shopping_list_type as type,
           name,
           quantity,
+          category,
           is_checked,
           checked_at,
           display_order,
           created_at,
           updated_at
       `,
-      [listId, dto.name.trim(), dto.quantity?.trim() ?? '', displayOrder, householdId, type]
+      [
+        listId,
+        dto.name.trim(),
+        dto.quantity?.trim() ?? '',
+        normalizeShoppingCategory(dto.category),
+        displayOrder,
+        householdId,
+        type
+      ]
     );
 
     return this.mapItemOrThrow(result.rows[0]);
@@ -432,6 +463,7 @@ export class ShoppingService {
           sl.type,
           sli.name,
           sli.quantity,
+          sli.category,
           sli.is_checked,
           sli.checked_at,
           sli.display_order,
@@ -572,6 +604,7 @@ export class ShoppingService {
           sl.type,
           sli.name,
           sli.quantity,
+          sli.category,
           sli.is_checked,
           sli.checked_at,
           sli.display_order,
@@ -628,6 +661,7 @@ export class ShoppingService {
     return {
       checkedAt: row.checked_at,
       createdAt: row.created_at,
+      category: row.category,
       displayOrder: row.display_order,
       householdId: row.household_id,
       id: row.id,
@@ -671,6 +705,18 @@ function mergeQuantity(current: string, next: string | undefined): string {
   return normalizedNext;
 }
 
+function normalizeShoppingCategory(value: string | undefined): ShoppingAiCategory | null {
+  const normalized = value?.trim();
+
+  if (!normalized) {
+    return null;
+  }
+
+  return SHOPPING_AI_CATEGORIES.includes(normalized as ShoppingAiCategory)
+    ? (normalized as ShoppingAiCategory)
+    : null;
+}
+
 function normalizeProductName(value: string): string {
   return value
     .trim()
@@ -712,6 +758,7 @@ interface ShoppingListRow {
 
 interface ShoppingItemRow {
   checked_at: string | null;
+  category: ShoppingAiCategory | null;
   created_at: string;
   display_order: number;
   household_id: string;
@@ -735,6 +782,7 @@ export interface ShoppingListRecord {
 
 export interface ShoppingItemRecord {
   checkedAt: string | null;
+  category: ShoppingAiCategory | null;
   createdAt: string;
   displayOrder: number;
   householdId: string;

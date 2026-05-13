@@ -25,6 +25,11 @@ export class CreateShoppingItemDto {
   quantity?: string;
 
   @IsOptional()
+  @IsString()
+  @Length(0, 80)
+  category?: string;
+
+  @IsOptional()
   @IsInt()
   @Min(0)
   displayOrder?: number;
@@ -40,6 +45,11 @@ export class UpdateShoppingItemDto {
   @IsString()
   @Length(0, 80)
   quantity?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 80)
+  category?: string;
 
   @IsOptional()
   @IsInt()

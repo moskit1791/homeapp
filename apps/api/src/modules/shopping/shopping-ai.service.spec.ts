@@ -235,6 +235,72 @@ describe('ShoppingAiService', () => {
     ]);
   });
 
+  it('repairs obvious product categories when Gemini returns Inne', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      json: async () => ({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify({
+                    clarificationMessage: '',
+                    ignoredSourceFragments: [],
+                    items: [
+                      {
+                        category: 'Inne',
+                        name: 'Jabłka',
+                        note: '',
+                        quantity: '',
+                        sourceFragmentIds: ['f1']
+                      },
+                      {
+                        category: 'Inne',
+                        name: 'Granat',
+                        note: '',
+                        quantity: '',
+                        sourceFragmentIds: ['f2']
+                      },
+                      {
+                        category: 'Inne',
+                        name: 'Pieczarki',
+                        note: '',
+                        quantity: '',
+                        sourceFragmentIds: ['f3']
+                      },
+                      {
+                        category: 'Inne',
+                        name: 'Burrata',
+                        note: '',
+                        quantity: '',
+                        sourceFragmentIds: ['f4']
+                      }
+                    ],
+                    status: 'ready',
+                    unresolvedSourceFragments: []
+                  })
+                }
+              ]
+            }
+          }
+        ]
+      }),
+      ok: true
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const plan = await new ShoppingAiService().planImport('Jabłka, granat, pieczarki, burrata');
+
+    expect(plan.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ category: 'Owoce i warzywa', name: 'Jabłka' }),
+        expect.objectContaining({ category: 'Owoce i warzywa', name: 'Granat' }),
+        expect.objectContaining({ category: 'Owoce i warzywa', name: 'Pieczarki' }),
+        expect.objectContaining({ category: 'Nabial', name: 'Burrata' })
+      ])
+    );
+  });
+
   it('falls back to a deterministic parser when Gemini quota is exhausted', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: false,
