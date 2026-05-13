@@ -43,6 +43,7 @@ import {
 import {
   Check,
   ChevronRight,
+  GeminiAi,
   Pencil,
   Plus,
   Sparkles,
@@ -137,7 +138,7 @@ export default function ListaScreen() {
             onPress={() => setShoppingAiOpenRequest((value) => value + 1)}
             style={styles.aiHeaderButton}
           >
-            <Sparkles color={theme.colors.inverseText} size={22} />
+            <GeminiAi size={24} />
           </IconButton>
         ) : undefined
       }
@@ -1399,10 +1400,10 @@ function createStyles(colors: AppPalette) {
       gap: spacing.sm,
     },
     aiHeaderButton: {
-      backgroundColor: colors.primary,
-      borderColor: colors.primaryDark,
+      backgroundColor: colors.card,
+      borderColor: "#448aff",
       elevation: 8,
-      shadowColor: colors.primary,
+      shadowColor: "#448aff",
       shadowOffset: { height: 8, width: 0 },
       shadowOpacity: 0.28,
       shadowRadius: 14,

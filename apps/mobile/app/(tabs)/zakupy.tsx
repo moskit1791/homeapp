@@ -191,23 +191,11 @@ export default function ZakupyScreen() {
       actions={
         <View style={styles.topActions}>
           {canCreate ? (
-            <>
-              <IconButton
-                accessibilityLabel="AI do listy zakupów"
-                onPress={() => {
-                  aiImportMutation.reset();
-                  setAiVisible(true);
-                }}
-                style={styles.aiIconButton}
-              >
-                <Sparkles color={theme.colors.inverseText} size={19} />
-              </IconButton>
-              <ActionButton
-                onPress={() => setCreateVisible(true)}
-                size="small"
-                title="+ Dodaj"
-              />
-            </>
+            <ActionButton
+              onPress={() => setCreateVisible(true)}
+              size="small"
+              title="+ Dodaj"
+            />
           ) : null}
           <IconButton
             disabled={itemsQuery.isFetching}
@@ -525,15 +513,6 @@ function createStyles(colors: AppPalette) {
     },
     addFabDisabled: {
       opacity: 0.42,
-    },
-    aiIconButton: {
-      backgroundColor: colors.shopping,
-      borderColor: colors.shopping,
-      elevation: 8,
-      shadowColor: colors.shopping,
-      shadowOffset: { height: 8, width: 0 },
-      shadowOpacity: 0.28,
-      shadowRadius: 14,
     },
     aiInput: {
       backgroundColor: colors.field,
