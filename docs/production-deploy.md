@@ -59,6 +59,60 @@ pnpm --filter @homeapp/api db:migrate && node apps/api/dist/main.js
 
 Dlatego przy deployu zmian backendu i SQL wystarczy przebudowac/restartowac Compose.
 
+## APK build - zasady bez mielenia czasu
+
+Nie buduj APK przy kazdej poprawce. Jesli zmiana dotyczy tylko API, DB, konfiguracji albo logiki backendu, rob tylko commit,
+push i deploy backendu. APK buduj dopiero wtedy, gdy uzytkownik wyraznie prosi o nowy plik APK albo instalacje na telefonie.
+
+Najczestsze bledy na Windows:
+
+- nie buduj z `C:\Users\moski\Desktop\homeapp`, bo Reanimated/CMake wpada w za dlugie sciezki;
+- nie uzywaj starego `C:\ha` z poprzednimi cache'ami, bo `android/build/generated/autolinking` potrafi trzymac absolutne sciezki do starego repo;
+- nie kopiuj `node_modules`, `android/.gradle`, `android/build`, `android/app/build`, `dist`, `.turbo` ani starych APK;
+- po jednym nieudanym buildzie nie odpalaj kolejnego w ciemno; najpierw sprawdz, czy log nie wskazuje starej sciezki albo cache.
+
+Bezpieczny schemat, tylko gdy APK jest naprawde potrzebny:
+
+```powershell
+$src = "C:\Users\moski\Desktop\homeapp"
+$work = "C:\ha-build-$(Get-Date -Format yyyyMMddHHmm)"
+New-Item -ItemType Directory -Path $work | Out-Null
+
+robocopy $src $work /MIR `
+  /XD .git node_modules .turbo `
+      apps\api\node_modules `
+      apps\mobile\node_modules `
+      apps\mobile\android\.gradle `
+      apps\mobile\android\build `
+      apps\mobile\android\app\build `
+      apps\mobile\builds `
+      apps\mobile\dist `
+  /XF apps\mobile\android\local.properties
+if ($LASTEXITCODE -gt 7) { throw "robocopy failed: $LASTEXITCODE" }
+
+Set-Location $work
+pnpm.cmd install --frozen-lockfile
+pnpm.cmd --filter @homeapp/mobile typecheck
+
+Set-Location "$work\apps\mobile\android"
+$env:NODE_ENV = "production"
+.\gradlew.bat --stop
+.\gradlew.bat assembleRelease
+```
+
+Po buildzie sprawdz, czy APK powstal i dopiero wtedy kopiuj go do repo oraz instaluj przez ADB:
+
+```powershell
+$apk = "$work\apps\mobile\android\app\build\outputs\apk\release\app-release.apk"
+Test-Path $apk
+Copy-Item $apk "$src\apps\mobile\builds\homeapp-0.1.xx-release.apk"
+adb devices -l
+adb install -r "$src\apps\mobile\builds\homeapp-0.1.xx-release.apk"
+```
+
+Jesli build pokazuje `C:\Users\moski\Desktop\homeapp\apps\mobile\node_modules\react-native-reanimated` w logu CMake,
+to znaczy, ze nadal bierze stary cache/autolinking. Przerwac, usunac katalog roboczy i zaczac od nowego `$work`.
+
 ## Kontrola po deployu
 
 Na serwerze:
