@@ -56,7 +56,6 @@ const shoppingAiResponseSchema = z.object({
 type ShoppingAiResponse = z.infer<typeof shoppingAiResponseSchema>;
 
 const shoppingAiResponseJsonSchema = {
-  additionalProperties: false,
   properties: {
     clarificationMessage: {
       description:
@@ -67,7 +66,6 @@ const shoppingAiResponseJsonSchema = {
       description:
         'Source fragments that are only headings, occasions or context and should not become shopping items.',
       items: {
-        additionalProperties: false,
         properties: {
           id: { description: 'Exact source fragment id.', type: 'string' },
           reason: { description: 'Short Polish reason.', type: 'string' }
@@ -81,7 +79,6 @@ const shoppingAiResponseJsonSchema = {
       description:
         'Shopping items sorted by the category order provided in the prompt.',
       items: {
-        additionalProperties: false,
         properties: {
           category: {
             description: 'One of the allowed categories from the prompt.',
@@ -125,7 +122,6 @@ const shoppingAiResponseJsonSchema = {
       description:
         'Fragments that are too vague to save safely. Use this for phrases like "something for X".',
       items: {
-        additionalProperties: false,
         properties: {
           id: { description: 'Exact source fragment id.', type: 'string' },
           question: {
@@ -205,7 +201,7 @@ export class ShoppingAiService {
       : env.GEMINI_MODEL;
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
       model
-    )}:generateContent`;
+    )}:generateContent?key=${encodeURIComponent(env.GEMINI_API_KEY)}`;
 
     try {
       const response = await fetch(url, {
@@ -223,8 +219,7 @@ export class ShoppingAiService {
           }
         }),
         headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': env.GEMINI_API_KEY
+          'Content-Type': 'application/json'
         },
         method: 'POST',
         signal: controller.signal
