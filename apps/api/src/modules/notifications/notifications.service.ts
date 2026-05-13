@@ -242,15 +242,15 @@ export class NotificationsService {
       return { sent: 0, tickets: [] };
     }
 
-    const time = input.eventTime ? ` o ${input.eventTime.slice(0, 5)}` : '';
+    const startsAt = formatCalendarReminderStart(input.eventDate, input.eventTime);
     const messages = recipients.map((token) => ({
-      body: `${input.eventDate}${time}: ${input.title}`,
+      body: input.title,
       data: {
         eventType: 'calendar.changed',
         kind: 'calendar-reminder'
       },
       sound: 'default' as const,
-      title: 'Nadchodzące wydarzenie',
+      title: `Start: ${startsAt}`,
       to: token.expoPushToken
     }));
 
@@ -477,6 +477,23 @@ function buildNotificationCopy(
     body: `${actor} zmienił coś w domu.`,
     title: 'HomeApp'
   };
+}
+
+function formatCalendarReminderStart(eventDate: string, eventTime: string | null): string {
+  const date = formatCalendarReminderDate(eventDate);
+  const time = eventTime?.slice(0, 5).trim();
+
+  return time ? `${date} o ${time}` : date;
+}
+
+function formatCalendarReminderDate(eventDate: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(eventDate);
+
+  if (!match) {
+    return eventDate;
+  }
+
+  return `${match[3]}.${match[2]}.${match[1]}`;
 }
 
 interface ExpoPushMessage {

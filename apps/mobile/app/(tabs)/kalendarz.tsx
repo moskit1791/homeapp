@@ -440,7 +440,7 @@ function UpcomingEvents({
 
   return (
     <View style={styles.eventStrip}>
-      {events.slice(0, 2).map((event) => (
+      {events.map((event) => (
         <View key={event.id} style={styles.eventPill}>
           <CalendarDays color={theme.colors.calendar} size={16} />
           <View style={styles.eventPillText}>
@@ -948,9 +948,9 @@ function createStyles(colors: AppPalette) {
     dayBubble: {
       alignItems: "center",
       borderRadius: 999,
-      height: 32,
+      height: 30,
       justifyContent: "center",
-      width: 32,
+      width: 30,
     },
     dayBubbleMuted: {
       opacity: 0.42,
@@ -964,7 +964,7 @@ function createStyles(colors: AppPalette) {
     dayCell: {
       alignItems: "center",
       flexBasis: "14.285%",
-      height: 44,
+      height: 40,
       justifyContent: "center",
     },
     dayGrid: {
@@ -1008,11 +1008,11 @@ function createStyles(colors: AppPalette) {
     },
     eventPill: {
       alignItems: "center",
+      alignSelf: "stretch",
       backgroundColor: colors.card,
       borderColor: colors.border,
       borderRadius: radii.card,
       borderWidth: 1,
-      flex: 1,
       flexDirection: "row",
       gap: spacing.sm,
       minHeight: 52,
@@ -1030,7 +1030,7 @@ function createStyles(colors: AppPalette) {
       minWidth: 0,
     },
     eventStrip: {
-      flexDirection: "row",
+      flexDirection: "column",
       gap: spacing.sm,
     },
     eventTitle: {
