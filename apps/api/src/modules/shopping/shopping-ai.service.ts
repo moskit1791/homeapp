@@ -114,13 +114,13 @@ const shoppingAiResponseJsonSchema = {
     },
     status: {
       description:
-        'ready only when all shopping items are clear and every source fragment is covered, ignored or unresolved.',
+        'ready when every source fragment is covered by an item or ignored as non-shopping context.',
       enum: ['ready', 'needs_clarification'],
       type: 'string'
     },
     unresolvedSourceFragments: {
       description:
-        'Fragments that are too vague to save safely. Use this for phrases like "something for X".',
+        'Use only for technically unreadable fragments. Vague shopping wishes still belong in items with category Inne.',
       items: {
         properties: {
           id: { description: 'Exact source fragment id.', type: 'string' },
@@ -158,7 +158,10 @@ export class ShoppingAiService {
     }
 
     const responseText = await this.callGemini(this.buildPrompt(input, sourceFragments));
-    const parsed = this.parseResponse(responseText);
+    const parsed = this.promoteUnclearShoppingItems(
+      this.parseResponse(responseText),
+      sourceFragments
+    );
     const coverage = this.verifyCoverage(parsed, sourceFragments);
 
     if (coverage.needsClarification) {
@@ -174,7 +177,7 @@ export class ShoppingAiService {
       });
     }
 
-    const items = this.normalizeItems(parsed.items);
+    const items = this.normalizeItems(parsed.items, sourceFragments);
 
     if (items.length === 0) {
       throw new ServiceUnavailableException('Shopping AI returned invalid response');
@@ -273,8 +276,9 @@ export class ShoppingAiService {
       'Zasady:',
       '- Odpowiadasz wyłącznie JSON-em zgodnym ze schematem.',
       '- Użyj dokładnie kategorii podanych niżej i ułóż produkty według tej kolejności kategorii.',
-      '- Nie gub żadnego fragmentu źródłowego. Każdy fragment musi trafić do items.sourceFragmentIds, unresolvedSourceFragments albo ignoredSourceFragments.',
-      '- Frazy typu "coś do kogoś", "jakieś rzeczy", "prezent" bez konkretu oznacz jako unresolvedSourceFragments.',
+      '- Nie gub żadnego fragmentu źródłowego. Każdy fragment musi trafić do items.sourceFragmentIds albo ignoredSourceFragments.',
+      '- unresolvedSourceFragments używaj tylko dla technicznie nieczytelnych fragmentów, których nie da się zapisać nawet jako ogólnej pozycji zakupowej.',
+      '- Frazy typu "coś do kogoś", "jakieś rzeczy", "prezent" bez konkretu nadal są produktami do kupienia. Dodaj je jako produkt w kategorii "Inne" i zachowaj sens frazy w nazwie.',
       '- Znane produkty z pytajnikiem, np. "prosciutto?", nadal dodaj jako produkt, a pytajnik przenieś do quantity albo note.',
       '- Nagłówki, okazje i kontekst bez produktu, np. "lista zakupów", "grill", "praca", możesz oznaczyć jako ignoredSourceFragments.',
       '- Jeśli nawias opisuje danie lub okazję, nie twórz z niego produktu, chyba że w nawiasie są konkretne produkty.',
@@ -302,6 +306,51 @@ export class ShoppingAiService {
       );
       throw new ServiceUnavailableException('Shopping AI returned invalid response');
     }
+  }
+
+  private promoteUnclearShoppingItems(
+    response: ShoppingAiResponse,
+    fragments: ShoppingAiSourceFragment[]
+  ): ShoppingAiResponse {
+    if (response.unresolvedSourceFragments.length === 0) {
+      return response;
+    }
+
+    const fragmentById = new Map(fragments.map((fragment) => [fragment.id, fragment]));
+    const itemFragmentIds = new Set(response.items.flatMap((item) => item.sourceFragmentIds));
+    const promotedItems: ShoppingAiResponse['items'] = [];
+    const unresolvedSourceFragments: ShoppingAiResponse['unresolvedSourceFragments'] = [];
+
+    for (const fragment of response.unresolvedSourceFragments) {
+      const source = fragmentById.get(fragment.id);
+
+      if (!source) {
+        unresolvedSourceFragments.push(fragment);
+        continue;
+      }
+
+      if (itemFragmentIds.has(fragment.id)) {
+        continue;
+      }
+
+      promotedItems.push({
+        category: 'Inne',
+        name: source.text,
+        note: '',
+        quantity: '',
+        sourceFragmentIds: [fragment.id]
+      });
+      itemFragmentIds.add(fragment.id);
+    }
+
+    return {
+      ...response,
+      clarificationMessage:
+        unresolvedSourceFragments.length === 0 ? '' : response.clarificationMessage,
+      items: [...response.items, ...promotedItems],
+      status: unresolvedSourceFragments.length === 0 ? 'ready' : response.status,
+      unresolvedSourceFragments
+    };
   }
 
   private verifyCoverage(
@@ -386,14 +435,24 @@ export class ShoppingAiService {
     return 'Doprecyzuj proszę listę zakupów, żebym niczego nie dopisał ani nie zgubił.';
   }
 
-  private normalizeItems(items: ShoppingAiResponse['items']): ShoppingAiPlannedItem[] {
+  private normalizeItems(
+    items: ShoppingAiResponse['items'],
+    fragments: ShoppingAiSourceFragment[]
+  ): ShoppingAiPlannedItem[] {
     const order = new Map<ShoppingAiCategory, number>(
       SHOPPING_AI_CATEGORIES.map((category, index) => [category, index])
     );
+    const fragmentById = new Map(fragments.map((fragment) => [fragment.id, fragment]));
 
     return items
       .map((item, index) => ({
-        category: item.category,
+        category: item.sourceFragmentIds.some((id) => {
+          const fragment = fragmentById.get(id);
+
+          return fragment ? isUnclearShoppingWish(fragment.text) : false;
+        })
+          ? 'Inne'
+          : item.category,
         name: trimToLength(item.name, 180),
         orderIndex: index,
         quantity: trimToLength(formatQuantity(item.quantity, item.note), 80),
@@ -543,6 +602,15 @@ function trimToLength(value: string, maxLength: number): string {
   }
 
   return normalized.slice(0, maxLength).trim();
+}
+
+function isUnclearShoppingWish(value: string): boolean {
+  const normalized = value
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase();
+
+  return /\b(cos|cokolwiek|jakies|jakis|jakas|jakiegos|jakiegos)\b/.test(normalized);
 }
 
 function isAbortError(error: unknown): boolean {
