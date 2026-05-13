@@ -132,4 +132,103 @@ describe('ShoppingAiService', () => {
       })
     );
   });
+
+  it('adds missed natural-list fragments as Inne instead of failing the import', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      json: async () => ({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify({
+                    clarificationMessage: '',
+                    ignoredSourceFragments: [],
+                    items: [
+                      {
+                        category: 'Nabial',
+                        name: 'Mleko',
+                        note: '',
+                        quantity: '2l',
+                        sourceFragmentIds: ['f1']
+                      }
+                    ],
+                    status: 'ready',
+                    unresolvedSourceFragments: []
+                  })
+                }
+              ]
+            }
+          }
+        ]
+      }),
+      ok: true
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const plan = await new ShoppingAiService().planImport('mleko 2l, coś do obiadu');
+
+    expect(plan.items).toEqual([
+      expect.objectContaining({
+        category: 'Nabial',
+        name: 'Mleko',
+        quantity: '2l'
+      }),
+      expect.objectContaining({
+        category: 'Inne',
+        name: 'coś do obiadu',
+        quantity: ''
+      })
+    ]);
+  });
+
+  it('ignores missed list headings instead of saving them as products', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      json: async () => ({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify({
+                    clarificationMessage: '',
+                    ignoredSourceFragments: [],
+                    items: [
+                      {
+                        category: 'Pieczywo',
+                        name: 'Chleb',
+                        note: '',
+                        quantity: '',
+                        sourceFragmentIds: ['f2']
+                      }
+                    ],
+                    status: 'ready',
+                    unresolvedSourceFragments: []
+                  })
+                }
+              ]
+            }
+          }
+        ]
+      }),
+      ok: true
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const plan = await new ShoppingAiService().planImport('zakupy\nchleb');
+
+    expect(plan.items).toHaveLength(1);
+    expect(plan.items[0]).toEqual(
+      expect.objectContaining({
+        category: 'Pieczywo',
+        name: 'Chleb'
+      })
+    );
+    expect(plan.ignoredSourceFragments).toEqual([
+      {
+        id: 'f1',
+        reason: 'Kontekst listy zakupów.'
+      }
+    ]);
+  });
 });

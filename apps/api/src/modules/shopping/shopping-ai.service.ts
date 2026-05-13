@@ -158,7 +158,7 @@ export class ShoppingAiService {
     }
 
     const responseText = await this.callGemini(this.buildPrompt(input, sourceFragments));
-    const parsed = this.promoteUnclearShoppingItems(
+    const parsed = this.repairShoppingAiResponse(
       this.parseResponse(responseText),
       sourceFragments
     );
@@ -308,48 +308,63 @@ export class ShoppingAiService {
     }
   }
 
-  private promoteUnclearShoppingItems(
+  private repairShoppingAiResponse(
     response: ShoppingAiResponse,
     fragments: ShoppingAiSourceFragment[]
   ): ShoppingAiResponse {
-    if (response.unresolvedSourceFragments.length === 0) {
-      return response;
-    }
-
     const fragmentById = new Map(fragments.map((fragment) => [fragment.id, fragment]));
-    const itemFragmentIds = new Set(response.items.flatMap((item) => item.sourceFragmentIds));
+    const knownFragmentIds = new Set(fragmentById.keys());
+    const items = response.items.map((item) => ({
+      ...item,
+      sourceFragmentIds: item.sourceFragmentIds.filter((id) => knownFragmentIds.has(id))
+    }));
+    const itemFragmentIds = new Set(items.flatMap((item) => item.sourceFragmentIds));
+    const ignoredSourceFragments = response.ignoredSourceFragments.filter((fragment) =>
+      knownFragmentIds.has(fragment.id)
+    );
+    const ignoredFragmentIds = new Set(ignoredSourceFragments.map((fragment) => fragment.id));
     const promotedItems: ShoppingAiResponse['items'] = [];
-    const unresolvedSourceFragments: ShoppingAiResponse['unresolvedSourceFragments'] = [];
 
     for (const fragment of response.unresolvedSourceFragments) {
       const source = fragmentById.get(fragment.id);
 
       if (!source) {
-        unresolvedSourceFragments.push(fragment);
         continue;
       }
 
-      if (itemFragmentIds.has(fragment.id)) {
+      if (itemFragmentIds.has(fragment.id) || ignoredFragmentIds.has(fragment.id)) {
         continue;
       }
 
-      promotedItems.push({
-        category: 'Inne',
-        name: source.text,
-        note: '',
-        quantity: '',
-        sourceFragmentIds: [fragment.id]
-      });
+      promotedItems.push(createFallbackItem(source));
+      itemFragmentIds.add(fragment.id);
+    }
+
+    for (const fragment of fragments) {
+      if (itemFragmentIds.has(fragment.id) || ignoredFragmentIds.has(fragment.id)) {
+        continue;
+      }
+
+      if (isIgnorableShoppingContext(fragment.text)) {
+        ignoredSourceFragments.push({
+          id: fragment.id,
+          reason: 'Kontekst listy zakupów.'
+        });
+        ignoredFragmentIds.add(fragment.id);
+        continue;
+      }
+
+      promotedItems.push(createFallbackItem(fragment));
       itemFragmentIds.add(fragment.id);
     }
 
     return {
       ...response,
-      clarificationMessage:
-        unresolvedSourceFragments.length === 0 ? '' : response.clarificationMessage,
-      items: [...response.items, ...promotedItems],
-      status: unresolvedSourceFragments.length === 0 ? 'ready' : response.status,
-      unresolvedSourceFragments
+      clarificationMessage: '',
+      ignoredSourceFragments,
+      items: [...items, ...promotedItems],
+      status: 'ready',
+      unresolvedSourceFragments: []
     };
   }
 
@@ -384,13 +399,7 @@ export class ShoppingAiService {
     }
 
     const missingSourceFragments = fragments.filter((fragment) => !coveredIds.has(fragment.id));
-    const needsClarification =
-      response.status !== 'ready' ||
-      response.items.length === 0 ||
-      response.unresolvedSourceFragments.length > 0 ||
-      missingSourceFragments.length > 0 ||
-      unknownIds.size > 0 ||
-      response.items.some((item) => item.sourceFragmentIds.length === 0);
+    const needsClarification = unknownIds.size > 0;
 
     return {
       clarificationMessage: this.buildClarificationMessage(
@@ -604,13 +613,37 @@ function trimToLength(value: string, maxLength: number): string {
   return normalized.slice(0, maxLength).trim();
 }
 
+function createFallbackItem(fragment: ShoppingAiSourceFragment): ShoppingAiResponse['items'][number] {
+  return {
+    category: 'Inne',
+    name: fragment.text,
+    note: '',
+    quantity: '',
+    sourceFragmentIds: [fragment.id]
+  };
+}
+
 function isUnclearShoppingWish(value: string): boolean {
   const normalized = value
     .normalize('NFD')
     .replace(/\p{Diacritic}/gu, '')
     .toLowerCase();
 
-  return /\b(cos|cokolwiek|jakies|jakis|jakas|jakiegos|jakiegos)\b/.test(normalized);
+  return /\b(cos|cokolwiek|jakies|jakis|jakas|jakiegos)\b/.test(normalized);
+}
+
+function isIgnorableShoppingContext(value: string): boolean {
+  const normalized = value
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return /^(lista zakupow|zakupy|lista|grill|obiad|kolacja|sniadanie|praca|dom|weekend|jutro|dzis|dzisiaj|na jutro|na dzis|na dzisiaj)$/.test(
+    normalized
+  );
 }
 
 function isAbortError(error: unknown): boolean {
