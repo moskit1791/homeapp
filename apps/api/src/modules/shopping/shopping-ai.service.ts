@@ -114,13 +114,13 @@ const shoppingAiResponseJsonSchema = {
     },
     status: {
       description:
-        'ready when every source fragment is covered by an item or ignored as non-shopping context.',
-      enum: ['ready', 'needs_clarification'],
+        'Always ready. The mobile UI is not a chat, so vague shopping wishes must be saved as Inne.',
+      enum: ['ready'],
       type: 'string'
     },
     unresolvedSourceFragments: {
       description:
-        'Use only for technically unreadable fragments. Vague shopping wishes still belong in items with category Inne.',
+        'Always empty. Do not ask the user questions; save unclear shopping wishes as category Inne.',
       items: {
         properties: {
           id: { description: 'Exact source fragment id.', type: 'string' },
@@ -275,10 +275,12 @@ export class ShoppingAiService {
       '',
       'Zasady:',
       '- Odpowiadasz wyłącznie JSON-em zgodnym ze schematem.',
+      '- To nie jest chat. Nie dopytuj użytkownika i nie zwracaj prośby o doprecyzowanie.',
+      '- Status zawsze ma być "ready", a unresolvedSourceFragments zawsze pustą tablicą.',
       '- Użyj dokładnie kategorii podanych niżej i ułóż produkty według tej kolejności kategorii.',
       '- Nie gub żadnego fragmentu źródłowego. Każdy fragment musi trafić do items.sourceFragmentIds albo ignoredSourceFragments.',
-      '- unresolvedSourceFragments używaj tylko dla technicznie nieczytelnych fragmentów, których nie da się zapisać nawet jako ogólnej pozycji zakupowej.',
-      '- Frazy typu "coś do kogoś", "jakieś rzeczy", "prezent" bez konkretu nadal są produktami do kupienia. Dodaj je jako produkt w kategorii "Inne" i zachowaj sens frazy w nazwie.',
+      '- Jeśli fragment jest niejasny, zbyt ogólny albo nie masz pewności, nadal dodaj go jako produkt w kategorii "Inne".',
+      '- Frazy typu "coś do kogoś", "jakieś rzeczy", "prezent" bez konkretu nadal są produktami do kupienia. Zachowaj sens frazy w nazwie.',
       '- Znane produkty z pytajnikiem, np. "prosciutto?", nadal dodaj jako produkt, a pytajnik przenieś do quantity albo note.',
       '- Nagłówki, okazje i kontekst bez produktu, np. "lista zakupów", "grill", "praca", możesz oznaczyć jako ignoredSourceFragments.',
       '- Jeśli nawias opisuje danie lub okazję, nie twórz z niego produktu, chyba że w nawiasie są konkretne produkty.',
