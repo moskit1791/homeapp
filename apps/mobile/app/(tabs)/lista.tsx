@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useLocalSearchParams } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Calendar, LocaleConfig, type DateData } from "react-native-calendars";
 import {
@@ -41,6 +41,7 @@ import {
   SegmentedControl,
 } from "../../src/ui";
 import {
+  CalendarDays,
   Check,
   ChevronRight,
   GeminiAi,
@@ -90,6 +91,7 @@ export default function ListaScreen() {
   const styles = createStyles(theme.colors);
   const [activeSegment, setActiveSegment] = useState<MainSegment>("shopping");
   const [shoppingAiOpenRequest, setShoppingAiOpenRequest] = useState(0);
+  const [mealViewResetRequest, setMealViewResetRequest] = useState(0);
   const availableSegments = useMemo(
     () =>
       [
@@ -103,15 +105,31 @@ export default function ListaScreen() {
 
   useEffect(() => {
     if (availableSegments.length > 0 && !availableSegments.some((segment) => segment.value === activeSegment)) {
-      setActiveSegment(availableSegments[0]!.value);
+      selectMainSegment(availableSegments[0]!.value);
     }
   }, [activeSegment, availableSegments]);
 
   useEffect(() => {
     if (params.segment && availableSegments.some((segment) => segment.value === params.segment)) {
-      setActiveSegment(params.segment);
+      selectMainSegment(params.segment);
     }
   }, [availableSegments, params.segment]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (activeSegment === "meals") {
+        setMealViewResetRequest((value) => value + 1);
+      }
+    }, [activeSegment]),
+  );
+
+  function selectMainSegment(segment: MainSegment) {
+    setActiveSegment(segment);
+
+    if (segment === "meals") {
+      setMealViewResetRequest((value) => value + 1);
+    }
+  }
 
   if (permissionsQuery.isLoading) {
     return (
@@ -145,7 +163,7 @@ export default function ListaScreen() {
       title="Lista"
     >
       <SegmentedControl
-        onChange={setActiveSegment}
+        onChange={selectMainSegment}
         options={availableSegments}
         value={activeSegment}
       />
@@ -154,10 +172,10 @@ export default function ListaScreen() {
         <ShoppingBoard
           action={params.action}
           aiOpenRequest={shoppingAiOpenRequest}
-          onOpenMealPlan={() => setActiveSegment("meals")}
+          onOpenMealPlan={() => selectMainSegment("meals")}
         />
       ) : null}
-      {activeSegment === "meals" ? <MealsBoard action={params.action} /> : null}
+      {activeSegment === "meals" ? <MealsBoard action={params.action} resetRequest={mealViewResetRequest} /> : null}
     </AppScreen>
   );
 }
@@ -454,7 +472,7 @@ function ShoppingBoard({
   );
 }
 
-function MealsBoard({ action }: { action?: string }) {
+function MealsBoard({ action, resetRequest }: { action?: string; resetRequest: number }) {
   const { session } = useSession();
   const queryClient = useQueryClient();
   const permission = useModulePermission("meal_planner");
@@ -471,6 +489,7 @@ function MealsBoard({ action }: { action?: string }) {
   const [note, setNote] = useState("");
   const [mealDrafts, setMealDrafts] = useState<Record<string, MealDraft>>({});
   const [modalVisible, setModalVisible] = useState(false);
+  const [isCalendarExpanded, setCalendarExpanded] = useState(false);
   const householdQuery = useQuery({
     enabled: Boolean(accessToken),
     queryFn: () => getMyHousehold({ accessToken }),
@@ -507,6 +526,17 @@ function MealsBoard({ action }: { action?: string }) {
   }, [currentQuery.data?.week.weekStartDate, didInitCurrentWeek]);
 
   useEffect(() => {
+    const nextDate = todayIso();
+    const nextWeekStart = weekStartFromIsoDate(nextDate) ?? currentWeekStart();
+
+    setSelectedWeekStartDate(nextWeekStart);
+    setMealDate(nextDate);
+    setWeekday(weekdayFromIsoDate(nextDate));
+    setSlotIndex(0);
+    setCalendarExpanded(false);
+  }, [resetRequest]);
+
+  useEffect(() => {
     if (action === "addMeal") {
       const nextDate = todayIso();
       const nextWeekStart = weekStartFromIsoDate(nextDate) ?? currentWeekStart();
@@ -515,6 +545,7 @@ function MealsBoard({ action }: { action?: string }) {
       setMealDate(nextDate);
       setWeekday(weekdayFromIsoDate(nextDate));
       setSlotIndex(0);
+      setCalendarExpanded(false);
       setModalVisible(true);
     }
   }, [action]);
@@ -626,6 +657,7 @@ function MealsBoard({ action }: { action?: string }) {
     setWeekday(weekdayFromIsoDate(nextDate));
     setSlotIndex(0);
     setMealDate(nextDate);
+    setCalendarExpanded(false);
     setModalVisible(true);
   }
 
@@ -647,6 +679,11 @@ function MealsBoard({ action }: { action?: string }) {
   function selectWeekStart(weekStart: string) {
     setSelectedWeekStartDate(weekStart);
     setMealDate(dateForWeekday(weekStart, weekday));
+  }
+
+  function selectMainWeekStart(weekStart: string) {
+    selectWeekStart(weekStart);
+    setCalendarExpanded(false);
   }
 
   function selectWeekday(day: number) {
@@ -684,11 +721,31 @@ function MealsBoard({ action }: { action?: string }) {
         ) : null}
       </View>
 
-      <CalendarWeekPicker
-        mealWeeks={historyWeeks}
-        onSelect={selectWeekStart}
-        selectedWeekStartDate={selectedWeekStartDate}
-      />
+      <Pressable
+        accessibilityLabel={isCalendarExpanded ? "Zwin wybor tygodnia" : "Zmien tydzien posilkow"}
+        accessibilityRole="button"
+        onPress={() => setCalendarExpanded((value) => !value)}
+        style={({ pressed }) => [styles.calendarToggle, pressed && styles.pressed]}
+      >
+        <View style={styles.calendarToggleIcon}>
+          <CalendarDays color={theme.colors.food} size={19} />
+        </View>
+        <View style={styles.calendarToggleText}>
+          <Text style={styles.calendarToggleTitle}>{isCalendarExpanded ? "Zwin kalendarz" : "Zmien tydzien"}</Text>
+          <Text style={styles.calendarToggleMeta}>{formatWeekRange(selectedWeekStartDate)}</Text>
+        </View>
+        <View style={isCalendarExpanded ? styles.calendarToggleChevronOpen : undefined}>
+          <ChevronRight color={theme.colors.textMuted} size={18} />
+        </View>
+      </Pressable>
+
+      {isCalendarExpanded ? (
+        <CalendarWeekPicker
+          mealWeeks={historyWeeks}
+          onSelect={selectMainWeekStart}
+          selectedWeekStartDate={selectedWeekStartDate}
+        />
+      ) : null}
 
       <QueryState
         emptyText="Brak posiłków w planie."
@@ -1432,6 +1489,45 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
       padding: spacing.sm,
       textAlign: "center",
+    },
+    calendarToggle: {
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      minHeight: 58,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+    },
+    calendarToggleChevronOpen: {
+      transform: [{ rotate: "90deg" }],
+    },
+    calendarToggleIcon: {
+      alignItems: "center",
+      backgroundColor: colors.softOrange,
+      borderRadius: radii.control,
+      height: 36,
+      justifyContent: "center",
+      width: 36,
+    },
+    calendarToggleMeta: {
+      color: colors.textMuted,
+      fontSize: 12,
+      fontWeight: "700",
+      letterSpacing: 0,
+    },
+    calendarToggleText: {
+      flex: 1,
+      gap: 2,
+    },
+    calendarToggleTitle: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: "900",
+      letterSpacing: 0,
     },
     checkBoxDone: {
       backgroundColor: colors.primary,
