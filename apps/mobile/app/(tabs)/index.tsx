@@ -83,6 +83,16 @@ export default function DzisiajScreen() {
     setNotificationsVisible(false);
     router.push(route as never);
   }, [router]);
+  const openCalendarForDate = useCallback((date: string, action?: "create") => {
+    router.push({
+      pathname: "/(tabs)/kalendarz",
+      params: action ? { action, date, intent: String(Date.now()) } : { date },
+    } as never);
+  }, [router]);
+  const openCalendarNotification = useCallback((date: string) => {
+    setNotificationsVisible(false);
+    openCalendarForDate(date);
+  }, [openCalendarForDate]);
   const openNotificationSettings = useCallback(() => {
     setNotificationsVisible(false);
     router.push({ pathname: "/(tabs)/dom", params: { settings: "1" } } as never);
@@ -127,7 +137,7 @@ export default function DzisiajScreen() {
         body: nextEvent ? eventMeta(nextEvent) : "Sprawdź plan dnia.",
         icon: <CalendarDays color={theme.colors.calendar} size={20} />,
         id: "today-events",
-        onPress: () => openFromNotification("/(tabs)/kalendarz"),
+        onPress: () => openCalendarNotification(todayIso()),
         title: todayEvents.length === 1 ? "Masz 1 wydarzenie dzisiaj" : `Masz ${todayEvents.length} wydarzenia dzisiaj`,
       });
     }
@@ -146,6 +156,7 @@ export default function DzisiajScreen() {
   }, [
     nextEvent,
     openShopping.length,
+    openCalendarNotification,
     openFromNotification,
     theme.colors.calendar,
     theme.colors.shopping,
@@ -196,8 +207,8 @@ export default function DzisiajScreen() {
           <QuickAction
             color={theme.colors.calendar}
             icon={<CalendarDays color={theme.colors.calendar} size={18} />}
-            label="Kalendarz"
-            onPress={() => router.push("/(tabs)/kalendarz" as never)}
+            label="Wydarzenie"
+            onPress={() => openCalendarForDate(todayIso(), "create")}
           />
           <QuickAction
             color={theme.colors.finance}
@@ -227,7 +238,7 @@ export default function DzisiajScreen() {
           accent={theme.colors.calendar}
           icon={<CalendarDays color={theme.colors.calendar} size={24} />}
           meta={nextEvent ? eventMeta(nextEvent) : "Brak planu na dziś"}
-          onPress={() => router.push("/(tabs)/kalendarz" as never)}
+          onPress={() => openCalendarForDate(todayIso())}
           showDivider
           title="Wydarzenia dzisiaj"
           value={String(todayEvents.length || upcomingEvents.length)}
@@ -236,7 +247,7 @@ export default function DzisiajScreen() {
           accent={theme.colors.calendar}
           icon={<CalendarDays color={theme.colors.calendar} size={24} />}
           meta={tomorrowEvents[0] ? eventMeta(tomorrowEvents[0]) : "Brak planu na jutro"}
-          onPress={() => router.push("/(tabs)/kalendarz" as never)}
+          onPress={() => openCalendarForDate(offsetIsoDate(1))}
           showDivider
           title="Wydarzenia jutro"
           value={String(tomorrowEvents.length)}

@@ -195,6 +195,10 @@ const notificationPreferenceLabels: Record<RealtimeEventType, { label: string; m
   },
 };
 
+const visibleNotificationEventTypes = REALTIME_EVENTS.filter(
+  (eventType) => eventType !== "note.changed",
+);
+
 export default function DomScreen() {
   const params = useLocalSearchParams<{ settings?: string }>();
   const permissionsQuery = usePermissions();
@@ -1553,6 +1557,10 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
     queryFn: () => listNotificationPreferences({ accessToken }),
     queryKey: [...queryKeys.permissions, "notification-preferences"],
   });
+  const notificationPreferences = useMemo(
+    () => mergeNotificationPreferences(notificationPreferencesQuery.data),
+    [notificationPreferencesQuery.data],
+  );
 
   useEffect(() => {
     if (openOnMount) {
@@ -1651,13 +1659,7 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
   }
 
   function toggleNotificationPreference(eventType: RealtimeEventType, enabled: boolean) {
-    const current =
-      notificationPreferencesQuery.data ??
-      REALTIME_EVENTS.map((type) => ({
-        enabled: true,
-        eventType: type,
-      }));
-    const next = current.map((preference) =>
+    const next = notificationPreferences.map((preference) =>
       preference.eventType === eventType ? { ...preference, enabled } : preference,
     );
 
@@ -1889,8 +1891,7 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
             isLoading={notificationPreferencesQuery.isLoading}
           />
           <View style={styles.notificationPreferenceList}>
-            {(notificationPreferencesQuery.data ?? [])
-              .filter((preference) => preference.eventType !== "note.changed")
+            {notificationPreferences
               .map((preference) => {
                 const copy = notificationPreferenceLabels[preference.eventType];
 
@@ -1963,6 +1964,19 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
     </FormModal>
     </>
   );
+}
+
+function mergeNotificationPreferences(
+  preferences: NotificationPreference[] | undefined,
+): NotificationPreference[] {
+  const preferencesByType = new Map(
+    preferences?.map((preference) => [preference.eventType, preference.enabled]) ?? [],
+  );
+
+  return visibleNotificationEventTypes.map((eventType) => ({
+    enabled: preferencesByType.get(eventType) ?? true,
+    eventType,
+  }));
 }
 
 function ModulePanel({

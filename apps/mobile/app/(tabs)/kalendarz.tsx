@@ -1,6 +1,7 @@
 import type { ModuleKey } from "@homeapp/shared-types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useLocalSearchParams } from "expo-router";
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import {
   CalendarEvent,
@@ -74,6 +75,11 @@ const weekdayLabels = ["Pon", "Wto", "Śro", "Czw", "Pią", "Sob", "Nie"];
 
 export default function KalendarzScreen() {
   const { session } = useSession();
+  const routeParams = useLocalSearchParams<{
+    action?: string | string[];
+    date?: string | string[];
+    intent?: string | string[];
+  }>();
   const permissionsQuery = usePermissions();
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
@@ -88,9 +94,13 @@ export default function KalendarzScreen() {
   const [eventReminder, setEventReminder] = useState<ReminderValue>("1440");
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [eventModalVisible, setEventModalVisible] = useState(false);
+  const [handledRouteAction, setHandledRouteAction] = useState<string | null>(null);
   const permissions = permissionsQuery.data;
   const calendarPermission = getPermission(permissions, "calendar");
   const canUseScreen = hasModuleRead(permissions, ["calendar"]);
+  const routeDate = getRouteParam(routeParams.date);
+  const routeAction = getRouteParam(routeParams.action);
+  const routeIntent = getRouteParam(routeParams.intent);
   const range = useMemo(
     () => getVisibleRange(visibleMonth, selectedDate, calendarView),
     [calendarView, selectedDate, visibleMonth],
@@ -108,10 +118,6 @@ export default function KalendarzScreen() {
   });
   const selectedDayEvents = (monthEventsQuery.data ?? []).filter(
     (event) => event.eventDate === selectedDate,
-  );
-  const eventsByDate = useMemo(
-    () => getEventCountsByDate(monthEventsQuery.data ?? []),
-    [monthEventsQuery.data],
   );
   const queryClient = useQueryClient();
   const saveEventMutation = useMutation({
@@ -159,6 +165,34 @@ export default function KalendarzScreen() {
     Boolean(eventTitle.trim()) &&
     /^\d{4}-\d{2}-\d{2}$/.test(eventDate) &&
     isOptionalTimeInputValid(eventTime);
+
+  useEffect(() => {
+    const targetDate = routeDate && isIsoDate(routeDate) ? routeDate : null;
+
+    if (targetDate && targetDate !== selectedDate) {
+      selectDate(targetDate);
+    }
+
+    if (routeAction !== "create" || !targetDate || !calendarPermission.canCreate) {
+      return;
+    }
+
+    const actionKey = `${routeAction}:${targetDate}:${routeIntent ?? ""}`;
+
+    if (handledRouteAction === actionKey) {
+      return;
+    }
+
+    setHandledRouteAction(actionKey);
+    openCreateEvent(targetDate);
+  }, [
+    calendarPermission.canCreate,
+    handledRouteAction,
+    routeAction,
+    routeDate,
+    routeIntent,
+    selectedDate,
+  ]);
 
   function openCreateEvent(date = selectedDate) {
     setEditingEvent(null);
@@ -282,11 +316,16 @@ export default function KalendarzScreen() {
           </IconButton>
         </View>
         {calendarView !== "month" ? (
-          <WeekStrip
-            eventsByDate={eventsByDate}
-            onSelectDate={selectDate}
-            selectedDate={selectedDate}
-          />
+          <>
+            <WeekStrip
+              onSelectDate={selectDate}
+              selectedDate={selectedDate}
+            />
+            <SelectedDaySummary
+              date={selectedDate}
+              eventCount={selectedDayEvents.length}
+            />
+          </>
         ) : null}
       </View>
 
@@ -492,11 +531,9 @@ function CalendarMonth({
 }
 
 function WeekStrip({
-  eventsByDate,
   onSelectDate,
   selectedDate,
 }: {
-  eventsByDate: Map<string, number>;
   onSelectDate: (date: string) => void;
   selectedDate: string;
 }) {
@@ -510,7 +547,6 @@ function WeekStrip({
       {days.map((day, index) => {
         const active = day === selectedDate;
         const isToday = day === today;
-        const eventCount = eventsByDate.get(day) ?? 0;
 
         return (
           <Pressable
@@ -536,14 +572,34 @@ function WeekStrip({
             >
               {parseIsoDate(day).getDate()}
             </Text>
-            <View style={styles.weekEventSlot}>
-              {eventCount > 0 ? (
-                <View style={[styles.weekEventDot, active && styles.weekEventDotActive]} />
-              ) : null}
-            </View>
           </Pressable>
         );
       })}
+    </View>
+  );
+}
+
+function SelectedDaySummary({
+  date,
+  eventCount,
+}: {
+  date: string;
+  eventCount: number;
+}) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+
+  return (
+    <View style={styles.selectedDaySummary}>
+      <View style={styles.selectedDayIcon}>
+        <CalendarClock color={theme.colors.primary} size={18} />
+      </View>
+      <View style={styles.selectedDayText}>
+        <Text numberOfLines={1} style={styles.selectedDayTitle}>
+          {formatDateLong(date)}
+        </Text>
+        <Text style={styles.selectedDayMeta}>{formatEventCount(eventCount)}</Text>
+      </View>
     </View>
   );
 }
@@ -607,12 +663,12 @@ function AgendaTimeline({
     <View style={styles.timeline}>
       {sortedEvents.map((event, index) => {
         const accent = getAgendaAccent(theme.colors, event, index);
+        const secondaryText = event.note?.trim() || formatTimelineHour(event.eventTime);
 
         return (
           <View key={event.id} style={styles.timelineRow}>
             <View style={styles.timelineTime}>
               <Text style={styles.timelineHour}>{formatTimelineHour(event.eventTime)}</Text>
-              <View style={[styles.timelineMarker, { backgroundColor: accent.color }]} />
             </View>
             <Pressable
               accessibilityRole={canUpdate ? "button" : undefined}
@@ -634,11 +690,9 @@ function AgendaTimeline({
                     <Text numberOfLines={2} style={styles.agendaTitle}>
                       {event.title}
                     </Text>
-                    {event.note ? (
-                      <Text numberOfLines={2} style={styles.agendaScope}>
-                        {event.note}
-                      </Text>
-                    ) : null}
+                    <Text numberOfLines={2} style={styles.agendaScope}>
+                      {secondaryText}
+                    </Text>
                   </View>
                 </View>
                 <View style={styles.agendaFooter}>
@@ -1052,14 +1106,12 @@ function getVisibleRange(month: Date, selectedDate: string, view: CalendarViewMo
   return getWeekRange(selectedDate);
 }
 
-function getEventCountsByDate(events: CalendarEvent[]) {
-  const eventsByDate = new Map<string, number>();
+function getRouteParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
 
-  events.forEach((event) => {
-    eventsByDate.set(event.eventDate, (eventsByDate.get(event.eventDate) ?? 0) + 1);
-  });
-
-  return eventsByDate;
+function isIsoDate(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
 function getCalendarDays(month: Date) {
@@ -1218,6 +1270,22 @@ function formatDateLong(value: string): string {
   }).format(date);
 }
 
+function formatEventCount(count: number): string {
+  if (count === 0) {
+    return "Brak wydarzeń w tym dniu";
+  }
+
+  if (count === 1) {
+    return "1 wydarzenie w tym dniu";
+  }
+
+  if (count >= 2 && count <= 4) {
+    return `${count} wydarzenia w tym dniu`;
+  }
+
+  return `${count} wydarzeń w tym dniu`;
+}
+
 function formatTimeInput(value: string): string {
   const digits = value.replace(/\D/g, "").slice(0, 4);
 
@@ -1271,47 +1339,40 @@ function formatTimelineHour(value: string | null): string {
   return value.slice(0, 5);
 }
 
-function getAgendaAccent(colors: AppPalette, event: CalendarEvent, index: number) {
-  const title = event.title.toLocaleLowerCase("pl-PL");
-  const calendarAccent = {
-    border: `${colors.calendar}40`,
-    color: colors.calendar,
-    iconSoft: colors.card,
-    soft: colors.softBlue,
-  };
-  const financeAccent = {
-    border: `${colors.finance}40`,
-    color: colors.finance,
-    iconSoft: colors.card,
-    soft: colors.softGreen,
-  };
-  const foodAccent = {
-    border: `${colors.food}40`,
-    color: colors.food,
-    iconSoft: colors.card,
-    soft: colors.softOrange,
-  };
-  const shoppingAccent = {
-    border: `${colors.shopping}40`,
-    color: colors.shopping,
-    iconSoft: colors.card,
-    soft: colors.softPurple,
-  };
-  const accents = [calendarAccent, financeAccent, foodAccent, shoppingAccent];
+function getAgendaAccent(colors: AppPalette, _event: CalendarEvent, index: number) {
+  const shades = [colors.primary, colors.primaryLight, colors.primaryDark];
+  const color = shades[index % shades.length] ?? colors.primary;
 
-  if (/rach|opła|plat|płat|finans|czynsz|faktur/.test(title)) {
-    return financeAccent;
+  return {
+    border: withAlpha(color, 0.34),
+    color,
+    iconSoft: withAlpha(color, 0.14),
+    soft: index === 0 ? colors.primarySoft : withAlpha(color, 0.12),
+  };
+}
+
+function withAlpha(color: string, opacity: number) {
+  if (!color.startsWith("#")) {
+    return color;
   }
 
-  if (/obiad|kolac|śniad|sniad|posił|posil|jedz/.test(title)) {
-    return foodAccent;
+  const normalized =
+    color.length === 4
+      ? color
+          .slice(1)
+          .split("")
+          .map((char) => `${char}${char}`)
+          .join("")
+      : color.slice(1, 7);
+  const red = Number.parseInt(normalized.slice(0, 2), 16);
+  const green = Number.parseInt(normalized.slice(2, 4), 16);
+  const blue = Number.parseInt(normalized.slice(4, 6), 16);
+
+  if ([red, green, blue].some((value) => Number.isNaN(value))) {
+    return color;
   }
 
-  if (/sprząt|sprzat|łazien|lazien|dom/.test(title)) {
-    return calendarAccent;
-  }
-
-  return accents[index % accents.length] ?? calendarAccent;
+  return `rgba(${red}, ${green}, ${blue}, ${opacity})`;
 }
 
 function reminderValueToMinutes(value: ReminderValue): number | null {
@@ -1464,7 +1525,7 @@ function createStyles(colors: AppPalette) {
       borderColor: colors.border,
       borderRadius: radii.card,
       borderWidth: 1,
-      gap: spacing.md,
+      gap: spacing.sm,
       padding: spacing.md,
     },
     dayBubble: {
@@ -1716,6 +1777,46 @@ function createStyles(colors: AppPalette) {
       fontWeight: "900",
       letterSpacing: 0,
     },
+    selectedDayIcon: {
+      alignItems: "center",
+      backgroundColor: colors.primarySoft,
+      borderRadius: 999,
+      height: 36,
+      justifyContent: "center",
+      width: 36,
+    },
+    selectedDayMeta: {
+      color: colors.textMuted,
+      fontSize: 12,
+      fontWeight: "700",
+      letterSpacing: 0,
+      lineHeight: 17,
+    },
+    selectedDaySummary: {
+      alignItems: "center",
+      backgroundColor: colors.cardMuted,
+      borderColor: colors.border,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      minHeight: 56,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+    },
+    selectedDayText: {
+      flex: 1,
+      gap: 1,
+      minWidth: 0,
+    },
+    selectedDayTitle: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: "900",
+      letterSpacing: 0,
+      lineHeight: 19,
+      textTransform: "capitalize",
+    },
     textArea: {
       minHeight: 86,
       paddingTop: spacing.md,
@@ -1732,12 +1833,6 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
       lineHeight: 20,
       textAlign: "right",
-    },
-    timelineMarker: {
-      borderRadius: 999,
-      height: 7,
-      marginTop: spacing.sm,
-      width: 7,
     },
     timelineRow: {
       flexDirection: "row",
@@ -1791,15 +1886,19 @@ function createStyles(colors: AppPalette) {
     },
     weekDay: {
       alignItems: "center",
+      backgroundColor: colors.cardMuted,
+      borderColor: colors.border,
       borderRadius: radii.control,
+      borderWidth: 1,
       flex: 1,
       gap: 3,
       justifyContent: "center",
-      minHeight: 66,
+      minHeight: 58,
       paddingVertical: spacing.xs,
     },
     weekDayActive: {
-      backgroundColor: colors.text,
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
     },
     weekDayName: {
       color: colors.textMuted,
@@ -1824,20 +1923,6 @@ function createStyles(colors: AppPalette) {
     },
     weekDayPressed: {
       opacity: 0.78,
-    },
-    weekEventDot: {
-      backgroundColor: colors.text,
-      borderRadius: 999,
-      height: 4,
-      width: 4,
-    },
-    weekEventDotActive: {
-      backgroundColor: colors.inverseText,
-    },
-    weekEventSlot: {
-      alignItems: "center",
-      height: 6,
-      justifyContent: "center",
     },
     weekRow: {
       flexDirection: "row",
