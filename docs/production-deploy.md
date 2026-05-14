@@ -61,6 +61,10 @@ Dlatego przy deployu zmian backendu i SQL wystarczy przebudowac/restartowac Comp
 
 ## APK build - zasady bez mielenia czasu
 
+Twarda zasada: APK instalowany na telefonie ma byc release buildem z dzialajacym Google OAuth.
+Nie wolno budowac ani instalowac release APK bez `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID`
+albo parametru `-GoogleAndroidClientId`. Nie ma obejscia typu "missing Google" dla release APK.
+
 Nie buduj APK przy kazdej poprawce. Jesli zmiana dotyczy tylko API, DB, konfiguracji albo logiki backendu, rob tylko commit,
 push i deploy backendu. APK buduj dopiero wtedy, gdy uzytkownik wyraznie prosi o nowy plik APK albo instalacje na telefonie.
 
@@ -76,6 +80,8 @@ Bezpieczny schemat, tylko gdy APK jest naprawde potrzebny:
 ```powershell
 $src = "C:\Users\moski\Desktop\homeapp"
 $work = "C:\ha-build-$(Get-Date -Format yyyyMMddHHmm)"
+$env:EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID = "<ANDROID_OAUTH_CLIENT_ID>"
+$env:EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID = "<ANDROID_OAUTH_CLIENT_ID>"
 New-Item -ItemType Directory -Path $work | Out-Null
 
 robocopy $src $work /MIR `
@@ -95,6 +101,7 @@ pnpm.cmd install --frozen-lockfile
 pnpm.cmd --filter @homeapp/mobile typecheck
 
 Set-Location "$work\apps\mobile\android"
+$env:EXPO_PUBLIC_API_URL = "https://app.porabkihome.pl/api"
 $env:NODE_ENV = "production"
 .\gradlew.bat --stop
 .\gradlew.bat assembleRelease

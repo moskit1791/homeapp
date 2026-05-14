@@ -189,16 +189,21 @@ Na potrzeby lokalnego debug APK React Native New Architecture jest wylaczone w A
 
 Release APK budujemy z krotkiej tymczasowej kopii i hoisted `node_modules`, zeby ominac limit dlugosci sciezek CMake/Ninja na Windows. Skrypt zapisuje adres API w bundle JS.
 
+Release APK do instalacji na telefonie zawsze musi miec Google Android OAuth Client ID.
+Nie buduj ani nie instaluj release APK bez Google. Skrypt ma przerwac build, jesli brakuje
+`EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_ID` albo parametru `-GoogleAndroidClientId`.
+Nie dodawaj obejsc dla brakujacego Google OAuth w release APK.
+
 ```powershell
-.\scripts\build-mobile-release-apk.cmd -ApiUrl 'http://192.168.100.109:3000/api'
+.\scripts\build-mobile-release-apk.cmd -ApiUrl 'https://app.porabkihome.pl/api' -GoogleAndroidClientId '<ANDROID_OAUTH_CLIENT_ID>'
 ```
 
-Przy buildzie pod produkcyjne API podaj Google Android OAuth Client ID albo ustaw env `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_ID`; skrypt przerwie produkcyjny build bez tej wartosci, zeby nie wypuscic APK z niedzialajacym przyciskiem Google.
+Mozesz zamiast parametru ustawic env `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_ID`.
 
 Jesli trzeba wskazac konkretny katalog roboczy:
 
 ```powershell
-.\scripts\build-mobile-release-apk.cmd -ApiUrl 'http://192.168.100.109:3000/api' -WorkDir 'C:\h4'
+.\scripts\build-mobile-release-apk.cmd -ApiUrl 'https://app.porabkihome.pl/api' -GoogleAndroidClientId '<ANDROID_OAUTH_CLIENT_ID>' -WorkDir 'C:\h4'
 ```
 
 Wyniki:

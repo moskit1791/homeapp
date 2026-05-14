@@ -3,7 +3,6 @@ param(
   [string]$GoogleAndroidClientId = $env:EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
   [string]$GoogleOAuthClientId = $env:EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID,
   [string]$GoogleWebClientId = $env:EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-  [switch]$AllowMissingGoogleOAuth,
   [switch]$UseLanApi,
   [string]$WorkDir
 )
@@ -64,8 +63,8 @@ if (-not $GoogleOAuthClientId -and $GoogleAndroidClientId) {
   $GoogleOAuthClientId = $GoogleAndroidClientId
 }
 
-if ($ApiUrl -eq $ProductionApiUrl -and -not $GoogleAndroidClientId -and -not $AllowMissingGoogleOAuth) {
-  throw 'Refusing to build production APK without Google OAuth client ID. Pass -GoogleAndroidClientId, set EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID/GOOGLE_OAUTH_CLIENT_ID, or use -AllowMissingGoogleOAuth intentionally.'
+if (-not $GoogleAndroidClientId) {
+  throw 'Refusing to build release APK without Google Android OAuth client ID. Pass -GoogleAndroidClientId or set EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID/GOOGLE_OAUTH_CLIENT_ID. There is no bypass for release APK builds.'
 }
 
 $repoRoot = Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')

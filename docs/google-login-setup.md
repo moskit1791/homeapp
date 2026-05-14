@@ -1,7 +1,9 @@
 # Google login setup
 
 Ten projekt ma juz podpiety kod pod Google OAuth. Przycisk Google zacznie dzialac po dodaniu Android OAuth Client ID do EAS i API.
-Produkcyjny APK nie powinien byc budowany bez Google client ID; lokalny skrypt release przerwie build, jesli brakuje tej wartosci.
+Produkcyjny APK nie moze byc budowany ani instalowany bez Google Android OAuth Client ID.
+Lokalny skrypt release ma przerwac build, jesli brakuje tej wartosci. Nie dodawaj ani nie uzywaj
+obejsc dla brakujacego Google OAuth w release APK.
 
 ## Dane projektu
 
