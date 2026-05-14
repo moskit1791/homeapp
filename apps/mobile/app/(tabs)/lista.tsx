@@ -226,6 +226,7 @@ function ShoppingBoard({
   const [aiMessage, setAiMessage] = useState("");
   const [aiNotice, setAiNotice] = useState("");
   const [aiModalVisible, setAiModalVisible] = useState(false);
+  const [handledAiOpenRequest, setHandledAiOpenRequest] = useState(aiOpenRequest);
   const [modalVisible, setModalVisible] = useState(false);
 
   useEffect(() => {
@@ -236,10 +237,11 @@ function ShoppingBoard({
   }, [action, onRouteActionHandled]);
 
   useEffect(() => {
-    if (aiOpenRequest > 0) {
+    if (aiOpenRequest > handledAiOpenRequest) {
+      setHandledAiOpenRequest(aiOpenRequest);
       setAiModalVisible(true);
     }
-  }, [aiOpenRequest]);
+  }, [aiOpenRequest, handledAiOpenRequest]);
 
   const listsQuery = useQuery({
     enabled: permission.canRead && Boolean(accessToken),
@@ -531,6 +533,7 @@ function MealsBoard({
   const [aiDraft, setAiDraft] = useState<MealPlanAiDraftEntry[]>([]);
   const [aiTargetWeekStartDate, setAiTargetWeekStartDate] = useState(nextWeekStart());
   const [aiNotice, setAiNotice] = useState("");
+  const [handledAiOpenRequest, setHandledAiOpenRequest] = useState(aiOpenRequest);
   const [isCalendarExpanded, setCalendarExpanded] = useState(false);
   const householdQuery = useQuery({
     enabled: Boolean(accessToken),
@@ -594,11 +597,12 @@ function MealsBoard({
   }, [action, onRouteActionHandled]);
 
   useEffect(() => {
-    if (aiOpenRequest > 0) {
+    if (aiOpenRequest > handledAiOpenRequest) {
+      setHandledAiOpenRequest(aiOpenRequest);
       setAiTargetWeekStartDate(nextWeekStart());
       setAiModalVisible(true);
     }
-  }, [aiOpenRequest]);
+  }, [aiOpenRequest, handledAiOpenRequest]);
 
   const activePlan =
     selectedWeekId === currentQuery.data?.week.id
@@ -1029,7 +1033,7 @@ function MealsBoard({
                 loading={aiChatMutation.isPending}
                 onPress={() => aiChatMutation.mutate()}
                 style={styles.modalFooterButton}
-                title={aiDraft.length > 0 ? "Popraw z AI" : "Analizuj"}
+                title="Wyślij"
               />
             </View>
             {aiDraft.length > 0 ? (

@@ -527,13 +527,15 @@ function createStyles(colors: AppPalette) {
       flex: 1,
     },
     noteCard: {
-      backgroundColor: colors.warningSoft,
+      backgroundColor: colors.card,
       borderColor: colors.border,
       borderRadius: radii.card,
       borderWidth: 1,
       flexDirection: "row",
       gap: spacing.sm,
-      padding: spacing.md,
+      minHeight: 86,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
     },
     rowActions: {
       alignItems: "center",

@@ -5,7 +5,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import {
   getStartDashboard,
-  listNotes,
   listShoppingItems,
   queryKeys,
   type StartCalendarEvent,
@@ -28,8 +27,6 @@ import {
   CalendarDays,
   CartPlus,
   ChevronRight,
-  NotePlus,
-  NotebookText,
   Plus,
   RefreshCcw,
   ReceiptText,
@@ -48,7 +45,6 @@ export default function DzisiajScreen() {
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
   const shoppingPermission = useModulePermission("shopping");
-  const notesPermission = useModulePermission("notes");
 
   const dashboardQuery = useQuery({
     enabled: Boolean(accessToken),
@@ -59,11 +55,6 @@ export default function DzisiajScreen() {
     enabled: shoppingPermission.canRead && Boolean(accessToken),
     queryFn: () => listShoppingItems("daily", { accessToken }),
     queryKey: [...queryKeys.shopping, "daily", "today-preview"],
-  });
-  const notesQuery = useQuery({
-    enabled: notesPermission.canRead && Boolean(accessToken),
-    queryFn: () => listNotes({ accessToken }),
-    queryKey: [...queryKeys.notes, "today-preview"],
   });
 
   const dashboard = dashboardQuery.data;
@@ -76,9 +67,6 @@ export default function DzisiajScreen() {
   const openShopping = (shoppingQuery.data ?? []).filter(
     (item) => !item.isChecked,
   );
-  const latestNote = [...(notesQuery.data ?? [])].sort((left, right) =>
-    right.updatedAt.localeCompare(left.updatedAt),
-  )[0];
   const openFromNotification = useCallback((route: "/(tabs)/kalendarz" | "/(tabs)/finanse" | "/(tabs)/lista" | "/(tabs)/dom" | "/(tabs)/zadania") => {
     setNotificationsVisible(false);
     router.push(route as never);
@@ -187,8 +175,33 @@ export default function DzisiajScreen() {
       <AppToast offsetTop={74} text={toast} />
       <QueryState error={dashboardQuery.error} isLoading={dashboardQuery.isLoading} />
 
-      <View style={styles.greeting}>
-        <Text style={styles.greetingTitle}>{greetingTitle()}</Text>
+      <View style={styles.quickSection}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Szybkie akcje</Text>
+          <Text style={styles.sectionMeta}>{greetingTitle()}</Text>
+        </View>
+        <View style={styles.quickGrid}>
+          <QuickAction
+            color={theme.colors.finance}
+            icon={<ReceiptText color={theme.colors.finance} size={18} />}
+            label="Wydatek"
+            onPress={() =>
+              router.push({ pathname: "/(tabs)/finanse", params: { action: "expense" } } as never)
+            }
+          />
+          <QuickAction
+            color={theme.colors.shopping}
+            icon={<CartPlus color={theme.colors.shopping} size={18} />}
+            label="Zakupy"
+            onPress={() => router.push({ pathname: "/(tabs)/lista", params: { action: "addShopping", segment: "shopping" } } as never)}
+          />
+          <QuickAction
+            color={theme.colors.food}
+            icon={<Utensils color={theme.colors.food} size={18} />}
+            label="Posiłek"
+            onPress={() => router.push({ pathname: "/(tabs)/lista", params: { action: "addMeal", segment: "meals" } } as never)}
+          />
+        </View>
       </View>
 
       <View style={styles.tileList}>
@@ -197,6 +210,7 @@ export default function DzisiajScreen() {
           icon={<CalendarDays color={theme.colors.calendar} size={24} />}
           meta={nextEvent ? eventMeta(nextEvent) : "Brak planu na dziś"}
           onPress={() => router.push("/(tabs)/kalendarz" as never)}
+          showDivider
           title="Wydarzenia dzisiaj"
           value={String(todayEvents.length || upcomingEvents.length)}
         />
@@ -205,22 +219,16 @@ export default function DzisiajScreen() {
           icon={<CalendarDays color={theme.colors.calendar} size={24} />}
           meta={tomorrowEvents[0] ? eventMeta(tomorrowEvents[0]) : "Brak planu na jutro"}
           onPress={() => router.push("/(tabs)/kalendarz" as never)}
+          showDivider
           title="Wydarzenia jutro"
           value={String(tomorrowEvents.length)}
-        />
-        <HomeTile
-          accent={theme.colors.warning}
-          icon={<NotebookText color={theme.colors.warning} size={24} />}
-          meta={latestNote ? `Prywatna / ${formatShortDate(latestNote.updatedAt)}` : "Dodaj pierwszą prywatną notatkę"}
-          onPress={() => router.push({ pathname: "/(tabs)/zadania", params: { segment: "notes" } } as never)}
-          title="Moja ostatnia notatka"
-          value={latestNote?.title ?? "Prywatne notatki"}
         />
         <HomeTile
           accent={theme.colors.shopping}
           icon={<ShoppingCart color={theme.colors.shopping} size={24} />}
           meta={openShopping.length === 1 ? "1 pozycja czeka" : `${openShopping.length} pozycji czeka`}
           onPress={() => router.push({ pathname: "/(tabs)/lista", params: { segment: "shopping" } } as never)}
+          showDivider
           title="Zakupy do zrobienia"
           value={`${openShopping.length} pozycji`}
         />
@@ -231,38 +239,6 @@ export default function DzisiajScreen() {
           onPress={() => router.push({ pathname: "/(tabs)/lista", params: { segment: "meals" } } as never)}
           title="Dzisiejszy posiłek"
           value={nextMeal?.mealName ?? "Brak planu"}
-        />
-      </View>
-
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Szybkie akcje</Text>
-      </View>
-      <View style={styles.quickGrid}>
-        <QuickAction
-          color={theme.colors.warning}
-          icon={<NotePlus color={theme.colors.warning} size={21} />}
-          label="Dodaj prywatną notatkę"
-          onPress={() => router.push({ pathname: "/(tabs)/zadania", params: { action: "note", segment: "notes" } } as never)}
-        />
-        <QuickAction
-          color={theme.colors.finance}
-          icon={<ReceiptText color={theme.colors.finance} size={21} />}
-          label="Dodaj wydatek"
-          onPress={() =>
-            router.push({ pathname: "/(tabs)/finanse", params: { action: "expense" } } as never)
-          }
-        />
-        <QuickAction
-          color={theme.colors.shopping}
-          icon={<CartPlus color={theme.colors.shopping} size={21} />}
-          label="Dodaj zakupy"
-          onPress={() => router.push({ pathname: "/(tabs)/lista", params: { action: "addShopping", segment: "shopping" } } as never)}
-        />
-        <QuickAction
-          color={theme.colors.food}
-          icon={<Utensils color={theme.colors.food} size={21} />}
-          label="Dodaj posiłek"
-          onPress={() => router.push({ pathname: "/(tabs)/lista", params: { action: "addMeal", segment: "meals" } } as never)}
         />
       </View>
 
@@ -368,6 +344,7 @@ function HomeTile({
   icon,
   meta,
   onPress,
+  showDivider = false,
   title,
   value,
 }: {
@@ -375,6 +352,7 @@ function HomeTile({
   icon: ReactNode;
   meta: string;
   onPress: () => void;
+  showDivider?: boolean;
   title: string;
   value: string;
 }) {
@@ -387,22 +365,22 @@ function HomeTile({
       accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [
-        styles.tile,
-        { backgroundColor: tint(accent, 0.1), borderColor: tint(accent, 0.2) },
+        styles.dashboardRow,
+        showDivider && styles.dashboardRowDivider,
         pressed && styles.pressed,
       ]}
     >
-      <View style={[styles.tileIcon, { backgroundColor: tint(accent, 0.16) }]}>{icon}</View>
-      <View style={styles.tileText}>
-        <Text style={styles.tileTitle}>{title}</Text>
-        <Text numberOfLines={1} style={styles.tileValue}>
+      <View style={[styles.dashboardIcon, { backgroundColor: tint(accent, 0.1) }]}>{icon}</View>
+      <View style={styles.dashboardText}>
+        <Text numberOfLines={1} style={styles.dashboardTitle}>{title}</Text>
+        <Text numberOfLines={1} style={styles.dashboardMeta}>
           {value}
         </Text>
-        <Text numberOfLines={1} style={styles.tileMeta}>
+        <Text numberOfLines={1} style={styles.dashboardSubMeta}>
           {meta}
         </Text>
       </View>
-      <ChevronRight color={theme.colors.textMuted} size={21} />
+      <ChevronRight color={theme.colors.textSubtle} size={20} />
     </Pressable>
   );
 }
@@ -428,7 +406,7 @@ function QuickAction({
       onPress={onPress}
       style={({ pressed }) => [styles.quickAction, pressed && styles.pressed]}
     >
-      <View style={[styles.quickIcon, { backgroundColor: tint(color, 0.14) }]}>
+      <View style={[styles.quickIcon, { backgroundColor: tint(color, 0.1) }]}>
         {icon}
         <View style={styles.quickPlus}>
           <Plus color={theme.colors.card} size={10} />
@@ -570,22 +548,6 @@ function createStyles(colors: AppPalette) {
       justifyContent: "center",
       width: 34,
     },
-    greeting: {
-      alignItems: "center",
-      gap: 2,
-      marginTop: -2,
-    },
-    greetingText: {
-      color: colors.textMuted,
-      fontSize: 12,
-      letterSpacing: 0,
-    },
-    greetingTitle: {
-      color: colors.text,
-      fontSize: 14,
-      fontWeight: "900",
-      letterSpacing: 0,
-    },
     headerActions: {
       alignItems: "center",
       flexDirection: "row",
@@ -613,6 +575,50 @@ function createStyles(colors: AppPalette) {
       fontWeight: "900",
       letterSpacing: 0,
       textAlign: "center",
+    },
+    dashboardIcon: {
+      alignItems: "center",
+      borderRadius: radii.control,
+      height: 46,
+      justifyContent: "center",
+      width: 46,
+    },
+    dashboardMeta: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: "900",
+      letterSpacing: 0,
+      lineHeight: 18,
+    },
+    dashboardRow: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.md,
+      minHeight: 86,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+    },
+    dashboardRowDivider: {
+      borderBottomColor: colors.border,
+      borderBottomWidth: 1,
+    },
+    dashboardSubMeta: {
+      color: colors.textMuted,
+      fontSize: 12,
+      letterSpacing: 0,
+      lineHeight: 17,
+    },
+    dashboardText: {
+      flex: 1,
+      gap: 3,
+      minWidth: 0,
+    },
+    dashboardTitle: {
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: "900",
+      letterSpacing: 0,
+      lineHeight: 20,
     },
     notificationBody: {
       color: colors.textMuted,
@@ -666,32 +672,31 @@ function createStyles(colors: AppPalette) {
       borderColor: colors.border,
       borderRadius: radii.card,
       borderWidth: 1,
-      gap: spacing.xs,
-      minHeight: 96,
+      flex: 1,
+      gap: 6,
+      minHeight: 74,
       justifyContent: "center",
-      paddingHorizontal: spacing.sm,
-      paddingVertical: spacing.md,
-      width: "48%",
+      minWidth: 0,
+      paddingHorizontal: 6,
+      paddingVertical: spacing.sm,
     },
     quickGrid: {
       flexDirection: "row",
-      flexWrap: "wrap",
-      gap: spacing.sm,
-      justifyContent: "space-between",
+      gap: spacing.xs,
     },
     quickIcon: {
       alignItems: "center",
       borderRadius: radii.control,
-      height: 40,
+      height: 34,
       justifyContent: "center",
-      width: 40,
+      width: 34,
     },
     quickLabel: {
       color: colors.text,
-      fontSize: 12,
+      fontSize: 11,
       fontWeight: "900",
       letterSpacing: 0,
-      lineHeight: 15,
+      lineHeight: 14,
       textAlign: "center",
     },
     quickPlus: {
@@ -699,14 +704,26 @@ function createStyles(colors: AppPalette) {
       backgroundColor: colors.primary,
       borderRadius: 999,
       bottom: -2,
-      height: 16,
+      height: 15,
       justifyContent: "center",
       position: "absolute",
       right: -2,
-      width: 16,
+      width: 15,
+    },
+    quickSection: {
+      gap: spacing.sm,
     },
     sectionHeader: {
-      marginTop: spacing.xs,
+      alignItems: "flex-end",
+      flexDirection: "row",
+      justifyContent: "space-between",
+      minHeight: 22,
+    },
+    sectionMeta: {
+      color: colors.textMuted,
+      fontSize: 12,
+      fontWeight: "700",
+      letterSpacing: 0,
     },
     sectionTitle: {
       color: colors.text,
@@ -715,25 +732,29 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
     },
     tile: {
-      alignItems: "center",
+      backgroundColor: colors.card,
       borderRadius: radii.card,
       borderWidth: 1,
-      flexDirection: "row",
       gap: spacing.sm,
-      minHeight: 62,
+      minHeight: 126,
       paddingHorizontal: spacing.md,
-      paddingVertical: 7,
+      paddingVertical: spacing.md,
+      width: "48.5%",
     },
     tileIcon: {
       alignItems: "center",
       borderRadius: radii.control,
-      height: 38,
+      height: 36,
       justifyContent: "center",
-      width: 38,
+      width: 36,
     },
     tileList: {
-      gap: spacing.sm,
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
       marginTop: spacing.xs,
+      overflow: "hidden",
     },
     tileMeta: {
       color: colors.textMuted,
@@ -747,17 +768,23 @@ function createStyles(colors: AppPalette) {
       minWidth: 0,
     },
     tileTitle: {
-      color: colors.text,
-      fontSize: 12,
-      fontWeight: "800",
+      color: colors.textMuted,
+      fontSize: 11,
+      fontWeight: "900",
       letterSpacing: 0,
+      textTransform: "uppercase",
+    },
+    tileTop: {
+      alignItems: "center",
+      flexDirection: "row",
+      justifyContent: "space-between",
     },
     tileValue: {
       color: colors.text,
-      fontSize: 17,
+      fontSize: 16,
       fontWeight: "900",
       letterSpacing: 0,
-      lineHeight: 21,
+      lineHeight: 20,
     },
   });
 }

@@ -6,7 +6,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as MediaLibrary from "expo-media-library";
 import * as Sharing from "expo-sharing";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Alert, Image, Linking, Modal, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import {
@@ -866,8 +866,10 @@ function AttachmentsPanel() {
   const [openingAttachment, setOpeningAttachment] = useState(false);
   const [downloadingAttachmentId, setDownloadingAttachmentId] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState("");
+  const [downloadNeedsSettings, setDownloadNeedsSettings] = useState(false);
   const [downloadNotice, setDownloadNotice] = useState("");
   const [uploadError, setUploadError] = useState("");
+  const [uploadNeedsSettings, setUploadNeedsSettings] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const attachmentsQuery = useQuery({
     enabled: permission.canRead && Boolean(accessToken),
@@ -980,27 +982,63 @@ function AttachmentsPanel() {
 
   async function handleDownloadAttachment(attachment: Attachment) {
     setDownloadError("");
+    setDownloadNeedsSettings(false);
     setDownloadNotice("");
     setDownloadingAttachmentId(attachment.id);
 
     try {
       const target = await downloadAttachmentFile(attachment, accessToken);
       setDownloadNotice(target === "gallery" ? "Zdjęcie zapisane w galerii." : "Plik zapisany w pamięci aplikacji.");
-    } catch {
-      setDownloadError("Nie udało się pobrać pliku na telefon.");
+    } catch (error) {
+      if (error instanceof PhotoLibraryPermissionError) {
+        setDownloadError(error.message);
+        setDownloadNeedsSettings(true);
+      } else {
+        setDownloadError("Nie udało się pobrać pliku na telefon.");
+      }
     } finally {
       setDownloadingAttachmentId(null);
     }
   }
 
+  function openAppSettings() {
+    void Linking.openSettings();
+  }
+
+  async function ensurePhotoLibraryPermission(): Promise<boolean> {
+    const currentPermission = await ImagePicker.getMediaLibraryPermissionsAsync();
+    const permissionResult = currentPermission.granted
+      ? currentPermission
+      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (permissionResult.granted) {
+      setUploadNeedsSettings(false);
+      return true;
+    }
+
+    const message = permissionResult.canAskAgain
+      ? "Nadaj dostęp do galerii zdjęć, żeby dodać załącznik."
+      : "Dostęp do galerii zdjęć jest zablokowany. Włącz go w ustawieniach telefonu.";
+
+    setUploadError(message);
+    setUploadNeedsSettings(true);
+
+    Alert.alert("Brak dostępu do zdjęć", message, [
+      { style: "cancel", text: "Anuluj" },
+      { onPress: openAppSettings, text: "Ustawienia" },
+    ]);
+
+    return false;
+  }
+
   async function handlePickPhoto() {
     setUploadError("");
+    setUploadNeedsSettings(false);
 
     try {
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const hasPermission = await ensurePhotoLibraryPermission();
 
-      if (!permissionResult.granted) {
-        setUploadError("Nadaj dostęp do galerii zdjęć, żeby dodać załącznik.");
+      if (!hasPermission) {
         return;
       }
 
@@ -1026,6 +1064,7 @@ function AttachmentsPanel() {
       setModalVisible(true);
     } catch {
       setUploadError("Nie udało się otworzyć galerii zdjęć.");
+      setUploadNeedsSettings(true);
     }
   }
 
@@ -1043,6 +1082,9 @@ function AttachmentsPanel() {
       title="Pliki"
     >
       {uploadError ? <InlineAlert tone="error" text={uploadError} /> : null}
+      {uploadNeedsSettings ? (
+        <ActionButton onPress={openAppSettings} size="small" title="Otwórz ustawienia" variant="secondary" />
+      ) : null}
       <TextInput
         onChangeText={setSearch}
         placeholder="Szukaj plików"
@@ -1076,6 +1118,9 @@ function AttachmentsPanel() {
       </View>
       {downloadNotice ? <InlineAlert text={downloadNotice} /> : null}
       {downloadError ? <InlineAlert tone="error" text={downloadError} /> : null}
+      {downloadNeedsSettings ? (
+        <ActionButton onPress={openAppSettings} size="small" title="Otwórz ustawienia" variant="secondary" />
+      ) : null}
       <FormModal
         footer={
           <View style={styles.modalFooter}>
@@ -1492,6 +1537,7 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
   const styles = createStyles(theme.colors);
   const accessToken = session?.accessToken;
   const [settingsVisible, setSettingsVisible] = useState(false);
+  const [notificationsVisible, setNotificationsVisible] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [homeName, setHomeName] = useState("");
   const [currencyCode, setCurrencyCode] = useState("PLN");
@@ -1752,80 +1798,15 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
           </View>
         </View>
         <View style={styles.settingsPanelRow}>
-          <Text style={styles.settingsPanelTitle}>Powiadomienia push</Text>
+          <Text style={styles.settingsPanelTitle}>Powiadomienia konfiguracja</Text>
           <Text style={styles.settingsPanelMeta}>
-            Wyślij test, żeby potwierdzić rejestrację tokenu push dla tego telefonu.
+            Token telefonu, test push i typy zdarzeń w jednym miejscu.
           </Text>
           <ActionButton
-            disabled={!accessToken}
-            loading={registerPushMutation.isPending}
-            onPress={() => registerPushMutation.mutate()}
-            title="Włącz / odśwież powiadomienia"
+            onPress={() => setNotificationsVisible(true)}
+            title="Otwórz konfigurację"
             variant="secondary"
           />
-          {registerPushMutation.data === null ? (
-            <InlineAlert tone="error" text="Nie udało się pobrać tokenu push dla tego telefonu." />
-          ) : null}
-          {registerPushMutation.error ? (
-            <InlineAlert tone="error" text="Rejestracja powiadomień nie powiodła się." />
-          ) : null}
-          <ActionButton
-            disabled={!accessToken}
-            loading={testPushMutation.isPending}
-            onPress={() => testPushMutation.mutate()}
-            title="Wyślij test push"
-            variant="secondary"
-          />
-          {testPushMutation.error ? (
-            <InlineAlert tone="error" text="Nie udało się wysłać testowego powiadomienia." />
-          ) : null}
-          <View style={styles.notificationPreferencesHeader}>
-            <Text style={styles.inputLabel}>Powiadamiaj mnie, gdy inny domownik zmieni:</Text>
-          </View>
-          <QueryState
-            error={notificationPreferencesQuery.error}
-            isLoading={notificationPreferencesQuery.isLoading}
-          />
-          <View style={styles.notificationPreferenceList}>
-            {(notificationPreferencesQuery.data ?? [])
-              .filter((preference) => preference.eventType !== "note.changed")
-              .map((preference) => {
-              const copy = notificationPreferenceLabels[preference.eventType];
-
-              return (
-                <View key={preference.eventType} style={styles.notificationPreferenceRow}>
-                  <View style={styles.notificationPreferenceText}>
-                    <Text style={styles.itemName}>{copy.label}</Text>
-                    <Text style={styles.itemMeta}>{copy.meta}</Text>
-                  </View>
-                  <View style={styles.notificationPreferenceSwitch}>
-                    <Text style={styles.preferenceToggleLabel}>
-                      {preference.enabled ? "Włączone" : "Wyłączone"}
-                    </Text>
-                    <Pressable
-                      accessibilityRole="switch"
-                      accessibilityState={{ checked: preference.enabled }}
-                      onPress={() => toggleNotificationPreference(preference.eventType, !preference.enabled)}
-                      style={[
-                        styles.preferenceToggle,
-                        preference.enabled && styles.preferenceToggleActive,
-                      ]}
-                    >
-                      <View
-                        style={[
-                          styles.preferenceToggleThumb,
-                          preference.enabled && styles.preferenceToggleThumbActive,
-                        ]}
-                      />
-                    </Pressable>
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-          {notificationPreferencesMutation.error ? (
-            <InlineAlert tone="error" text="Nie udało się zapisać ustawień powiadomień." />
-          ) : null}
         </View>
         <View style={[styles.settingsPanelRow, styles.dangerPanel]}>
           <Text style={styles.settingsPanelTitle}>Usuwanie konta</Text>
@@ -1847,6 +1828,114 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
                   : "Nie udało się usunąć konta."
               }
             />
+          ) : null}
+        </View>
+      </View>
+    </FormModal>
+    <FormModal
+      footer={
+        <ActionButton
+          onPress={() => setNotificationsVisible(false)}
+          title="Zamknij"
+          variant="secondary"
+        />
+      }
+      onClose={() => setNotificationsVisible(false)}
+      subtitle="Token telefonu, test push i zdarzenia, które mają wysyłać powiadomienia."
+      title="Powiadomienia"
+      visible={notificationsVisible}
+    >
+      {toast ? (
+        <View style={styles.settingsToast}>
+          <Text style={styles.settingsToastText}>{toast}</Text>
+        </View>
+      ) : null}
+      <View style={styles.settingsPanel}>
+        <View style={styles.settingsPanelRow}>
+          <Text style={styles.settingsPanelTitle}>Telefon</Text>
+          <Text style={styles.settingsPanelMeta}>
+            Włącz albo odśwież token push dla tego telefonu.
+          </Text>
+          <ActionButton
+            disabled={!accessToken}
+            loading={registerPushMutation.isPending}
+            onPress={() => registerPushMutation.mutate()}
+            title="Włącz / odśwież powiadomienia"
+            variant="secondary"
+          />
+          {registerPushMutation.data === null ? (
+            <InlineAlert tone="error" text="Nie udało się pobrać tokenu push dla tego telefonu." />
+          ) : null}
+          {registerPushMutation.error ? (
+            <InlineAlert tone="error" text="Rejestracja powiadomień nie powiodła się." />
+          ) : null}
+        </View>
+        <View style={styles.settingsPanelRow}>
+          <Text style={styles.settingsPanelTitle}>Test</Text>
+          <Text style={styles.settingsPanelMeta}>
+            Wyślij test, żeby potwierdzić, że powiadomienia działają.
+          </Text>
+          <ActionButton
+            disabled={!accessToken}
+            loading={testPushMutation.isPending}
+            onPress={() => testPushMutation.mutate()}
+            title="Wyślij test push"
+            variant="secondary"
+          />
+          {testPushMutation.error ? (
+            <InlineAlert tone="error" text="Nie udało się wysłać testowego powiadomienia." />
+          ) : null}
+        </View>
+        <View style={styles.settingsPanelRow}>
+          <Text style={styles.settingsPanelTitle}>Typy powiadomień</Text>
+          <Text style={styles.settingsPanelMeta}>
+            Wybierz, kiedy zmiany innych domowników mają wysyłać powiadomienie.
+          </Text>
+          <QueryState
+            error={notificationPreferencesQuery.error}
+            isLoading={notificationPreferencesQuery.isLoading}
+          />
+          <View style={styles.notificationPreferenceList}>
+            {(notificationPreferencesQuery.data ?? [])
+              .filter((preference) => preference.eventType !== "note.changed")
+              .map((preference) => {
+                const copy = notificationPreferenceLabels[preference.eventType];
+
+                return (
+                  <View key={preference.eventType} style={styles.notificationPreferenceRow}>
+                    <View style={styles.notificationPreferenceText}>
+                      <Text style={styles.itemName}>{copy.label}</Text>
+                      <Text style={styles.itemMeta}>{copy.meta}</Text>
+                    </View>
+                    <View style={styles.notificationPreferenceSwitch}>
+                      <Text style={styles.preferenceToggleLabel}>
+                        {preference.enabled ? "Włączone" : "Wyłączone"}
+                      </Text>
+                      <Pressable
+                        accessibilityRole="switch"
+                        accessibilityState={{ checked: preference.enabled }}
+                        disabled={notificationPreferencesMutation.isPending}
+                        onPress={() => toggleNotificationPreference(preference.eventType, !preference.enabled)}
+                        style={[
+                          styles.preferenceToggle,
+                          preference.enabled && styles.preferenceToggleActive,
+                          notificationPreferencesMutation.isPending && styles.preferenceToggleDisabled,
+                        ]}
+                      >
+                        <View
+                          style={[
+                            styles.preferenceToggleThumb,
+                            preference.enabled && styles.preferenceToggleThumbActive,
+                          ]}
+                        />
+                      </Pressable>
+                    </View>
+                  </View>
+                );
+              })}
+          </View>
+          {notificationPreferencesMutation.error ? (
+            <InlineAlert tone="error" text="Nie udało się zapisać ustawień powiadomień." />
           ) : null}
         </View>
       </View>
@@ -2361,7 +2450,11 @@ async function downloadAttachmentFile(
     const permissions = await MediaLibrary.requestPermissionsAsync(true, ["photo"]);
 
     if (!permissions.granted) {
-      throw new Error("Media library permission was denied");
+      throw new PhotoLibraryPermissionError(
+        permissions.canAskAgain
+          ? "Nadaj dostęp do galerii zdjęć, żeby zapisać zdjęcie w telefonie."
+          : "Dostęp do galerii zdjęć jest zablokowany. Włącz go w ustawieniach telefonu.",
+      );
     }
 
     await MediaLibrary.saveToLibraryAsync(result.uri);
@@ -2383,6 +2476,13 @@ async function downloadAttachmentFile(
   });
 
   return "app";
+}
+
+class PhotoLibraryPermissionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PhotoLibraryPermissionError";
+  }
 }
 
 function sanitizeCacheFileName(fileName: string): string {
@@ -2627,6 +2727,9 @@ function createStyles(colors: AppPalette) {
     },
     preferenceToggleActive: {
       backgroundColor: colors.primary,
+    },
+    preferenceToggleDisabled: {
+      opacity: 0.56,
     },
     preferenceToggleThumb: {
       alignSelf: "flex-start",

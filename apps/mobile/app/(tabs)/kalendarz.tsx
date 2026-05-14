@@ -38,15 +38,19 @@ import {
 } from "../../src/ui";
 import {
   CalendarDays,
+  CalendarClock,
   CalendarPlus,
   Check,
   ChevronLeft,
   ChevronRight,
+  DotsVertical,
   Pencil,
+  Plus,
   RefreshCcw,
   Trash2,
 } from "../../src/ui/icon";
 
+type CalendarViewMode = "month" | "week" | "day";
 type _AgendaSegment = "notes" | "todo";
 type ReminderValue = "none" | "15" | "60" | "1440";
 
@@ -62,6 +66,14 @@ const reminderOptions: Array<{ label: string; value: ReminderValue }> = [
   { label: "Dzień wcześniej", value: "1440" },
 ];
 
+const calendarViewOptions: Array<{ label: string; value: CalendarViewMode }> = [
+  { label: "Miesiąc", value: "month" },
+  { label: "Tydzień", value: "week" },
+  { label: "Dzień", value: "day" },
+];
+
+const weekdayLabels = ["Pon", "Wto", "Śro", "Czw", "Pią", "Sob", "Nie"];
+
 export default function KalendarzScreen() {
   const { session } = useSession();
   const permissionsQuery = usePermissions();
@@ -70,6 +82,7 @@ export default function KalendarzScreen() {
   const accessToken = session?.accessToken;
   const [visibleMonth, setVisibleMonth] = useState(() => monthAnchor(new Date()));
   const [selectedDate, setSelectedDate] = useState(todayIso());
+  const [calendarView, setCalendarView] = useState<CalendarViewMode>("week");
   const [eventTitle, setEventTitle] = useState("");
   const [eventDate, setEventDate] = useState(todayIso());
   const [eventTime, setEventTime] = useState("");
@@ -80,12 +93,15 @@ export default function KalendarzScreen() {
   const permissions = permissionsQuery.data;
   const calendarPermission = getPermission(permissions, "calendar");
   const canUseScreen = hasModuleRead(permissions, ["calendar"]);
-  const range = useMemo(() => getMonthRange(visibleMonth), [visibleMonth]);
+  const range = useMemo(
+    () => getVisibleRange(visibleMonth, selectedDate, calendarView),
+    [calendarView, selectedDate, visibleMonth],
+  );
 
   const monthEventsQuery = useQuery({
     enabled: calendarPermission.canRead && Boolean(accessToken),
     queryFn: () => listCalendarEvents(range.from, range.to, { accessToken }),
-    queryKey: [...queryKeys.calendar, "month", range.from, range.to],
+    queryKey: [...queryKeys.calendar, "range", calendarView, range.from, range.to],
   });
   const upcomingQuery = useQuery({
     enabled: calendarPermission.canRead && Boolean(accessToken),
@@ -94,6 +110,10 @@ export default function KalendarzScreen() {
   });
   const selectedDayEvents = (monthEventsQuery.data ?? []).filter(
     (event) => event.eventDate === selectedDate,
+  );
+  const eventsByDate = useMemo(
+    () => getEventCountsByDate(monthEventsQuery.data ?? []),
+    [monthEventsQuery.data],
   );
   const queryClient = useQueryClient();
   const saveEventMutation = useMutation({
@@ -171,6 +191,29 @@ export default function KalendarzScreen() {
     setEventModalVisible(false);
   }
 
+  function selectDate(date: string) {
+    setSelectedDate(date);
+    setEventDate(date);
+    setVisibleMonth(monthAnchor(parseIsoDate(date)));
+  }
+
+  function shiftVisiblePeriod(direction: -1 | 1) {
+    if (calendarView === "month") {
+      const nextMonth = addMonths(visibleMonth, direction);
+      const nextDate = isoFromParts(nextMonth.getFullYear(), nextMonth.getMonth(), 1);
+
+      setVisibleMonth(nextMonth);
+      setSelectedDate(nextDate);
+      setEventDate(nextDate);
+      return;
+    }
+
+    const daysToMove = calendarView === "week" ? direction * 7 : direction;
+    const nextDate = dateToIso(addDays(parseIsoDate(selectedDate), daysToMove));
+
+    selectDate(nextDate);
+  }
+
   if (permissionsQuery.isLoading) {
     return (
       <AppScreen title="Kalendarz">
@@ -212,40 +255,72 @@ export default function KalendarzScreen() {
       }
       title="Kalendarz"
     >
-      <View style={styles.monthHeader}>
-        <Text style={styles.monthTitle}>{formatMonthTitle(visibleMonth)}</Text>
-        <View style={styles.monthNav}>
+      <View style={styles.calendarTopPanel}>
+        <SegmentedControl
+          onChange={setCalendarView}
+          options={calendarViewOptions}
+          value={calendarView}
+        />
+        <View style={styles.periodHeader}>
           <IconButton
             accessibilityLabel="Poprzedni miesiąc"
-            onPress={() => setVisibleMonth(addMonths(visibleMonth, -1))}
+            onPress={() => shiftVisiblePeriod(-1)}
           >
             <ChevronLeft color={theme.colors.textMuted} size={19} />
           </IconButton>
+          <View style={styles.periodText}>
+            <Text style={styles.periodTitle}>
+              {formatPeriodTitle(calendarView, visibleMonth, selectedDate)}
+            </Text>
+            <Text style={styles.periodSubtitle}>
+              {formatPeriodSubtitle(calendarView)}
+            </Text>
+          </View>
           <IconButton
             accessibilityLabel="Następny miesiąc"
-            onPress={() => setVisibleMonth(addMonths(visibleMonth, 1))}
+            onPress={() => shiftVisiblePeriod(1)}
           >
             <ChevronRight color={theme.colors.textMuted} size={19} />
           </IconButton>
         </View>
+        {calendarView !== "month" ? (
+          <WeekStrip
+            eventsByDate={eventsByDate}
+            onSelectDate={selectDate}
+            selectedDate={selectedDate}
+          />
+        ) : null}
       </View>
 
       {calendarPermission.canRead ? (
+        calendarView === "month" ? (
         <CalendarMonth
           events={monthEventsQuery.data ?? []}
           isLoading={monthEventsQuery.isLoading}
           month={visibleMonth}
-          onSelectDate={(date) => {
-            setSelectedDate(date);
-            setEventDate(date);
-          }}
+          onSelectDate={selectDate}
           selectedDate={selectedDate}
         />
+        ) : (
+          <AgendaTimeline
+            canCreate={calendarPermission.canCreate}
+            canDelete={calendarPermission.canDelete}
+            canUpdate={calendarPermission.canUpdate}
+            date={selectedDate}
+            deleting={deleteEventMutation.isPending}
+            error={monthEventsQuery.error}
+            events={selectedDayEvents}
+            isLoading={monthEventsQuery.isLoading}
+            onCreate={() => openCreateEvent(selectedDate)}
+            onDelete={(event) => deleteEventMutation.mutate(event)}
+            onEdit={openEditEvent}
+          />
+        )
       ) : (
         <InlineAlert text="Nie masz uprawnienia do kalendarza." />
       )}
 
-      {calendarPermission.canRead ? (
+      {calendarPermission.canRead && calendarView === "month" ? (
         <UpcomingEvents
           canDelete={calendarPermission.canDelete}
           canUpdate={calendarPermission.canUpdate}
@@ -256,6 +331,19 @@ export default function KalendarzScreen() {
           onEdit={openEditEvent}
           query={monthEventsQuery}
         />
+      ) : null}
+
+      {calendarPermission.canCreate && calendarView !== "month" ? (
+        <View style={styles.fabRow}>
+          <Pressable
+            accessibilityLabel="Dodaj wydarzenie"
+            accessibilityRole="button"
+            onPress={() => openCreateEvent(selectedDate)}
+            style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
+          >
+            <Plus color={theme.colors.inverseText} size={27} />
+          </Pressable>
+        </View>
       ) : null}
 
       <FormModal
@@ -401,6 +489,186 @@ function CalendarMonth({
       {isLoading ? (
         <Text style={styles.calendarLoading}>Ładuję wydarzenia...</Text>
       ) : null}
+    </View>
+  );
+}
+
+function WeekStrip({
+  eventsByDate,
+  onSelectDate,
+  selectedDate,
+}: {
+  eventsByDate: Map<string, number>;
+  onSelectDate: (date: string) => void;
+  selectedDate: string;
+}) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+  const days = getWeekDays(selectedDate);
+  const today = todayIso();
+
+  return (
+    <View style={styles.weekStrip}>
+      {days.map((day, index) => {
+        const active = day === selectedDate;
+        const isToday = day === today;
+        const eventCount = eventsByDate.get(day) ?? 0;
+
+        return (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
+            key={day}
+            onPress={() => onSelectDate(day)}
+            style={({ pressed }) => [
+              styles.weekDay,
+              active && styles.weekDayActive,
+              pressed && styles.weekDayPressed,
+            ]}
+          >
+            <Text style={[styles.weekDayName, active && styles.weekDayNameActive]}>
+              {weekdayLabels[index]}
+            </Text>
+            <Text
+              style={[
+                styles.weekDayNumber,
+                isToday && styles.weekDayNumberToday,
+                active && styles.weekDayNumberActive,
+              ]}
+            >
+              {parseIsoDate(day).getDate()}
+            </Text>
+            <View style={styles.weekEventSlot}>
+              {eventCount > 0 ? (
+                <View style={[styles.weekEventDot, active && styles.weekEventDotActive]} />
+              ) : null}
+            </View>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+function AgendaTimeline({
+  canCreate,
+  canDelete,
+  canUpdate,
+  date,
+  deleting,
+  error,
+  events,
+  isLoading,
+  onCreate,
+  onDelete,
+  onEdit,
+}: {
+  canCreate: boolean;
+  canDelete: boolean;
+  canUpdate: boolean;
+  date: string;
+  deleting: boolean;
+  error: unknown;
+  events: CalendarEvent[];
+  isLoading: boolean;
+  onCreate: () => void;
+  onDelete: (event: CalendarEvent) => void;
+  onEdit: (event: CalendarEvent) => void;
+}) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+  const sortedEvents = [...events].sort(compareCalendarEvents);
+
+  if (isLoading || error) {
+    return (
+      <QueryState
+        error={error}
+        isLoading={isLoading}
+      />
+    );
+  }
+
+  if (sortedEvents.length === 0) {
+    return (
+      <View style={styles.agendaEmpty}>
+        <View style={styles.agendaEmptyIcon}>
+          <CalendarClock color={theme.colors.primary} size={22} />
+        </View>
+        <Text style={styles.agendaEmptyTitle}>Brak wydarzeń</Text>
+        <Text style={styles.agendaEmptyText}>
+          {formatDateLong(date)}
+        </Text>
+        {canCreate ? (
+          <ActionButton onPress={onCreate} size="small" title="Dodaj wydarzenie" />
+        ) : null}
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.timeline}>
+      {sortedEvents.map((event, index) => {
+        const accent = getAgendaAccent(theme.colors, event, index);
+
+        return (
+          <View key={event.id} style={styles.timelineRow}>
+            <View style={styles.timelineTime}>
+              <Text style={styles.timelineHour}>{formatTimelineHour(event.eventTime)}</Text>
+              <Text style={styles.timelineMinute}>{formatTimelineMinute(event.eventTime)}</Text>
+              <View style={[styles.timelineMarker, { backgroundColor: accent.color }]} />
+            </View>
+            <Pressable
+              accessibilityRole={canUpdate ? "button" : undefined}
+              disabled={!canUpdate}
+              onPress={() => onEdit(event)}
+              style={({ pressed }) => [
+                styles.agendaCard,
+                { backgroundColor: accent.soft, borderColor: accent.border },
+                pressed && styles.agendaCardPressed,
+              ]}
+            >
+              <View style={[styles.agendaAccent, { backgroundColor: accent.color }]} />
+              <View style={styles.agendaContent}>
+                <View style={styles.agendaHeader}>
+                  <View style={[styles.agendaIcon, { backgroundColor: accent.iconSoft }]}>
+                    <CalendarDays color={accent.color} size={15} />
+                  </View>
+                  <View style={styles.agendaTitleBlock}>
+                    <Text numberOfLines={2} style={styles.agendaTitle}>
+                      {event.title}
+                    </Text>
+                    <Text style={[styles.agendaScope, { color: accent.color }]}>
+                      {formatScopeLabel(event)}
+                    </Text>
+                  </View>
+                  <DotsVertical color={theme.colors.textSubtle} size={18} />
+                </View>
+                <View style={styles.agendaFooter}>
+                  <Text style={styles.agendaMeta}>{formatEventTimeRange(event.eventTime)}</Text>
+                  {event.reminderOffsetMinutes ? (
+                    <Text style={styles.agendaMeta}>Przypomnienie</Text>
+                  ) : null}
+                  <View style={styles.agendaFooterSpacer} />
+                  {canUpdate ? (
+                    <IconButton accessibilityLabel="Edytuj wydarzenie" onPress={() => onEdit(event)}>
+                      <Pencil color={theme.colors.textMuted} size={15} />
+                    </IconButton>
+                  ) : null}
+                  {canDelete ? (
+                    <IconButton
+                      accessibilityLabel="Usuń wydarzenie"
+                      disabled={deleting}
+                      onPress={() => onDelete(event)}
+                    >
+                      <Trash2 color={theme.colors.danger} size={15} />
+                    </IconButton>
+                  ) : null}
+                </View>
+              </View>
+            </Pressable>
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -784,6 +1052,31 @@ function getPermission(
   };
 }
 
+function getVisibleRange(month: Date, selectedDate: string, view: CalendarViewMode) {
+  if (view === "month") {
+    return getMonthRange(month);
+  }
+
+  if (view === "day") {
+    return {
+      from: selectedDate,
+      to: selectedDate,
+    };
+  }
+
+  return getWeekRange(selectedDate);
+}
+
+function getEventCountsByDate(events: CalendarEvent[]) {
+  const eventsByDate = new Map<string, number>();
+
+  events.forEach((event) => {
+    eventsByDate.set(event.eventDate, (eventsByDate.get(event.eventDate) ?? 0) + 1);
+  });
+
+  return eventsByDate;
+}
+
 function getCalendarDays(month: Date) {
   const year = month.getFullYear();
   const monthIndex = month.getMonth();
@@ -838,6 +1131,50 @@ function getMonthRange(date: Date) {
   };
 }
 
+function getWeekRange(value: string) {
+  const weekStart = getWeekStart(parseIsoDate(value));
+  const weekEnd = addDays(weekStart, 6);
+
+  return {
+    from: dateToIso(weekStart),
+    to: dateToIso(weekEnd),
+  };
+}
+
+function getWeekDays(value: string) {
+  const weekStart = getWeekStart(parseIsoDate(value));
+
+  return Array.from({ length: 7 }, (_, index) => dateToIso(addDays(weekStart, index)));
+}
+
+function getWeekStart(date: Date) {
+  const start = new Date(date);
+  const offset = (start.getDay() + 6) % 7;
+
+  start.setDate(start.getDate() - offset);
+  start.setHours(0, 0, 0, 0);
+
+  return start;
+}
+
+function addDays(date: Date, amount: number) {
+  const nextDate = new Date(date);
+
+  nextDate.setDate(nextDate.getDate() + amount);
+
+  return nextDate;
+}
+
+function parseIsoDate(value: string) {
+  const [year = "0", month = "1", day = "1"] = value.split("-");
+
+  return new Date(Number(year), Number(month) - 1, Number(day));
+}
+
+function dateToIso(date: Date) {
+  return isoFromParts(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
 function isoFromParts(year: number, monthIndex: number, day: number) {
   return `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
@@ -856,12 +1193,52 @@ function formatMonthTitle(date: Date): string {
   return title.charAt(0).toUpperCase() + title.slice(1);
 }
 
+function formatPeriodTitle(view: CalendarViewMode, visibleMonth: Date, selectedDate: string): string {
+  if (view === "month") {
+    return formatMonthTitle(visibleMonth);
+  }
+
+  if (view === "day") {
+    return formatDateLong(selectedDate);
+  }
+
+  const range = getWeekRange(selectedDate);
+
+  return `${formatDate(range.from)} - ${formatDate(range.to)}`;
+}
+
+function formatPeriodSubtitle(view: CalendarViewMode): string {
+  if (view === "month") {
+    return "Wybierz dzień, żeby zobaczyć plan.";
+  }
+
+  if (view === "day") {
+    return "Agenda wybranego dnia.";
+  }
+
+  return "Tydzień z szybkim wyborem dnia.";
+}
+
 function formatDate(value: string): string {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     return value;
   }
 
   return `${value.slice(8, 10)}.${value.slice(5, 7)}`;
+}
+
+function formatDateLong(value: string): string {
+  const date = parseIsoDate(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("pl-PL", {
+    day: "numeric",
+    month: "long",
+    weekday: "long",
+  }).format(date);
 }
 
 function formatTimeInput(value: string): string {
@@ -896,6 +1273,103 @@ function normalizeEventTime(value: string): string | null {
   const trimmed = value.trim();
 
   return trimmed ? trimmed : null;
+}
+
+function compareCalendarEvents(left: CalendarEvent, right: CalendarEvent) {
+  const leftTime = left.eventTime ?? "99:99";
+  const rightTime = right.eventTime ?? "99:99";
+
+  if (leftTime !== rightTime) {
+    return leftTime.localeCompare(rightTime);
+  }
+
+  return left.title.localeCompare(right.title);
+}
+
+function formatTimelineHour(value: string | null): string {
+  if (!value) {
+    return "Cały";
+  }
+
+  const hour = Number(value.slice(0, 2));
+
+  return `${hour}:00`;
+}
+
+function formatTimelineMinute(value: string | null): string {
+  if (!value) {
+    return "dzień";
+  }
+
+  const hour = Number(value.slice(0, 2));
+
+  return hour < 12 ? "am" : "pm";
+}
+
+function formatEventTimeRange(value: string | null): string {
+  if (!value) {
+    return "Cały dzień";
+  }
+
+  const start = value.slice(0, 5);
+
+  return `${start} - ${addMinutesToTime(start, 30)}`;
+}
+
+function addMinutesToTime(value: string, minutesToAdd: number): string {
+  const [hoursPart = "0", minutesPart = "0"] = value.split(":");
+  const totalMinutes = Number(hoursPart) * 60 + Number(minutesPart) + minutesToAdd;
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+function formatScopeLabel(event: CalendarEvent): string {
+  return event.scopeType === "household" ? "Dom" : "Prywatne";
+}
+
+function getAgendaAccent(colors: AppPalette, event: CalendarEvent, index: number) {
+  const title = event.title.toLocaleLowerCase("pl-PL");
+  const calendarAccent = {
+    border: `${colors.calendar}40`,
+    color: colors.calendar,
+    iconSoft: colors.card,
+    soft: colors.softBlue,
+  };
+  const financeAccent = {
+    border: `${colors.finance}40`,
+    color: colors.finance,
+    iconSoft: colors.card,
+    soft: colors.softGreen,
+  };
+  const foodAccent = {
+    border: `${colors.food}40`,
+    color: colors.food,
+    iconSoft: colors.card,
+    soft: colors.softOrange,
+  };
+  const shoppingAccent = {
+    border: `${colors.shopping}40`,
+    color: colors.shopping,
+    iconSoft: colors.card,
+    soft: colors.softPurple,
+  };
+  const accents = [calendarAccent, financeAccent, foodAccent, shoppingAccent];
+
+  if (/rach|opła|plat|płat|finans|czynsz|faktur/.test(title)) {
+    return financeAccent;
+  }
+
+  if (/obiad|kolac|śniad|sniad|posił|posil|jedz/.test(title)) {
+    return foodAccent;
+  }
+
+  if (/sprząt|sprzat|łazien|lazien|dom/.test(title)) {
+    return calendarAccent;
+  }
+
+  return accents[index % accents.length] ?? calendarAccent;
 }
 
 function reminderValueToMinutes(value: ReminderValue): number | null {
@@ -944,6 +1418,110 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
       paddingHorizontal: spacing.sm,
       paddingTop: spacing.xs,
+    },
+    agendaAccent: {
+      alignSelf: "stretch",
+      width: 5,
+    },
+    agendaCard: {
+      borderRadius: radii.card,
+      borderWidth: 1,
+      flex: 1,
+      flexDirection: "row",
+      minHeight: 86,
+      overflow: "hidden",
+    },
+    agendaCardPressed: {
+      opacity: 0.82,
+    },
+    agendaContent: {
+      flex: 1,
+      gap: spacing.sm,
+      justifyContent: "space-between",
+      minWidth: 0,
+      padding: spacing.md,
+    },
+    agendaEmpty: {
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      gap: spacing.sm,
+      padding: spacing.lg,
+    },
+    agendaEmptyIcon: {
+      alignItems: "center",
+      backgroundColor: colors.primarySoft,
+      borderRadius: 999,
+      height: 44,
+      justifyContent: "center",
+      width: 44,
+    },
+    agendaEmptyText: {
+      color: colors.textMuted,
+      fontSize: 13,
+      letterSpacing: 0,
+      lineHeight: 18,
+      textAlign: "center",
+    },
+    agendaEmptyTitle: {
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    agendaFooter: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.xs,
+      minHeight: 28,
+    },
+    agendaFooterSpacer: {
+      flex: 1,
+    },
+    agendaHeader: {
+      alignItems: "flex-start",
+      flexDirection: "row",
+      gap: spacing.sm,
+    },
+    agendaIcon: {
+      alignItems: "center",
+      borderRadius: 999,
+      height: 28,
+      justifyContent: "center",
+      width: 28,
+    },
+    agendaMeta: {
+      color: colors.textMuted,
+      fontSize: 11,
+      fontWeight: "700",
+      letterSpacing: 0,
+    },
+    agendaScope: {
+      fontSize: 11,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    agendaTitle: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: "900",
+      letterSpacing: 0,
+      lineHeight: 19,
+    },
+    agendaTitleBlock: {
+      flex: 1,
+      gap: 3,
+      minWidth: 0,
+    },
+    calendarTopPanel: {
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      gap: spacing.md,
+      padding: spacing.md,
     },
     dayBubble: {
       alignItems: "center",
@@ -1039,6 +1617,23 @@ function createStyles(colors: AppPalette) {
       fontWeight: "900",
       letterSpacing: 0,
     },
+    fab: {
+      alignItems: "center",
+      backgroundColor: colors.primary,
+      borderRadius: 999,
+      height: 56,
+      justifyContent: "center",
+      width: 56,
+    },
+    fabPressed: {
+      opacity: 0.82,
+      transform: [{ scale: 0.98 }],
+    },
+    fabRow: {
+      alignItems: "flex-end",
+      paddingHorizontal: spacing.xs,
+      paddingTop: spacing.xs,
+    },
     flexInput: {
       flex: 1,
     },
@@ -1083,6 +1678,33 @@ function createStyles(colors: AppPalette) {
     },
     modalFooterButton: {
       flex: 1,
+    },
+    periodHeader: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.sm,
+      justifyContent: "space-between",
+    },
+    periodSubtitle: {
+      color: colors.textMuted,
+      fontSize: 12,
+      fontWeight: "700",
+      letterSpacing: 0,
+      lineHeight: 17,
+      textAlign: "center",
+    },
+    periodText: {
+      alignItems: "center",
+      flex: 1,
+      gap: 2,
+      minWidth: 0,
+    },
+    periodTitle: {
+      color: colors.text,
+      fontSize: 16,
+      fontWeight: "900",
+      letterSpacing: 0,
+      textAlign: "center",
     },
     monthHeader: {
       alignItems: "center",
@@ -1155,6 +1777,41 @@ function createStyles(colors: AppPalette) {
       paddingTop: spacing.md,
       textAlignVertical: "top",
     },
+    timeline: {
+      gap: spacing.md,
+      paddingTop: spacing.xs,
+    },
+    timelineHour: {
+      color: colors.text,
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 0,
+      lineHeight: 16,
+      textAlign: "right",
+    },
+    timelineMarker: {
+      borderRadius: 999,
+      height: 7,
+      marginTop: spacing.sm,
+      width: 7,
+    },
+    timelineMinute: {
+      color: colors.textMuted,
+      fontSize: 10,
+      fontWeight: "800",
+      letterSpacing: 0,
+      lineHeight: 13,
+      textAlign: "right",
+    },
+    timelineRow: {
+      flexDirection: "row",
+      gap: spacing.sm,
+    },
+    timelineTime: {
+      alignItems: "flex-end",
+      paddingTop: spacing.sm,
+      width: 54,
+    },
     timeInput: {
       width: 92,
     },
@@ -1196,9 +1853,63 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
       textAlign: "center",
     },
+    weekDay: {
+      alignItems: "center",
+      borderRadius: radii.control,
+      flex: 1,
+      gap: 3,
+      justifyContent: "center",
+      minHeight: 66,
+      paddingVertical: spacing.xs,
+    },
+    weekDayActive: {
+      backgroundColor: colors.text,
+    },
+    weekDayName: {
+      color: colors.textMuted,
+      fontSize: 10,
+      fontWeight: "800",
+      letterSpacing: 0,
+    },
+    weekDayNameActive: {
+      color: colors.inverseText,
+    },
+    weekDayNumber: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    weekDayNumberActive: {
+      color: colors.inverseText,
+    },
+    weekDayNumberToday: {
+      color: colors.primaryDark,
+    },
+    weekDayPressed: {
+      opacity: 0.78,
+    },
+    weekEventDot: {
+      backgroundColor: colors.text,
+      borderRadius: 999,
+      height: 4,
+      width: 4,
+    },
+    weekEventDotActive: {
+      backgroundColor: colors.inverseText,
+    },
+    weekEventSlot: {
+      alignItems: "center",
+      height: 6,
+      justifyContent: "center",
+    },
     weekRow: {
       flexDirection: "row",
       paddingBottom: spacing.xs,
+    },
+    weekStrip: {
+      flexDirection: "row",
+      gap: spacing.xs,
     },
   });
 }

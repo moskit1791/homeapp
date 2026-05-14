@@ -140,6 +140,7 @@ export class MealPlannerAiService {
       ? dto.targetWeekStartDate
       : defaultTargetWeekStartDate;
     const currentDraft = normalizeDraftEntries(dto.currentDraft ?? [], mealSlotsPerDay);
+    const latestUserMessage = getLatestUserMessage(messages);
 
     try {
       const responseText = await this.callGemini(
@@ -155,7 +156,8 @@ export class MealPlannerAiService {
         this.parseResponse(responseText),
         targetWeekStartDate,
         mealSlotsPerDay,
-        currentDraft
+        currentDraft,
+        latestUserMessage?.content ?? ''
       );
 
       if (response.entries.length > 0) {
@@ -261,12 +263,13 @@ export class MealPlannerAiService {
   }): string {
     return [
       'Jestes backendowym asystentem planu posilkow w polskiej aplikacji domowej.',
-      'To jest rozmowa robocza: niczego nie zapisujesz w bazie. Zwracasz tylko aktualny szkic planu.',
+      'To jest rozmowa robocza: niczego nie zapisujesz w bazie. Zwracasz tylko aktualny szkic planu i odpowiedz dla uzytkownika.',
       '',
       'Zadanie:',
       '- Uzytkownik wkleja tekst z planem jedzenia albo dopisuje poprawki do obecnego szkicu.',
-      '- Zamien rozmowe na pelny aktualny szkic wpisow posilkow.',
-      '- Gdy szkic jest gotowy, zapytaj po polsku, czy zapisac go na wskazany tydzien.',
+      '- Zachowuj sie jak chat: odpowiadaj na ostatnia prosbe w kontekscie rozmowy i obecnego szkicu.',
+      '- Zamien rozmowe na pelny aktualny szkic wpisow posilkow tylko wtedy, gdy uzytkownik faktycznie podaje plan albo prosi o korekte planu.',
+      '- Nigdy nie sugeruj, ze plan zostal zapisany. Mozesz tylko zapytac, czy zapisac szkic na wskazany tydzien.',
       '',
       'Zasady planu:',
       '- Weekday: poniedzialek=1, wtorek=2, sroda=3, czwartek=4, piatek=5, sobota=6, niedziela=7.',
@@ -279,11 +282,15 @@ export class MealPlannerAiService {
       '- LinkUrl wypelnij tylko wtedy, gdy znasz realny, publiczny URL przepisu albo masz go w sekcji znanych przepisow z domu.',
       '- Nie wymyslaj slugow ani adresow. Gdy nie masz pewnosci, linkUrl musi byc pustym stringiem.',
       '- Najpierw uzywaj znanych przepisow z domu, jezeli nazwa pasuje.',
-      '- Oznaczenia zrodla: C=Cookidoo, KS=Kwestia Smaku, I/IG=Instagram, AG=AniaGotuje, Knorr=Knorr, MW=Moje Wypieki.',
+      '- Oznaczenia zrodla sa podpowiedziami wyszukiwania: C=szukaj na Cookidoo, KS=szukaj na Kwestia Smaku, I/IG=szukaj na Instagramie, AG=szukaj na AniaGotuje, Knorr=szukaj na Knorr, MW=szukaj na Moje Wypieki.',
       '- Prefix zrodla usun z mealName i wpisz znormalizowana nazwe do sourceHint.',
+      '- Gdy uzytkownik pisze "daj linki", "uzupelnij linki", "znajdz przepisy" albo podobnie, nie tworz nowej listy jedzenia. Zachowaj currentDraft, uzupelnij tylko pewne linkUrl/sourceHint/note i powiedz, ktorych linkow nie udalo sie pewnie znalezc.',
       '',
       'Zasady korekt:',
-      '- Jesli uzytkownik poprawia szkic, zastosuj poprawke do currentDraft i zwroc caly zaktualizowany szkic, nie tylko zmiany.',
+      '- Jesli currentDraft nie jest pusty, traktuj go jako aktualny stan rozmowy.',
+      '- Jesli uzytkownik poprawia szkic ("popraw", "zamien", "usun", "dodaj", "zmien"), zastosuj poprawke do currentDraft i zwroc caly zaktualizowany szkic, nie tylko zmiany.',
+      '- Jesli uzytkownik zadaje pytanie albo prosi o wyjasnienie bez zmiany planu, zwroc currentDraft bez zmian i odpowiedz na pytanie.',
+      '- Jesli uzytkownik podaje krotka wiadomosc bez dni tygodnia, nie interpretuj jej jako nowego planu.',
       '- Jesli nie da sie zrozumiec intencji, status needs_clarification i zadaj krotkie pytanie.',
       '- Odpowiadasz wylacznie JSON-em zgodnym ze schematem.',
       '',
@@ -319,12 +326,16 @@ export class MealPlannerAiService {
     response: MealPlanAiResponse,
     fallbackTargetWeekStartDate: string,
     mealSlotsPerDay: number,
-    currentDraft: MealPlanAiDraftEntry[]
+    currentDraft: MealPlanAiDraftEntry[],
+    latestUserMessage: string
   ): MealPlanAiChatResult {
-    const entries = normalizeDraftEntries(
-      response.entries.length > 0 ? response.entries : currentDraft,
-      mealSlotsPerDay
-    );
+    const responseEntries = normalizeDraftEntries(response.entries, mealSlotsPerDay);
+    const entries =
+      currentDraft.length > 0 && isLinkRequest(latestUserMessage)
+        ? mergeDraftEntries(currentDraft, responseEntries, mealSlotsPerDay)
+        : responseEntries.length > 0
+          ? responseEntries
+          : currentDraft;
     const targetWeekStartDate = isMondayDateOnly(response.targetWeekStartDate)
       ? response.targetWeekStartDate
       : fallbackTargetWeekStartDate;
@@ -348,11 +359,16 @@ export class MealPlannerAiService {
     targetWeekStartDate: string,
     mealSlotsPerDay: number
   ): MealPlanAiChatResult {
-    const lastUserMessage = [...messages].reverse().find((message) => message.role === 'user');
+    const lastUserMessage = getLatestUserMessage(messages);
     const parsedEntries = lastUserMessage
       ? parseMealPlanText(lastUserMessage.content, mealSlotsPerDay)
       : [];
-    const entries = parsedEntries.length > 0 ? parsedEntries : currentDraft;
+    const linkRequest = Boolean(lastUserMessage && isLinkRequest(lastUserMessage.content));
+    const entries = linkRequest && currentDraft.length > 0
+      ? currentDraft
+      : parsedEntries.length > 0
+        ? parsedEntries
+        : currentDraft;
 
     if (entries.length === 0) {
       return {
@@ -365,10 +381,14 @@ export class MealPlannerAiService {
       };
     }
 
+    const assistantMessage = linkRequest
+      ? `Mam obecny szkic na tydzien ${targetWeekStartDate}, ale bez AI nie znalazlem pewnych nowych linkow. ` +
+        'Zostawiam niepewne adresy puste. Czy mam zapisac taki szkic?'
+      : `Rozpisalem szkic planu na tydzien ${targetWeekStartDate}. ` +
+        'Nie uzupelnilem linkow tam, gdzie nie mialem pewnego adresu. Czy zapisac taki plan?';
+
     return {
-      assistantMessage:
-        `Rozpisalem szkic planu na tydzien ${targetWeekStartDate}. ` +
-        'Nie uzupelnilem linkow tam, gdzie nie mialem pewnego adresu. Czy zapisac taki plan?',
+      assistantMessage,
       entries,
       questions: [],
       status: 'ready',
@@ -470,6 +490,10 @@ function normalizeMessages(messages: MealPlanAiChatDto['messages']): MealPlanAiM
     .filter((message) => message.content.length > 0);
 }
 
+function getLatestUserMessage(messages: MealPlanAiMessage[]): MealPlanAiMessage | undefined {
+  return [...messages].reverse().find((message) => message.role === 'user');
+}
+
 function normalizeDraftEntries(
   entries: Array<MealPlanAiDraftEntryDto | MealPlanAiResponse['entries'][number]>,
   mealSlotsPerDay: number
@@ -509,6 +533,44 @@ function normalizeDraftEntries(
 
   return [...bySlot.values()].sort(
     (left, right) => left.weekday - right.weekday || left.slotIndex - right.slotIndex
+  );
+}
+
+function mergeDraftEntries(
+  currentDraft: MealPlanAiDraftEntry[],
+  updates: MealPlanAiDraftEntry[],
+  mealSlotsPerDay: number
+): MealPlanAiDraftEntry[] {
+  const merged = new Map<string, MealPlanAiDraftEntry>();
+
+  for (const entry of normalizeDraftEntries(currentDraft, mealSlotsPerDay)) {
+    merged.set(`${entry.weekday}:${entry.slotIndex}`, entry);
+  }
+
+  for (const update of normalizeDraftEntries(updates, mealSlotsPerDay)) {
+    const key = `${update.weekday}:${update.slotIndex}`;
+    const previous = merged.get(key);
+
+    merged.set(key, {
+      linkUrl: update.linkUrl ?? previous?.linkUrl ?? null,
+      mealName: update.mealName || previous?.mealName || '',
+      note: update.note ?? previous?.note ?? null,
+      slotIndex: update.slotIndex,
+      sourceHint: update.sourceHint ?? previous?.sourceHint ?? null,
+      weekday: update.weekday
+    });
+  }
+
+  return [...merged.values()]
+    .filter((entry) => entry.mealName)
+    .sort((left, right) => left.weekday - right.weekday || left.slotIndex - right.slotIndex);
+}
+
+function isLinkRequest(value: string): boolean {
+  const normalized = normalizeText(value);
+
+  return /\b(link|linki|url|adres|adresy|przepis|przepisy|znajdz|znajdzcie|wyszukaj)\b/.test(
+    normalized
   );
 }
 
