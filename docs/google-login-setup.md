@@ -1,6 +1,7 @@
 # Google login setup
 
 Ten projekt ma juz podpiety kod pod Google OAuth. Przycisk Google zacznie dzialac po dodaniu Android OAuth Client ID do EAS i API.
+Produkcyjny APK nie powinien byc budowany bez Google client ID; lokalny skrypt release przerwie build, jesli brakuje tej wartosci.
 
 ## Dane projektu
 
@@ -40,6 +41,8 @@ Wartoscia jest Android OAuth Client ID z Google Cloud, zwykle konczy sie na `.ap
 cd c:\Users\moski\Desktop\homeapp\apps\mobile
 npx eas-cli env:create preview --name EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID --value "<ANDROID_CLIENT_ID>" --visibility plaintext --force
 npx eas-cli env:create production --name EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID --value "<ANDROID_CLIENT_ID>" --visibility plaintext --force
+npx eas-cli env:create preview --name EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID --value "<ANDROID_CLIENT_ID>" --visibility plaintext --force
+npx eas-cli env:create production --name EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID --value "<ANDROID_CLIENT_ID>" --visibility plaintext --force
 ```
 
 Potem zbuduj APK ponownie:
@@ -65,6 +68,14 @@ Jesli w `.env` nie ma jeszcze tej zmiennej, dodaj ja:
 ```bash
 echo 'GOOGLE_OAUTH_CLIENT_ID=<ANDROID_CLIENT_ID>' >> /opt/homeapp/.env
 ```
+
+Jesli sa osobne klienty OAuth dla EAS preview, Google Play albo web, backend moze przyjac liste:
+
+```bash
+GOOGLE_OAUTH_CLIENT_IDS=<ANDROID_CLIENT_ID>,<PLAY_ANDROID_CLIENT_ID>,<WEB_CLIENT_ID>
+```
+
+`GOOGLE_OAUTH_CLIENT_ID` zostaje wspierany jako pojedynczy fallback.
 
 ## 4. Test
 

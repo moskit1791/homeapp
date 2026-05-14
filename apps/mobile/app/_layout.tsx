@@ -11,32 +11,40 @@ import { registerForPushNotifications } from '../src/notifications/register-push
 import { storeNotificationFromExpo } from '../src/notifications/notification-center';
 import { SessionProvider, useSession } from '../src/session/session-context';
 import { spacing } from '../src/theme/tokens';
-import { useAppTheme, type AppPalette } from '../src/theme/use-app-theme';
+import { AppThemeProvider, useAppTheme, type AppPalette } from '../src/theme/use-app-theme';
 
 export default function RootLayout() {
   const [queryClient] = useState(() => new QueryClient());
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <GestureHandlerRootView style={rootStyles.gestureRoot}>
+        <SafeAreaProvider>
+          <AppThemeProvider>
+            <ThemedRootLayout />
+          </AppThemeProvider>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    </QueryClientProvider>
+  );
+}
+
+function ThemedRootLayout() {
   const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
 
   useEffect(() => {
     hideSplashScreen();
   }, []);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <GestureHandlerRootView style={styles.gestureRoot}>
-        <SafeAreaProvider>
-          <RootErrorBoundary>
-            <SessionProvider>
-              <PushNotificationBootstrap />
-              <NotificationCenterBootstrap />
-              <StatusBar style={theme.isDark ? 'light' : 'dark'} />
-              <Stack screenOptions={{ headerShown: false }} />
-            </SessionProvider>
-          </RootErrorBoundary>
-        </SafeAreaProvider>
-      </GestureHandlerRootView>
-    </QueryClientProvider>
+    <RootErrorBoundary>
+      <SessionProvider>
+        <PushNotificationBootstrap />
+        <NotificationCenterBootstrap />
+        <StatusBar style={theme.isDark ? 'light' : 'dark'} />
+        <Stack screenOptions={{ headerShown: false }} />
+      </SessionProvider>
+    </RootErrorBoundary>
   );
 }
 
@@ -138,8 +146,11 @@ function createStyles(colors: AppPalette) {
     fontWeight: '800',
     letterSpacing: 0
   },
+});
+}
+
+const rootStyles = StyleSheet.create({
   gestureRoot: {
     flex: 1
   }
 });
-}

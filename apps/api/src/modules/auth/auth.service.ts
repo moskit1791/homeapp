@@ -83,11 +83,13 @@ export class AuthService {
   async loginWithGoogle(dto: GoogleLoginDto) {
     const env = loadEnv();
 
-    if (!env.GOOGLE_OAUTH_CLIENT_ID) {
+    const googleAudiences = this.getGoogleAudiences(env);
+
+    if (googleAudiences.length === 0) {
       throw new NotImplementedException('Google OAuth requires GOOGLE_OAUTH_CLIENT_ID');
     }
 
-    const payload = await this.verifyGoogleIdToken(dto.idToken, env.GOOGLE_OAUTH_CLIENT_ID);
+    const payload = await this.verifyGoogleIdToken(dto.idToken, googleAudiences);
     const email = this.normalizeEmail(payload.email);
     const displayName = this.normalizeText(payload.name || (email.split('@')[0] ?? email));
     const user = await this.usersService.upsertGoogleUser({
@@ -269,9 +271,19 @@ export class AuthService {
     return env.NODE_ENV !== 'production';
   }
 
+  private getGoogleAudiences(env: AppEnv): string[] {
+    return Array.from(
+      new Set(
+        [...(env.GOOGLE_OAUTH_CLIENT_IDS ?? []), env.GOOGLE_OAUTH_CLIENT_ID].filter(
+          (audience): audience is string => Boolean(audience)
+        )
+      )
+    );
+  }
+
   private async verifyGoogleIdToken(
     idToken: string,
-    audience: string
+    audience: string[]
   ): Promise<GoogleIdentityPayload> {
     try {
       const ticket = await this.googleClient.verifyIdToken({

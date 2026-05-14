@@ -1,8 +1,10 @@
 import {
+  ArrayMaxSize,
   ArrayMinSize,
   IsArray,
   IsDateString,
   IsInt,
+  IsIn,
   IsOptional,
   IsString,
   IsUUID,
@@ -76,6 +78,68 @@ export class UpdateMealPlanDto {
   @ValidateNested({ each: true })
   @Type(() => MealPlanEntryDto)
   entries!: MealPlanEntryDto[];
+}
+
+export class MealPlanAiMessageDto {
+  @IsIn(['user', 'assistant'])
+  role!: 'user' | 'assistant';
+
+  @IsString()
+  @Length(1, 4000)
+  content!: string;
+}
+
+export class MealPlanAiDraftEntryDto {
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(7)
+  weekday!: number;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(7)
+  slotIndex!: number;
+
+  @IsString()
+  @Length(1, 180)
+  mealName!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  linkUrl?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  note?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  sourceHint?: string | null;
+}
+
+export class MealPlanAiChatDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => MealPlanAiMessageDto)
+  messages!: MealPlanAiMessageDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(56)
+  @ValidateNested({ each: true })
+  @Type(() => MealPlanAiDraftEntryDto)
+  currentDraft?: MealPlanAiDraftEntryDto[];
+
+  @IsOptional()
+  @IsDateString({ strict: true })
+  targetWeekStartDate?: string;
 }
 
 export class CopyMealPlanDto {

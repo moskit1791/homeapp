@@ -475,6 +475,34 @@ export interface UpdateMealPlanRequest {
   entries: MealPlanEntryRequest[];
 }
 
+export interface MealPlanAiMessage {
+  content: string;
+  role: "assistant" | "user";
+}
+
+export interface MealPlanAiDraftEntry {
+  linkUrl: string | null;
+  mealName: string;
+  note: string | null;
+  slotIndex: number;
+  sourceHint: string | null;
+  weekday: number;
+}
+
+export interface MealPlanAiChatRequest {
+  currentDraft?: MealPlanAiDraftEntry[];
+  messages: MealPlanAiMessage[];
+  targetWeekStartDate?: string;
+}
+
+export interface MealPlanAiChatResponse {
+  assistantMessage: string;
+  entries: MealPlanAiDraftEntry[];
+  questions: string[];
+  status: "needs_clarification" | "ready";
+  targetWeekStartDate: string;
+}
+
 export interface CopyMealPlanRequest {
   targetWeekStartDate: string;
 }

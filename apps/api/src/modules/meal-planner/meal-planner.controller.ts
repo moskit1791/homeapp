@@ -21,6 +21,7 @@ import {
   CopyMealPlanDto,
   CreateMealIdeaDto,
   CreateMealPlanDto,
+  MealPlanAiChatDto,
   MealPlanEntryTargetDto,
   MealIdeaIdParamDto,
   MealPlanIdParamDto,
@@ -28,12 +29,16 @@ import {
   UpdateMealIdeaDto,
   UpdateMealPlanDto
 } from './dto/meal-planner.dto';
+import { MealPlannerAiService } from './meal-planner-ai.service';
 import { MealPlannerService } from './meal-planner.service';
 
 @Controller()
 @UseGuards(JwtAuthGuard, HouseholdContextGuard, PermissionGuard)
 export class MealPlannerController {
-  constructor(private readonly mealPlannerService: MealPlannerService) {}
+  constructor(
+    private readonly mealPlannerService: MealPlannerService,
+    private readonly mealPlannerAiService: MealPlannerAiService
+  ) {}
 
   @Get('meal-plans/current')
   @RequirePermission('meal_planner', 'read')
@@ -72,6 +77,18 @@ export class MealPlannerController {
     @Body() dto: CreateMealPlanDto
   ) {
     return this.mealPlannerService.createPlan(
+      this.requireHousehold(household).householdId,
+      dto
+    );
+  }
+
+  @Post('meal-plans/ai/chat')
+  @RequirePermission('meal_planner', 'read')
+  chatWithAi(
+    @CurrentHousehold() household: HouseholdContext | undefined,
+    @Body() dto: MealPlanAiChatDto
+  ) {
+    return this.mealPlannerAiService.chat(
       this.requireHousehold(household).householdId,
       dto
     );

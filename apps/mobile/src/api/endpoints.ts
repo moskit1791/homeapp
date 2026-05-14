@@ -59,6 +59,8 @@ import type {
   LoginRequest,
   LoginResponse,
   MealIdea,
+  MealPlanAiChatRequest,
+  MealPlanAiChatResponse,
   MealPlanDetail,
   MealPlanEntryRequest,
   MealPlanSummary,
@@ -701,6 +703,20 @@ export function updateMealPlan(
     accessToken: requestOptions.accessToken,
     body: input,
     method: 'PATCH',
+    signal: requestOptions.signal
+  });
+}
+
+export function chatMealPlanWithAi(
+  input: MealPlanAiChatRequest,
+  options?: ApiCallOptionsInput
+): Promise<MealPlanAiChatResponse> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<MealPlanAiChatResponse, MealPlanAiChatRequest>('/meal-plans/ai/chat', {
+    accessToken: requestOptions.accessToken,
+    body: input,
+    method: 'POST',
     signal: requestOptions.signal
   });
 }

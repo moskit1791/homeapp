@@ -50,7 +50,13 @@ import { registerForPushNotifications } from "../../src/notifications/register-p
 import { useModulePermission, usePermissions } from "../../src/permissions/use-permissions";
 import { useSession } from "../../src/session/session-context";
 import { radii, spacing } from "../../src/theme/tokens";
-import { useAppTheme, type AppPalette } from "../../src/theme/use-app-theme";
+import {
+  darkAccentOptions,
+  useAppTheme,
+  useThemePreferences,
+  type AppPalette,
+  type DarkAccentKey,
+} from "../../src/theme/use-app-theme";
 import {
   ActionButton,
   AppScreen,
@@ -1482,6 +1488,7 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
   const queryClient = useQueryClient();
   const householdPermission = useModulePermission("household_members");
   const theme = useAppTheme();
+  const { darkAccent, setDarkAccent } = useThemePreferences();
   const styles = createStyles(theme.colors);
   const accessToken = session?.accessToken;
   const [settingsVisible, setSettingsVisible] = useState(false);
@@ -1611,6 +1618,11 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
     notificationPreferencesMutation.mutate(next);
   }
 
+  function handleDarkAccentChange(accent: DarkAccentKey) {
+    setDarkAccent(accent);
+    showToast("Kolor zapisany");
+  }
+
   return (
     <>
     <IconButton accessibilityLabel="Otwórz ustawienia i konto" onPress={() => setSettingsVisible(true)}>
@@ -1704,6 +1716,42 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
           ) : null}
         </View>
         <View style={styles.settingsPanelRow}>
+          <Text style={styles.settingsPanelTitle}>Wygląd</Text>
+          <Text style={styles.settingsPanelMeta}>Akcent trybu ciemnego.</Text>
+          <View style={styles.accentChoiceGrid}>
+            {darkAccentOptions.map((option) => {
+              const active = option.value === darkAccent;
+
+              return (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                  key={option.value}
+                  onPress={() => handleDarkAccentChange(option.value)}
+                  style={[
+                    styles.accentChoice,
+                    active && styles.accentChoiceActive,
+                    active && { borderColor: option.color },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.accentSwatch,
+                      {
+                        backgroundColor: option.color,
+                        shadowColor: option.color,
+                      },
+                    ]}
+                  />
+                  <Text style={[styles.accentChoiceLabel, active && styles.accentChoiceLabelActive]}>
+                    {option.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+        <View style={styles.settingsPanelRow}>
           <Text style={styles.settingsPanelTitle}>Powiadomienia push</Text>
           <Text style={styles.settingsPanelMeta}>
             Wyślij test, żeby potwierdzić rejestrację tokenu push dla tego telefonu.
@@ -1751,6 +1799,9 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
                     <Text style={styles.itemMeta}>{copy.meta}</Text>
                   </View>
                   <View style={styles.notificationPreferenceSwitch}>
+                    <Text style={styles.preferenceToggleLabel}>
+                      {preference.enabled ? "Włączone" : "Wyłączone"}
+                    </Text>
                     <Pressable
                       accessibilityRole="switch"
                       accessibilityState={{ checked: preference.enabled }}
@@ -2342,6 +2393,47 @@ function sanitizeCacheFileName(fileName: string): string {
 
 function createStyles(colors: AppPalette) {
   return StyleSheet.create({
+    accentChoice: {
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      flex: 1,
+      gap: spacing.xs,
+      minHeight: 74,
+      minWidth: 96,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.sm,
+    },
+    accentChoiceActive: {
+      backgroundColor: colors.cardMuted,
+      borderWidth: 2,
+    },
+    accentChoiceGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: spacing.sm,
+    },
+    accentChoiceLabel: {
+      color: colors.textMuted,
+      fontSize: 12,
+      fontWeight: "800",
+      letterSpacing: 0,
+    },
+    accentChoiceLabelActive: {
+      color: colors.text,
+      fontWeight: "900",
+    },
+    accentSwatch: {
+      borderRadius: 999,
+      elevation: 4,
+      height: 28,
+      shadowOffset: { height: 0, width: 0 },
+      shadowOpacity: 0.42,
+      shadowRadius: 10,
+      width: 28,
+    },
     avatar: {
       alignItems: "center",
       backgroundColor: colors.cardMuted,
@@ -2492,35 +2584,37 @@ function createStyles(colors: AppPalette) {
       gap: spacing.xs,
     },
     notificationPreferenceRow: {
-      alignItems: "center",
+      alignItems: "stretch",
       backgroundColor: colors.card,
       borderColor: colors.border,
       borderRadius: radii.control,
       borderWidth: 1,
-      flexDirection: "row",
       gap: spacing.sm,
-      justifyContent: "space-between",
       minHeight: 64,
-      paddingLeft: spacing.md,
-      paddingRight: spacing.md,
-      paddingVertical: spacing.xs,
+      padding: spacing.md,
     },
     notificationPreferenceSwitch: {
-      alignItems: "flex-end",
-      alignSelf: "center",
-      flexShrink: 0,
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.sm,
       justifyContent: "center",
-      width: 44,
+      minHeight: 28,
+      width: "100%",
     },
     notificationPreferencesHeader: {
       gap: 2,
       paddingTop: spacing.xs,
     },
     notificationPreferenceText: {
-      flex: 1,
       gap: 2,
       minWidth: 0,
-      paddingRight: spacing.xs,
+    },
+    preferenceToggleLabel: {
+      color: colors.textMuted,
+      flex: 1,
+      fontSize: 12,
+      fontWeight: "800",
+      letterSpacing: 0,
     },
     preferenceToggle: {
       alignItems: "center",

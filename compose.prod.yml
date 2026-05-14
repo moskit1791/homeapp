@@ -39,6 +39,7 @@ services:
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
       GEMINI_TIMEOUT_MS: ${GEMINI_TIMEOUT_MS:-15000}
       GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      GOOGLE_OAUTH_CLIENT_IDS: ${GOOGLE_OAUTH_CLIENT_IDS:-}
       MAIL_DRIVER: ${MAIL_DRIVER:-smtp}
       SMTP_FROM: ${SMTP_FROM:-HomeApp <noreply@app.porabkihome.pl>}
       SMTP_HOST: ${SMTP_HOST:-}

@@ -29,6 +29,19 @@ const optionalNonEmptyString = z.preprocess((value) => {
   return value;
 }, z.string().min(1).optional());
 
+const optionalStringList = z.preprocess((value) => {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  const items = value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return items.length ? items : undefined;
+}, z.array(z.string().min(1)).optional());
+
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1).default(defaultDatabaseUrl),
   APP_PUBLIC_URL: z.string().url().default('http://localhost:3000'),
@@ -39,6 +52,7 @@ const envSchema = z.object({
   GEMINI_MODEL: optionalNonEmptyString.default('gemini-2.5-flash'),
   GEMINI_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
   GOOGLE_OAUTH_CLIENT_ID: optionalNonEmptyString,
+  GOOGLE_OAUTH_CLIENT_IDS: optionalStringList,
   JWT_ACCESS_SECRET: z.string().min(32).default(defaultAccessSecret),
   JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().positive().default(900),
   JWT_REFRESH_SECRET: z.string().min(32).default(defaultRefreshSecret),

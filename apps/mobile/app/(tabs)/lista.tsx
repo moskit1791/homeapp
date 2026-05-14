@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Calendar, LocaleConfig, type DateData } from "react-native-calendars";
 import {
+  chatMealPlanWithAi,
   clearShoppingList,
   createMealPlan,
   deleteMealSlot,
@@ -19,6 +20,8 @@ import {
   moveShoppingItem,
   moveUncheckedShoppingToTomorrow,
   queryKeys,
+  type MealPlanAiDraftEntry,
+  type MealPlanAiMessage,
   type MealPlanEntry,
   type MealPlanDetail,
   type MealPlanSummary,
@@ -44,7 +47,6 @@ import {
   CalendarDays,
   Check,
   ChevronRight,
-  GeminiAi,
   Pencil,
   Plus,
   Sparkles,
@@ -84,6 +86,7 @@ LocaleConfig.defaultLocale = "pl";
 
 export default function ListaScreen() {
   const params = useLocalSearchParams<{ action?: string; segment?: MainSegment }>();
+  const router = useRouter();
   const permissionsQuery = usePermissions();
   const shoppingPermission = useModulePermission("shopping");
   const mealPermission = useModulePermission("meal_planner");
@@ -91,7 +94,11 @@ export default function ListaScreen() {
   const styles = createStyles(theme.colors);
   const [activeSegment, setActiveSegment] = useState<MainSegment>("shopping");
   const [shoppingAiOpenRequest, setShoppingAiOpenRequest] = useState(0);
+  const [mealAiOpenRequest, setMealAiOpenRequest] = useState(0);
   const [mealViewResetRequest, setMealViewResetRequest] = useState(0);
+  const clearRouteAction = useCallback(() => {
+    router.setParams({ action: undefined });
+  }, [router]);
   const availableSegments = useMemo(
     () =>
       [
@@ -156,7 +163,15 @@ export default function ListaScreen() {
             onPress={() => setShoppingAiOpenRequest((value) => value + 1)}
             style={styles.aiHeaderButton}
           >
-            <GeminiAi size={24} />
+            <Sparkles color={theme.colors.primary} size={22} />
+          </IconButton>
+        ) : activeSegment === "meals" && mealPermission.canCreate && mealPermission.canUpdate ? (
+          <IconButton
+            accessibilityLabel="AI do planu posilkow"
+            onPress={() => setMealAiOpenRequest((value) => value + 1)}
+            style={styles.aiHeaderButton}
+          >
+            <Sparkles color={theme.colors.food} size={22} />
           </IconButton>
         ) : undefined
       }
@@ -173,9 +188,17 @@ export default function ListaScreen() {
           action={params.action}
           aiOpenRequest={shoppingAiOpenRequest}
           onOpenMealPlan={() => selectMainSegment("meals")}
+          onRouteActionHandled={clearRouteAction}
         />
       ) : null}
-      {activeSegment === "meals" ? <MealsBoard action={params.action} resetRequest={mealViewResetRequest} /> : null}
+      {activeSegment === "meals" ? (
+        <MealsBoard
+          action={params.action}
+          aiOpenRequest={mealAiOpenRequest}
+          onRouteActionHandled={clearRouteAction}
+          resetRequest={mealViewResetRequest}
+        />
+      ) : null}
     </AppScreen>
   );
 }
@@ -184,10 +207,12 @@ function ShoppingBoard({
   action,
   aiOpenRequest,
   onOpenMealPlan,
+  onRouteActionHandled,
 }: {
   action?: string;
   aiOpenRequest: number;
   onOpenMealPlan: () => void;
+  onRouteActionHandled: () => void;
 }) {
   const { session } = useSession();
   const queryClient = useQueryClient();
@@ -206,8 +231,9 @@ function ShoppingBoard({
   useEffect(() => {
     if (action === "addShopping") {
       setModalVisible(true);
+      onRouteActionHandled();
     }
-  }, [action]);
+  }, [action, onRouteActionHandled]);
 
   useEffect(() => {
     if (aiOpenRequest > 0) {
@@ -472,7 +498,17 @@ function ShoppingBoard({
   );
 }
 
-function MealsBoard({ action, resetRequest }: { action?: string; resetRequest: number }) {
+function MealsBoard({
+  action,
+  aiOpenRequest,
+  onRouteActionHandled,
+  resetRequest,
+}: {
+  action?: string;
+  aiOpenRequest: number;
+  onRouteActionHandled: () => void;
+  resetRequest: number;
+}) {
   const { session } = useSession();
   const queryClient = useQueryClient();
   const permission = useModulePermission("meal_planner");
@@ -489,6 +525,12 @@ function MealsBoard({ action, resetRequest }: { action?: string; resetRequest: n
   const [note, setNote] = useState("");
   const [mealDrafts, setMealDrafts] = useState<Record<string, MealDraft>>({});
   const [modalVisible, setModalVisible] = useState(false);
+  const [aiModalVisible, setAiModalVisible] = useState(false);
+  const [aiInput, setAiInput] = useState("");
+  const [aiMessages, setAiMessages] = useState<MealPlanAiMessage[]>([]);
+  const [aiDraft, setAiDraft] = useState<MealPlanAiDraftEntry[]>([]);
+  const [aiTargetWeekStartDate, setAiTargetWeekStartDate] = useState(nextWeekStart());
+  const [aiNotice, setAiNotice] = useState("");
   const [isCalendarExpanded, setCalendarExpanded] = useState(false);
   const householdQuery = useQuery({
     enabled: Boolean(accessToken),
@@ -547,8 +589,16 @@ function MealsBoard({ action, resetRequest }: { action?: string; resetRequest: n
       setSlotIndex(0);
       setCalendarExpanded(false);
       setModalVisible(true);
+      onRouteActionHandled();
     }
-  }, [action]);
+  }, [action, onRouteActionHandled]);
+
+  useEffect(() => {
+    if (aiOpenRequest > 0) {
+      setAiTargetWeekStartDate(nextWeekStart());
+      setAiModalVisible(true);
+    }
+  }, [aiOpenRequest]);
 
   const activePlan =
     selectedWeekId === currentQuery.data?.week.id
@@ -615,6 +665,78 @@ function MealsBoard({ action, resetRequest }: { action?: string; resetRequest: n
       await queryClient.invalidateQueries({ queryKey: queryKeys.start });
     },
   });
+  const aiChatMutation = useMutation({
+    mutationFn: async () => {
+      const content = aiInput.trim();
+
+      if (!content) {
+        throw new Error("Missing AI message");
+      }
+
+      const nextMessages: MealPlanAiMessage[] = [
+        ...aiMessages,
+        { content, role: "user" },
+      ];
+      const response = await chatMealPlanWithAi(
+        {
+          currentDraft: aiDraft,
+          messages: nextMessages,
+          targetWeekStartDate: aiTargetWeekStartDate,
+        },
+        { accessToken },
+      );
+
+      return { messages: nextMessages, response };
+    },
+    onSuccess: ({ messages, response }) => {
+      setAiMessages([
+        ...messages,
+        { content: response.assistantMessage, role: "assistant" },
+      ]);
+      setAiDraft(response.entries);
+      setAiTargetWeekStartDate(response.targetWeekStartDate);
+      setAiInput("");
+    },
+  });
+  const aiSaveMutation = useMutation({
+    mutationFn: async () => {
+      const targetPlan = await getOrCreateMealPlanForDate({
+        accessToken,
+        activePlan,
+        currentPlan: currentQuery.data,
+        history: historyQuery.data ?? [],
+        targetWeekStartDate: aiTargetWeekStartDate,
+      });
+      const weekId = targetPlan?.week?.id;
+
+      if (!weekId || aiDraft.length === 0) {
+        throw new Error("Missing AI meal plan draft");
+      }
+
+      return upsertMealSlot(
+        weekId,
+        aiDraft.map((entry) => ({
+          linkUrl: entry.linkUrl,
+          mealName: entry.mealName,
+          note: buildAiMealNote(entry),
+          slotIndex: entry.slotIndex,
+          weekday: entry.weekday,
+        })),
+        { accessToken },
+      );
+    },
+    onSuccess: async (updatedPlan) => {
+      setSelectedWeekStartDate(updatedPlan.week.weekStartDate);
+      setAiModalVisible(false);
+      setAiInput("");
+      setAiMessages([]);
+      setAiDraft([]);
+      setAiNotice(`AI zapisalo ${updatedPlan.entries.length} pozycji w planie.`);
+      setTimeout(() => setAiNotice(""), 3000);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.meal });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.start });
+    },
+  });
   const entries = [...(activePlan?.entries ?? [])].sort(
     (left, right) => left.weekday - right.weekday || left.slotIndex - right.slotIndex,
   );
@@ -625,6 +747,14 @@ function MealsBoard({ action, resetRequest }: { action?: string; resetRequest: n
     Boolean(mealName.trim()) &&
     /^\d{4}-\d{2}-\d{2}$/.test(selectedWeekStartDate) &&
     !upsertMutation.isPending;
+  const canSendAi = aiInput.trim().length >= 3 && !aiChatMutation.isPending;
+  const canSaveAi =
+    permission.canCreate &&
+    permission.canUpdate &&
+    aiDraft.length > 0 &&
+    !aiChatMutation.isPending &&
+    !aiSaveMutation.isPending;
+  const aiDraftGroups = groupMealDraftEntries(aiDraft);
 
   useEffect(() => {
     if (!modalVisible) {
@@ -720,6 +850,7 @@ function MealsBoard({ action, resetRequest }: { action?: string; resetRequest: n
           </Pressable>
         ) : null}
       </View>
+      {aiNotice ? <InlineAlert text={aiNotice} /> : null}
 
       <Pressable
         accessibilityLabel={isCalendarExpanded ? "Zwin wybor tygodnia" : "Zmien tydzien posilkow"}
@@ -881,6 +1012,119 @@ function MealsBoard({ action, resetRequest }: { action?: string; resetRequest: n
         <Text style={styles.itemMeta}>Wybrana data: {mealDate}</Text>
         {upsertMutation.error ? (
           <InlineAlert text="Nie udało się zapisać posiłku." tone="error" />
+        ) : null}
+      </FormModal>
+      <FormModal
+        footer={
+          <View style={styles.aiFooter}>
+            <View style={styles.modalFooter}>
+              <ActionButton
+                onPress={() => setAiModalVisible(false)}
+                style={styles.modalFooterButton}
+                title="Zamknij"
+                variant="secondary"
+              />
+              <ActionButton
+                disabled={!canSendAi}
+                loading={aiChatMutation.isPending}
+                onPress={() => aiChatMutation.mutate()}
+                style={styles.modalFooterButton}
+                title={aiDraft.length > 0 ? "Popraw z AI" : "Analizuj"}
+              />
+            </View>
+            {aiDraft.length > 0 ? (
+              <ActionButton
+                disabled={!canSaveAi}
+                loading={aiSaveMutation.isPending}
+                onPress={() => aiSaveMutation.mutate()}
+                title="Zapisz plan"
+              />
+            ) : null}
+          </View>
+        }
+        onClose={() => setAiModalVisible(false)}
+        subtitle="Wklej plan lub dopisz poprawke. Zapis nastapi dopiero po akceptacji."
+        title="AI plan posilkow"
+        visible={aiModalVisible}
+      >
+        <View style={styles.aiHeader}>
+          <View style={styles.aiIcon}>
+            <Sparkles color={theme.colors.food} size={20} />
+          </View>
+          <View style={styles.itemText}>
+            <Text style={styles.sectionTitle}>Tydzien docelowy</Text>
+            <Text style={styles.sectionMeta}>{formatWeekRange(aiTargetWeekStartDate)}</Text>
+          </View>
+        </View>
+
+        {aiMessages.length > 0 ? (
+          <View style={styles.aiChatList}>
+            {aiMessages.slice(-6).map((message, index) => (
+              <View
+                key={`${message.role}-${index}`}
+                style={[
+                  styles.aiChatBubble,
+                  message.role === "user" ? styles.aiChatBubbleUser : null,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.aiChatText,
+                    message.role === "user" ? styles.aiChatTextUser : null,
+                  ]}
+                >
+                  {message.content}
+                </Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        {aiDraftGroups.length > 0 ? (
+          <View style={styles.aiDraftCard}>
+            <View style={styles.aiDraftHeader}>
+              <Text style={styles.groupTitle}>Szkic do zapisania</Text>
+              <Text style={styles.itemMeta}>{aiDraft.length} pozycji</Text>
+            </View>
+            {aiDraftGroups.map((group) => (
+              <View key={group.day} style={styles.aiDraftDay}>
+                <Text style={styles.groupTitle}>{weekdayLabel(group.day)}</Text>
+                {group.entries.map((entry) => (
+                  <View key={`${entry.weekday}-${entry.slotIndex}`} style={styles.aiDraftMeal}>
+                    <View style={styles.mealSlot}>
+                      <Text style={styles.mealSlotText}>{entry.slotIndex + 1}</Text>
+                    </View>
+                    <View style={styles.itemText}>
+                      <Text style={styles.itemName}>{entry.mealName}</Text>
+                      {entry.sourceHint || entry.note || entry.linkUrl ? (
+                        <Text numberOfLines={2} style={styles.itemMeta}>
+                          {[entry.sourceHint, entry.linkUrl ? "link" : null, entry.note]
+                            .filter(Boolean)
+                            .join(" / ")}
+                        </Text>
+                      ) : null}
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        <Text style={styles.inputLabel}>Wiadomosc</Text>
+        <TextInput
+          multiline
+          onChangeText={setAiInput}
+          placeholder="Np. Pon: C kasza manna, KS pieczona kielbasa z warzywami..."
+          placeholderTextColor={theme.colors.textSubtle}
+          style={[styles.input, styles.textArea]}
+          value={aiInput}
+        />
+        {aiChatMutation.error ? (
+          <InlineAlert tone="error" text="AI nie przygotowalo szkicu. Sprobuj wkleic plan jeszcze raz." />
+        ) : null}
+        {aiSaveMutation.error ? (
+          <InlineAlert tone="error" text="Nie udalo sie zapisac planu z AI." />
         ) : null}
       </FormModal>
     </>
@@ -1231,6 +1475,30 @@ function findMealDraftForSelection(
   );
 }
 
+function buildAiMealNote(entry: MealPlanAiDraftEntry): string | null {
+  const note = entry.note?.trim();
+  const sourceHint = entry.sourceHint?.trim();
+
+  if (note && sourceHint && !note.toLowerCase().includes(sourceHint.toLowerCase())) {
+    return `${note}\nZrodlo: ${sourceHint}`;
+  }
+
+  return note || (sourceHint ? `Zrodlo: ${sourceHint}` : null);
+}
+
+function groupMealDraftEntries(entries: MealPlanAiDraftEntry[]) {
+  const groups = new Map<number, MealPlanAiDraftEntry[]>();
+
+  entries.forEach((entry) => {
+    groups.set(entry.weekday, [...(groups.get(entry.weekday) ?? []), entry]);
+  });
+
+  return [...groups.entries()].map(([day, dayEntries]) => ({
+    day,
+    entries: dayEntries,
+  }));
+}
+
 function normalizeOptionalMealUrl(value: string): string | null {
   const trimmed = value.trim();
 
@@ -1365,6 +1633,13 @@ function currentWeekStart(): string {
   return isoFromDate(from);
 }
 
+function nextWeekStart(): string {
+  const date = new Date(`${currentWeekStart()}T12:00:00`);
+  date.setDate(date.getDate() + 7);
+
+  return isoFromDate(date);
+}
+
 function todayIso(): string {
   return isoFromDate(new Date());
 }
@@ -1472,6 +1747,59 @@ function createStyles(colors: AppPalette) {
       height: 38,
       justifyContent: "center",
       width: 38,
+    },
+    aiChatBubble: {
+      alignSelf: "flex-start",
+      backgroundColor: colors.cardMuted,
+      borderColor: colors.border,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      maxWidth: "92%",
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+    },
+    aiChatBubbleUser: {
+      alignSelf: "flex-end",
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    aiChatList: {
+      gap: spacing.sm,
+    },
+    aiChatText: {
+      color: colors.text,
+      fontSize: 13,
+      letterSpacing: 0,
+      lineHeight: 18,
+    },
+    aiChatTextUser: {
+      color: colors.inverseText,
+      fontWeight: "700",
+    },
+    aiDraftCard: {
+      backgroundColor: colors.field,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      gap: spacing.sm,
+      padding: spacing.md,
+    },
+    aiDraftDay: {
+      gap: spacing.xs,
+    },
+    aiDraftHeader: {
+      alignItems: "center",
+      flexDirection: "row",
+      justifyContent: "space-between",
+    },
+    aiDraftMeal: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.sm,
+      minHeight: 30,
+    },
+    aiFooter: {
+      gap: spacing.sm,
     },
     calendarPicker: {
       backgroundColor: colors.card,

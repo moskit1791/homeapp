@@ -9,10 +9,15 @@ module.exports = () => {
   const config = appJson.expo;
   const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'https://app.porabkihome.pl/api';
   const projectId = process.env.EXPO_PROJECT_ID || config.extra?.eas?.projectId;
-  const googleAndroidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
+  const googleAndroidClientId =
+    process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ||
+    process.env.EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID ||
+    process.env.GOOGLE_OAUTH_CLIENT_ID;
   const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
   const googleOAuthClientId =
-    process.env.EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID || process.env.GOOGLE_OAUTH_CLIENT_ID;
+    process.env.EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID ||
+    process.env.GOOGLE_OAUTH_CLIENT_ID ||
+    googleAndroidClientId;
   const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || googleOAuthClientId;
   const googleServicesFile = resolveOptionalFile(
     process.env.GOOGLE_SERVICES_JSON || './google-services.json'

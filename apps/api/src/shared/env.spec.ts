@@ -40,6 +40,7 @@ describe('loadEnv', () => {
   it('treats blank optional integration variables as unset', () => {
     vi.stubEnv('GEMINI_API_KEY', '');
     vi.stubEnv('GOOGLE_OAUTH_CLIENT_ID', '');
+    vi.stubEnv('GOOGLE_OAUTH_CLIENT_IDS', '');
     vi.stubEnv('SMTP_HOST', '');
     vi.stubEnv('SMTP_PASSWORD', '');
     vi.stubEnv('SMTP_USER', '');
@@ -47,9 +48,18 @@ describe('loadEnv', () => {
     expect(loadEnv()).toMatchObject({
       GEMINI_API_KEY: undefined,
       GOOGLE_OAUTH_CLIENT_ID: undefined,
+      GOOGLE_OAUTH_CLIENT_IDS: undefined,
       SMTP_HOST: undefined,
       SMTP_PASSWORD: undefined,
       SMTP_USER: undefined
+    });
+  });
+
+  it('parses multiple Google OAuth audiences from a comma-separated variable', () => {
+    vi.stubEnv('GOOGLE_OAUTH_CLIENT_IDS', ' android-client , web-client ,, ');
+
+    expect(loadEnv()).toMatchObject({
+      GOOGLE_OAUTH_CLIENT_IDS: ['android-client', 'web-client']
     });
   });
 });

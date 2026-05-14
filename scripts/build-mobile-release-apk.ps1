@@ -1,6 +1,9 @@
 param(
   [string]$ApiUrl = $env:EXPO_PUBLIC_API_URL,
+  [string]$GoogleAndroidClientId = $env:EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
   [string]$GoogleOAuthClientId = $env:EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID,
+  [string]$GoogleWebClientId = $env:EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+  [switch]$AllowMissingGoogleOAuth,
   [switch]$UseLanApi,
   [string]$WorkDir
 )
@@ -51,6 +54,18 @@ if (-not $ApiUrl) {
 
 if (-not $GoogleOAuthClientId) {
   $GoogleOAuthClientId = $env:GOOGLE_OAUTH_CLIENT_ID
+}
+
+if (-not $GoogleAndroidClientId -and $GoogleOAuthClientId) {
+  $GoogleAndroidClientId = $GoogleOAuthClientId
+}
+
+if (-not $GoogleOAuthClientId -and $GoogleAndroidClientId) {
+  $GoogleOAuthClientId = $GoogleAndroidClientId
+}
+
+if ($ApiUrl -eq $ProductionApiUrl -and -not $GoogleAndroidClientId -and -not $AllowMissingGoogleOAuth) {
+  throw 'Refusing to build production APK without Google OAuth client ID. Pass -GoogleAndroidClientId, set EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID/GOOGLE_OAUTH_CLIENT_ID, or use -AllowMissingGoogleOAuth intentionally.'
 }
 
 $repoRoot = Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')
@@ -106,10 +121,15 @@ Set-Content -LiteralPath (Join-Path $resolvedWorkDir.Path '.npmrc') -Value "node
 Push-Location $resolvedWorkDir.Path
 try {
   $env:EXPO_PUBLIC_API_URL = $ApiUrl
+  if ($GoogleAndroidClientId) {
+    $env:EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID = $GoogleAndroidClientId
+  }
   if ($GoogleOAuthClientId) {
-    $env:EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID = $GoogleOAuthClientId
     $env:EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID = $GoogleOAuthClientId
     $env:GOOGLE_OAUTH_CLIENT_ID = $GoogleOAuthClientId
+  }
+  if ($GoogleWebClientId) {
+    $env:EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID = $GoogleWebClientId
   }
 
   pnpm.cmd install
@@ -146,6 +166,7 @@ Copy-Item -LiteralPath $sourceApk -Destination $latestApk -Force
 Copy-Item -LiteralPath $sourceApk -Destination $stampedApk -Force
 
 Write-Host "Built standalone APK with EXPO_PUBLIC_API_URL=$ApiUrl"
-Write-Host ("Google OAuth client ID included: " + [string][bool]$GoogleOAuthClientId)
+Write-Host ("Google Android OAuth client ID included: " + [string][bool]$GoogleAndroidClientId)
+Write-Host ("Google Web OAuth client ID included: " + [string][bool]$GoogleWebClientId)
 Get-Item -LiteralPath $latestApk, $stampedApk |
   Select-Object FullName, Length, LastWriteTime

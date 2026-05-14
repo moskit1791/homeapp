@@ -201,4 +201,13 @@ describe('AuthService production auth policy', () => {
       NotImplementedException
     );
   });
+
+  it('accepts comma-separated Google OAuth audience configuration', async () => {
+    vi.stubEnv('GOOGLE_OAUTH_CLIENT_IDS', 'android-client.apps.googleusercontent.com,web-client.apps.googleusercontent.com');
+    const service = createService();
+
+    await expect(service.loginWithGoogle({ idToken: 'token' })).rejects.toThrow(
+      UnauthorizedException
+    );
+  });
 });

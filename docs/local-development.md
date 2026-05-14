@@ -193,6 +193,8 @@ Release APK budujemy z krotkiej tymczasowej kopii i hoisted `node_modules`, zeby
 .\scripts\build-mobile-release-apk.cmd -ApiUrl 'http://192.168.100.109:3000/api'
 ```
 
+Przy buildzie pod produkcyjne API podaj Google Android OAuth Client ID albo ustaw env `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_ID`; skrypt przerwie produkcyjny build bez tej wartosci, zeby nie wypuscic APK z niedzialajacym przyciskiem Google.
+
 Jesli trzeba wskazac konkretny katalog roboczy:
 
 ```powershell
