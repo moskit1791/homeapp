@@ -5,8 +5,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import {
   getStartDashboard,
+  listCleaningTasks,
   listShoppingItems,
   queryKeys,
+  type CleaningTask,
   type StartCalendarEvent,
 } from "../../src/api";
 import {
@@ -24,6 +26,7 @@ import { ActionButton, AppScreen, AppToast, FormModal, IconButton, QueryState } 
 import {
   AccountCircle,
   Bell,
+  Broom,
   CalendarDays,
   CartPlus,
   ChevronRight,
@@ -44,6 +47,7 @@ export default function DzisiajScreen() {
   const [pushNotifications, setPushNotifications] = useState<StoredNotification[]>([]);
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
+  const cleaningPermission = useModulePermission("cleaning");
   const shoppingPermission = useModulePermission("shopping");
 
   const dashboardQuery = useQuery({
@@ -56,6 +60,11 @@ export default function DzisiajScreen() {
     queryFn: () => listShoppingItems("daily", { accessToken }),
     queryKey: [...queryKeys.shopping, "daily", "today-preview"],
   });
+  const cleaningQuery = useQuery({
+    enabled: cleaningPermission.canRead && Boolean(accessToken),
+    queryFn: () => listCleaningTasks({ accessToken }),
+    queryKey: [...queryKeys.cleaning, "today-preview"],
+  });
 
   const dashboard = dashboardQuery.data;
   const upcomingEvents = dashboard?.upcomingEvents ?? [];
@@ -66,6 +75,9 @@ export default function DzisiajScreen() {
   const nextMeal = mealEntries.find((entry) => entry.weekday === todayWeekday());
   const openShopping = (shoppingQuery.data ?? []).filter(
     (item) => !item.isChecked,
+  );
+  const todayCleaningTasks = (cleaningQuery.data ?? []).filter(
+    (task) => task.nextDueAt === todayIso(),
   );
   const openFromNotification = useCallback((route: "/(tabs)/kalendarz" | "/(tabs)/finanse" | "/(tabs)/lista" | "/(tabs)/dom" | "/(tabs)/zadania") => {
     setNotificationsVisible(false);
@@ -182,6 +194,12 @@ export default function DzisiajScreen() {
         </View>
         <View style={styles.quickGrid}>
           <QuickAction
+            color={theme.colors.calendar}
+            icon={<CalendarDays color={theme.colors.calendar} size={18} />}
+            label="Kalendarz"
+            onPress={() => router.push("/(tabs)/kalendarz" as never)}
+          />
+          <QuickAction
             color={theme.colors.finance}
             icon={<ReceiptText color={theme.colors.finance} size={18} />}
             label="Wydatek"
@@ -241,6 +259,13 @@ export default function DzisiajScreen() {
           value={nextMeal?.mealName ?? "Brak planu"}
         />
       </View>
+
+      <CleaningTodaySection
+        error={cleaningQuery.error}
+        isLoading={cleaningQuery.isLoading}
+        onOpenCleaning={() => router.push("/(tabs)/dom" as never)}
+        tasks={todayCleaningTasks}
+      />
 
       <FormModal
         onClose={() => setNotificationsVisible(false)}
@@ -382,6 +407,61 @@ function HomeTile({
       </View>
       <ChevronRight color={theme.colors.textSubtle} size={20} />
     </Pressable>
+  );
+}
+
+function CleaningTodaySection({
+  error,
+  isLoading,
+  onOpenCleaning,
+  tasks,
+}: {
+  error: unknown;
+  isLoading: boolean;
+  onOpenCleaning: () => void;
+  tasks: CleaningTask[];
+}) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+
+  return (
+    <View style={styles.cleaningSection}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Zaplanowane sprzątanie</Text>
+        <Text style={styles.sectionMeta}>Dzisiaj</Text>
+      </View>
+      <View style={styles.cleaningPanel}>
+        <QueryState
+          emptyText="Brak sprzątania na dziś."
+          error={error}
+          isEmpty={!isLoading && tasks.length === 0}
+          isLoading={isLoading}
+        />
+        {tasks.map((task, index) => (
+          <Pressable
+            accessibilityRole="button"
+            key={task.id}
+            onPress={onOpenCleaning}
+            style={({ pressed }) => [
+              styles.cleaningRow,
+              index < tasks.length - 1 && styles.cleaningRowDivider,
+              pressed && styles.pressed,
+            ]}
+          >
+            <View style={[styles.dashboardIcon, { backgroundColor: tint(theme.colors.shopping, 0.1) }]}>
+              <Broom color={theme.colors.shopping} size={22} />
+            </View>
+            <View style={styles.dashboardText}>
+              <Text numberOfLines={1} style={styles.dashboardTitle}>{task.name}</Text>
+              <Text numberOfLines={1} style={styles.dashboardSubMeta}>
+                Termin dzisiaj / co {task.frequencyDays} dni
+              </Text>
+            </View>
+            <ChevronRight color={theme.colors.textSubtle} size={20} />
+          </Pressable>
+        ))}
+      </View>
+    </View>
   );
 }
 
@@ -619,6 +699,29 @@ function createStyles(colors: AppPalette) {
       fontWeight: "900",
       letterSpacing: 0,
       lineHeight: 20,
+    },
+    cleaningPanel: {
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      overflow: "hidden",
+    },
+    cleaningRow: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.md,
+      minHeight: 76,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+    },
+    cleaningRowDivider: {
+      borderBottomColor: colors.border,
+      borderBottomWidth: 1,
+    },
+    cleaningSection: {
+      gap: spacing.sm,
+      marginTop: spacing.sm,
     },
     notificationBody: {
       color: colors.textMuted,

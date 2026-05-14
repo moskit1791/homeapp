@@ -1833,15 +1833,8 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
       </View>
     </FormModal>
     <FormModal
-      footer={
-        <ActionButton
-          onPress={() => setNotificationsVisible(false)}
-          title="Zamknij"
-          variant="secondary"
-        />
-      }
       onClose={() => setNotificationsVisible(false)}
-      subtitle="Token telefonu, test push i zdarzenia, które mają wysyłać powiadomienia."
+      subtitle="Token, test push i typy zdarzeń."
       title="Powiadomienia"
       visible={notificationsVisible}
     >

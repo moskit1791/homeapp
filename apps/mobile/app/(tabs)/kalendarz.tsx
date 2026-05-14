@@ -43,14 +43,13 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
-  DotsVertical,
   Pencil,
   Plus,
   RefreshCcw,
   Trash2,
 } from "../../src/ui/icon";
 
-type CalendarViewMode = "month" | "week" | "day";
+type CalendarViewMode = "month" | "week";
 type _AgendaSegment = "notes" | "todo";
 type ReminderValue = "none" | "15" | "60" | "1440";
 
@@ -69,7 +68,6 @@ const reminderOptions: Array<{ label: string; value: ReminderValue }> = [
 const calendarViewOptions: Array<{ label: string; value: CalendarViewMode }> = [
   { label: "Miesiąc", value: "month" },
   { label: "Tydzień", value: "week" },
-  { label: "Dzień", value: "day" },
 ];
 
 const weekdayLabels = ["Pon", "Wto", "Śro", "Czw", "Pią", "Sob", "Nie"];
@@ -208,7 +206,7 @@ export default function KalendarzScreen() {
       return;
     }
 
-    const daysToMove = calendarView === "week" ? direction * 7 : direction;
+    const daysToMove = direction * 7;
     const nextDate = dateToIso(addDays(parseIsoDate(selectedDate), daysToMove));
 
     selectDate(nextDate);
@@ -614,7 +612,6 @@ function AgendaTimeline({
           <View key={event.id} style={styles.timelineRow}>
             <View style={styles.timelineTime}>
               <Text style={styles.timelineHour}>{formatTimelineHour(event.eventTime)}</Text>
-              <Text style={styles.timelineMinute}>{formatTimelineMinute(event.eventTime)}</Text>
               <View style={[styles.timelineMarker, { backgroundColor: accent.color }]} />
             </View>
             <Pressable
@@ -637,23 +634,18 @@ function AgendaTimeline({
                     <Text numberOfLines={2} style={styles.agendaTitle}>
                       {event.title}
                     </Text>
-                    <Text style={[styles.agendaScope, { color: accent.color }]}>
-                      {formatScopeLabel(event)}
-                    </Text>
+                    {event.note ? (
+                      <Text numberOfLines={2} style={styles.agendaScope}>
+                        {event.note}
+                      </Text>
+                    ) : null}
                   </View>
-                  <DotsVertical color={theme.colors.textSubtle} size={18} />
                 </View>
                 <View style={styles.agendaFooter}>
-                  <Text style={styles.agendaMeta}>{formatEventTimeRange(event.eventTime)}</Text>
                   {event.reminderOffsetMinutes ? (
                     <Text style={styles.agendaMeta}>Przypomnienie</Text>
                   ) : null}
                   <View style={styles.agendaFooterSpacer} />
-                  {canUpdate ? (
-                    <IconButton accessibilityLabel="Edytuj wydarzenie" onPress={() => onEdit(event)}>
-                      <Pencil color={theme.colors.textMuted} size={15} />
-                    </IconButton>
-                  ) : null}
                   {canDelete ? (
                     <IconButton
                       accessibilityLabel="Usuń wydarzenie"
@@ -1057,13 +1049,6 @@ function getVisibleRange(month: Date, selectedDate: string, view: CalendarViewMo
     return getMonthRange(month);
   }
 
-  if (view === "day") {
-    return {
-      from: selectedDate,
-      to: selectedDate,
-    };
-  }
-
   return getWeekRange(selectedDate);
 }
 
@@ -1198,10 +1183,6 @@ function formatPeriodTitle(view: CalendarViewMode, visibleMonth: Date, selectedD
     return formatMonthTitle(visibleMonth);
   }
 
-  if (view === "day") {
-    return formatDateLong(selectedDate);
-  }
-
   const range = getWeekRange(selectedDate);
 
   return `${formatDate(range.from)} - ${formatDate(range.to)}`;
@@ -1210,10 +1191,6 @@ function formatPeriodTitle(view: CalendarViewMode, visibleMonth: Date, selectedD
 function formatPeriodSubtitle(view: CalendarViewMode): string {
   if (view === "month") {
     return "Wybierz dzień, żeby zobaczyć plan.";
-  }
-
-  if (view === "day") {
-    return "Agenda wybranego dnia.";
   }
 
   return "Tydzień z szybkim wyborem dnia.";
@@ -1288,45 +1265,10 @@ function compareCalendarEvents(left: CalendarEvent, right: CalendarEvent) {
 
 function formatTimelineHour(value: string | null): string {
   if (!value) {
-    return "Cały";
-  }
-
-  const hour = Number(value.slice(0, 2));
-
-  return `${hour}:00`;
-}
-
-function formatTimelineMinute(value: string | null): string {
-  if (!value) {
-    return "dzień";
-  }
-
-  const hour = Number(value.slice(0, 2));
-
-  return hour < 12 ? "am" : "pm";
-}
-
-function formatEventTimeRange(value: string | null): string {
-  if (!value) {
     return "Cały dzień";
   }
 
-  const start = value.slice(0, 5);
-
-  return `${start} - ${addMinutesToTime(start, 30)}`;
-}
-
-function addMinutesToTime(value: string, minutesToAdd: number): string {
-  const [hoursPart = "0", minutesPart = "0"] = value.split(":");
-  const totalMinutes = Number(hoursPart) * 60 + Number(minutesPart) + minutesToAdd;
-  const hours = Math.floor((totalMinutes % 1440) / 60);
-  const minutes = totalMinutes % 60;
-
-  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
-}
-
-function formatScopeLabel(event: CalendarEvent): string {
-  return event.scopeType === "household" ? "Dom" : "Prywatne";
+  return value.slice(0, 5);
 }
 
 function getAgendaAccent(colors: AppPalette, event: CalendarEvent, index: number) {
@@ -1499,9 +1441,11 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
     },
     agendaScope: {
-      fontSize: 11,
-      fontWeight: "900",
+      color: colors.textMuted,
+      fontSize: 12,
+      fontWeight: "700",
       letterSpacing: 0,
+      lineHeight: 16,
     },
     agendaTitle: {
       color: colors.text,
@@ -1783,10 +1727,10 @@ function createStyles(colors: AppPalette) {
     },
     timelineHour: {
       color: colors.text,
-      fontSize: 12,
+      fontSize: 16,
       fontWeight: "900",
       letterSpacing: 0,
-      lineHeight: 16,
+      lineHeight: 20,
       textAlign: "right",
     },
     timelineMarker: {
@@ -1795,14 +1739,6 @@ function createStyles(colors: AppPalette) {
       marginTop: spacing.sm,
       width: 7,
     },
-    timelineMinute: {
-      color: colors.textMuted,
-      fontSize: 10,
-      fontWeight: "800",
-      letterSpacing: 0,
-      lineHeight: 13,
-      textAlign: "right",
-    },
     timelineRow: {
       flexDirection: "row",
       gap: spacing.sm,
@@ -1810,7 +1746,7 @@ function createStyles(colors: AppPalette) {
     timelineTime: {
       alignItems: "flex-end",
       paddingTop: spacing.sm,
-      width: 54,
+      width: 64,
     },
     timeInput: {
       width: 92,
