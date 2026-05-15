@@ -531,7 +531,8 @@ function MealsBoard({
   const [aiInput, setAiInput] = useState("");
   const [aiMessages, setAiMessages] = useState<MealPlanAiMessage[]>([]);
   const [aiDraft, setAiDraft] = useState<MealPlanAiDraftEntry[]>([]);
-  const [aiTargetWeekStartDate, setAiTargetWeekStartDate] = useState(nextWeekStart());
+  const [aiTargetWeekConfirmed, setAiTargetWeekConfirmed] = useState(false);
+  const [aiTargetWeekStartDate, setAiTargetWeekStartDate] = useState(selectedWeekStartDate);
   const [aiNotice, setAiNotice] = useState("");
   const [handledAiOpenRequest, setHandledAiOpenRequest] = useState(aiOpenRequest);
   const [isCalendarExpanded, setCalendarExpanded] = useState(false);
@@ -599,10 +600,11 @@ function MealsBoard({
   useEffect(() => {
     if (aiOpenRequest > handledAiOpenRequest) {
       setHandledAiOpenRequest(aiOpenRequest);
-      setAiTargetWeekStartDate(nextWeekStart());
+      setAiTargetWeekConfirmed(false);
+      setAiTargetWeekStartDate(selectedWeekStartDate);
       setAiModalVisible(true);
     }
-  }, [aiOpenRequest, handledAiOpenRequest]);
+  }, [aiOpenRequest, handledAiOpenRequest, selectedWeekStartDate]);
 
   const activePlan =
     selectedWeekId === currentQuery.data?.week.id
@@ -681,6 +683,11 @@ function MealsBoard({
         ...aiMessages,
         { content, role: "user" },
       ];
+
+      if (!aiTargetWeekConfirmed || !isValidWeekStartDate(aiTargetWeekStartDate)) {
+        throw new Error("Missing AI target week");
+      }
+
       const response = await chatMealPlanWithAi(
         {
           currentDraft: aiDraft,
@@ -698,12 +705,15 @@ function MealsBoard({
         { content: response.assistantMessage, role: "assistant" },
       ]);
       setAiDraft(response.entries);
-      setAiTargetWeekStartDate(response.targetWeekStartDate);
       setAiInput("");
     },
   });
   const aiSaveMutation = useMutation({
     mutationFn: async () => {
+      if (!aiTargetWeekConfirmed || !isValidWeekStartDate(aiTargetWeekStartDate)) {
+        throw new Error("Missing AI target week");
+      }
+
       const targetPlan = await getOrCreateMealPlanForDate({
         accessToken,
         activePlan,
@@ -735,6 +745,7 @@ function MealsBoard({
       setAiInput("");
       setAiMessages([]);
       setAiDraft([]);
+      setAiTargetWeekConfirmed(false);
       setAiNotice(`AI zapisalo ${updatedPlan.entries.length} pozycji w planie.`);
       setTimeout(() => setAiNotice(""), 3000);
       await queryClient.invalidateQueries({ queryKey: queryKeys.meal });
@@ -751,10 +762,16 @@ function MealsBoard({
     Boolean(mealName.trim()) &&
     /^\d{4}-\d{2}-\d{2}$/.test(selectedWeekStartDate) &&
     !upsertMutation.isPending;
-  const canSendAi = aiInput.trim().length >= 3 && !aiChatMutation.isPending;
+  const canSendAi =
+    aiTargetWeekConfirmed &&
+    isValidWeekStartDate(aiTargetWeekStartDate) &&
+    aiInput.trim().length >= 3 &&
+    !aiChatMutation.isPending;
   const canSaveAi =
     permission.canCreate &&
     permission.canUpdate &&
+    aiTargetWeekConfirmed &&
+    isValidWeekStartDate(aiTargetWeekStartDate) &&
     aiDraft.length > 0 &&
     !aiChatMutation.isPending &&
     !aiSaveMutation.isPending;
@@ -818,6 +835,11 @@ function MealsBoard({
   function selectMainWeekStart(weekStart: string) {
     selectWeekStart(weekStart);
     setCalendarExpanded(false);
+  }
+
+  function selectAiTargetWeekStart(weekStart: string) {
+    setAiTargetWeekStartDate(weekStart);
+    setAiTargetWeekConfirmed(true);
   }
 
   function selectWeekday(day: number) {
@@ -1057,9 +1079,23 @@ function MealsBoard({
           </View>
           <View style={styles.itemText}>
             <Text style={styles.sectionTitle}>Tydzien docelowy</Text>
-            <Text style={styles.sectionMeta}>{formatWeekRange(aiTargetWeekStartDate)}</Text>
+            <Text style={styles.sectionMeta}>
+              {aiTargetWeekConfirmed
+                ? formatWeekRange(aiTargetWeekStartDate)
+                : "Wybierz tydzien przed wyslaniem planu"}
+            </Text>
           </View>
         </View>
+
+        <Text style={styles.inputLabel}>Tydzien zapisu *</Text>
+        <CalendarWeekPicker
+          mealWeeks={historyWeeks}
+          onSelect={selectAiTargetWeekStart}
+          selectedWeekStartDate={aiTargetWeekStartDate}
+        />
+        {!aiTargetWeekConfirmed ? (
+          <InlineAlert text="Wybierz tydzien, do ktorego AI ma przygotowac i zapisac plan posilkow." />
+        ) : null}
 
         {aiMessages.length > 0 ? (
           <View style={styles.aiChatList}>
@@ -1637,13 +1673,6 @@ function currentWeekStart(): string {
   return isoFromDate(from);
 }
 
-function nextWeekStart(): string {
-  const date = new Date(`${currentWeekStart()}T12:00:00`);
-  date.setDate(date.getDate() + 7);
-
-  return isoFromDate(date);
-}
-
 function todayIso(): string {
   return isoFromDate(new Date());
 }
@@ -1663,6 +1692,10 @@ function weekStartFromIsoDate(value: string): string | null {
   date.setDate(date.getDate() - day + 1);
 
   return isoFromDate(date);
+}
+
+function isValidWeekStartDate(value: string): boolean {
+  return weekStartFromIsoDate(value) === value;
 }
 
 function weekdayFromIsoDate(value: string): number {

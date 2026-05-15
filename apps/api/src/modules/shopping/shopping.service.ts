@@ -515,24 +515,14 @@ export class ShoppingService {
 
       const dailyListId = await this.getListId(client, householdId, 'daily');
       const tomorrowListId = await this.getListId(client, householdId, 'tomorrow');
-      const dailyStats = await client.query<{ checked_count: string; total_count: string }>(
+      await client.query(
         `
-          select
-            count(*)::text as total_count,
-            count(*) filter (where is_checked = true)::text as checked_count
-          from shopping_list_items
+          delete from shopping_list_items
           where shopping_list_id = $1
+            and is_checked = true
         `,
         [dailyListId]
       );
-      const total = Number(dailyStats.rows[0]?.total_count ?? 0);
-      const checked = Number(dailyStats.rows[0]?.checked_count ?? 0);
-
-      if (total > 0 && total === checked) {
-        await client.query('delete from shopping_list_items where shopping_list_id = $1', [
-          dailyListId
-        ]);
-      }
 
       const baseOrder = await this.nextDisplayOrder(client, dailyListId);
       await client.query(

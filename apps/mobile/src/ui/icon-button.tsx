@@ -44,13 +44,18 @@ function createStyles(colors: AppPalette) {
   return StyleSheet.create({
   button: {
     alignItems: 'center',
-    backgroundColor: colors.card,
+    backgroundColor: colors.surface,
     borderColor: colors.border,
     borderRadius: radii.control,
     borderWidth: 1,
+    elevation: 1,
     height: 38,
     justifyContent: 'center',
     padding: spacing.sm,
+    shadowColor: colors.primary,
+    shadowOffset: { height: 0, width: 0 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
     width: 38
   },
   disabled: {

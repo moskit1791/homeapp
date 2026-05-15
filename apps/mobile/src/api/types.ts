@@ -492,7 +492,7 @@ export interface MealPlanAiDraftEntry {
 export interface MealPlanAiChatRequest {
   currentDraft?: MealPlanAiDraftEntry[];
   messages: MealPlanAiMessage[];
-  targetWeekStartDate?: string;
+  targetWeekStartDate: string;
 }
 
 export interface MealPlanAiChatResponse {

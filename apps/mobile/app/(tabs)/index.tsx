@@ -31,7 +31,6 @@ import {
   CartPlus,
   ChevronRight,
   Plus,
-  RefreshCcw,
   ReceiptText,
   ShoppingCart,
   Utensils,
@@ -86,7 +85,7 @@ export default function DzisiajScreen() {
   const openCalendarForDate = useCallback((date: string, action?: "create") => {
     router.push({
       pathname: "/(tabs)/kalendarz",
-      params: action ? { action, date, intent: String(Date.now()) } : { date },
+      params: { action, date, intent: String(Date.now()) },
     } as never);
   }, [router]);
   const openCalendarNotification = useCallback((date: string) => {
@@ -167,15 +166,6 @@ export default function DzisiajScreen() {
     <AppScreen
       actions={
         <View style={styles.headerActions}>
-          <IconButton
-            accessibilityLabel="Odśwież ekran Dzisiaj"
-            disabled={dashboardQuery.isFetching}
-            onPress={() => {
-              dashboardQuery.refetch().finally(() => showToast("Widok odświeżony"));
-            }}
-          >
-            <RefreshCcw color={theme.colors.textMuted} size={17} />
-          </IconButton>
           <IconButton
             accessibilityLabel="Pokaż powiadomienia"
             onPress={() => setNotificationsVisible(true)}

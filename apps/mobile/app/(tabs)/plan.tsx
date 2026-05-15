@@ -8,7 +8,6 @@ import {
   Lightbulb,
   NotebookText,
   Pencil,
-  RefreshCcw,
   Trash2,
   Utensils,
 } from "../../src/ui/icon";
@@ -438,11 +437,6 @@ function FoodSegment({
             ) : null}
           </View>
         }
-        onRefresh={() => {
-          currentQuery.refetch();
-          historyQuery.refetch();
-          selectedPlanQuery.refetch();
-        }}
         title="Plan posiłków"
       />
       <SectionCard
@@ -737,7 +731,6 @@ function CalendarSegment({
             />
           ) : undefined
         }
-        onRefresh={() => upcomingQuery.refetch()}
         title="Kalendarz"
       />
 
@@ -888,7 +881,6 @@ function TodoSegment({
             />
           ) : undefined
         }
-        onRefresh={() => todoQuery.refetch()}
         title="Do zrobienia"
       />
       <SectionCard
@@ -1064,7 +1056,6 @@ function NotesSegment({
             />
           ) : undefined
         }
-        onRefresh={() => notesQuery.refetch()}
         title="Notatki prywatne"
       />
       <SectionCard
@@ -1283,11 +1274,9 @@ function NoteRow({
 
 function Toolbar({
   action,
-  onRefresh,
   title,
 }: {
   action?: ReactNode;
-  onRefresh: () => void;
   title: string;
 }) {
   const theme = useAppTheme();
@@ -1298,9 +1287,6 @@ function Toolbar({
       <Text style={styles.sectionTitle}>{title}</Text>
       <View style={styles.toolbarActions}>
         {action}
-        <IconButton onPress={onRefresh}>
-          <RefreshCcw color={theme.colors.textMuted} size={18} />
-        </IconButton>
       </View>
     </View>
   );

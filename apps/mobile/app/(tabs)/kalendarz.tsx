@@ -16,7 +16,6 @@ import {
   deleteNote,
   deleteTodoItem,
   listCalendarEvents,
-  listCalendarUpcoming,
   listNotes,
   listTodoItems,
   queryKeys,
@@ -46,7 +45,6 @@ import {
   ChevronRight,
   Pencil,
   Plus,
-  RefreshCcw,
   Trash2,
 } from "../../src/ui/icon";
 
@@ -94,6 +92,7 @@ export default function KalendarzScreen() {
   const [eventReminder, setEventReminder] = useState<ReminderValue>("1440");
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [eventModalVisible, setEventModalVisible] = useState(false);
+  const [handledRouteDate, setHandledRouteDate] = useState<string | null>(null);
   const [handledRouteAction, setHandledRouteAction] = useState<string | null>(null);
   const permissions = permissionsQuery.data;
   const calendarPermission = getPermission(permissions, "calendar");
@@ -110,11 +109,6 @@ export default function KalendarzScreen() {
     enabled: calendarPermission.canRead && Boolean(accessToken),
     queryFn: () => listCalendarEvents(range.from, range.to, { accessToken }),
     queryKey: [...queryKeys.calendar, "range", calendarView, range.from, range.to],
-  });
-  const upcomingQuery = useQuery({
-    enabled: calendarPermission.canRead && Boolean(accessToken),
-    queryFn: () => listCalendarUpcoming(4, { accessToken }),
-    queryKey: [...queryKeys.calendar, "mobile-upcoming"],
   });
   const selectedDayEvents = (monthEventsQuery.data ?? []).filter(
     (event) => event.eventDate === selectedDate,
@@ -168,9 +162,14 @@ export default function KalendarzScreen() {
 
   useEffect(() => {
     const targetDate = routeDate && isIsoDate(routeDate) ? routeDate : null;
+    const dateKey = `${targetDate ?? ""}:${routeIntent ?? ""}`;
 
-    if (targetDate && targetDate !== selectedDate) {
+    if (targetDate && handledRouteDate !== dateKey && targetDate !== selectedDate) {
       selectDate(targetDate);
+    }
+
+    if (targetDate && handledRouteDate !== dateKey) {
+      setHandledRouteDate(dateKey);
     }
 
     if (routeAction !== "create" || !targetDate || !calendarPermission.canCreate) {
@@ -188,6 +187,7 @@ export default function KalendarzScreen() {
   }, [
     calendarPermission.canCreate,
     handledRouteAction,
+    handledRouteDate,
     routeAction,
     routeDate,
     routeIntent,
@@ -265,25 +265,16 @@ export default function KalendarzScreen() {
   return (
     <AppScreen
       actions={
-        <View style={styles.headerActions}>
-          {calendarPermission.canCreate ? (
+        calendarPermission.canCreate ? (
+          <View style={styles.headerActions}>
             <IconButton
               accessibilityLabel="Dodaj wydarzenie"
               onPress={() => openCreateEvent()}
             >
               <CalendarPlus color={theme.colors.text} size={18} />
             </IconButton>
-          ) : null}
-          <IconButton
-            accessibilityLabel="Odśwież kalendarz"
-            onPress={() => {
-              monthEventsQuery.refetch();
-              upcomingQuery.refetch();
-            }}
-          >
-            <RefreshCcw color={theme.colors.text} size={18} />
-          </IconButton>
-        </View>
+          </View>
+        ) : undefined
       }
       title="Kalendarz"
     >

@@ -137,9 +137,8 @@ export class MealPlanAiChatDto {
   @Type(() => MealPlanAiDraftEntryDto)
   currentDraft?: MealPlanAiDraftEntryDto[];
 
-  @IsOptional()
   @IsDateString({ strict: true })
-  targetWeekStartDate?: string;
+  targetWeekStartDate!: string;
 }
 
 export class CopyMealPlanDto {

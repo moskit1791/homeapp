@@ -1,6 +1,6 @@
 import { PropsWithChildren, ReactNode } from 'react';
 import { StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
-import { radii, shadows, spacing } from '../theme/tokens';
+import { radii, spacing } from '../theme/tokens';
 import { useAppTheme, type AppPalette } from '../theme/use-app-theme';
 
 interface SectionCardProps extends PropsWithChildren {
@@ -39,9 +39,13 @@ function createStyles(colors: AppPalette) {
     borderColor: colors.border,
     borderRadius: radii.card,
     borderWidth: 1,
+    elevation: 2,
     gap: spacing.md,
     padding: spacing.lg,
-    ...shadows.card
+    shadowColor: colors.primary,
+    shadowOffset: { height: 10, width: 0 },
+    shadowOpacity: 0.08,
+    shadowRadius: 22
   },
   header: {
     alignItems: 'center',

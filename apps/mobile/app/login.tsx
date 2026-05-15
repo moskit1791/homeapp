@@ -2,9 +2,11 @@ import * as GoogleAuth from 'expo-auth-session/providers/google';
 import Constants from 'expo-constants';
 import { Redirect, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
+import brandIconSource from '../assets/icon.png';
 import { ReactNode, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Linking,
   Modal,
@@ -24,7 +26,7 @@ import { useAppTheme, type AppPalette } from '../src/theme/use-app-theme';
 import { radii, spacing } from '../src/theme/tokens';
 import { ActionButton } from '../src/ui/action-button';
 import { AuthTextField } from '../src/ui/auth-text-field';
-import { Apple, Check, Eye, EyeOff, Google, Home, LogIn, UserPlus } from '../src/ui/icon';
+import { Apple, Check, Eye, EyeOff, Google, LogIn, UserPlus } from '../src/ui/icon';
 import { SegmentedControl } from '../src/ui/segmented-control';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -658,7 +660,7 @@ export default function Index() {
     return (
       <View style={styles.brandBar}>
         <View style={styles.brandIcon}>
-          <Home color={theme.colors.inverseText} size={26} />
+          <Image source={brandIconSource} style={styles.brandIconImage} />
         </View>
         <Text style={styles.brand}>HomeApp</Text>
         <Text style={styles.subtitle}>Domowy panel operacyjny</Text>
@@ -1009,6 +1011,11 @@ function createStyles(colors: AppPalette) {
       height: 64,
       justifyContent: 'center',
       width: 64
+    },
+    brandIconImage: {
+      borderRadius: 14,
+      height: 52,
+      width: 52
     },
     checkbox: {
       alignItems: 'center',

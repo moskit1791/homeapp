@@ -10,7 +10,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { radii, shadows, spacing } from "../theme/tokens";
+import { radii, spacing } from "../theme/tokens";
 import { useAppTheme, type AppPalette } from "../theme/use-app-theme";
 import { Close } from "./icon";
 import { IconButton } from "./icon-button";
@@ -63,6 +63,7 @@ export function FormModal({
             <ScrollView
               contentContainerStyle={[styles.body, footer ? styles.bodyWithFooter : null]}
               keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled
               showsVerticalScrollIndicator={false}
               style={styles.scroll}
             >
@@ -130,16 +131,20 @@ function createStyles(colors: AppPalette) {
     },
     sheet: {
       alignSelf: "stretch",
-      backgroundColor: colors.card,
+      backgroundColor: colors.overlay,
       borderColor: colors.border,
       borderTopLeftRadius: radii.card,
       borderTopRightRadius: radii.card,
       borderTopWidth: 1,
+      elevation: 12,
       flexShrink: 1,
       marginHorizontal: spacing.md,
       maxHeight: "92%",
       overflow: "hidden",
-      ...shadows.card,
+      shadowColor: colors.primary,
+      shadowOffset: { height: 10, width: 0 },
+      shadowOpacity: 0.16,
+      shadowRadius: 24,
     },
     scroll: {
       flexShrink: 1,

@@ -1,5 +1,4 @@
 import { ActivityIndicator, Pressable, StyleProp, StyleSheet, Text, TextStyle, ViewStyle } from 'react-native';
-import { shadows } from '../theme/tokens';
 import { useAppTheme, type AppPalette } from '../theme/use-app-theme';
 
 interface ActionButtonProps {
@@ -84,7 +83,11 @@ function createStyles(colors: AppPalette) {
   primary: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
-    ...shadows.control
+    elevation: 2,
+    shadowColor: colors.primary,
+    shadowOffset: { height: 0, width: 0 },
+    shadowOpacity: 0.28,
+    shadowRadius: 12
   },
   primaryLabel: {
     color: colors.inverseText

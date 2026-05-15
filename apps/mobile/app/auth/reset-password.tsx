@@ -1,6 +1,8 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
+import brandIconSource from "../../assets/icon.png";
 import { useState, type ReactNode } from "react";
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -16,7 +18,7 @@ import { radii, spacing } from "../../src/theme/tokens";
 import { useAppTheme, type AppPalette } from "../../src/theme/use-app-theme";
 import { ActionButton } from "../../src/ui/action-button";
 import { AuthTextField } from "../../src/ui/auth-text-field";
-import { ChevronLeft, Eye, EyeOff, Home } from "../../src/ui/icon";
+import { ChevronLeft, Eye, EyeOff } from "../../src/ui/icon";
 
 const resetPasswordSchema = z.object({
   password: z.string().min(8, "Hasło musi mieć min. 8 znaków"),
@@ -94,7 +96,7 @@ export default function ResetPasswordScreen() {
           <View style={styles.shell}>
             <View style={styles.brandBar}>
               <View style={styles.brandIcon}>
-                <Home color={theme.colors.inverseText} size={26} />
+                <Image source={brandIconSource} style={styles.brandIconImage} />
               </View>
               <Text style={styles.brand}>HomeApp</Text>
             </View>
@@ -279,6 +281,11 @@ function createStyles(colors: AppPalette) {
       height: 64,
       justifyContent: "center",
       width: 64,
+    },
+    brandIconImage: {
+      borderRadius: 14,
+      height: 52,
+      width: 52,
     },
     card: {
       backgroundColor: colors.card,

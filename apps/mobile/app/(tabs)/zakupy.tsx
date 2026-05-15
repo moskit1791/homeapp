@@ -36,7 +36,6 @@ import {
 } from "../../src/ui";
 import {
   Check,
-  RefreshCcw,
   ShoppingCart,
   Sparkles,
   Trash2,
@@ -197,12 +196,6 @@ export default function ZakupyScreen() {
               title="+ Dodaj"
             />
           ) : null}
-          <IconButton
-            disabled={itemsQuery.isFetching}
-            onPress={() => itemsQuery.refetch()}
-          >
-            <RefreshCcw color={theme.colors.textMuted} size={18} />
-          </IconButton>
         </View>
       }
       subtitle="Szybka lista domowa, bez przeklikiwania formularzy."

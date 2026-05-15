@@ -71,10 +71,13 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
+        tabBarActiveBackgroundColor: theme.colors.primarySoft,
         tabBarActiveTintColor: theme.colors.primary,
         tabBarInactiveTintColor: theme.colors.textMuted,
         tabBarHideOnKeyboard: true,
         tabBarItemStyle: {
+          borderRadius: 8,
+          marginHorizontal: 2,
           paddingVertical: 3,
         },
         tabBarLabelStyle: {
@@ -83,12 +86,23 @@ export default function TabsLayout() {
           letterSpacing: 0,
         },
         tabBarStyle: {
-          backgroundColor: theme.colors.card,
+          backgroundColor: theme.colors.overlay,
+          borderColor: theme.colors.border,
+          borderRadius: 8,
           borderTopColor: theme.colors.border,
           borderTopWidth: 1,
-          height: 62,
+          borderWidth: 1,
+          elevation: 8,
+          height: 66,
+          marginBottom: 8,
+          marginHorizontal: 12,
           paddingBottom: 7,
           paddingTop: 6,
+          position: "absolute",
+          shadowColor: theme.colors.primary,
+          shadowOffset: { height: 8, width: 0 },
+          shadowOpacity: theme.isDark ? 0.22 : 0.1,
+          shadowRadius: 18,
         },
       }}
     >

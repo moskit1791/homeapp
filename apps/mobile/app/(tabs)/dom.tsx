@@ -60,7 +60,6 @@ import {
 import {
   ActionButton,
   AppScreen,
-  AppToast,
   FormModal,
   IconButton,
   InlineAlert,
@@ -77,7 +76,6 @@ import {
   FileText,
   Folder,
   Pencil,
-  RefreshCcw,
   Trash2,
   Users,
 } from "../../src/ui/icon";
@@ -237,8 +235,6 @@ export default function DomScreen() {
       subtitle="Zarządzaj swoim domem"
       title="Dom"
     >
-      <HouseholdCard />
-
       {availableTiles.length === 0 ? (
         <InlineAlert text="Nie masz dostępu do modułów domowych." />
       ) : (
@@ -286,7 +282,8 @@ function ModuleTile({
       onPress={onPress}
       style={({ pressed }) => [
         styles.moduleTile,
-        active && { borderColor: accent.color, backgroundColor: accent.soft },
+        active && styles.moduleTileActive,
+        active && { borderColor: accent.color, backgroundColor: accent.soft, shadowColor: accent.color },
         pressed && styles.pressed,
       ]}
     >
@@ -433,7 +430,6 @@ function CleaningPanel() {
         ) : undefined
       }
       icon={<Broom color={accent.color} size={18} />}
-      onRefresh={() => tasksQuery.refetch()}
       subtitle={`${tasks.length} zadań / ${overdue} po terminie`}
       title="Sprzątanie"
     >
@@ -608,10 +604,6 @@ function AnnualCostsPanel() {
         ) : undefined
       }
       icon={<ChartBar color={accent.color} size={18} />}
-      onRefresh={() => {
-        costsQuery.refetch();
-        historyQuery.refetch();
-      }}
       subtitle={`${costs.length} kosztów / ${history.length} wpisów w ${year}`}
       title="Koszty roczne"
     >
@@ -776,7 +768,6 @@ function DataEntriesPanel() {
         ) : undefined
       }
       icon={<Database color={accent.color} size={18} />}
-      onRefresh={() => entriesQuery.refetch()}
       subtitle={`${entries.length} zapisanych wpisów`}
       title="Dane"
     >
@@ -1081,7 +1072,6 @@ function AttachmentsPanel() {
         ) : undefined
       }
       icon={<Folder color={accent.color} size={18} />}
-      onRefresh={() => attachmentsQuery.refetch()}
       subtitle={`${attachments.length} zapisanych plików`}
       title="Pliki"
     >
@@ -1402,142 +1392,12 @@ function ZoomableImageModal({
   );
 }
 
-function HouseholdCard() {
-  const { session } = useSession();
-  const queryClient = useQueryClient();
-  const permission = useModulePermission("household_members");
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
-  const accessToken = session?.accessToken;
-  const [email, setEmail] = useState("");
-  const [inviteVisible, setInviteVisible] = useState(false);
-  const [invitationNotice, setInvitationNotice] = useState<string | null>(null);
-  const householdQuery = useQuery({
-    enabled: permission.canRead && Boolean(accessToken),
-    queryFn: () => getMyHousehold({ accessToken }),
-    queryKey: [...queryKeys.household, "me"],
-  });
-  const membersQuery = useQuery({
-    enabled: permission.canRead && Boolean(accessToken),
-    queryFn: () => listHouseholdMembers({ accessToken }),
-    queryKey: [...queryKeys.household, "members"],
-  });
-  const inviteMutation = useMutation({
-    mutationFn: () => inviteHouseholdMember({ email: email.trim() }, { accessToken }),
-    onSuccess: async (invitation) => {
-      setEmail("");
-      setInviteVisible(false);
-      setInvitationNotice(
-        invitation.notificationSent && invitation.notificationSent > 0
-          ? `Zaproszenie wysłane do ${invitation.email}. Wysłano też powiadomienie push.`
-          : `Zaproszenie wysłane do ${invitation.email}.`
-      );
-      setTimeout(() => setInvitationNotice(null), 2600);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.household });
-    },
-  });
-  const removeMutation = useMutation({
-    mutationFn: (memberId: string) => removeHouseholdMember(memberId, { accessToken }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.household }),
-  });
-  const members = membersQuery.data ?? [];
-  const canInvite = permission.canCreate && Boolean(email.trim()) && !inviteMutation.isPending;
-  const inviteErrorMessage =
-    inviteMutation.error instanceof Error
-      ? inviteMutation.error.message
-      : "Nie udało się zaprosić osoby.";
-
-  if (!permission.canRead) {
-    return null;
-  }
-
-  return (
-    <>
-    <AppToast text={invitationNotice} />
-    <View style={styles.householdCard}>
-      <View style={[styles.moduleIcon, { backgroundColor: theme.colors.softBlue }]}>
-        <Users color={theme.colors.calendar} size={25} />
-      </View>
-      <View style={styles.householdText}>
-        <Text style={styles.householdTitle}>Członkowie domu</Text>
-        <Text style={styles.householdMeta}>
-          {householdQuery.data?.name ?? "Dom"} / {members.length} osób
-        </Text>
-      </View>
-      <View style={styles.memberAvatars}>
-        {members.slice(0, 3).map((member) => (
-          <MiniAvatar key={member.id} member={member} />
-        ))}
-      </View>
-      {permission.canCreate ? (
-        <IconButton
-          accessibilityLabel="Zaproś domownika"
-          onPress={() => {
-            inviteMutation.reset();
-            setInvitationNotice(null);
-            setInviteVisible(true);
-          }}
-        >
-          <ChevronRight color={theme.colors.textMuted} size={20} />
-        </IconButton>
-      ) : null}
-      <FormModal
-        footer={
-          <View style={styles.modalFooter}>
-            <ActionButton
-              onPress={() => setInviteVisible(false)}
-              style={styles.modalFooterButton}
-              title="Anuluj"
-              variant="secondary"
-            />
-            <ActionButton
-              disabled={!canInvite}
-              loading={inviteMutation.isPending}
-              onPress={() => inviteMutation.mutate()}
-              style={styles.modalFooterButton}
-              title="Wyślij"
-            />
-          </View>
-        }
-        onClose={() => setInviteVisible(false)}
-        subtitle="Zaproszona osoba dostanie możliwość dołączenia do domu."
-        title="Zaproś domownika"
-        visible={inviteVisible}
-      >
-        <TextInput
-          autoCapitalize="none"
-          keyboardType="email-address"
-          onChangeText={setEmail}
-          placeholder="email@dom.pl"
-          placeholderTextColor={theme.colors.textSubtle}
-          style={styles.input}
-          value={email}
-        />
-        {members.map((member) =>
-          permission.canDelete && member.role !== "owner" ? (
-            <MemberDeleteRow
-              deleting={removeMutation.isPending}
-              key={member.id}
-              member={member}
-              onDelete={() => removeMutation.mutate(member.id)}
-            />
-          ) : null,
-        )}
-        {inviteMutation.error ? (
-          <InlineAlert tone="error" text={inviteErrorMessage} />
-        ) : null}
-      </FormModal>
-    </View>
-    </>
-  );
-}
-
 function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
   const { logout, session } = useSession();
   const queryClient = useQueryClient();
   const householdPermission = useModulePermission("household_members");
   const theme = useAppTheme();
-  const { darkAccent, setDarkAccent } = useThemePreferences();
+  const { accent, setAccent } = useThemePreferences();
   const styles = createStyles(theme.colors);
   const accessToken = session?.accessToken;
   const [settingsVisible, setSettingsVisible] = useState(false);
@@ -1546,11 +1406,17 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
   const [homeName, setHomeName] = useState("");
   const [currencyCode, setCurrencyCode] = useState("PLN");
   const [mealSlotsPerDay, setMealSlotsPerDay] = useState("4");
+  const [memberInviteEmail, setMemberInviteEmail] = useState("");
   const [toast, setToast] = useState<string | null>(null);
   const householdQuery = useQuery({
     enabled: Boolean(accessToken),
     queryFn: () => getMyHousehold({ accessToken }),
     queryKey: [...queryKeys.household, "me"],
+  });
+  const membersQuery = useQuery({
+    enabled: householdPermission.canRead && Boolean(accessToken),
+    queryFn: () => listHouseholdMembers({ accessToken }),
+    queryKey: [...queryKeys.household, "members"],
   });
   const notificationPreferencesQuery = useQuery({
     enabled: Boolean(accessToken),
@@ -1561,6 +1427,7 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
     () => mergeNotificationPreferences(notificationPreferencesQuery.data),
     [notificationPreferencesQuery.data],
   );
+  const members = membersQuery.data ?? [];
 
   useEffect(() => {
     if (openOnMount) {
@@ -1599,6 +1466,25 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
       showToast("Ustawienia domu zapisane");
       await queryClient.invalidateQueries({ queryKey: queryKeys.household });
       await queryClient.invalidateQueries({ queryKey: queryKeys.start });
+    },
+  });
+  const inviteMemberMutation = useMutation({
+    mutationFn: () => inviteHouseholdMember({ email: memberInviteEmail.trim() }, { accessToken }),
+    onSuccess: async (invitation) => {
+      setMemberInviteEmail("");
+      showToast(
+        invitation.notificationSent && invitation.notificationSent > 0
+          ? `Zaproszenie wysłane do ${invitation.email}. Wysłano też powiadomienie push.`
+          : `Zaproszenie wysłane do ${invitation.email}.`,
+      );
+      await queryClient.invalidateQueries({ queryKey: queryKeys.household });
+    },
+  });
+  const removeMemberMutation = useMutation({
+    mutationFn: (memberId: string) => removeHouseholdMember(memberId, { accessToken }),
+    onSuccess: async () => {
+      showToast("Domownik usunięty");
+      await queryClient.invalidateQueries({ queryKey: queryKeys.household });
     },
   });
   const registerPushMutation = useMutation({
@@ -1666,10 +1552,20 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
     notificationPreferencesMutation.mutate(next);
   }
 
-  function handleDarkAccentChange(accent: DarkAccentKey) {
-    setDarkAccent(accent);
+  function handleAccentChange(accent: DarkAccentKey) {
+    setAccent(accent);
     showToast("Kolor zapisany");
   }
+
+  function openNotificationConfiguration() {
+    setSettingsVisible(false);
+    setNotificationsVisible(true);
+  }
+
+  const canInviteMember =
+    householdPermission.canCreate &&
+    Boolean(memberInviteEmail.trim()) &&
+    !inviteMemberMutation.isPending;
 
   return (
     <>
@@ -1763,19 +1659,98 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
             <InlineAlert tone="error" text="Nie udało się zapisać ustawień domu." />
           ) : null}
         </View>
+        {householdPermission.canRead ? (
+          <View style={styles.settingsPanelRow}>
+            <View style={styles.settingsMembersHeader}>
+              <View style={[styles.moduleIcon, { backgroundColor: theme.colors.softBlue }]}>
+                <Users color={theme.colors.calendar} size={22} />
+              </View>
+              <View style={styles.itemText}>
+                <Text style={styles.settingsPanelTitle}>Członkowie domu</Text>
+                <Text style={styles.settingsPanelMeta}>
+                  {householdQuery.data?.name ?? "Dom"} / {members.length} osób
+                </Text>
+              </View>
+              <View style={styles.memberAvatars}>
+                {members.slice(0, 3).map((member) => (
+                  <MiniAvatar key={member.id} member={member} />
+                ))}
+              </View>
+            </View>
+            <QueryState
+              error={membersQuery.error}
+              isLoading={membersQuery.isLoading}
+            />
+            {householdPermission.canCreate ? (
+              <View style={styles.formRow}>
+                <TextInput
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  onChangeText={setMemberInviteEmail}
+                  placeholder="email@dom.pl"
+                  placeholderTextColor={theme.colors.textSubtle}
+                  style={[styles.input, styles.flexInput]}
+                  value={memberInviteEmail}
+                />
+                <ActionButton
+                  disabled={!canInviteMember}
+                  loading={inviteMemberMutation.isPending}
+                  onPress={() => inviteMemberMutation.mutate()}
+                  title="Zaproś"
+                  variant="secondary"
+                />
+              </View>
+            ) : null}
+            <View style={styles.itemList}>
+              {members.map((member) => (
+                <View key={member.id} style={styles.memberDeleteRow}>
+                  <View style={styles.itemText}>
+                    <Text style={styles.itemName}>{member.displayName}</Text>
+                    <Text style={styles.itemMeta}>
+                      {[member.email, member.role === "owner" ? "właściciel" : "domownik"]
+                        .filter(Boolean)
+                        .join(" / ")}
+                    </Text>
+                  </View>
+                  {householdPermission.canDelete && member.role !== "owner" ? (
+                    <IconButton
+                      disabled={removeMemberMutation.isPending}
+                      onPress={() => removeMemberMutation.mutate(member.id)}
+                    >
+                      <Trash2 color={theme.colors.danger} size={17} />
+                    </IconButton>
+                  ) : null}
+                </View>
+              ))}
+            </View>
+            {inviteMemberMutation.error ? (
+              <InlineAlert
+                tone="error"
+                text={
+                  inviteMemberMutation.error instanceof Error
+                    ? inviteMemberMutation.error.message
+                    : "Nie udało się zaprosić osoby."
+                }
+              />
+            ) : null}
+            {removeMemberMutation.error ? (
+              <InlineAlert tone="error" text="Nie udało się usunąć domownika." />
+            ) : null}
+          </View>
+        ) : null}
         <View style={styles.settingsPanelRow}>
           <Text style={styles.settingsPanelTitle}>Wygląd</Text>
-          <Text style={styles.settingsPanelMeta}>Akcent trybu ciemnego.</Text>
+          <Text style={styles.settingsPanelMeta}>Kolor akcentu aplikacji.</Text>
           <View style={styles.accentChoiceGrid}>
             {darkAccentOptions.map((option) => {
-              const active = option.value === darkAccent;
+              const active = option.value === accent;
 
               return (
                 <Pressable
                   accessibilityRole="button"
                   accessibilityState={{ selected: active }}
                   key={option.value}
-                  onPress={() => handleDarkAccentChange(option.value)}
+                  onPress={() => handleAccentChange(option.value)}
                   style={[
                     styles.accentChoice,
                     active && styles.accentChoiceActive,
@@ -1805,7 +1780,7 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
             Token telefonu, test push i typy zdarzeń w jednym miejscu.
           </Text>
           <ActionButton
-            onPress={() => setNotificationsVisible(true)}
+            onPress={openNotificationConfiguration}
             title="Otwórz konfigurację"
             variant="secondary"
           />
@@ -1984,7 +1959,6 @@ function ModulePanel({
   action,
   children,
   icon,
-  onRefresh,
   subtitle,
   title,
 }: {
@@ -1992,19 +1966,10 @@ function ModulePanel({
   action?: ReactNode;
   children: ReactNode;
   icon: ReactNode;
-  onRefresh: () => void;
   subtitle: string;
   title: string;
 }) {
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
-  const [refreshNotice, setRefreshNotice] = useState<string | null>(null);
-
-  function handleRefresh() {
-    onRefresh();
-    setRefreshNotice("Widok odświeżony");
-    setTimeout(() => setRefreshNotice(null), 1800);
-  }
+  const styles = createStyles(useAppTheme().colors);
 
   return (
     <View style={styles.panel}>
@@ -2016,12 +1981,8 @@ function ModulePanel({
         </View>
         <View style={styles.panelActions}>
           {action}
-          <IconButton onPress={handleRefresh}>
-            <RefreshCcw color={theme.colors.textMuted} size={17} />
-          </IconButton>
         </View>
       </View>
-      {refreshNotice ? <Text style={styles.refreshNotice}>{refreshNotice}</Text> : null}
       {children}
     </View>
   );
@@ -2238,28 +2199,6 @@ function MiniAvatar({ member }: { member: HouseholdMember }) {
   return (
     <View style={styles.miniAvatar}>
       <Text style={styles.miniAvatarText}>{initial}</Text>
-    </View>
-  );
-}
-
-function MemberDeleteRow({
-  deleting,
-  member,
-  onDelete,
-}: {
-  deleting: boolean;
-  member: HouseholdMember;
-  onDelete: () => void;
-}) {
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
-
-  return (
-    <View style={styles.memberDeleteRow}>
-      <Text style={styles.itemName}>{member.displayName}</Text>
-      <IconButton disabled={deleting} onPress={onDelete}>
-        <Trash2 color={theme.colors.danger} size={17} />
-      </IconButton>
     </View>
   );
 }
@@ -2591,34 +2530,6 @@ function createStyles(colors: AppPalette) {
       flexDirection: "row",
       gap: spacing.sm,
     },
-    householdCard: {
-      alignItems: "center",
-      backgroundColor: colors.softBlue,
-      borderColor: colors.border,
-      borderRadius: radii.card,
-      borderWidth: 1,
-      flexDirection: "row",
-      gap: spacing.sm,
-      minHeight: 82,
-      padding: spacing.md,
-    },
-    householdMeta: {
-      color: colors.textMuted,
-      fontSize: 12,
-      letterSpacing: 0,
-      lineHeight: 17,
-    },
-    householdText: {
-      flex: 1,
-      gap: 2,
-      minWidth: 0,
-    },
-    householdTitle: {
-      color: colors.text,
-      fontSize: 14,
-      fontWeight: "900",
-      letterSpacing: 0,
-    },
     hidden: {
       display: "none",
     },
@@ -2663,7 +2574,7 @@ function createStyles(colors: AppPalette) {
     },
     itemRow: {
       alignItems: "center",
-      backgroundColor: colors.card,
+      backgroundColor: colors.cardMuted,
       borderColor: colors.border,
       borderRadius: radii.card,
       borderWidth: 1,
@@ -2814,6 +2725,12 @@ function createStyles(colors: AppPalette) {
       paddingHorizontal: spacing.xs,
       paddingVertical: spacing.sm,
     },
+    moduleTileActive: {
+      elevation: 4,
+      shadowOffset: { height: 0, width: 0 },
+      shadowOpacity: 0.34,
+      shadowRadius: 14,
+    },
     moduleTileIcon: {
       alignItems: "center",
       borderRadius: radii.control,
@@ -2847,8 +2764,13 @@ function createStyles(colors: AppPalette) {
       borderColor: colors.border,
       borderRadius: radii.card,
       borderWidth: 1,
+      elevation: 2,
       gap: spacing.md,
       padding: spacing.md,
+      shadowColor: colors.primary,
+      shadowOffset: { height: 8, width: 0 },
+      shadowOpacity: 0.1,
+      shadowRadius: 22,
     },
     panelActions: {
       alignItems: "center",
@@ -2929,13 +2851,6 @@ function createStyles(colors: AppPalette) {
       minHeight: 42,
       paddingHorizontal: spacing.md,
     },
-    refreshNotice: {
-      color: colors.primary,
-      fontSize: 12,
-      fontWeight: "800",
-      letterSpacing: 0,
-      marginTop: -spacing.xs,
-    },
     textArea: {
       minHeight: 90,
       paddingTop: spacing.md,
@@ -2998,6 +2913,12 @@ function createStyles(colors: AppPalette) {
       borderWidth: 1,
       gap: spacing.sm,
       padding: spacing.md,
+    },
+    settingsMembersHeader: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.sm,
+      minHeight: 44,
     },
     settingsPanelTitle: {
       color: colors.text,

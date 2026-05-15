@@ -131,16 +131,19 @@ export class MealPlannerAiService {
       throw new BadRequestException('Meal plan AI chat needs a user message');
     }
 
-    const [mealSlotsPerDay, defaultTargetWeekStartDate, knownRecipes] = await Promise.all([
+    const [mealSlotsPerDay, knownRecipes] = await Promise.all([
       this.getMealSlotsPerDay(householdId),
-      this.getNextWeekStartDate(),
       this.listKnownRecipes(householdId)
     ]);
-    const targetWeekStartDate = isMondayDateOnly(dto.targetWeekStartDate)
-      ? dto.targetWeekStartDate
-      : defaultTargetWeekStartDate;
+
+    if (!isMondayDateOnly(dto.targetWeekStartDate)) {
+      throw new BadRequestException('Meal plan AI target week is required');
+    }
+
+    const targetWeekStartDate = dto.targetWeekStartDate;
     const currentDraft = normalizeDraftEntries(dto.currentDraft ?? [], mealSlotsPerDay);
     const latestUserMessage = getLatestUserMessage(messages);
+    const useGoogleSearch = shouldUseGoogleSearch(messages, currentDraft);
 
     try {
       const responseText = await this.callGemini(
@@ -149,8 +152,10 @@ export class MealPlannerAiService {
           knownRecipes,
           mealSlotsPerDay,
           messages,
-          targetWeekStartDate
-        })
+          targetWeekStartDate,
+          useGoogleSearch
+        }),
+        { useGoogleSearch }
       );
       const response = this.normalizeResponse(
         this.parseResponse(responseText),
@@ -176,7 +181,10 @@ export class MealPlannerAiService {
     return this.buildFallbackResponse(messages, currentDraft, targetWeekStartDate, mealSlotsPerDay);
   }
 
-  private async callGemini(prompt: string): Promise<string> {
+  private async callGemini(
+    prompt: string,
+    options: { useGoogleSearch?: boolean } = {}
+  ): Promise<string> {
     const env = loadEnv();
 
     if (!env.GEMINI_API_KEY) {
@@ -191,22 +199,31 @@ export class MealPlannerAiService {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
       model
     )}:generateContent?key=${encodeURIComponent(env.GEMINI_API_KEY)}`;
-
-    try {
-      const response = await fetch(url, {
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [{ text: prompt }],
-              role: 'user'
-            }
-          ],
-          generationConfig: {
+    const requestBody: GeminiGenerateContentRequest = {
+      contents: [
+        {
+          parts: [{ text: prompt }],
+          role: 'user'
+        }
+      ],
+      generationConfig: options.useGoogleSearch
+        ? {
+            temperature: 0.15
+          }
+        : {
             responseMimeType: 'application/json',
             responseSchema: mealPlanAiResponseJsonSchema,
             temperature: 0.15
           }
-        }),
+    };
+
+    if (options.useGoogleSearch) {
+      requestBody.tools = [{ google_search: {} }];
+    }
+
+    try {
+      const response = await fetch(url, {
+        body: JSON.stringify(requestBody),
         headers: {
           'Content-Type': 'application/json'
         },
@@ -260,7 +277,17 @@ export class MealPlannerAiService {
     mealSlotsPerDay: number;
     messages: MealPlanAiMessage[];
     targetWeekStartDate: string;
+    useGoogleSearch: boolean;
   }): string {
+    const searchRules = input.useGoogleSearch
+      ? [
+          '- W tym wywolaniu masz wlaczone Google Search. Gdy uzytkownik prosi o linki albo podaje zrodlo przepisu, uzyj wyszukiwania i wpisz znaleziony publiczny URL w linkUrl.',
+          '- Nie odpowiadaj, ze nie masz dostepu do internetu. Jesli wyszukiwanie nie daje pewnego wyniku, zostaw linkUrl pusty i napisz krotko, ktore pozycje wymagaja recznego sprawdzenia.'
+        ]
+      : [
+          '- W tym wywolaniu nie uzywasz wyszukiwania. Jesli nie masz pewnego adresu ze znanych przepisow albo wiedzy modelu, zostaw linkUrl pusty.'
+        ];
+
     return [
       'Jestes backendowym asystentem planu posilkow w polskiej aplikacji domowej.',
       'To jest rozmowa robocza: niczego nie zapisujesz w bazie. Zwracasz tylko aktualny szkic planu i odpowiedz dla uzytkownika.',
@@ -283,8 +310,13 @@ export class MealPlannerAiService {
       '- Nie wymyslaj slugow ani adresow. Gdy nie masz pewnosci, linkUrl musi byc pustym stringiem.',
       '- Najpierw uzywaj znanych przepisow z domu, jezeli nazwa pasuje.',
       '- Oznaczenia zrodla sa podpowiedziami wyszukiwania: C=szukaj na Cookidoo, KS=szukaj na Kwestia Smaku, I/IG=szukaj na Instagramie, AG=szukaj na AniaGotuje, Knorr=szukaj na Knorr, MW=szukaj na Moje Wypieki.',
+      '- Gdy uzytkownik wkleja plan z prefiksami zrodla, np. "C kokosowa jaglanka", "KS kasza + schab", "AG nalesniki", od razu potraktuj prefiks jako prosbe o znalezienie adresu URL. Nie czekaj na osobna wiadomosc "daj linki".',
+      '- Dla pozycji z prefiksem zrodla wyszukaj konkretny przepis w odpowiednim serwisie i wpisz URL do pola linkUrl tego posilku. Przyklady: C -> Cookidoo, KS -> Kwestia Smaku, AG -> AniaGotuje, I/IG -> Instagram, Knorr -> Knorr, MW -> Moje Wypieki.',
+      '- Pozycje bez prefiksu zrodla, np. "kanapki", "pizza", "parowki", nie powinny dostawac przypadkowych linkow. Uzupelnij je tylko, jesli pasuja do znanych przepisow z domu albo masz bardzo pewny publiczny URL.',
       '- Prefix zrodla usun z mealName i wpisz znormalizowana nazwe do sourceHint.',
+      '- Gdy uzytkownik pisze "to samo co w sobote" albo podobnie, skopiuj odpowiednie posilki z tego dnia razem z linkUrl/sourceHint, jesli te dane sa juz dostepne w szkicu.',
       '- Gdy uzytkownik pisze "daj linki", "uzupelnij linki", "znajdz przepisy" albo podobnie, nie tworz nowej listy jedzenia. Zachowaj currentDraft, uzupelnij tylko pewne linkUrl/sourceHint/note i powiedz, ktorych linkow nie udalo sie pewnie znalezc.',
+      ...searchRules,
       '',
       'Zasady korekt:',
       '- Jesli currentDraft nie jest pusty, traktuj go jako aktualny stan rozmowy.',
@@ -311,7 +343,7 @@ export class MealPlannerAiService {
 
   private parseResponse(responseText: string): MealPlanAiResponse {
     try {
-      return mealPlanAiResponseSchema.parse(JSON.parse(responseText));
+      return mealPlanAiResponseSchema.parse(parseJsonResponse(responseText));
     } catch (error) {
       this.logger.warn(
         `Invalid Gemini meal plan chat JSON: ${
@@ -415,24 +447,6 @@ export class MealPlannerAiService {
     return Math.max(1, Math.min(8, Number(row.meal_slots_per_day) || 1));
   }
 
-  private async getNextWeekStartDate(): Promise<string> {
-    const result = await this.database.query<{ week_start_date: string }>(
-      `
-        select (
-          current_date - ((extract(isodow from current_date)::integer - 1) * interval '1 day')
-          + interval '7 days'
-        )::date::text as week_start_date
-      `
-    );
-    const row = result.rows[0];
-
-    if (!row) {
-      throw new Error('Expected next week start date');
-    }
-
-    return row.week_start_date;
-  }
-
   private async listKnownRecipes(householdId: string): Promise<KnownMealRecipe[]> {
     const result = await this.database.query<KnownMealRecipeRow>(
       `
@@ -492,6 +506,58 @@ function normalizeMessages(messages: MealPlanAiChatDto['messages']): MealPlanAiM
 
 function getLatestUserMessage(messages: MealPlanAiMessage[]): MealPlanAiMessage | undefined {
   return [...messages].reverse().find((message) => message.role === 'user');
+}
+
+function shouldUseGoogleSearch(
+  messages: MealPlanAiMessage[],
+  currentDraft: MealPlanAiDraftEntry[]
+): boolean {
+  const userMessages = messages
+    .filter((message) => message.role === 'user')
+    .map((message) => message.content);
+
+  return userMessages.some((message) => isLinkRequest(message) || hasSourceHintRequest(message)) ||
+    currentDraft.some((entry) => Boolean(entry.sourceHint && !entry.linkUrl));
+}
+
+function hasSourceHintRequest(value: string): boolean {
+  const normalized = normalizeText(value);
+  const tokens = new Set(normalized.split(/[^a-z0-9]+/).filter(Boolean));
+
+  return sourceAliases.some((source) =>
+    source.aliases.some((alias) => {
+      const normalizedAlias = normalizeText(alias);
+
+      if (normalizedAlias === 'i') {
+        return false;
+      }
+
+      return normalizedAlias.length <= 2
+        ? tokens.has(normalizedAlias)
+        : normalized.includes(normalizedAlias);
+    })
+  );
+}
+
+function parseJsonResponse(value: string): unknown {
+  const trimmed = value
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/```\s*$/i, '')
+    .trim();
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const start = trimmed.indexOf('{');
+    const end = trimmed.lastIndexOf('}');
+
+    if (start >= 0 && end > start) {
+      return JSON.parse(trimmed.slice(start, end + 1));
+    }
+
+    throw new Error('No JSON object found in Gemini response');
+  }
 }
 
 function normalizeDraftEntries(
@@ -772,6 +838,21 @@ interface KnownMealRecipeRow {
   source: string;
   title: string;
   updated_at: string;
+}
+
+interface GeminiGenerateContentRequest {
+  contents: Array<{
+    parts: Array<{ text: string }>;
+    role: 'user';
+  }>;
+  generationConfig: {
+    responseMimeType?: 'application/json';
+    responseSchema?: typeof mealPlanAiResponseJsonSchema;
+    temperature: number;
+  };
+  tools?: Array<{
+    google_search: Record<string, never>;
+  }>;
 }
 
 interface GeminiGenerateContentResponse {

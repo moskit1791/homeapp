@@ -1,4 +1,5 @@
 import { PropsWithChildren, ReactNode } from 'react';
+import { LinearGradient } from 'expo-linear-gradient';
 import { ScrollView, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { spacing } from '../theme/tokens';
@@ -27,27 +28,33 @@ export function AppScreen({
   const centered = titleAlign === 'center';
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView
-        contentContainerStyle={[styles.content, contentStyle]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.header}>
-          {leading ? <View style={styles.leading}>{leading}</View> : null}
-          <View style={[styles.headerText, centered && styles.headerTextCentered]}>
-            <Text style={styles.title}>{title}</Text>
-            {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+    <LinearGradient
+      colors={[theme.colors.backgroundTop, theme.colors.background, theme.colors.backgroundBottom]}
+      locations={[0, 0.48, 1]}
+      style={styles.safeArea}
+    >
+      <SafeAreaView style={styles.safeAreaContent}>
+        <ScrollView
+          contentContainerStyle={[styles.content, contentStyle]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.header}>
+            {leading ? <View style={styles.leading}>{leading}</View> : null}
+            <View style={[styles.headerText, centered && styles.headerTextCentered]}>
+              <Text style={styles.title}>{title}</Text>
+              {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+            </View>
+            {actions ? (
+              <View style={styles.actions}>{actions}</View>
+            ) : leading && centered ? (
+              <View style={styles.leadingSpacer} />
+            ) : null}
           </View>
-          {actions ? (
-            <View style={styles.actions}>{actions}</View>
-          ) : leading && centered ? (
-            <View style={styles.leadingSpacer} />
-          ) : null}
-        </View>
-        {children}
-      </ScrollView>
-    </SafeAreaView>
+          {children}
+        </ScrollView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
@@ -88,6 +95,9 @@ function createStyles(colors: AppPalette) {
   },
   safeArea: {
     backgroundColor: colors.background,
+    flex: 1
+  },
+  safeAreaContent: {
     flex: 1
   },
   title: {

@@ -5,7 +5,6 @@ import { StyleSheet, Text, TextInput, View } from "react-native";
 import {
   LogOut,
   MailPlus,
-  RefreshCcw,
   ShieldCheck,
   Trash2,
   UserPlus,
@@ -178,10 +177,6 @@ function HouseholdPanel({
       }
       accent={accent}
       icon={<Users color={accent.color} size={18} />}
-      onRefresh={() => {
-        householdQuery.refetch();
-        membersQuery.refetch();
-      }}
       subtitle={`${members.length} członków / ${ownerCount} właścicieli`}
       title="Członkowie domu"
     >
@@ -303,7 +298,6 @@ function PermissionsPanel({
     <Panel
       accent={accent}
       icon={<ShieldCheck color={accent.color} size={18} />}
-      onRefresh={() => undefined}
       subtitle={`${readableCount} modułów widocznych`}
       title="Uprawnienia"
     >
@@ -439,7 +433,6 @@ function Panel({
   action,
   children,
   icon,
-  onRefresh,
   subtitle,
   title,
 }: {
@@ -447,7 +440,6 @@ function Panel({
   action?: ReactNode;
   children: ReactNode;
   icon: ReactNode;
-  onRefresh: () => void;
   subtitle: string;
   title: string;
 }) {
@@ -459,9 +451,6 @@ function Panel({
       action={
         <View style={styles.panelActions}>
           {action}
-          <IconButton onPress={onRefresh}>
-            <RefreshCcw color={theme.colors.textMuted} size={18} />
-          </IconButton>
         </View>
       }
       icon={icon}
