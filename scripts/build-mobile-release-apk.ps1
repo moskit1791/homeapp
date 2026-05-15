@@ -86,12 +86,22 @@ if ($resolvedWorkDir.Path -eq $repoPath) {
 }
 
 $excludedDirectories = @(
+  'node_modules',
   (Join-Path $repoPath 'node_modules'),
+  (Join-Path $repoPath 'apps\api\node_modules'),
+  (Join-Path $repoPath 'apps\mobile\node_modules'),
+  (Join-Path $repoPath 'packages\eslint-config\node_modules'),
+  (Join-Path $repoPath 'packages\shared-types\node_modules'),
+  (Join-Path $repoPath 'packages\shared-validation\node_modules'),
+  (Join-Path $repoPath 'packages\tsconfig\node_modules'),
   (Join-Path $repoPath '.git'),
   (Join-Path $repoPath '.turbo'),
   '.tmp-apk-build-*',
   (Join-Path $repoPath 'apps\mobile\.expo'),
+  (Join-Path $repoPath 'apps\mobile\android\.gradle'),
   (Join-Path $repoPath 'apps\mobile\android\build'),
+  (Join-Path $repoPath 'apps\mobile\android\app\build'),
+  (Join-Path $repoPath 'apps\mobile\builds'),
   (Join-Path $repoPath 'apps\mobile\tmp-assets'),
   (Join-Path $repoPath 'apps\mobile\dist')
 )
