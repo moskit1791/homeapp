@@ -12,6 +12,10 @@ export default function AuthLinkRedirectScreen() {
     return <Redirect href={{ pathname: "/auth/reset-password", params: { token } } as never} />;
   }
 
+  if ((action === "invitation" || action === "accept-invitation") && token) {
+    return <Redirect href={{ pathname: "/auth/invitation", params: { token } } as never} />;
+  }
+
   return <Redirect href={"/login" as never} />;
 }
 

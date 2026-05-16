@@ -202,6 +202,10 @@ export class AuthService {
     return { ok: true };
   }
 
+  issueSessionForUser(userId: string) {
+    return this.issueSession(userId);
+  }
+
   verifyAccessToken(token: string): AccessTokenPayload {
     const env = loadEnv();
 

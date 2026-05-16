@@ -56,9 +56,13 @@ const exactMessages: Record<string, string> = {
   "Invalid refresh token": "Token odświeżania jest nieprawidłowy.",
   "Invitation belongs to another email address":
     "Zaproszenie jest przypisane do innego adresu e-mail.",
+  "Invitation account already exists":
+    "Konto dla tego adresu już istnieje. Zaloguj się, aby przyjąć zaproszenie.",
   "Invitation has already been accepted":
     "Zaproszenie zostało już zaakceptowane.",
   "Invitation has expired": "Zaproszenie wygasło.",
+  "Legal acceptance is required":
+    "Zaakceptuj regulamin oraz politykę prywatności.",
   "Meal idea not found": "Nie znaleziono pomysłu na posiłek.",
   "Meal plan not found": "Nie znaleziono planu posiłków.",
   "Meal plan week already exists":

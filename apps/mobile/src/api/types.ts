@@ -823,6 +823,27 @@ export interface AcceptInvitationResponse {
   membership: HouseholdMembership;
 }
 
+export interface InvitationPreview {
+  email: string;
+  expiresAt: string;
+  householdName: string;
+  invitedByDisplayName: string;
+}
+
+export interface CompleteInvitationRegistrationRequest {
+  acceptedPrivacy: boolean;
+  acceptedTerms: boolean;
+  displayName: string;
+  password: string;
+  token: string;
+}
+
+export interface CompleteInvitationRegistrationResponse extends LoginResponse {
+  householdId: string;
+  invitationId: string;
+  membership: HouseholdMembership;
+}
+
 export interface PatchMemberPermissionsRequest {
   permissions: EffectivePermission[];
 }

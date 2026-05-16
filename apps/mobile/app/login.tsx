@@ -1,6 +1,6 @@
 import * as GoogleAuth from 'expo-auth-session/providers/google';
 import Constants from 'expo-constants';
-import { Redirect, useRouter } from 'expo-router';
+import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import brandIconSource from '../assets/icon.png';
 import { ReactNode, useEffect, useState } from 'react';
@@ -63,6 +63,15 @@ export default function Index() {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
   const router = useRouter();
+  const params = useLocalSearchParams<{
+    invitationToken?: string | string[];
+    notice?: string | string[];
+    skipInitialAuthLink?: string | string[];
+  }>();
+  const routeInvitationToken = normalizeParam(params.invitationToken);
+  const routeNotice = normalizeParam(params.notice);
+  const skipInitialAuthLink =
+    normalizeParam(params.skipInitialAuthLink) === '1' || Boolean(routeInvitationToken);
   const { createFirstHousehold, registerAndSignIn, signIn, signInWithGoogle, status } = useSession();
   const googleOAuthConfig = readGoogleOAuthConfig();
   const googleFallbackClientId =
@@ -124,6 +133,23 @@ export default function Index() {
   }, []);
 
   useEffect(() => {
+    if (!routeInvitationToken) {
+      return;
+    }
+
+    setPendingInvitationToken(routeInvitationToken);
+    setMode('login');
+    setNotice('Zaproszenie zapisane. Zaloguj się kontem z zaproszonego adresu e-mail.');
+  }, [routeInvitationToken]);
+
+  useEffect(() => {
+    if (routeNotice === 'password-reset') {
+      setMode('login');
+      setNotice('Hasło zostało zmienione. Możesz się zalogować.');
+    }
+  }, [routeNotice]);
+
+  useEffect(() => {
     if (googleResponse?.type !== 'success') {
       return;
     }
@@ -165,9 +191,7 @@ export default function Index() {
       }
 
       if (action.type === 'invitation') {
-        setPendingInvitationToken(action.token);
-        setMode('login');
-        setNotice('Zaproszenie zapisane. Zaloguj się kontem z zaproszonego adresu e-mail.');
+        router.push({ pathname: '/auth/invitation', params: { token: action.token } } as never);
         return;
       }
 
@@ -194,11 +218,13 @@ export default function Index() {
         });
     }
 
-    void Linking.getInitialURL().then((url) => {
-      if (url) {
-        handleAuthUrl(url);
-      }
-    });
+    if (!skipInitialAuthLink) {
+      void Linking.getInitialURL().then((url) => {
+        if (url) {
+          handleAuthUrl(url);
+        }
+      });
+    }
 
     const subscription = Linking.addEventListener('url', ({ url }) => handleAuthUrl(url));
 
@@ -206,7 +232,7 @@ export default function Index() {
       active = false;
       subscription.remove();
     };
-  }, [router]);
+  }, [router, skipInitialAuthLink]);
 
   if (status === 'ready') {
     return <Redirect href={'/(tabs)' as never} />;
@@ -854,6 +880,12 @@ function ResetPasswordModal({
       </View>
     </Modal>
   );
+}
+
+function normalizeParam(value: string | string[] | undefined): string {
+  const normalized = Array.isArray(value) ? value[0] : value;
+
+  return normalized?.trim() ?? '';
 }
 
 function toFieldErrors<TField extends string>(error: z.ZodError): FieldErrors<TField> {

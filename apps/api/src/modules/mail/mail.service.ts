@@ -67,14 +67,14 @@ export class MailService {
         `<p>Czesc,</p>`,
         `<p>${escapeHtml(input.invitedByDisplayName)} zaprasza Cie do domu "${escapeHtml(input.householdName)}" w HomeApp.</p>`,
         this.buttonLink(link, 'Dolacz do domu'),
-        '<p>Link wygasa po 7 dniach. Zaloguj sie kontem z adresem, na ktory przyszlo zaproszenie.</p>',
+        '<p>Link wygasa po 7 dniach. Otworzy widok dolaczenia do domu, gdzie ustawisz haslo i zaakceptujesz dokumenty.</p>',
         `<p>Jesli przycisk nie dziala, skopiuj ten link: ${escapeHtml(link)}</p>`
       ].join(''),
       subject: `Zaproszenie do domu ${input.householdName} w HomeApp`,
       text: [
         'Czesc,',
         `${input.invitedByDisplayName} zaprasza Cie do domu "${input.householdName}" w HomeApp.`,
-        'Link wygasa po 7 dniach. Zaloguj sie kontem z adresem, na ktory przyszlo zaproszenie.',
+        'Link wygasa po 7 dniach. Otworzy widok dolaczenia do domu, gdzie ustawisz haslo i zaakceptujesz dokumenty.',
         link
       ].join('\n\n'),
       to: input.email

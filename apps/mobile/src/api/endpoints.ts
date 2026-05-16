@@ -18,6 +18,8 @@ import type {
   CalendarEvent,
   CleaningTask,
   CompleteAnnualCostRequest,
+  CompleteInvitationRegistrationRequest,
+  CompleteInvitationRegistrationResponse,
   CompleteCleaningTaskRequest,
   CopyMealPlanRequest,
   CreateAnnualCostRequest,
@@ -46,6 +48,7 @@ import type {
   Expense,
   Household,
   HouseholdInvitation,
+  InvitationPreview,
   HouseholdMember,
   ForgotPasswordRequest,
   ForgotPasswordResponse,
@@ -375,6 +378,34 @@ export function acceptInvitation(
 
   return apiRequest<AcceptInvitationResponse, AcceptInvitationRequest>('/invitations/accept', {
     accessToken: requestOptions.accessToken,
+    body: input,
+    method: 'POST',
+    signal: requestOptions.signal
+  });
+}
+
+export function previewInvitation(
+  token: string,
+  options?: ApiCallOptionsInput
+): Promise<InvitationPreview> {
+  const requestOptions = normalizeApiCallOptions(options);
+  const query = `token=${encodeURIComponent(token)}`;
+
+  return apiRequest<InvitationPreview>(`/invitations/preview?${query}`, {
+    signal: requestOptions.signal
+  });
+}
+
+export function completeInvitationRegistration(
+  input: CompleteInvitationRegistrationRequest,
+  options?: ApiCallOptionsInput
+): Promise<CompleteInvitationRegistrationResponse> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<
+    CompleteInvitationRegistrationResponse,
+    CompleteInvitationRegistrationRequest
+  >('/invitations/complete-registration', {
     body: input,
     method: 'POST',
     signal: requestOptions.signal

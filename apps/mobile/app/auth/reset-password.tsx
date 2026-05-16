@@ -22,7 +22,11 @@ import { ChevronLeft, Eye, EyeOff } from "../../src/ui/icon";
 
 const resetPasswordSchema = z.object({
   password: z.string().min(8, "Hasło musi mieć min. 8 znaków"),
+  passwordConfirmation: z.string().min(8, "Powtórz hasło"),
   token: z.string().trim().min(1, "Link resetu hasła jest nieprawidłowy lub wygasł"),
+}).refine((value) => value.password === value.passwordConfirmation, {
+  message: "Hasła muszą być takie same",
+  path: ["passwordConfirmation"],
 });
 
 type ResetPasswordValues = z.input<typeof resetPasswordSchema>;
@@ -36,12 +40,21 @@ export default function ResetPasswordScreen() {
   const styles = createStyles(theme.colors);
   const token = normalizeParam(params.token);
   const [password, setPassword] = useState("");
+  const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showPasswordConfirmation, setShowPasswordConfirmation] = useState(false);
   const [errors, setErrors] = useState<FieldErrors<ResetPasswordField>>({});
   const [notice, setNotice] = useState<string | null>(
     token ? null : "Link resetu hasła jest nieprawidłowy lub wygasł.",
   );
   const [loading, setLoading] = useState(false);
+
+  function goToLogin(extraParams: Record<string, string> = {}) {
+    router.replace({
+      pathname: "/login",
+      params: { skipInitialAuthLink: "1", ...extraParams },
+    } as never);
+  }
 
   function updatePassword(value: string) {
     setPassword(value);
@@ -49,8 +62,14 @@ export default function ResetPasswordScreen() {
     setNotice(token ? null : "Link resetu hasła jest nieprawidłowy lub wygasł.");
   }
 
+  function updatePasswordConfirmation(value: string) {
+    setPasswordConfirmation(value);
+    setErrors((current) => ({ ...current, passwordConfirmation: undefined }));
+    setNotice(token ? null : "Link resetu hasła jest nieprawidłowy lub wygasł.");
+  }
+
   async function submit() {
-    const parsed = resetPasswordSchema.safeParse({ password, token });
+    const parsed = resetPasswordSchema.safeParse({ password, passwordConfirmation, token });
 
     if (!parsed.success) {
       setErrors(toFieldErrors<ResetPasswordField>(parsed.error));
@@ -62,9 +81,12 @@ export default function ResetPasswordScreen() {
     setNotice(null);
 
     try {
-      await resetPassword(parsed.data);
+      await resetPassword({
+        password: parsed.data.password,
+        token: parsed.data.token,
+      });
       setNotice("Hasło zostało zmienione. Możesz się zalogować.");
-      setTimeout(() => router.replace("/login" as never), 900);
+      setTimeout(() => goToLogin({ notice: "password-reset" }), 900);
     } catch (submitError) {
       setNotice(getMessage(submitError));
     } finally {
@@ -81,7 +103,7 @@ export default function ResetPasswordScreen() {
           <Pressable
             accessibilityLabel="Wróć do logowania"
             accessibilityRole="button"
-            onPress={() => router.replace("/login" as never)}
+            onPress={() => goToLogin()}
             style={styles.backButton}
           >
             <ChevronLeft color={theme.colors.textMuted} size={20} />
@@ -103,7 +125,7 @@ export default function ResetPasswordScreen() {
 
             <View style={styles.card}>
               <Text style={styles.heading}>Ustaw nowe hasło</Text>
-              <Text style={styles.copy}>Wpisz nowe hasło do konta.</Text>
+              <Text style={styles.copy}>Wpisz i potwierdź nowe hasło do konta.</Text>
               <AuthTextField
                 autoComplete="new-password"
                 error={errors.password}
@@ -122,6 +144,25 @@ export default function ResetPasswordScreen() {
                 secureTextEntry={!showPassword}
                 textContentType="newPassword"
                 value={password}
+              />
+              <AuthTextField
+                autoComplete="new-password"
+                error={errors.passwordConfirmation}
+                label="Powtórz hasło"
+                onChangeText={updatePasswordConfirmation}
+                placeholder="Wpisz hasło ponownie"
+                rightElement={
+                  <IconTap onPress={() => setShowPasswordConfirmation((current) => !current)}>
+                    {showPasswordConfirmation ? (
+                      <EyeOff color={theme.colors.textMuted} size={18} />
+                    ) : (
+                      <Eye color={theme.colors.textMuted} size={18} />
+                    )}
+                  </IconTap>
+                }
+                secureTextEntry={!showPasswordConfirmation}
+                textContentType="newPassword"
+                value={passwordConfirmation}
               />
               <PasswordStrength value={password} />
               {notice ? <Banner message={notice} tone={noticeTone} /> : null}
@@ -247,10 +288,6 @@ function createStyles(colors: AppPalette) {
       fontWeight: "800",
       letterSpacing: 0,
     },
-    header: {
-      paddingHorizontal: spacing.lg,
-      paddingTop: spacing.sm,
-    },
     banner: {
       borderRadius: radii.control,
       borderWidth: 1,
@@ -308,6 +345,10 @@ function createStyles(colors: AppPalette) {
     errorBox: {
       backgroundColor: "#FFF1F0",
       borderColor: "#FFDAD6",
+    },
+    header: {
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.sm,
     },
     heading: {
       color: colors.text,

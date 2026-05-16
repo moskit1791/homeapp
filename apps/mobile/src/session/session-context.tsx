@@ -8,11 +8,13 @@ import {
 } from "react";
 import {
   ApiError,
+  CompleteInvitationRegistrationRequest,
   CreateHouseholdRequest,
   LoginResponse,
   LoginRequest,
   RegisterRequest,
   acceptInvitation,
+  completeInvitationRegistration as completeInvitationRegistrationApi,
   createHousehold,
   getStartDashboard,
   login,
@@ -44,6 +46,10 @@ interface SignInOptions {
 }
 
 interface SessionContextValue {
+  completeInvitationRegistration: (
+    input: CompleteInvitationRegistrationRequest,
+    options?: Pick<SignInOptions, "remember">,
+  ) => Promise<void>;
   createFirstHousehold: (input: CreateHouseholdRequest) => Promise<void>;
   isAuthenticated: boolean;
   logout: () => Promise<void>;
@@ -175,6 +181,23 @@ export function SessionProvider({ children }: PropsWithChildren) {
 
   const value = useMemo<SessionContextValue>(
     () => ({
+      completeInvitationRegistration: async (input, options) => {
+        const nextSession = await completeInvitationRegistrationApi(input);
+        const authSession = toSession(nextSession);
+
+        setSession(authSession);
+        setRememberSession(Boolean(options?.remember));
+
+        if (options?.remember) {
+          await saveStoredSession(authSession);
+        } else {
+          await clearStoredSession();
+          await clearRememberedEmail();
+        }
+
+        await getStartDashboard({ accessToken: authSession.accessToken });
+        setStatus("ready");
+      },
       createFirstHousehold: async (input) => {
         if (!session) {
           throw new Error("Brak aktywnej sesji");
