@@ -536,7 +536,6 @@ function QuickAction({
           styles.quickIcon,
           {
             backgroundColor: tint(color, 0.08),
-            borderColor: tint(color, 0.12),
           },
         ]}
       >
@@ -902,7 +901,6 @@ function createStyles(colors: AppPalette) {
     quickIcon: {
       alignItems: "center",
       borderRadius: 999,
-      borderWidth: 1,
       height: 46,
       justifyContent: "center",
       width: 46,

@@ -1254,7 +1254,7 @@ function createStyles(colors: AppPalette) {
       maxHeight: 220
     },
     modalCard: {
-      backgroundColor: colors.overlay,
+      backgroundColor: colors.backgroundTop,
       borderColor: colors.border,
       borderRadius: radii.card,
       borderWidth: 1,

@@ -296,7 +296,6 @@ function ModuleTile({
             styles.moduleTileIcon,
             {
               backgroundColor: active ? alphaColor(accent.color, 0.1) : "transparent",
-              borderColor: active ? alphaColor(accent.color, 0.16) : "transparent",
             },
           ]}
         >
@@ -304,9 +303,7 @@ function ModuleTile({
         </View>
       </View>
       <Text numberOfLines={2} style={styles.moduleTitle}>{title}</Text>
-      {active ? (
-        <View style={[styles.moduleActiveStrip, { backgroundColor: accent.color, shadowColor: accent.color }]} />
-      ) : null}
+      {active ? <View style={[styles.moduleActiveStrip, { backgroundColor: accent.color }]} /> : null}
     </Pressable>
   );
 }
@@ -1977,7 +1974,7 @@ function mergeNotificationPreferences(
 }
 
 function ModulePanel({
-  accent,
+  accent: _accent,
   action,
   children,
   icon,
@@ -1997,17 +1994,7 @@ function ModulePanel({
   return (
     <View style={styles.panel}>
       <View style={styles.panelHeader}>
-        <View
-          style={[
-            styles.panelIcon,
-            {
-              backgroundColor: alphaColor(accent.color, 0.07),
-              borderColor: alphaColor(accent.color, 0.12),
-            },
-          ]}
-        >
-          {icon}
-        </View>
+        <View style={styles.panelIcon}>{icon}</View>
         <View style={styles.panelText}>
           <Text style={styles.panelTitle}>{title}</Text>
           <Text style={styles.panelSubtitle}>{subtitle}</Text>
@@ -2804,14 +2791,10 @@ function createStyles(colors: AppPalette) {
       left: spacing.md,
       position: "absolute",
       right: spacing.md,
-      shadowOffset: { height: 0, width: 0 },
-      shadowOpacity: 0.36,
-      shadowRadius: 8,
     },
     moduleTileIcon: {
       alignItems: "center",
       borderRadius: 999,
-      borderWidth: 1,
       elevation: 0,
       height: 46,
       justifyContent: "center",
@@ -2863,7 +2846,6 @@ function createStyles(colors: AppPalette) {
     panelIcon: {
       alignItems: "center",
       borderRadius: 999,
-      borderWidth: 1,
       height: 36,
       justifyContent: "center",
       width: 36,

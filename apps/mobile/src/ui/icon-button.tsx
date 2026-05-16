@@ -1,7 +1,6 @@
 import { ReactNode } from 'react';
 import { Pressable, StyleProp, StyleSheet, ViewStyle } from 'react-native';
-import { radii, spacing } from '../theme/tokens';
-import { useAppTheme, type AppPalette } from '../theme/use-app-theme';
+import { spacing } from '../theme/tokens';
 
 interface IconButtonProps {
   accessibilityLabel?: string;
@@ -18,8 +17,7 @@ export function IconButton({
   onPress,
   style
 }: IconButtonProps) {
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
+  const styles = createStyles();
 
   return (
     <Pressable
@@ -40,29 +38,23 @@ export function IconButton({
   );
 }
 
-function createStyles(colors: AppPalette) {
+function createStyles() {
   return StyleSheet.create({
   button: {
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radii.control,
-    borderWidth: 1,
-    elevation: 1,
+    backgroundColor: 'transparent',
+    borderRadius: 999,
+    elevation: 0,
     height: 38,
     justifyContent: 'center',
     padding: spacing.sm,
-    shadowColor: colors.primary,
-    shadowOffset: { height: 0, width: 0 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
     width: 38
   },
   disabled: {
     opacity: 0.48
   },
   pressed: {
-    opacity: 0.72
+    opacity: 0.62
   }
 });
 }

@@ -76,11 +76,9 @@ type FinanceFormValues = {
   itemName: string;
   monthInput: string;
   savingsAmount: string;
-  savingsChangedAt: string;
   savingsName: string;
   savingsNote: string;
   savingsTransactionAmount: string;
-  savingsTransactionChangedAt: string;
   savingsTransactionNote: string;
 };
 
@@ -158,11 +156,9 @@ export default function FinanseScreen() {
       itemName: "",
       monthInput: "",
       savingsAmount: "",
-      savingsChangedAt: todayIso(),
       savingsName: "",
       savingsNote: "",
       savingsTransactionAmount: "",
-      savingsTransactionChangedAt: todayIso(),
       savingsTransactionNote: "",
     },
   });
@@ -179,11 +175,9 @@ export default function FinanseScreen() {
   const debtNote = watch("debtNote");
   const debtPurpose = watch("debtPurpose");
   const savingsAmount = watch("savingsAmount");
-  const savingsChangedAt = watch("savingsChangedAt");
   const savingsName = watch("savingsName");
   const savingsNote = watch("savingsNote");
   const savingsTransactionAmount = watch("savingsTransactionAmount");
-  const savingsTransactionChangedAt = watch("savingsTransactionChangedAt");
   const savingsTransactionNote = watch("savingsTransactionNote");
   const [selectedIncomeMemberId, setSelectedIncomeMemberId] = useState("");
   const [selectedItemCategoryId, setSelectedItemCategoryId] = useState("");
@@ -613,7 +607,7 @@ export default function FinanseScreen() {
       createFinanceSavingsAccount(
         {
           amount: parseMoney(savingsAmount),
-          changedAt: savingsChangedAt.trim(),
+          changedAt: todayIso(),
           name: savingsName.trim(),
           note: savingsNote.trim() || null,
         },
@@ -631,7 +625,7 @@ export default function FinanseScreen() {
         selectedSavingsAccount?.id ?? "",
         {
           amount: parseMoney(savingsTransactionAmount),
-          changedAt: savingsTransactionChangedAt.trim(),
+          changedAt: todayIso(),
           direction: savingsDirection,
           note: savingsTransactionNote.trim() || null,
         },
@@ -808,7 +802,6 @@ export default function FinanseScreen() {
 
   function resetSavingsAccountForm() {
     setValue("savingsAmount", "");
-    setValue("savingsChangedAt", todayIso());
     setValue("savingsName", "");
     setValue("savingsNote", "");
   }
@@ -822,7 +815,6 @@ export default function FinanseScreen() {
     setSelectedSavingsAccount(null);
     setSavingsDirection("add");
     setValue("savingsTransactionAmount", "");
-    setValue("savingsTransactionChangedAt", todayIso());
     setValue("savingsTransactionNote", "");
   }
 
@@ -830,7 +822,6 @@ export default function FinanseScreen() {
     setSelectedSavingsAccount(account);
     setSavingsDirection(direction);
     setValue("savingsTransactionAmount", "");
-    setValue("savingsTransactionChangedAt", todayIso());
     setValue("savingsTransactionNote", "");
     setFinanceModal("savingsTransaction");
   }
@@ -863,13 +854,11 @@ export default function FinanseScreen() {
   const canSaveSavingsAccount =
     canCreate &&
     Boolean(savingsName.trim()) &&
-    isValidMoney(savingsAmount) &&
-    isValidDateInput(savingsChangedAt);
+    isValidMoney(savingsAmount);
   const canSaveSavingsTransaction =
     canUpdate &&
     Boolean(selectedSavingsAccount?.id) &&
-    isPositiveMoney(savingsTransactionAmount) &&
-    isValidDateInput(savingsTransactionChangedAt);
+    isPositiveMoney(savingsTransactionAmount);
   const canSaveCopyAmounts =
     copiedMonthItems.length > 0 &&
     copiedMonthItems.every((item) => {
@@ -1553,7 +1542,6 @@ export default function FinanseScreen() {
           >
             <TextField control={control} label="Nazwa" name="savingsName" placeholder="Np. Poduszka finansowa" />
             <TextField control={control} keyboardType="decimal-pad" label="Kwota" name="savingsAmount" placeholder="0,00" />
-            <TextField control={control} label="Data ostatniej zmiany" name="savingsChangedAt" placeholder="YYYY-MM-DD" />
             <TextField control={control} label="Notatka" name="savingsNote" placeholder="Opcjonalnie" />
             {savingsAccountMutation.error ? (
               <InlineAlert tone="error" text="Nie udało się dodać oszczędności." />
@@ -1595,11 +1583,10 @@ export default function FinanseScreen() {
             />
             <TextField
               control={control}
-              label="Data zmiany"
-              name="savingsTransactionChangedAt"
-              placeholder="YYYY-MM-DD"
+              label="Notatka"
+              name="savingsTransactionNote"
+              placeholder="Opcjonalnie"
             />
-            <TextField control={control} label="Notatka" name="savingsTransactionNote" placeholder="Opcjonalnie" />
             {savingsTransactionMutation.error ? (
               <InlineAlert tone="error" text="Nie udało się zapisać zmiany oszczędności." />
             ) : null}
@@ -2238,10 +2225,6 @@ function isPositiveMoney(value: string): boolean {
   const parsed = parseMoney(value);
 
   return value.trim().length > 0 && Number.isFinite(parsed) && parsed > 0;
-}
-
-function isValidDateInput(value: string): boolean {
-  return /^\d{4}-\d{2}-\d{2}$/.test(value.trim());
 }
 
 function formatMoney(value: string | number | null | undefined): string {

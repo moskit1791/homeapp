@@ -10,7 +10,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { radii, spacing } from "../theme/tokens";
+import { spacing } from "../theme/tokens";
 import { useAppTheme, type AppPalette } from "../theme/use-app-theme";
 import { Close } from "./icon";
 import { IconButton } from "./icon-button";
@@ -131,10 +131,10 @@ function createStyles(colors: AppPalette) {
     },
     sheet: {
       alignSelf: "stretch",
-      backgroundColor: colors.overlay,
+      backgroundColor: colors.backgroundTop,
       borderColor: colors.border,
-      borderTopLeftRadius: radii.card,
-      borderTopRightRadius: radii.card,
+      borderTopLeftRadius: 18,
+      borderTopRightRadius: 18,
       borderTopWidth: 1,
       elevation: 12,
       flexShrink: 1,

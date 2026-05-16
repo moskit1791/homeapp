@@ -58,8 +58,8 @@ function createStyles(colors: AppPalette) {
   },
   iconBadge: {
     alignItems: 'center',
-    backgroundColor: colors.primarySoft,
-    borderRadius: radii.control,
+    backgroundColor: 'transparent',
+    borderRadius: 999,
     height: 34,
     justifyContent: 'center',
     width: 34
