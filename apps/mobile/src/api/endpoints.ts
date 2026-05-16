@@ -359,6 +359,18 @@ export function listHouseholdMembers(options?: ApiCallOptionsInput): Promise<Hou
   });
 }
 
+export function listMemberPermissions(
+  memberId: string,
+  options?: ApiCallOptionsInput
+): Promise<EffectivePermission[]> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<EffectivePermission[]>(`/households/me/members/${memberId}/permissions`, {
+    accessToken: requestOptions.accessToken,
+    signal: requestOptions.signal
+  });
+}
+
 export function inviteHouseholdMember(
   input: CreateInvitationRequest,
   options?: ApiCallOptionsInput

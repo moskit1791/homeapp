@@ -26,7 +26,10 @@ export async function listStoredNotifications(): Promise<StoredNotification[]> {
     const parsed = JSON.parse(raw) as StoredNotification[];
 
     return Array.isArray(parsed)
-      ? parsed.filter((notification) => !deletedIds.includes(notification.id))
+      ? parsed.filter(
+          (notification) =>
+            !deletedIds.includes(notification.id) && shouldShowInNotificationCenter(notification),
+        )
       : [];
   } catch {
     return [];
@@ -75,6 +78,10 @@ export async function storeNotificationFromExpo(
     return;
   }
 
+  if (isGenericHomeAppNotification(title, content.data)) {
+    return;
+  }
+
   await addStoredNotification({
     body,
     id: notification.request.identifier,
@@ -82,6 +89,20 @@ export async function storeNotificationFromExpo(
     status: "unread",
     title,
   });
+}
+
+function shouldShowInNotificationCenter(notification: StoredNotification): boolean {
+  return !isGenericHomeAppNotification(notification.title);
+}
+
+function isGenericHomeAppNotification(
+  title: string,
+  data?: Notifications.NotificationContent["data"],
+): boolean {
+  const normalizedTitle = title.trim().toLowerCase();
+  const kind = typeof data?.kind === "string" ? data.kind : undefined;
+
+  return normalizedTitle === "homeapp" || kind === "test";
 }
 
 async function addStoredNotification(notification: StoredNotification) {

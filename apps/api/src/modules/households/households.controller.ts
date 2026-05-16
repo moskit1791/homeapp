@@ -72,6 +72,25 @@ export class HouseholdsController {
     return this.permissionsService.listEffectivePermissions(context.memberId, context.role);
   }
 
+  @Get('me/members/:id/permissions')
+  @RequirePermission('permissions', 'read')
+  @UseGuards(JwtAuthGuard, HouseholdContextGuard, PermissionGuard)
+  async listMemberPermissions(
+    @CurrentHousehold() household: HouseholdContext | undefined,
+    @Param() params: MemberIdParamDto
+  ) {
+    const permissions = await this.permissionsService.listEffectivePermissionsForHouseholdMember(
+      this.requireHousehold(household).householdId,
+      params.id
+    );
+
+    if (!permissions) {
+      throw new NotFoundException('Member not found');
+    }
+
+    return permissions;
+  }
+
   @Post('me/invitations')
   @RequirePermission('household_members', 'create')
   @UseGuards(JwtAuthGuard, HouseholdContextGuard, PermissionGuard)

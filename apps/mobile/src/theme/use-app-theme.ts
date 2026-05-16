@@ -19,7 +19,7 @@ type Palette = { [Key in keyof typeof colors]: string } & {
   softPurple: string;
 };
 
-export type DarkAccentKey = 'violet' | 'cyan' | 'pink' | 'amber';
+export type DarkAccentKey = 'violet' | 'cyan' | 'pink' | 'amber' | 'emerald' | 'sunset';
 
 type DarkAccentOption = {
   color: string;
@@ -47,7 +47,9 @@ export const darkAccentOptions: DarkAccentOption[] = [
   { color: '#B56CFF', label: 'Fiolet', value: 'violet' },
   { color: '#20E7FF', label: 'Cyjan', value: 'cyan' },
   { color: '#FF4FD8', label: 'Róż', value: 'pink' },
-  { color: '#FFB020', label: 'Amber', value: 'amber' }
+  { color: '#FFB020', label: 'Amber', value: 'amber' },
+  { color: '#36D399', label: 'Szmaragd', value: 'emerald' },
+  { color: '#FF6B6B', label: 'Koral', value: 'sunset' }
 ];
 
 const darkAccentPalettes: Record<
@@ -66,6 +68,20 @@ const darkAccentPalettes: Record<
     primaryDarker: '#FFE2A3',
     primaryLight: '#FFC857',
     primarySoft: 'rgba(255, 176, 32, 0.18)'
+  },
+  emerald: {
+    primary: '#36D399',
+    primaryDark: '#8BF0C7',
+    primaryDarker: '#C9FBE6',
+    primaryLight: '#63E6B5',
+    primarySoft: 'rgba(54, 211, 153, 0.17)'
+  },
+  sunset: {
+    primary: '#FF6B6B',
+    primaryDark: '#FFA3A3',
+    primaryDarker: '#FFD6D6',
+    primaryLight: '#FF8A8A',
+    primarySoft: 'rgba(255, 107, 107, 0.17)'
   },
   cyan: {
     primary: '#20E7FF',
@@ -97,6 +113,20 @@ const lightAccentPalettes: typeof darkAccentPalettes = {
     primaryDarker: '#78350F',
     primaryLight: '#D97706',
     primarySoft: 'rgba(180, 83, 9, 0.13)'
+  },
+  emerald: {
+    primary: '#047857',
+    primaryDark: '#065F46',
+    primaryDarker: '#064E3B',
+    primaryLight: '#10B981',
+    primarySoft: 'rgba(4, 120, 87, 0.13)'
+  },
+  sunset: {
+    primary: '#DC2626',
+    primaryDark: '#B91C1C',
+    primaryDarker: '#7F1D1D',
+    primaryLight: '#FB7185',
+    primarySoft: 'rgba(220, 38, 38, 0.12)'
   },
   cyan: {
     primary: '#0E7490',
@@ -361,5 +391,12 @@ function hexToRgb(value: string): { blue: number; green: number; red: number } |
 }
 
 function isDarkAccentKey(value: string): value is DarkAccentKey {
-  return value === 'violet' || value === 'cyan' || value === 'pink' || value === 'amber';
+  return (
+    value === 'violet' ||
+    value === 'cyan' ||
+    value === 'pink' ||
+    value === 'amber' ||
+    value === 'emerald' ||
+    value === 'sunset'
+  );
 }

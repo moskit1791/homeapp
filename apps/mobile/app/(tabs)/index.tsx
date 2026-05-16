@@ -213,13 +213,15 @@ export default function DzisiajScreen() {
         </View>
         <View style={styles.quickGrid}>
           <QuickAction
-            icon={<CalendarDays color={theme.colors.calendar} size={24} />}
+            accent={theme.colors.calendar}
+            icon={<CalendarDays color={theme.colors.calendar} size={29} />}
             label="Wydarzenie"
             onPress={() => openCalendarForDate(todayIso(), "create")}
             showDivider
           />
           <QuickAction
-            icon={<ReceiptText color={theme.colors.finance} size={24} />}
+            accent={theme.colors.finance}
+            icon={<ReceiptText color={theme.colors.finance} size={29} />}
             label="Wydatek"
             onPress={() =>
               router.push({ pathname: "/(tabs)/finanse", params: { action: "expense" } } as never)
@@ -227,13 +229,15 @@ export default function DzisiajScreen() {
             showDivider
           />
           <QuickAction
-            icon={<CartPlus color={theme.colors.shopping} size={24} />}
+            accent={theme.colors.shopping}
+            icon={<CartPlus color={theme.colors.shopping} size={29} />}
             label="Zakupy"
             onPress={() => router.push({ pathname: "/(tabs)/lista", params: { action: "addShopping", segment: "shopping" } } as never)}
             showDivider
           />
           <QuickAction
-            icon={<Utensils color={theme.colors.food} size={24} />}
+            accent={theme.colors.food}
+            icon={<Utensils color={theme.colors.food} size={29} />}
             label="Posiłek"
             onPress={() => router.push({ pathname: "/(tabs)/lista", params: { action: "addMeal", segment: "meals" } } as never)}
           />
@@ -501,11 +505,13 @@ function CleaningTodaySection({
 }
 
 function QuickAction({
+  accent,
   icon,
   label,
   onPress,
   showDivider = false,
 }: {
+  accent: string;
   icon: ReactNode;
   label: string;
   onPress: () => void;
@@ -525,7 +531,16 @@ function QuickAction({
         pressed && styles.quickActionPressed,
       ]}
     >
-      <View style={styles.quickIcon}>
+      <View
+        style={[
+          styles.quickIcon,
+          {
+            backgroundColor: tint(accent, 0.12),
+            borderColor: tint(accent, 0.24),
+            shadowColor: accent,
+          },
+        ]}
+      >
         {icon}
       </View>
       <Text numberOfLines={2} style={styles.quickLabel}>
@@ -854,43 +869,48 @@ function createStyles(colors: AppPalette) {
     },
     quickAction: {
       alignItems: "center",
-      backgroundColor: "transparent",
+      backgroundColor: "rgba(255, 255, 255, 0.08)",
       flex: 1,
-      gap: 6,
-      minHeight: 88,
+      gap: 7,
+      minHeight: 96,
       justifyContent: "center",
       minWidth: 0,
       paddingHorizontal: 6,
-      paddingVertical: spacing.sm,
+      paddingVertical: spacing.md,
     },
     quickActionDivider: {
-      borderColor: colors.border,
+      borderColor: colors.line,
       borderRightWidth: 1,
     },
     quickActionPressed: {
-      backgroundColor: colors.cardMuted,
+      backgroundColor: colors.primarySoft,
       opacity: 0.86,
     },
     quickGrid: {
-      backgroundColor: colors.overlay,
-      borderColor: colors.border,
-      borderRadius: 20,
+      backgroundColor: "rgba(255, 255, 255, 0.16)",
+      borderColor: colors.line,
+      borderRadius: 22,
       borderWidth: 1,
-      elevation: 0,
+      elevation: 3,
       flexDirection: "row",
       gap: 0,
       overflow: "hidden",
-      shadowColor: colors.text,
-      shadowOffset: { height: 8, width: 0 },
-      shadowOpacity: 0.06,
-      shadowRadius: 18,
+      shadowColor: "#000000",
+      shadowOffset: { height: 14, width: 0 },
+      shadowOpacity: 0.1,
+      shadowRadius: 28,
     },
     quickIcon: {
       alignItems: "center",
+      borderWidth: 1,
       borderRadius: 999,
-      height: 46,
+      elevation: 3,
+      height: 54,
       justifyContent: "center",
-      width: 46,
+      shadowOffset: { height: 8, width: 0 },
+      shadowOpacity: 0.18,
+      shadowRadius: 16,
+      width: 54,
     },
     quickLabel: {
       color: colors.text,

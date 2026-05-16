@@ -1,7 +1,7 @@
 import { REALTIME_EVENTS, type ModuleKey, type RealtimeEventType } from "@homeapp/shared-types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as FileSystem from "expo-file-system";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import * as MediaLibrary from "expo-media-library";
 import * as Sharing from "expo-sharing";
@@ -68,6 +68,7 @@ import {
 import {
   Broom,
   ChartBar,
+  ChevronRight,
   Close,
   Cog,
   Database,
@@ -290,8 +291,8 @@ function ModuleTile({
       ]}
     >
       <View style={styles.moduleTileTop}>
-        <View style={styles.moduleTileIcon}>
-          {getSegmentIcon(segment, accent.color, 28)}
+        <View style={[styles.moduleTileIcon, { backgroundColor: accent.soft, shadowColor: accent.color }]}>
+          {getSegmentIcon(segment, accent.color, 32)}
         </View>
       </View>
       <Text numberOfLines={2} style={styles.moduleTitle}>{title}</Text>
@@ -1397,6 +1398,7 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
   const { logout, session } = useSession();
   const queryClient = useQueryClient();
   const householdPermission = useModulePermission("household_members");
+  const router = useRouter();
   const theme = useAppTheme();
   const { accent, setAccent } = useThemePreferences();
   const styles = createStyles(theme.colors);
@@ -1563,6 +1565,14 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
     setNotificationsVisible(true);
   }
 
+  function openMemberPermissions(member: HouseholdMember) {
+    setSettingsVisible(false);
+    router.push({
+      pathname: "/member-permissions",
+      params: { memberId: member.id },
+    } as never);
+  }
+
   const canInviteMember =
     householdPermission.canCreate &&
     Boolean(memberInviteEmail.trim()) &&
@@ -1705,22 +1715,35 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
             <View style={styles.itemList}>
               {members.map((member) => (
                 <View key={member.id} style={styles.memberDeleteRow}>
-                  <View style={styles.itemText}>
-                    <Text style={styles.itemName}>{member.displayName}</Text>
-                    <Text style={styles.itemMeta}>
-                      {[member.email, member.role === "owner" ? "właściciel" : "domownik"]
-                        .filter(Boolean)
-                        .join(" / ")}
-                    </Text>
+                  <Pressable
+                    accessibilityLabel={`Otwórz uprawnienia: ${member.displayName}`}
+                    accessibilityRole="button"
+                    onPress={() => openMemberPermissions(member)}
+                    style={({ pressed }) => [
+                      styles.memberOpenArea,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <View style={styles.itemText}>
+                      <Text style={styles.itemName}>{member.displayName}</Text>
+                      <Text style={styles.itemMeta}>
+                        {[member.email, member.role === "owner" ? "właściciel" : "domownik"]
+                          .filter(Boolean)
+                          .join(" / ")}
+                      </Text>
+                    </View>
+                    <ChevronRight color={theme.colors.textSubtle} size={20} />
+                  </Pressable>
+                  <View style={styles.memberActions}>
+                    {householdPermission.canDelete && member.role !== "owner" ? (
+                      <IconButton
+                        disabled={removeMemberMutation.isPending}
+                        onPress={() => removeMemberMutation.mutate(member.id)}
+                      >
+                        <Trash2 color={theme.colors.danger} size={17} />
+                      </IconButton>
+                    ) : null}
                   </View>
-                  {householdPermission.canDelete && member.role !== "owner" ? (
-                    <IconButton
-                      disabled={removeMemberMutation.isPending}
-                      onPress={() => removeMemberMutation.mutate(member.id)}
-                    >
-                      <Trash2 color={theme.colors.danger} size={17} />
-                    </IconButton>
-                  ) : null}
                 </View>
               ))}
             </View>
@@ -2689,6 +2712,18 @@ function createStyles(colors: AppPalette) {
       justifyContent: "space-between",
       padding: spacing.sm,
     },
+    memberOpenArea: {
+      alignItems: "center",
+      flex: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      minWidth: 0,
+    },
+    memberActions: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.xs,
+    },
     miniAvatar: {
       alignItems: "center",
       backgroundColor: colors.card,
@@ -2720,18 +2755,18 @@ function createStyles(colors: AppPalette) {
       lineHeight: 16,
     },
     moduleGrid: {
-      backgroundColor: colors.overlay,
-      borderColor: colors.border,
-      borderRadius: 20,
+      backgroundColor: "rgba(255, 255, 255, 0.16)",
+      borderColor: colors.line,
+      borderRadius: 22,
       borderWidth: 1,
-      elevation: 0,
+      elevation: 3,
       flexDirection: "row",
       gap: 0,
       overflow: "hidden",
-      shadowColor: colors.text,
-      shadowOffset: { height: 8, width: 0 },
-      shadowOpacity: 0.06,
-      shadowRadius: 18,
+      shadowColor: "#000000",
+      shadowOffset: { height: 14, width: 0 },
+      shadowOpacity: 0.1,
+      shadowRadius: 28,
     },
     moduleIcon: {
       alignItems: "center",
@@ -2742,21 +2777,21 @@ function createStyles(colors: AppPalette) {
     },
     moduleTile: {
       alignItems: "center",
-      backgroundColor: "transparent",
-      borderColor: colors.border,
+      backgroundColor: "rgba(255, 255, 255, 0.08)",
+      borderColor: colors.line,
       borderRadius: 0,
       flex: 1,
-      gap: 6,
+      gap: 7,
       justifyContent: "center",
-      minHeight: 88,
+      minHeight: 96,
       overflow: "hidden",
       paddingHorizontal: spacing.xs,
-      paddingVertical: spacing.sm,
+      paddingVertical: spacing.md,
       position: "relative",
     },
     moduleTileActive: {
-      backgroundColor: colors.cardMuted,
-      elevation: 0,
+      backgroundColor: colors.primarySoft,
+      elevation: 2,
     },
     moduleTileDivider: {
       borderColor: colors.border,
@@ -2764,11 +2799,16 @@ function createStyles(colors: AppPalette) {
     },
     moduleTileIcon: {
       alignItems: "center",
+      borderColor: "rgba(255, 255, 255, 0.34)",
+      borderWidth: 1,
       borderRadius: 999,
-      elevation: 0,
-      height: 46,
+      elevation: 3,
+      height: 54,
       justifyContent: "center",
-      width: 46,
+      shadowOffset: { height: 8, width: 0 },
+      shadowOpacity: 0.18,
+      shadowRadius: 16,
+      width: 54,
     },
     moduleTileTop: {
       alignItems: "center",

@@ -101,6 +101,30 @@ export class PermissionsService {
         }
     );
   }
+
+  async listEffectivePermissionsForHouseholdMember(
+    householdId: string,
+    householdMemberId: string
+  ): Promise<PermissionSet[] | null> {
+    const member = await this.database.query<{ id: string; role: HouseholdMemberRole }>(
+      `
+        select id, role
+        from household_members
+        where household_id = $1
+          and id = $2
+          and is_active = true
+        limit 1
+      `,
+      [householdId, householdMemberId]
+    );
+    const row = member.rows[0];
+
+    if (!row) {
+      return null;
+    }
+
+    return this.listEffectivePermissions(row.id, row.role);
+  }
 }
 
 interface PermissionRow {

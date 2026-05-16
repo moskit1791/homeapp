@@ -6,7 +6,12 @@ import {
   Logger
 } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
-import { HouseholdMemberRole } from '@homeapp/shared-types';
+import {
+  HouseholdMemberRole,
+  MODULE_KEYS,
+  ModuleKey,
+  PermissionSet
+} from '@homeapp/shared-types';
 import { PoolClient } from 'pg';
 import { UserContext } from '../../shared/request-context';
 import { DatabaseService } from '../database/database.service';
@@ -364,10 +369,11 @@ export class HouseholdsService {
         );
       }
 
-      const updated = {
+      const updated = await this.listMemberPermissions(
+        client,
         memberId,
-        permissions: dto.permissions
-      };
+        member.rows[0].role
+      );
       this.realtime.publish(householdId, 'permissions.changed', memberId);
 
       return updated;
@@ -586,6 +592,59 @@ export class HouseholdsService {
     );
   }
 
+  private async listMemberPermissions(
+    client: PoolClient,
+    memberId: string,
+    role: HouseholdMemberRole
+  ): Promise<PermissionSet[]> {
+    if (role === 'owner') {
+      return MODULE_KEYS.map((moduleKey) => ({
+        canCreate: true,
+        canDelete: true,
+        canRead: true,
+        canUpdate: true,
+        moduleKey
+      }));
+    }
+
+    const result = await client.query<MemberPermissionRow>(
+      `
+        select
+          module_key,
+          can_read,
+          can_create,
+          can_update,
+          can_delete
+        from member_permissions
+        where household_member_id = $1
+      `,
+      [memberId]
+    );
+    const permissionsByModule = new Map(
+      result.rows.map((row) => [
+        row.module_key,
+        {
+          canCreate: row.can_create,
+          canDelete: row.can_delete,
+          canRead: row.can_read,
+          canUpdate: row.can_update,
+          moduleKey: row.module_key
+        }
+      ])
+    );
+
+    return MODULE_KEYS.map(
+      (moduleKey) =>
+        permissionsByModule.get(moduleKey) ?? {
+          canCreate: false,
+          canDelete: false,
+          canRead: false,
+          canUpdate: false,
+          moduleKey
+        }
+    );
+  }
+
   private async createInitialBudgetMonth(
     client: PoolClient,
     householdId: string,
@@ -660,6 +719,14 @@ interface MemberRow {
   joined_at: string;
   role: HouseholdMemberRole;
   user_id: string;
+}
+
+interface MemberPermissionRow {
+  can_create: boolean;
+  can_delete: boolean;
+  can_read: boolean;
+  can_update: boolean;
+  module_key: ModuleKey;
 }
 
 interface InvitationRow {
