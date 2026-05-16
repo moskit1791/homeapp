@@ -42,9 +42,9 @@ function createStyles(colors: AppPalette) {
     elevation: 2,
     gap: spacing.md,
     padding: spacing.lg,
-    shadowColor: colors.primary,
+    shadowColor: '#000000',
     shadowOffset: { height: 10, width: 0 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.06,
     shadowRadius: 22
   },
   header: {

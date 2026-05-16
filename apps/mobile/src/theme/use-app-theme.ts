@@ -11,6 +11,7 @@ type Palette = { [Key in keyof typeof colors]: string } & {
   field: string;
   inverseText: string;
   line: string;
+  modalSurface: string;
   overlay: string;
   softBlue: string;
   softGreen: string;
@@ -139,6 +140,7 @@ const lightPalette: Palette = {
   field: '#FFFFFF',
   inverseText: '#FFFFFF',
   line: 'rgba(145, 158, 171, 0.24)',
+  modalSurface: 'rgba(246, 247, 249, 0.95)',
   overlay: '#FFFFFF',
   softBlue: '#EAF2FF',
   softGreen: '#E9FCD4',
@@ -168,6 +170,7 @@ const darkPaletteBase: typeof lightPalette = {
   infoSoft: 'rgba(181, 108, 255, 0.18)',
   inverseText: '#050711',
   line: 'rgba(238, 244, 255, 0.14)',
+  modalSurface: 'rgba(18, 22, 34, 0.95)',
   overlay: 'rgba(32, 39, 59, 0.72)',
   primary: '#B56CFF',
   primaryDark: '#D7B2FF',

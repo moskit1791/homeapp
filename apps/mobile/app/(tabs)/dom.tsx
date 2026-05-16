@@ -286,24 +286,15 @@ function ModuleTile({
         styles.moduleTile,
         showDivider && styles.moduleTileDivider,
         active && styles.moduleTileActive,
-        active && { backgroundColor: alphaColor(accent.color, theme.isDark ? 0.06 : 0.04) },
         pressed && styles.pressed,
       ]}
     >
       <View style={styles.moduleTileTop}>
-        <View
-          style={[
-            styles.moduleTileIcon,
-            {
-              backgroundColor: active ? alphaColor(accent.color, 0.1) : "transparent",
-            },
-          ]}
-        >
+        <View style={styles.moduleTileIcon}>
           {getSegmentIcon(segment, accent.color, 28)}
         </View>
       </View>
       <Text numberOfLines={2} style={styles.moduleTitle}>{title}</Text>
-      {active ? <View style={[styles.moduleActiveStrip, { backgroundColor: accent.color }]} /> : null}
     </Pressable>
   );
 }
@@ -1772,7 +1763,7 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
                       styles.accentSwatch,
                       {
                         backgroundColor: option.color,
-                        shadowColor: option.color,
+                        shadowColor: "#000000",
                       },
                     ]}
                   />
@@ -2250,20 +2241,6 @@ function getSegmentIcon(segment: HomeSegment, color: string, size: number): Reac
   return <Folder color={color} size={size} />;
 }
 
-function alphaColor(color: string, opacity: number): string {
-  const value = color.replace("#", "");
-
-  if (value.length !== 6 || color[0] !== "#") {
-    return color;
-  }
-
-  const alpha = Math.round(opacity * 255)
-    .toString(16)
-    .padStart(2, "0");
-
-  return `${color}${alpha}`;
-}
-
 function normalizePickedPhoto(asset: ImagePicker.ImagePickerAsset | undefined): PickedAttachmentPhoto | null {
   if (!asset?.uri) {
     return null;
@@ -2618,9 +2595,9 @@ function createStyles(colors: AppPalette) {
       minHeight: 58,
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.sm,
-      shadowColor: colors.primary,
+      shadowColor: "#000000",
       shadowOffset: { height: 6, width: 0 },
-      shadowOpacity: 0.08,
+      shadowOpacity: 0.06,
       shadowRadius: 14,
     },
     itemText: {
@@ -2778,19 +2755,12 @@ function createStyles(colors: AppPalette) {
       position: "relative",
     },
     moduleTileActive: {
+      backgroundColor: colors.cardMuted,
       elevation: 0,
     },
     moduleTileDivider: {
       borderColor: colors.border,
       borderRightWidth: 1,
-    },
-    moduleActiveStrip: {
-      borderRadius: 999,
-      bottom: 0,
-      height: 3,
-      left: spacing.md,
-      position: "absolute",
-      right: spacing.md,
     },
     moduleTileIcon: {
       alignItems: "center",
@@ -2828,9 +2798,9 @@ function createStyles(colors: AppPalette) {
       elevation: 4,
       gap: spacing.md,
       padding: spacing.md,
-      shadowColor: colors.primary,
+      shadowColor: "#000000",
       shadowOffset: { height: 12, width: 0 },
-      shadowOpacity: 0.16,
+      shadowOpacity: 0.08,
       shadowRadius: 30,
     },
     panelActions: {
@@ -2868,7 +2838,7 @@ function createStyles(colors: AppPalette) {
     },
     paidBadge: {
       backgroundColor: colors.softGreen,
-      borderColor: `${colors.primary}33`,
+      borderColor: colors.border,
       borderRadius: radii.control,
       borderWidth: 1,
       paddingHorizontal: spacing.sm,
@@ -2941,7 +2911,7 @@ function createStyles(colors: AppPalette) {
     },
     settingsToast: {
       backgroundColor: colors.softGreen,
-      borderColor: `${colors.primary}33`,
+      borderColor: colors.border,
       borderRadius: radii.control,
       borderWidth: 1,
       paddingHorizontal: spacing.md,
@@ -2975,9 +2945,9 @@ function createStyles(colors: AppPalette) {
       elevation: 2,
       gap: spacing.sm,
       padding: spacing.md,
-      shadowColor: colors.primary,
+      shadowColor: "#000000",
       shadowOffset: { height: 8, width: 0 },
-      shadowOpacity: 0.1,
+      shadowOpacity: 0.06,
       shadowRadius: 18,
     },
     settingsMembersHeader: {

@@ -213,14 +213,12 @@ export default function DzisiajScreen() {
         </View>
         <View style={styles.quickGrid}>
           <QuickAction
-            color={theme.colors.calendar}
             icon={<CalendarDays color={theme.colors.calendar} size={24} />}
             label="Wydarzenie"
             onPress={() => openCalendarForDate(todayIso(), "create")}
             showDivider
           />
           <QuickAction
-            color={theme.colors.finance}
             icon={<ReceiptText color={theme.colors.finance} size={24} />}
             label="Wydatek"
             onPress={() =>
@@ -229,14 +227,12 @@ export default function DzisiajScreen() {
             showDivider
           />
           <QuickAction
-            color={theme.colors.shopping}
             icon={<CartPlus color={theme.colors.shopping} size={24} />}
             label="Zakupy"
             onPress={() => router.push({ pathname: "/(tabs)/lista", params: { action: "addShopping", segment: "shopping" } } as never)}
             showDivider
           />
           <QuickAction
-            color={theme.colors.food}
             icon={<Utensils color={theme.colors.food} size={24} />}
             label="Posiłek"
             onPress={() => router.push({ pathname: "/(tabs)/lista", params: { action: "addMeal", segment: "meals" } } as never)}
@@ -505,13 +501,11 @@ function CleaningTodaySection({
 }
 
 function QuickAction({
-  color,
   icon,
   label,
   onPress,
   showDivider = false,
 }: {
-  color: string;
   icon: ReactNode;
   label: string;
   onPress: () => void;
@@ -531,14 +525,7 @@ function QuickAction({
         pressed && styles.quickActionPressed,
       ]}
     >
-      <View
-        style={[
-          styles.quickIcon,
-          {
-            backgroundColor: tint(color, 0.08),
-          },
-        ]}
-      >
+      <View style={styles.quickIcon}>
         {icon}
       </View>
       <Text numberOfLines={2} style={styles.quickLabel}>
@@ -757,9 +744,9 @@ function createStyles(colors: AppPalette) {
       borderWidth: 1,
       elevation: 2,
       overflow: "hidden",
-      shadowColor: colors.primary,
+      shadowColor: "#000000",
       shadowOffset: { height: 10, width: 0 },
-      shadowOpacity: 0.13,
+      shadowOpacity: 0.07,
       shadowRadius: 22,
     },
     cleaningRow: {
@@ -805,9 +792,9 @@ function createStyles(colors: AppPalette) {
       elevation: 4,
       gap: spacing.md,
       padding: spacing.md,
-      shadowColor: colors.primary,
+      shadowColor: "#000000",
       shadowOffset: { height: 12, width: 0 },
-      shadowOpacity: 0.18,
+      shadowOpacity: 0.08,
       shadowRadius: 28,
     },
     notificationPanelHeader: {
@@ -959,9 +946,9 @@ function createStyles(colors: AppPalette) {
       elevation: 2,
       marginTop: spacing.xs,
       overflow: "hidden",
-      shadowColor: colors.primary,
+      shadowColor: "#000000",
       shadowOffset: { height: 10, width: 0 },
-      shadowOpacity: 0.12,
+      shadowOpacity: 0.07,
       shadowRadius: 24,
     },
     tileMeta: {

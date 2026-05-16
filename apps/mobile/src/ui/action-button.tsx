@@ -84,9 +84,9 @@ function createStyles(colors: AppPalette) {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
     elevation: 2,
-    shadowColor: colors.primary,
+    shadowColor: '#000000',
     shadowOffset: { height: 0, width: 0 },
-    shadowOpacity: 0.28,
+    shadowOpacity: 0.12,
     shadowRadius: 12
   },
   primaryLabel: {

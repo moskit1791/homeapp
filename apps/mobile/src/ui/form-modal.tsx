@@ -131,7 +131,7 @@ function createStyles(colors: AppPalette) {
     },
     sheet: {
       alignSelf: "stretch",
-      backgroundColor: colors.backgroundTop,
+      backgroundColor: colors.modalSurface,
       borderColor: colors.border,
       borderTopLeftRadius: 18,
       borderTopRightRadius: 18,
@@ -141,9 +141,9 @@ function createStyles(colors: AppPalette) {
       marginHorizontal: spacing.md,
       maxHeight: "92%",
       overflow: "hidden",
-      shadowColor: colors.primary,
+      shadowColor: "#000000",
       shadowOffset: { height: 10, width: 0 },
-      shadowOpacity: 0.16,
+      shadowOpacity: 0.14,
       shadowRadius: 24,
     },
     scroll: {
