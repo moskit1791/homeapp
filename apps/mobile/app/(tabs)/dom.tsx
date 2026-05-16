@@ -291,8 +291,8 @@ function ModuleTile({
       ]}
     >
       <View style={styles.moduleTileTop}>
-        <View style={[styles.moduleTileIcon, { backgroundColor: accent.soft, shadowColor: accent.color }]}>
-          {getSegmentIcon(segment, accent.color, 32)}
+        <View style={styles.moduleTileIcon}>
+          {getSegmentIcon(segment, accent.color, 30)}
         </View>
       </View>
       <Text numberOfLines={2} style={styles.moduleTitle}>{title}</Text>
@@ -2755,18 +2755,18 @@ function createStyles(colors: AppPalette) {
       lineHeight: 16,
     },
     moduleGrid: {
-      backgroundColor: "rgba(255, 255, 255, 0.16)",
-      borderColor: colors.line,
-      borderRadius: 22,
+      backgroundColor: colors.overlay,
+      borderColor: colors.border,
+      borderRadius: 20,
       borderWidth: 1,
-      elevation: 3,
+      elevation: 0,
       flexDirection: "row",
       gap: 0,
       overflow: "hidden",
-      shadowColor: "#000000",
-      shadowOffset: { height: 14, width: 0 },
-      shadowOpacity: 0.1,
-      shadowRadius: 28,
+      shadowColor: colors.text,
+      shadowOffset: { height: 8, width: 0 },
+      shadowOpacity: 0.06,
+      shadowRadius: 18,
     },
     moduleIcon: {
       alignItems: "center",
@@ -2777,21 +2777,21 @@ function createStyles(colors: AppPalette) {
     },
     moduleTile: {
       alignItems: "center",
-      backgroundColor: "rgba(255, 255, 255, 0.08)",
-      borderColor: colors.line,
+      backgroundColor: "transparent",
+      borderColor: colors.border,
       borderRadius: 0,
       flex: 1,
-      gap: 7,
+      gap: 6,
       justifyContent: "center",
-      minHeight: 96,
+      minHeight: 90,
       overflow: "hidden",
       paddingHorizontal: spacing.xs,
-      paddingVertical: spacing.md,
+      paddingVertical: spacing.sm,
       position: "relative",
     },
     moduleTileActive: {
-      backgroundColor: colors.primarySoft,
-      elevation: 2,
+      backgroundColor: colors.cardMuted,
+      elevation: 0,
     },
     moduleTileDivider: {
       borderColor: colors.border,
@@ -2799,16 +2799,10 @@ function createStyles(colors: AppPalette) {
     },
     moduleTileIcon: {
       alignItems: "center",
-      borderColor: "rgba(255, 255, 255, 0.34)",
-      borderWidth: 1,
-      borderRadius: 999,
-      elevation: 3,
-      height: 54,
+      elevation: 0,
+      height: 46,
       justifyContent: "center",
-      shadowOffset: { height: 8, width: 0 },
-      shadowOpacity: 0.18,
-      shadowRadius: 16,
-      width: 54,
+      width: 46,
     },
     moduleTileTop: {
       alignItems: "center",

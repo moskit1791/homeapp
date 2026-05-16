@@ -109,45 +109,45 @@ const darkAccentPalettes: Record<
 const lightAccentPalettes: typeof darkAccentPalettes = {
   amber: {
     primary: '#B45309',
-    primaryDark: '#92400E',
-    primaryDarker: '#78350F',
-    primaryLight: '#D97706',
-    primarySoft: 'rgba(180, 83, 9, 0.13)'
+    primaryDark: '#7C2D12',
+    primaryDarker: '#431407',
+    primaryLight: '#F59E0B',
+    primarySoft: 'rgba(180, 83, 9, 0.16)'
   },
   emerald: {
-    primary: '#047857',
-    primaryDark: '#065F46',
-    primaryDarker: '#064E3B',
-    primaryLight: '#10B981',
-    primarySoft: 'rgba(4, 120, 87, 0.13)'
+    primary: '#15803D',
+    primaryDark: '#166534',
+    primaryDarker: '#14532D',
+    primaryLight: '#22C55E',
+    primarySoft: 'rgba(21, 128, 61, 0.15)'
   },
   sunset: {
-    primary: '#DC2626',
-    primaryDark: '#B91C1C',
-    primaryDarker: '#7F1D1D',
-    primaryLight: '#FB7185',
-    primarySoft: 'rgba(220, 38, 38, 0.12)'
+    primary: '#BE123C',
+    primaryDark: '#9F1239',
+    primaryDarker: '#4C0519',
+    primaryLight: '#F43F5E',
+    primarySoft: 'rgba(190, 18, 60, 0.14)'
   },
   cyan: {
-    primary: '#0E7490',
-    primaryDark: '#155E75',
-    primaryDarker: '#164E63',
-    primaryLight: '#06B6D4',
-    primarySoft: 'rgba(14, 116, 144, 0.13)'
+    primary: '#0369A1',
+    primaryDark: '#075985',
+    primaryDarker: '#0C4A6E',
+    primaryLight: '#0EA5E9',
+    primarySoft: 'rgba(3, 105, 161, 0.14)'
   },
   pink: {
-    primary: '#C026D3',
-    primaryDark: '#A21CAF',
-    primaryDarker: '#701A75',
-    primaryLight: '#E879F9',
-    primarySoft: 'rgba(192, 38, 211, 0.13)'
+    primary: '#BE185D',
+    primaryDark: '#9D174D',
+    primaryDarker: '#500724',
+    primaryLight: '#EC4899',
+    primarySoft: 'rgba(190, 24, 93, 0.14)'
   },
   violet: {
-    primary: '#7C3AED',
-    primaryDark: '#6D28D9',
-    primaryDarker: '#4C1D95',
-    primaryLight: '#A78BFA',
-    primarySoft: 'rgba(124, 58, 237, 0.12)'
+    primary: '#6D28D9',
+    primaryDark: '#5B21B6',
+    primaryDarker: '#2E1065',
+    primaryLight: '#8B5CF6',
+    primarySoft: 'rgba(109, 40, 217, 0.14)'
   }
 };
 
@@ -303,7 +303,7 @@ function buildLightPalette(accentKey: DarkAccentKey): typeof lightPalette {
 
   return {
     ...lightPalette,
-    backgroundTop: mixLightTop(accent.primary),
+    backgroundBottom: mixLightBottom(accent.primary),
     calendar: accent.primary,
     info: accent.primary,
     infoSoft: accent.primarySoft,
@@ -325,7 +325,7 @@ function buildDarkPalette(accentKey: DarkAccentKey): typeof lightPalette {
   return {
     ...darkPaletteBase,
     calendar: accent.primary,
-    backgroundTop: mixDarkTop(accent.primary),
+    backgroundBottom: mixDarkBottom(accent.primary),
     info: accent.primary,
     infoSoft: accent.primarySoft,
     primary: accent.primary,
@@ -340,28 +340,28 @@ function buildDarkPalette(accentKey: DarkAccentKey): typeof lightPalette {
   };
 }
 
-function mixLightTop(accent: string): string {
+function mixLightBottom(accent: string): string {
   const rgb = hexToRgb(accent);
 
   if (!rgb) {
-    return lightPalette.backgroundTop;
+    return lightPalette.backgroundBottom;
   }
 
-  return `rgba(${rgb.red}, ${rgb.green}, ${rgb.blue}, 0.08)`;
+  return `rgba(${rgb.red}, ${rgb.green}, ${rgb.blue}, 0.1)`;
 }
 
-function mixDarkTop(accent: string): string {
-  const base = hexToRgb(darkPaletteBase.backgroundTop);
+function mixDarkBottom(accent: string): string {
+  const base = hexToRgb(darkPaletteBase.backgroundBottom);
   const rgb = hexToRgb(accent);
 
   if (!base || !rgb) {
-    return darkPaletteBase.backgroundTop;
+    return darkPaletteBase.backgroundBottom;
   }
 
   return rgbToHex({
-    blue: Math.round(base.blue * 0.82 + rgb.blue * 0.18),
-    green: Math.round(base.green * 0.82 + rgb.green * 0.18),
-    red: Math.round(base.red * 0.82 + rgb.red * 0.18)
+    blue: Math.round(base.blue * 0.78 + rgb.blue * 0.22),
+    green: Math.round(base.green * 0.78 + rgb.green * 0.22),
+    red: Math.round(base.red * 0.78 + rgb.red * 0.22)
   });
 }
 

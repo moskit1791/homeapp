@@ -15,7 +15,9 @@ import {
   PiggyBank,
   Plus,
   ReceiptText,
+  TableLarge,
   Trash2,
+  ViewGrid,
   WalletCards,
 } from "../../src/ui/icon";
 import {
@@ -979,6 +981,21 @@ export default function FinanseScreen() {
                 <ChevronRight color={canGoNextMonth ? theme.colors.textMuted : theme.colors.textSubtle} size={20} />
               </IconButton>
             </View>
+            <IconButton
+              accessibilityLabel={
+                budgetLayout === "table"
+                  ? "Zmień widok budżetu na kafelki"
+                  : "Zmień widok budżetu na tabelę"
+              }
+              onPress={toggleBudgetLayout}
+              style={styles.budgetLayoutButton}
+            >
+              {budgetLayout === "table" ? (
+                <ViewGrid color={theme.colors.primaryDark} size={20} />
+              ) : (
+                <TableLarge color={theme.colors.primaryDark} size={20} />
+              )}
+            </IconButton>
             {canDelete ? (
               <IconButton
                 accessibilityLabel="Usuń wybrany miesiąc budżetu"
@@ -3215,6 +3232,12 @@ function createStyles(colors: AppPalette) {
       fontWeight: "900",
       letterSpacing: 0,
       textAlign: "center",
+    },
+    budgetLayoutButton: {
+      backgroundColor: colors.primarySoft,
+      borderColor: colors.primary,
+      height: 38,
+      width: 38,
     },
     monthNavButton: {
       backgroundColor: "transparent",
