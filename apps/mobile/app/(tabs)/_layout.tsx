@@ -96,18 +96,19 @@ export default function TabsLayout() {
           borderTopColor: theme.colors.border,
           borderTopWidth: 1,
           borderWidth: 1,
-          elevation: 8,
+          elevation: 0,
           height: 76,
           marginBottom: 10,
           marginHorizontal: 12,
+          overflow: "hidden",
           paddingBottom: 10,
           paddingHorizontal: 8,
           paddingTop: 8,
           position: "absolute",
-          shadowColor: theme.colors.primary,
+          shadowColor: theme.colors.text,
           shadowOffset: { height: 8, width: 0 },
-          shadowOpacity: theme.isDark ? 0.26 : 0.12,
-          shadowRadius: 22,
+          shadowOpacity: 0.06,
+          shadowRadius: 16,
         },
       }}
     >
@@ -223,15 +224,7 @@ function TabGlyph({
 
   return (
     <View
-      style={[
-        styles.tabGlyph,
-        focused && {
-          backgroundColor: theme.colors.primarySoft,
-          borderColor: `${theme.colors.primary}66`,
-          shadowColor: theme.colors.primary,
-          shadowOpacity: theme.isDark ? 0.42 : 0.2,
-        },
-      ]}
+      style={styles.tabGlyph}
     >
       <View style={styles.tabIconSlot}>{icon(color)}</View>
       <Text
@@ -267,7 +260,6 @@ const styles = StyleSheet.create({
     alignSelf: "stretch",
     borderColor: "transparent",
     borderRadius: 18,
-    borderWidth: 1,
     elevation: 0,
     flex: 1,
     gap: 2,
@@ -276,9 +268,6 @@ const styles = StyleSheet.create({
     minHeight: 56,
     paddingHorizontal: 2,
     paddingVertical: 5,
-    shadowOffset: { height: 0, width: 0 },
-    shadowOpacity: 0,
-    shadowRadius: 16,
   },
   tabGlyphLabel: {
     fontSize: 10,

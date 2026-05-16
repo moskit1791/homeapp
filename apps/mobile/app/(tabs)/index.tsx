@@ -31,7 +31,6 @@ import {
   CartPlus,
   ChevronRight,
   Close,
-  Plus,
   ReceiptText,
   ShoppingCart,
   Utensils,
@@ -215,27 +214,30 @@ export default function DzisiajScreen() {
         <View style={styles.quickGrid}>
           <QuickAction
             color={theme.colors.calendar}
-            icon={<CalendarDays color={theme.colors.calendar} size={18} />}
+            icon={<CalendarDays color={theme.colors.calendar} size={24} />}
             label="Wydarzenie"
             onPress={() => openCalendarForDate(todayIso(), "create")}
+            showDivider
           />
           <QuickAction
             color={theme.colors.finance}
-            icon={<ReceiptText color={theme.colors.finance} size={18} />}
+            icon={<ReceiptText color={theme.colors.finance} size={24} />}
             label="Wydatek"
             onPress={() =>
               router.push({ pathname: "/(tabs)/finanse", params: { action: "expense" } } as never)
             }
+            showDivider
           />
           <QuickAction
             color={theme.colors.shopping}
-            icon={<CartPlus color={theme.colors.shopping} size={18} />}
+            icon={<CartPlus color={theme.colors.shopping} size={24} />}
             label="Zakupy"
             onPress={() => router.push({ pathname: "/(tabs)/lista", params: { action: "addShopping", segment: "shopping" } } as never)}
+            showDivider
           />
           <QuickAction
             color={theme.colors.food}
-            icon={<Utensils color={theme.colors.food} size={18} />}
+            icon={<Utensils color={theme.colors.food} size={24} />}
             label="Posiłek"
             onPress={() => router.push({ pathname: "/(tabs)/lista", params: { action: "addMeal", segment: "meals" } } as never)}
           />
@@ -507,11 +509,13 @@ function QuickAction({
   icon,
   label,
   onPress,
+  showDivider = false,
 }: {
   color: string;
   icon: ReactNode;
   label: string;
   onPress: () => void;
+  showDivider?: boolean;
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
@@ -521,13 +525,22 @@ function QuickAction({
       accessibilityLabel={label}
       accessibilityRole="button"
       onPress={onPress}
-      style={({ pressed }) => [styles.quickAction, pressed && styles.pressed]}
+      style={({ pressed }) => [
+        styles.quickAction,
+        showDivider && styles.quickActionDivider,
+        pressed && styles.quickActionPressed,
+      ]}
     >
-      <View style={[styles.quickIcon, { backgroundColor: tint(color, 0.1) }]}>
+      <View
+        style={[
+          styles.quickIcon,
+          {
+            backgroundColor: tint(color, 0.08),
+            borderColor: tint(color, 0.12),
+          },
+        ]}
+      >
         {icon}
-        <View style={styles.quickPlus}>
-          <Plus color={theme.colors.inverseText} size={10} />
-        </View>
       </View>
       <Text numberOfLines={2} style={styles.quickLabel}>
         {label}
@@ -855,33 +868,44 @@ function createStyles(colors: AppPalette) {
     },
     quickAction: {
       alignItems: "center",
-      backgroundColor: colors.overlay,
-      borderColor: colors.border,
-      borderRadius: radii.card,
-      borderWidth: 1,
-      elevation: 2,
+      backgroundColor: "transparent",
       flex: 1,
       gap: 6,
-      minHeight: 74,
+      minHeight: 88,
       justifyContent: "center",
       minWidth: 0,
       paddingHorizontal: 6,
       paddingVertical: spacing.sm,
-      shadowColor: colors.primary,
-      shadowOffset: { height: 8, width: 0 },
-      shadowOpacity: 0.12,
-      shadowRadius: 18,
+    },
+    quickActionDivider: {
+      borderColor: colors.border,
+      borderRightWidth: 1,
+    },
+    quickActionPressed: {
+      backgroundColor: colors.cardMuted,
+      opacity: 0.86,
     },
     quickGrid: {
+      backgroundColor: colors.overlay,
+      borderColor: colors.border,
+      borderRadius: 20,
+      borderWidth: 1,
+      elevation: 0,
       flexDirection: "row",
-      gap: spacing.xs,
+      gap: 0,
+      overflow: "hidden",
+      shadowColor: colors.text,
+      shadowOffset: { height: 8, width: 0 },
+      shadowOpacity: 0.06,
+      shadowRadius: 18,
     },
     quickIcon: {
       alignItems: "center",
-      borderRadius: radii.control,
-      height: 34,
+      borderRadius: 999,
+      borderWidth: 1,
+      height: 46,
       justifyContent: "center",
-      width: 34,
+      width: 46,
     },
     quickLabel: {
       color: colors.text,
@@ -890,17 +914,6 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
       lineHeight: 14,
       textAlign: "center",
-    },
-    quickPlus: {
-      alignItems: "center",
-      backgroundColor: colors.primary,
-      borderRadius: 999,
-      bottom: -2,
-      height: 15,
-      justifyContent: "center",
-      position: "absolute",
-      right: -2,
-      width: 15,
     },
     quickSection: {
       gap: spacing.sm,

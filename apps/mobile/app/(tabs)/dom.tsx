@@ -68,7 +68,6 @@ import {
 import {
   Broom,
   ChartBar,
-  ChevronRight,
   Close,
   Cog,
   Database,
@@ -239,12 +238,13 @@ export default function DomScreen() {
         <InlineAlert text="Nie masz dostępu do modułów domowych." />
       ) : (
         <View style={styles.moduleGrid}>
-          {availableTiles.map((tile) => (
+          {availableTiles.map((tile, index) => (
             <ModuleTile
               active={tile.value === activeSegment}
               description={tile.description}
               key={tile.value}
               segment={tile.value}
+              showDivider={index < availableTiles.length - 1}
               title={tile.title}
               onPress={() => setActiveSegment(tile.value)}
             />
@@ -262,12 +262,14 @@ function ModuleTile({
   description,
   onPress,
   segment,
+  showDivider,
   title,
 }: {
   active: boolean;
   description: string;
   onPress: () => void;
   segment: HomeSegment;
+  showDivider: boolean;
   title: string;
 }) {
   const theme = useAppTheme();
@@ -282,16 +284,24 @@ function ModuleTile({
       onPress={onPress}
       style={({ pressed }) => [
         styles.moduleTile,
+        showDivider && styles.moduleTileDivider,
         active && styles.moduleTileActive,
-        active && { borderColor: accent.color, backgroundColor: accent.soft, shadowColor: accent.color },
+        active && { backgroundColor: alphaColor(accent.color, theme.isDark ? 0.06 : 0.04) },
         pressed && styles.pressed,
       ]}
     >
       <View style={styles.moduleTileTop}>
-        <View style={[styles.moduleTileIcon, { backgroundColor: accent.soft }]}>
-          {getSegmentIcon(segment, accent.color, 20)}
+        <View
+          style={[
+            styles.moduleTileIcon,
+            {
+              backgroundColor: active ? alphaColor(accent.color, 0.1) : "transparent",
+              borderColor: active ? alphaColor(accent.color, 0.16) : "transparent",
+            },
+          ]}
+        >
+          {getSegmentIcon(segment, accent.color, 28)}
         </View>
-        <ChevronRight color={active ? accent.color : theme.colors.textMuted} size={15} />
       </View>
       <Text numberOfLines={2} style={styles.moduleTitle}>{title}</Text>
       {active ? (
@@ -1981,12 +1991,23 @@ function ModulePanel({
   subtitle: string;
   title: string;
 }) {
-  const styles = createStyles(useAppTheme().colors);
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
 
   return (
     <View style={styles.panel}>
       <View style={styles.panelHeader}>
-        <View style={[styles.panelIcon, { backgroundColor: accent.soft }]}>{icon}</View>
+        <View
+          style={[
+            styles.panelIcon,
+            {
+              backgroundColor: alphaColor(accent.color, 0.07),
+              borderColor: alphaColor(accent.color, 0.12),
+            },
+          ]}
+        >
+          {icon}
+        </View>
         <View style={styles.panelText}>
           <Text style={styles.panelTitle}>{title}</Text>
           <Text style={styles.panelSubtitle}>{subtitle}</Text>
@@ -2240,6 +2261,20 @@ function getSegmentIcon(segment: HomeSegment, color: string, size: number): Reac
   }
 
   return <Folder color={color} size={size} />;
+}
+
+function alphaColor(color: string, opacity: number): string {
+  const value = color.replace("#", "");
+
+  if (value.length !== 6 || color[0] !== "#") {
+    return color;
+  }
+
+  const alpha = Math.round(opacity * 255)
+    .toString(16)
+    .padStart(2, "0");
+
+  return `${color}${alpha}`;
 }
 
 function normalizePickedPhoto(asset: ImagePicker.ImagePickerAsset | undefined): PickedAttachmentPhoto | null {
@@ -2723,16 +2758,16 @@ function createStyles(colors: AppPalette) {
     moduleGrid: {
       backgroundColor: colors.overlay,
       borderColor: colors.border,
-      borderRadius: radii.card,
+      borderRadius: 20,
       borderWidth: 1,
-      elevation: 3,
+      elevation: 0,
       flexDirection: "row",
       gap: 0,
       overflow: "hidden",
-      shadowColor: colors.primary,
-      shadowOffset: { height: 12, width: 0 },
-      shadowOpacity: 0.14,
-      shadowRadius: 28,
+      shadowColor: colors.text,
+      shadowOffset: { height: 8, width: 0 },
+      shadowOpacity: 0.06,
+      shadowRadius: 18,
     },
     moduleIcon: {
       alignItems: "center",
@@ -2746,49 +2781,45 @@ function createStyles(colors: AppPalette) {
       backgroundColor: "transparent",
       borderColor: colors.border,
       borderRadius: 0,
-      borderRightWidth: 1,
       flex: 1,
-      gap: spacing.xs,
+      gap: 6,
       justifyContent: "center",
-      minHeight: 96,
+      minHeight: 88,
       overflow: "hidden",
       paddingHorizontal: spacing.xs,
-      paddingVertical: spacing.md,
+      paddingVertical: spacing.sm,
       position: "relative",
     },
     moduleTileActive: {
-      elevation: 4,
-      borderWidth: 1,
-      shadowOffset: { height: 0, width: 0 },
-      shadowOpacity: 0.42,
-      shadowRadius: 18,
+      elevation: 0,
+    },
+    moduleTileDivider: {
+      borderColor: colors.border,
+      borderRightWidth: 1,
     },
     moduleActiveStrip: {
       borderRadius: 999,
       bottom: 0,
-      height: 4,
-      left: spacing.sm,
+      height: 3,
+      left: spacing.md,
       position: "absolute",
-      right: spacing.sm,
+      right: spacing.md,
       shadowOffset: { height: 0, width: 0 },
-      shadowOpacity: 0.64,
-      shadowRadius: 12,
+      shadowOpacity: 0.36,
+      shadowRadius: 8,
     },
     moduleTileIcon: {
       alignItems: "center",
-      borderRadius: radii.control,
-      elevation: 3,
-      height: 38,
+      borderRadius: 999,
+      borderWidth: 1,
+      elevation: 0,
+      height: 46,
       justifyContent: "center",
-      shadowOffset: { height: 0, width: 0 },
-      shadowOpacity: 0.28,
-      shadowRadius: 12,
-      width: 38,
+      width: 46,
     },
     moduleTileTop: {
       alignItems: "center",
-      flexDirection: "row",
-      gap: 2,
+      justifyContent: "center",
     },
     moduleTitle: {
       color: colors.text,
@@ -2831,7 +2862,8 @@ function createStyles(colors: AppPalette) {
     },
     panelIcon: {
       alignItems: "center",
-      borderRadius: radii.control,
+      borderRadius: 999,
+      borderWidth: 1,
       height: 36,
       justifyContent: "center",
       width: 36,

@@ -16,7 +16,7 @@ import {
   acceptInvitation,
   completeInvitationRegistration as completeInvitationRegistrationApi,
   createHousehold,
-  getStartDashboard,
+  getMyPermissions,
   login,
   loginWithGoogle,
   register,
@@ -106,13 +106,13 @@ export function SessionProvider({ children }: PropsWithChildren) {
 
         setRememberSession(true);
         setSession(nextSession);
-        await getStartDashboard({ accessToken: nextSession.accessToken });
+        await ensureSessionHasHousehold(nextSession);
 
         if (active) {
           setStatus("ready");
         }
       } catch (error) {
-        if (error instanceof ApiError && error.status === 403) {
+        if (isNoActiveHouseholdError(error)) {
           if (active) {
             setStatus("needs-household");
           }
@@ -195,7 +195,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
           await clearRememberedEmail();
         }
 
-        await getStartDashboard({ accessToken: authSession.accessToken });
+        await ensureSessionHasHousehold(authSession);
         setStatus("ready");
       },
       createFirstHousehold: async (input) => {
@@ -247,11 +247,10 @@ export function SessionProvider({ children }: PropsWithChildren) {
         }
 
         if (options?.invitationToken) {
-          await acceptInvitation(
-            { token: options.invitationToken },
-            { accessToken: authSession.accessToken },
+          await activateHouseholdSession(
+            authSession,
+            options.invitationToken,
           );
-          await getStartDashboard({ accessToken: authSession.accessToken });
           setStatus("ready");
           return;
         }
@@ -275,17 +274,13 @@ export function SessionProvider({ children }: PropsWithChildren) {
         }
 
         try {
-          if (options?.invitationToken) {
-            await acceptInvitation(
-              { token: options.invitationToken },
-              { accessToken: authSession.accessToken },
-            );
-          }
-
-          await getStartDashboard({ accessToken: authSession.accessToken });
+          await activateHouseholdSession(
+            authSession,
+            options?.invitationToken,
+          );
           setStatus("ready");
         } catch (error) {
-          if (error instanceof ApiError && error.status === 403) {
+          if (isNoActiveHouseholdError(error)) {
             setStatus("needs-household");
             return;
           }
@@ -308,17 +303,13 @@ export function SessionProvider({ children }: PropsWithChildren) {
         }
 
         try {
-          if (options?.invitationToken) {
-            await acceptInvitation(
-              { token: options.invitationToken },
-              { accessToken: authSession.accessToken },
-            );
-          }
-
-          await getStartDashboard({ accessToken: authSession.accessToken });
+          await activateHouseholdSession(
+            authSession,
+            options?.invitationToken,
+          );
           setStatus("ready");
         } catch (error) {
-          if (error instanceof ApiError && error.status === 403) {
+          if (isNoActiveHouseholdError(error)) {
             setStatus("needs-household");
             return;
           }
@@ -333,6 +324,55 @@ export function SessionProvider({ children }: PropsWithChildren) {
 
   return (
     <SessionContext.Provider value={value}>{children}</SessionContext.Provider>
+  );
+}
+
+async function activateHouseholdSession(
+  session: Session,
+  invitationToken?: string | null,
+): Promise<void> {
+  if (invitationToken) {
+    try {
+      await acceptInvitation(
+        { token: invitationToken },
+        { accessToken: session.accessToken },
+      );
+    } catch (error) {
+      if (!isAlreadyAcceptedInvitationError(error)) {
+        throw error;
+      }
+
+      try {
+        await ensureSessionHasHousehold(session);
+        return;
+      } catch {
+        throw error;
+      }
+    }
+  }
+
+  await ensureSessionHasHousehold(session);
+}
+
+async function ensureSessionHasHousehold(session: Session): Promise<void> {
+  await getMyPermissions({ accessToken: session.accessToken });
+}
+
+function isNoActiveHouseholdError(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    error.status === 403 &&
+    (error.message.includes("aktywnego domu") ||
+      error.message.includes("active household"))
+  );
+}
+
+function isAlreadyAcceptedInvitationError(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    error.status === 400 &&
+    (error.message.includes("zaakceptowane") ||
+      error.message.includes("already been accepted"))
   );
 }
 
