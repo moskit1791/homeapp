@@ -730,8 +730,8 @@ function createStyles(colors: AppPalette) {
     },
     dashboardTitle: {
       color: colors.text,
-      fontSize: 15,
-      fontWeight: "900",
+      fontSize: 16,
+      fontWeight: "800",
       letterSpacing: 0,
       lineHeight: 20,
     },
@@ -809,7 +809,7 @@ function createStyles(colors: AppPalette) {
     notificationPanelTitle: {
       color: colors.text,
       fontSize: 17,
-      fontWeight: "900",
+      fontWeight: "800",
       letterSpacing: 0,
       lineHeight: 22,
     },
@@ -838,7 +838,7 @@ function createStyles(colors: AppPalette) {
     notificationTitle: {
       color: colors.text,
       fontSize: 13,
-      fontWeight: "900",
+      fontWeight: "800",
       letterSpacing: 0,
     },
     notificationTime: {
@@ -892,10 +892,10 @@ function createStyles(colors: AppPalette) {
     },
     quickLabel: {
       color: colors.text,
-      fontSize: 11,
-      fontWeight: "900",
+      fontSize: 12,
+      fontWeight: "800",
       letterSpacing: 0,
-      lineHeight: 14,
+      lineHeight: 15,
       textAlign: "center",
     },
     quickSection: {
@@ -915,8 +915,8 @@ function createStyles(colors: AppPalette) {
     },
     sectionTitle: {
       color: colors.text,
-      fontSize: 14,
-      fontWeight: "900",
+      fontSize: 15,
+      fontWeight: "800",
       letterSpacing: 0,
     },
     tile: {
@@ -962,8 +962,8 @@ function createStyles(colors: AppPalette) {
     },
     tileTitle: {
       color: colors.textMuted,
-      fontSize: 11,
-      fontWeight: "900",
+      fontSize: 12,
+      fontWeight: "800",
       letterSpacing: 0,
       textTransform: "uppercase",
     },
@@ -974,8 +974,8 @@ function createStyles(colors: AppPalette) {
     },
     tileValue: {
       color: colors.text,
-      fontSize: 16,
-      fontWeight: "900",
+      fontSize: 17,
+      fontWeight: "800",
       letterSpacing: 0,
       lineHeight: 20,
     },

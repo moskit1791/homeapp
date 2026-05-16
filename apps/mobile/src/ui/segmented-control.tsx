@@ -58,8 +58,8 @@ function createStyles(colors: AppPalette) {
   },
   label: {
     color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '900',
+    fontSize: 13,
+    fontWeight: '800',
     letterSpacing: 0
   },
   option: {
@@ -69,7 +69,7 @@ function createStyles(colors: AppPalette) {
     borderRadius: radii.control,
     flex: 1,
     justifyContent: 'center',
-    minHeight: 32,
+    minHeight: 34,
     paddingHorizontal: spacing.xs
   },
   pressed: {

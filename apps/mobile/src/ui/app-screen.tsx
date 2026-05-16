@@ -102,8 +102,8 @@ function createStyles(colors: AppPalette) {
   },
   title: {
     color: colors.text,
-    fontSize: 22,
-    fontWeight: '900',
+    fontSize: 23,
+    fontWeight: '800',
     letterSpacing: 0
   },
   subtitle: {

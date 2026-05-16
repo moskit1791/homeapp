@@ -347,7 +347,7 @@ function mixLightBottom(accent: string): string {
     return lightPalette.backgroundBottom;
   }
 
-  return `rgba(${rgb.red}, ${rgb.green}, ${rgb.blue}, 0.1)`;
+  return `rgba(${rgb.red}, ${rgb.green}, ${rgb.blue}, 0.06)`;
 }
 
 function mixDarkBottom(accent: string): string {
@@ -359,9 +359,9 @@ function mixDarkBottom(accent: string): string {
   }
 
   return rgbToHex({
-    blue: Math.round(base.blue * 0.78 + rgb.blue * 0.22),
-    green: Math.round(base.green * 0.78 + rgb.green * 0.22),
-    red: Math.round(base.red * 0.78 + rgb.red * 0.22)
+    blue: Math.round(base.blue * 0.86 + rgb.blue * 0.14),
+    green: Math.round(base.green * 0.86 + rgb.green * 0.14),
+    red: Math.round(base.red * 0.86 + rgb.red * 0.14)
   });
 }
 

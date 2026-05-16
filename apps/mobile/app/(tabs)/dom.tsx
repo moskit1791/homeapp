@@ -2810,10 +2810,10 @@ function createStyles(colors: AppPalette) {
     },
     moduleTitle: {
       color: colors.text,
-      fontSize: 11,
-      fontWeight: "900",
+      fontSize: 12,
+      fontWeight: "800",
       letterSpacing: 0,
-      lineHeight: 14,
+      lineHeight: 15,
       textAlign: "center",
     },
     mealSlotsField: {

@@ -270,10 +270,10 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   tabGlyphLabel: {
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: 11,
+    fontWeight: "800",
     letterSpacing: 0,
-    lineHeight: 13,
+    lineHeight: 14,
     maxWidth: "100%",
     textAlign: "center",
   },
