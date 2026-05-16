@@ -2,6 +2,7 @@ import {
   IsBoolean,
   IsDateString,
   IsInt,
+  IsIn,
   IsNumber,
   IsOptional,
   IsString,
@@ -37,6 +38,11 @@ export class FinanceExpenseIdParamDto {
 }
 
 export class FinanceDebtIdParamDto {
+  @IsUUID()
+  id!: string;
+}
+
+export class FinanceSavingsAccountIdParamDto {
   @IsUUID()
   id!: string;
 }
@@ -222,4 +228,43 @@ export class UpdateFinanceDebtDto {
   @IsString()
   @Length(1, 200)
   purpose?: string;
+}
+
+export class CreateFinanceSavingsAccountDto {
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  amount!: number;
+
+  @IsOptional()
+  @IsDateString()
+  changedAt?: string;
+
+  @IsString()
+  @Length(1, 160)
+  name!: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 500)
+  note?: string | null;
+}
+
+export class CreateFinanceSavingsTransactionDto {
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.01)
+  amount!: number;
+
+  @IsOptional()
+  @IsDateString()
+  changedAt?: string;
+
+  @IsIn(['add', 'subtract'])
+  direction!: 'add' | 'subtract';
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 500)
+  note?: string | null;
 }

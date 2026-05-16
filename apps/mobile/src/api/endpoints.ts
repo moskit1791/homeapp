@@ -33,6 +33,8 @@ import type {
   CreateDataEntryRequest,
   CreateExpenseRequest,
   CreateFinanceDebtRequest,
+  CreateFinanceSavingsAccountRequest,
+  CreateFinanceSavingsTransactionRequest,
   CreateHouseholdRequest,
   CreateHouseholdResponse,
   CreateInvitationRequest,
@@ -53,6 +55,7 @@ import type {
   ForgotPasswordRequest,
   ForgotPasswordResponse,
   FinanceDebt,
+  FinanceSavingsAccount,
   GoogleLoginRequest,
   Income,
   IncomeSummary,
@@ -667,6 +670,62 @@ export function deleteFinanceDebt(
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<OkResponse>(`/finance/debts/${debtId}`, {
+    accessToken: requestOptions.accessToken,
+    method: 'DELETE',
+    signal: requestOptions.signal
+  });
+}
+
+export function listFinanceSavings(
+  options?: ApiCallOptionsInput
+): Promise<FinanceSavingsAccount[]> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<FinanceSavingsAccount[]>('/finance/savings', {
+    accessToken: requestOptions.accessToken,
+    signal: requestOptions.signal
+  });
+}
+
+export function createFinanceSavingsAccount(
+  input: CreateFinanceSavingsAccountRequest,
+  options?: ApiCallOptionsInput
+): Promise<FinanceSavingsAccount> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<FinanceSavingsAccount, CreateFinanceSavingsAccountRequest>('/finance/savings', {
+    accessToken: requestOptions.accessToken,
+    body: input,
+    method: 'POST',
+    signal: requestOptions.signal
+  });
+}
+
+export function createFinanceSavingsTransaction(
+  accountId: string,
+  input: CreateFinanceSavingsTransactionRequest,
+  options?: ApiCallOptionsInput
+): Promise<FinanceSavingsAccount> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<FinanceSavingsAccount, CreateFinanceSavingsTransactionRequest>(
+    `/finance/savings/${accountId}/transactions`,
+    {
+      accessToken: requestOptions.accessToken,
+      body: input,
+      method: 'POST',
+      signal: requestOptions.signal
+    }
+  );
+}
+
+export function deleteFinanceSavingsAccount(
+  accountId: string,
+  options?: ApiCallOptionsInput
+): Promise<OkResponse> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<OkResponse>(`/finance/savings/${accountId}`, {
     accessToken: requestOptions.accessToken,
     method: 'DELETE',
     signal: requestOptions.signal

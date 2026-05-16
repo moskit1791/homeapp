@@ -23,12 +23,15 @@ import {
   CreateBudgetMonthDto,
   CreateExpenseDto,
   CreateFinanceDebtDto,
+  CreateFinanceSavingsAccountDto,
+  CreateFinanceSavingsTransactionDto,
   FinanceBudgetItemIdParamDto,
   FinanceCategoryIdParamDto,
   FinanceDebtIdParamDto,
   FinanceExpenseIdParamDto,
   FinanceMemberIdParamDto,
   FinanceMonthIdParamDto,
+  FinanceSavingsAccountIdParamDto,
   UpdateBudgetCategoryDto,
   UpdateBudgetItemDto,
   UpdateFinanceDebtDto,
@@ -39,6 +42,7 @@ import { BudgetItemsService } from './services/budget-items.service';
 import { BudgetMonthsService } from './services/budget-months.service';
 import { ExpensesService } from './services/expenses.service';
 import { FinanceDebtsService } from './services/finance-debts.service';
+import { FinanceSavingsService } from './services/finance-savings.service';
 import { FinanceSummaryService } from './services/finance-summary.service';
 import { IncomesService } from './services/incomes.service';
 
@@ -51,6 +55,7 @@ export class FinanceController {
     private readonly budgetItemsService: BudgetItemsService,
     private readonly expensesService: ExpensesService,
     private readonly financeDebtsService: FinanceDebtsService,
+    private readonly financeSavingsService: FinanceSavingsService,
     private readonly financeSummaryService: FinanceSummaryService,
     private readonly incomesService: IncomesService
   ) {}
@@ -323,6 +328,64 @@ export class FinanceController {
 
     if (!deleted) {
       throw new NotFoundException('Finance debt not found');
+    }
+
+    return { ok: true };
+  }
+
+  @Get('savings')
+  @RequirePermission('finances', 'read')
+  listSavings(@CurrentHousehold() household: HouseholdContext | undefined) {
+    return this.financeSavingsService.listAccounts(
+      this.requireHousehold(household).householdId
+    );
+  }
+
+  @Post('savings')
+  @RequirePermission('finances', 'create')
+  createSavingsAccount(
+    @CurrentHousehold() household: HouseholdContext | undefined,
+    @Body() dto: CreateFinanceSavingsAccountDto
+  ) {
+    return this.financeSavingsService.createAccount(
+      this.requireHousehold(household).householdId,
+      dto
+    );
+  }
+
+  @Post('savings/:id/transactions')
+  @RequirePermission('finances', 'update')
+  async createSavingsTransaction(
+    @CurrentHousehold() household: HouseholdContext | undefined,
+    @Param() params: FinanceSavingsAccountIdParamDto,
+    @Body() dto: CreateFinanceSavingsTransactionDto
+  ) {
+    const account = await this.financeSavingsService.createTransaction(
+      this.requireHousehold(household).householdId,
+      params.id,
+      dto
+    );
+
+    if (!account) {
+      throw new NotFoundException('Finance savings account not found');
+    }
+
+    return account;
+  }
+
+  @Delete('savings/:id')
+  @RequirePermission('finances', 'delete')
+  async deleteSavingsAccount(
+    @CurrentHousehold() household: HouseholdContext | undefined,
+    @Param() params: FinanceSavingsAccountIdParamDto
+  ) {
+    const deleted = await this.financeSavingsService.deleteAccount(
+      this.requireHousehold(household).householdId,
+      params.id
+    );
+
+    if (!deleted) {
+      throw new NotFoundException('Finance savings account not found');
     }
 
     return { ok: true };

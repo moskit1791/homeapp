@@ -1,5 +1,5 @@
 import { createContext, createElement, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
-import { useColorScheme } from 'react-native';
+import { Appearance, type ColorSchemeName } from 'react-native';
 import { loadStoredJson, saveStoredJson } from '../session/secure-session-store';
 import { colors, radii, shadows, spacing } from './tokens';
 
@@ -34,6 +34,7 @@ type StoredThemePreferences = {
 type ThemePreferencesContextValue = {
   accent: DarkAccentKey;
   darkAccent: DarkAccentKey;
+  systemScheme: ColorSchemeName;
   setAccent: (accent: DarkAccentKey) => void;
   setDarkAccent: (accent: DarkAccentKey) => void;
 };
@@ -122,6 +123,7 @@ const lightAccentPalettes: typeof darkAccentPalettes = {
 const ThemePreferencesContext = createContext<ThemePreferencesContextValue>({
   accent: defaultDarkAccent,
   darkAccent: defaultDarkAccent,
+  systemScheme: Appearance.getColorScheme(),
   setAccent: () => undefined,
   setDarkAccent: () => undefined
 });
@@ -149,24 +151,24 @@ const lightPalette: Palette = {
 
 const darkPaletteBase: typeof lightPalette = {
   ...colors,
-  background: '#070B14',
-  backgroundBottom: '#050914',
-  backgroundTop: '#131827',
-  backdrop: 'rgba(3, 6, 13, 0.7)',
-  border: 'rgba(231, 236, 248, 0.16)',
+  background: '#0C1220',
+  backgroundBottom: '#080D18',
+  backgroundTop: '#1B2032',
+  backdrop: 'rgba(6, 9, 18, 0.68)',
+  border: 'rgba(238, 244, 255, 0.2)',
   calendar: '#B56CFF',
-  card: 'rgba(24, 30, 47, 0.74)',
-  cardMuted: 'rgba(35, 43, 64, 0.76)',
+  card: 'rgba(38, 45, 67, 0.68)',
+  cardMuted: 'rgba(48, 56, 78, 0.62)',
   danger: '#FF7A90',
   dangerSoft: 'rgba(255, 122, 144, 0.18)',
-  field: 'rgba(19, 25, 39, 0.78)',
+  field: 'rgba(30, 36, 54, 0.78)',
   finance: '#66E3FF',
   food: '#FFC766',
   info: '#B56CFF',
   infoSoft: 'rgba(181, 108, 255, 0.18)',
   inverseText: '#050711',
-  line: 'rgba(231, 236, 248, 0.1)',
-  overlay: 'rgba(20, 27, 43, 0.84)',
+  line: 'rgba(238, 244, 255, 0.14)',
+  overlay: 'rgba(32, 39, 59, 0.72)',
   primary: '#B56CFF',
   primaryDark: '#D7B2FF',
   primaryDarker: '#EBDCFF',
@@ -179,11 +181,11 @@ const darkPaletteBase: typeof lightPalette = {
   softOrange: 'rgba(255, 199, 102, 0.17)',
   softPurple: 'rgba(255, 117, 222, 0.16)',
   successSoft: 'rgba(102, 227, 255, 0.17)',
-  surface: 'rgba(24, 30, 47, 0.74)',
-  surfaceMuted: 'rgba(35, 43, 64, 0.76)',
+  surface: 'rgba(38, 45, 67, 0.68)',
+  surfaceMuted: 'rgba(48, 56, 78, 0.62)',
   text: '#FFFFFF',
-  textMuted: '#D7DEED',
-  textSubtle: '#A7B1C6',
+  textMuted: '#E2E7F3',
+  textSubtle: '#B8C2D8',
   warning: '#FFD977',
   warningSoft: 'rgba(255, 217, 119, 0.17)'
 };
@@ -192,6 +194,7 @@ export type AppPalette = typeof lightPalette;
 
 export function AppThemeProvider({ children }: PropsWithChildren) {
   const [darkAccent, setDarkAccentState] = useState<DarkAccentKey>(defaultDarkAccent);
+  const [systemScheme, setSystemScheme] = useState<ColorSchemeName>(() => Appearance.getColorScheme());
 
   useEffect(() => {
     loadStoredJson<StoredThemePreferences>(themePreferencesKey)
@@ -205,10 +208,19 @@ export function AppThemeProvider({ children }: PropsWithChildren) {
       .catch(() => undefined);
   }, []);
 
+  useEffect(() => {
+    const subscription = Appearance.addChangeListener(({ colorScheme }) => {
+      setSystemScheme(colorScheme);
+    });
+
+    return () => subscription.remove();
+  }, []);
+
   const value = useMemo<ThemePreferencesContextValue>(
     () => ({
       accent: darkAccent,
       darkAccent,
+      systemScheme,
       setAccent: (accent) => {
         setDarkAccentState(accent);
         saveStoredJson<StoredThemePreferences>(themePreferencesKey, {
@@ -224,7 +236,7 @@ export function AppThemeProvider({ children }: PropsWithChildren) {
         }).catch(() => undefined);
       }
     }),
-    [darkAccent]
+    [darkAccent, systemScheme]
   );
 
   return createElement(ThemePreferencesContext.Provider, { value }, children);
@@ -235,9 +247,8 @@ export function useThemePreferences() {
 }
 
 export function useAppTheme() {
-  const scheme = useColorScheme();
-  const isDark = scheme === 'dark';
-  const { darkAccent } = useThemePreferences();
+  const { darkAccent, systemScheme } = useThemePreferences();
+  const isDark = systemScheme === 'dark';
   const palette = useMemo(
     () => (isDark ? buildDarkPalette(darkAccent) : buildLightPalette(darkAccent)),
     [darkAccent, isDark]

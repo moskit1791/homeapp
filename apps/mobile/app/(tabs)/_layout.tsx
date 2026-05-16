@@ -1,6 +1,6 @@
 import type { ModuleKey } from "@homeapp/shared-types";
 import { Tabs, useRouter } from "expo-router";
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import {
   CalendarDays,
@@ -71,38 +71,43 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveBackgroundColor: theme.colors.primarySoft,
         tabBarActiveTintColor: theme.colors.primary,
+        tabBarShowLabel: false,
         tabBarInactiveTintColor: theme.colors.textMuted,
         tabBarHideOnKeyboard: true,
-        tabBarItemStyle: {
-          borderRadius: 8,
-          marginHorizontal: 2,
-          paddingVertical: 3,
+        tabBarIconStyle: {
+          alignItems: "stretch",
+          flex: 1,
+          height: 58,
+          justifyContent: "center",
+          width: "100%",
         },
-        tabBarLabelStyle: {
-          fontSize: 10,
-          fontWeight: "800",
-          letterSpacing: 0,
+        tabBarItemStyle: {
+          alignItems: "stretch",
+          flex: 1,
+          height: 58,
+          justifyContent: "center",
+          padding: 0,
         },
         tabBarStyle: {
           backgroundColor: theme.colors.overlay,
           borderColor: theme.colors.border,
-          borderRadius: 8,
+          borderRadius: 18,
           borderTopColor: theme.colors.border,
           borderTopWidth: 1,
           borderWidth: 1,
           elevation: 8,
-          height: 66,
-          marginBottom: 8,
+          height: 76,
+          marginBottom: 10,
           marginHorizontal: 12,
-          paddingBottom: 7,
-          paddingTop: 6,
+          paddingBottom: 10,
+          paddingHorizontal: 8,
+          paddingTop: 8,
           position: "absolute",
           shadowColor: theme.colors.primary,
           shadowOffset: { height: 8, width: 0 },
-          shadowOpacity: theme.isDark ? 0.22 : 0.1,
-          shadowRadius: 18,
+          shadowOpacity: theme.isDark ? 0.26 : 0.12,
+          shadowRadius: 22,
         },
       }}
     >
@@ -110,7 +115,9 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: "Dzisiaj",
-          tabBarIcon: ({ color }) => <CheckCircle2 color={color} size={20} />,
+          tabBarIcon: ({ focused }) => (
+            <TabGlyph focused={focused} icon={(color) => <CheckCircle2 color={color} size={20} />} label="Dzisiaj" />
+          ),
         }}
       />
       <Tabs.Screen
@@ -118,7 +125,9 @@ export default function TabsLayout() {
         options={{
           href: shouldShow(["calendar"]) ? undefined : null,
           title: "Kalendarz",
-          tabBarIcon: ({ color }) => <CalendarDays color={color} size={20} />,
+          tabBarIcon: ({ focused }) => (
+            <TabGlyph focused={focused} icon={(color) => <CalendarDays color={color} size={20} />} label="Kalendarz" />
+          ),
         }}
       />
       <Tabs.Screen
@@ -126,7 +135,9 @@ export default function TabsLayout() {
         options={{
           href: shouldShow(["finances"]) ? undefined : null,
           title: "Finanse",
-          tabBarIcon: ({ color }) => <WalletCards color={color} size={20} />,
+          tabBarIcon: ({ focused }) => (
+            <TabGlyph focused={focused} icon={(color) => <WalletCards color={color} size={20} />} label="Finanse" />
+          ),
         }}
       />
       <Tabs.Screen
@@ -134,7 +145,9 @@ export default function TabsLayout() {
         options={{
           href: shouldShow(["shopping", "meal_planner"]) ? undefined : null,
           title: "Lista",
-          tabBarIcon: ({ color }) => <ListChecks color={color} size={20} />,
+          tabBarIcon: ({ focused }) => (
+            <TabGlyph focused={focused} icon={(color) => <ListChecks color={color} size={20} />} label="Lista" />
+          ),
         }}
       />
       <Tabs.Screen
@@ -142,7 +155,9 @@ export default function TabsLayout() {
         options={{
           href: shouldShow(["notes", "todo"]) ? undefined : null,
           title: "Zadania",
-          tabBarIcon: ({ color }) => <NotebookText color={color} size={20} />,
+          tabBarIcon: ({ focused }) => (
+            <TabGlyph focused={focused} icon={(color) => <NotebookText color={color} size={20} />} label="Zadania" />
+          ),
         }}
       />
       <Tabs.Screen
@@ -150,7 +165,9 @@ export default function TabsLayout() {
         options={{
           href: null,
           title: "Zakupy",
-          tabBarIcon: ({ color }) => <ShoppingCart color={color} size={18} />,
+          tabBarIcon: ({ focused }) => (
+            <TabGlyph focused={focused} icon={(color) => <ShoppingCart color={color} size={18} />} label="Zakupy" />
+          ),
         }}
       />
       <Tabs.Screen
@@ -158,7 +175,9 @@ export default function TabsLayout() {
         options={{
           href: null,
           title: "Plan",
-          tabBarIcon: ({ color }) => <Utensils color={color} size={18} />,
+          tabBarIcon: ({ focused }) => (
+            <TabGlyph focused={focused} icon={(color) => <Utensils color={color} size={18} />} label="Plan" />
+          ),
         }}
       />
       <Tabs.Screen
@@ -173,7 +192,9 @@ export default function TabsLayout() {
             ? undefined
             : null,
           title: "Dom",
-          tabBarIcon: ({ color }) => <Home color={color} size={20} />,
+          tabBarIcon: ({ focused }) => (
+            <TabGlyph focused={focused} icon={(color) => <Home color={color} size={20} />} label="Dom" />
+          ),
         }}
       />
       <Tabs.Screen
@@ -185,6 +206,46 @@ export default function TabsLayout() {
         }}
       />
     </Tabs>
+  );
+}
+
+function TabGlyph({
+  focused,
+  icon,
+  label,
+}: {
+  focused: boolean;
+  icon: (color: string) => ReactNode;
+  label: string;
+}) {
+  const theme = useAppTheme();
+  const color = focused ? theme.colors.primary : theme.colors.textMuted;
+
+  return (
+    <View
+      style={[
+        styles.tabGlyph,
+        focused && {
+          backgroundColor: theme.colors.primarySoft,
+          borderColor: `${theme.colors.primary}66`,
+          shadowColor: theme.colors.primary,
+          shadowOpacity: theme.isDark ? 0.42 : 0.2,
+        },
+      ]}
+    >
+      <View style={styles.tabIconSlot}>{icon(color)}</View>
+      <Text
+        numberOfLines={1}
+        style={[
+          styles.tabGlyphLabel,
+          {
+            color,
+          },
+        ]}
+      >
+        {label}
+      </Text>
+    </View>
   );
 }
 
@@ -200,5 +261,36 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
     letterSpacing: 0,
+  },
+  tabGlyph: {
+    alignItems: "center",
+    alignSelf: "stretch",
+    borderColor: "transparent",
+    borderRadius: 18,
+    borderWidth: 1,
+    elevation: 0,
+    flex: 1,
+    gap: 2,
+    justifyContent: "center",
+    marginHorizontal: 1,
+    minHeight: 56,
+    paddingHorizontal: 2,
+    paddingVertical: 5,
+    shadowOffset: { height: 0, width: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 16,
+  },
+  tabGlyphLabel: {
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0,
+    lineHeight: 13,
+    maxWidth: "100%",
+    textAlign: "center",
+  },
+  tabIconSlot: {
+    alignItems: "center",
+    height: 22,
+    justifyContent: "center",
   },
 });

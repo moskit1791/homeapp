@@ -10,6 +10,7 @@ import { BudgetMonthsService } from './services/budget-months.service';
 import { ExpensesService } from './services/expenses.service';
 import { FinanceDebtsService } from './services/finance-debts.service';
 import { FinanceSummaryService } from './services/finance-summary.service';
+import { FinanceSavingsService } from './services/finance-savings.service';
 import { IncomesService } from './services/incomes.service';
 
 const services = [
@@ -18,6 +19,7 @@ const services = [
   BudgetItemsService,
   ExpensesService,
   FinanceDebtsService,
+  FinanceSavingsService,
   IncomesService,
   FinanceSummaryService
 ];

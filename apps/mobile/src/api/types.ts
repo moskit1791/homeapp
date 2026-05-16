@@ -425,6 +425,43 @@ export interface UpdateFinanceDebtRequest {
   purpose?: string;
 }
 
+export type FinanceSavingsDirection = "add" | "subtract";
+
+export interface FinanceSavingsTransaction {
+  amount: string;
+  changedAt: string;
+  createdAt: string;
+  direction: FinanceSavingsDirection;
+  id: string;
+  note: string | null;
+  savingsAccountId: string;
+}
+
+export interface FinanceSavingsAccount {
+  createdAt: string;
+  currentAmount: string;
+  householdId: string;
+  id: string;
+  lastChangedAt: string;
+  name: string;
+  transactions: FinanceSavingsTransaction[];
+  updatedAt: string;
+}
+
+export interface CreateFinanceSavingsAccountRequest {
+  amount: number;
+  changedAt?: string;
+  name: string;
+  note?: string | null;
+}
+
+export interface CreateFinanceSavingsTransactionRequest {
+  amount: number;
+  changedAt?: string;
+  direction: FinanceSavingsDirection;
+  note?: string | null;
+}
+
 export interface MealPlanWeek {
   createdAt: string;
   householdId: string;

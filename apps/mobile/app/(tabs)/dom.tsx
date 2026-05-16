@@ -294,6 +294,9 @@ function ModuleTile({
         <ChevronRight color={active ? accent.color : theme.colors.textMuted} size={15} />
       </View>
       <Text numberOfLines={2} style={styles.moduleTitle}>{title}</Text>
+      {active ? (
+        <View style={[styles.moduleActiveStrip, { backgroundColor: accent.color, shadowColor: accent.color }]} />
+      ) : null}
     </Pressable>
   );
 }
@@ -1809,12 +1812,20 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
         </View>
       </View>
     </FormModal>
-    <FormModal
-      onClose={() => setNotificationsVisible(false)}
-      subtitle="Token, test push i typy zdarzeń."
-      title="Powiadomienia"
+    <Modal
+      animationType="slide"
+      onRequestClose={() => setNotificationsVisible(false)}
       visible={notificationsVisible}
     >
+      <AppScreen
+        actions={
+          <IconButton accessibilityLabel="Zamknij powiadomienia" onPress={() => setNotificationsVisible(false)}>
+            <Close color={theme.colors.textMuted} size={18} />
+          </IconButton>
+        }
+        subtitle="Token, test push i typy zdarzeń."
+        title="Powiadomienia"
+      >
       {toast ? (
         <View style={styles.settingsToast}>
           <Text style={styles.settingsToastText}>{toast}</Text>
@@ -1908,7 +1919,8 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
           ) : null}
         </View>
       </View>
-    </FormModal>
+      </AppScreen>
+    </Modal>
     <FormModal
       footer={
         <View style={styles.modalFooter}>
@@ -2578,11 +2590,16 @@ function createStyles(colors: AppPalette) {
       borderColor: colors.border,
       borderRadius: radii.card,
       borderWidth: 1,
+      elevation: 1,
       flexDirection: "row",
       gap: spacing.sm,
       minHeight: 58,
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.sm,
+      shadowColor: colors.primary,
+      shadowOffset: { height: 6, width: 0 },
+      shadowOpacity: 0.08,
+      shadowRadius: 14,
     },
     itemText: {
       flex: 1,
@@ -2603,9 +2620,9 @@ function createStyles(colors: AppPalette) {
     },
     notificationPreferenceRow: {
       alignItems: "stretch",
-      backgroundColor: colors.card,
+      backgroundColor: colors.cardMuted,
       borderColor: colors.border,
-      borderRadius: radii.control,
+      borderRadius: radii.card,
       borderWidth: 1,
       gap: spacing.sm,
       minHeight: 64,
@@ -2666,7 +2683,9 @@ function createStyles(colors: AppPalette) {
     memberDeleteRow: {
       alignItems: "center",
       backgroundColor: colors.cardMuted,
+      borderColor: colors.border,
       borderRadius: radii.card,
+      borderWidth: 1,
       flexDirection: "row",
       justifyContent: "space-between",
       padding: spacing.sm,
@@ -2702,8 +2721,18 @@ function createStyles(colors: AppPalette) {
       lineHeight: 16,
     },
     moduleGrid: {
+      backgroundColor: colors.overlay,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      elevation: 3,
       flexDirection: "row",
-      gap: spacing.sm,
+      gap: 0,
+      overflow: "hidden",
+      shadowColor: colors.primary,
+      shadowOffset: { height: 12, width: 0 },
+      shadowOpacity: 0.14,
+      shadowRadius: 28,
     },
     moduleIcon: {
       alignItems: "center",
@@ -2714,29 +2743,47 @@ function createStyles(colors: AppPalette) {
     },
     moduleTile: {
       alignItems: "center",
-      backgroundColor: colors.card,
+      backgroundColor: "transparent",
       borderColor: colors.border,
-      borderRadius: radii.card,
-      borderWidth: 1,
+      borderRadius: 0,
+      borderRightWidth: 1,
       flex: 1,
       gap: spacing.xs,
       justifyContent: "center",
-      minHeight: 78,
+      minHeight: 96,
+      overflow: "hidden",
       paddingHorizontal: spacing.xs,
-      paddingVertical: spacing.sm,
+      paddingVertical: spacing.md,
+      position: "relative",
     },
     moduleTileActive: {
       elevation: 4,
+      borderWidth: 1,
       shadowOffset: { height: 0, width: 0 },
-      shadowOpacity: 0.34,
-      shadowRadius: 14,
+      shadowOpacity: 0.42,
+      shadowRadius: 18,
+    },
+    moduleActiveStrip: {
+      borderRadius: 999,
+      bottom: 0,
+      height: 4,
+      left: spacing.sm,
+      position: "absolute",
+      right: spacing.sm,
+      shadowOffset: { height: 0, width: 0 },
+      shadowOpacity: 0.64,
+      shadowRadius: 12,
     },
     moduleTileIcon: {
       alignItems: "center",
       borderRadius: radii.control,
-      height: 32,
+      elevation: 3,
+      height: 38,
       justifyContent: "center",
-      width: 32,
+      shadowOffset: { height: 0, width: 0 },
+      shadowOpacity: 0.28,
+      shadowRadius: 12,
+      width: 38,
     },
     moduleTileTop: {
       alignItems: "center",
@@ -2760,17 +2807,17 @@ function createStyles(colors: AppPalette) {
       textAlignVertical: "top",
     },
     panel: {
-      backgroundColor: colors.card,
+      backgroundColor: colors.overlay,
       borderColor: colors.border,
       borderRadius: radii.card,
       borderWidth: 1,
-      elevation: 2,
+      elevation: 4,
       gap: spacing.md,
       padding: spacing.md,
       shadowColor: colors.primary,
-      shadowOffset: { height: 8, width: 0 },
-      shadowOpacity: 0.1,
-      shadowRadius: 22,
+      shadowOffset: { height: 12, width: 0 },
+      shadowOpacity: 0.16,
+      shadowRadius: 30,
     },
     panelActions: {
       alignItems: "center",
@@ -2867,7 +2914,7 @@ function createStyles(colors: AppPalette) {
     },
     settingsRow: {
       alignItems: "center",
-      backgroundColor: colors.card,
+      backgroundColor: colors.overlay,
       borderColor: colors.border,
       borderRadius: radii.card,
       borderWidth: 1,
@@ -2907,12 +2954,17 @@ function createStyles(colors: AppPalette) {
       lineHeight: 19,
     },
     settingsPanelRow: {
-      backgroundColor: colors.cardMuted,
+      backgroundColor: colors.overlay,
       borderColor: colors.border,
       borderRadius: radii.card,
       borderWidth: 1,
+      elevation: 2,
       gap: spacing.sm,
       padding: spacing.md,
+      shadowColor: colors.primary,
+      shadowOffset: { height: 8, width: 0 },
+      shadowOpacity: 0.1,
+      shadowRadius: 18,
     },
     settingsMembersHeader: {
       alignItems: "center",

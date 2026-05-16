@@ -22,7 +22,7 @@ import { useModulePermission } from "../../src/permissions/use-permissions";
 import { useSession } from "../../src/session/session-context";
 import { radii, spacing } from "../../src/theme/tokens";
 import { useAppTheme, type AppPalette } from "../../src/theme/use-app-theme";
-import { ActionButton, AppScreen, AppToast, FormModal, IconButton, QueryState } from "../../src/ui";
+import { ActionButton, AppScreen, AppToast, IconButton, QueryState } from "../../src/ui";
 import {
   AccountCircle,
   Bell,
@@ -30,6 +30,7 @@ import {
   CalendarDays,
   CartPlus,
   ChevronRight,
+  Close,
   Plus,
   ReceiptText,
   ShoppingCart,
@@ -188,6 +189,24 @@ export default function DzisiajScreen() {
       <AppToast offsetTop={74} text={toast} />
       <QueryState error={dashboardQuery.error} isLoading={dashboardQuery.isLoading} />
 
+      {notificationsVisible ? (
+        <NotificationCenterPanel
+          notificationItems={notificationItems}
+          onClear={() => {
+            clearStoredNotifications()
+              .then(() => {
+                setPushNotifications([]);
+                setUnreadNotificationsCount(0);
+                showToast("Powiadomienia wyczyszczone");
+              })
+              .catch(() => showToast("Nie udało się wyczyścić powiadomień"));
+          }}
+          onClose={() => setNotificationsVisible(false)}
+          onOpenSettings={openNotificationSettings}
+          pushNotifications={pushNotifications}
+        />
+      ) : null}
+
       <View style={styles.quickSection}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Szybkie akcje</Text>
@@ -268,52 +287,6 @@ export default function DzisiajScreen() {
         tasks={todayCleaningTasks}
       />
 
-      <FormModal
-        onClose={() => setNotificationsVisible(false)}
-        subtitle={
-          notificationItems.length === 0
-            ? "Brak aktywnych spraw."
-            : notificationItems.length === 1
-            ? "1 aktywna sprawa do sprawdzenia."
-            : `${notificationItems.length} aktywne sprawy do sprawdzenia.`
-        }
-        title="Powiadomienia"
-        visible={notificationsVisible}
-      >
-        {pushNotifications.length > 0 ? (
-          <>
-            {pushNotifications.map((item) => (
-              <StoredNotificationRow item={item} key={item.id} />
-            ))}
-            <ActionButton
-              onPress={() => {
-                clearStoredNotifications()
-                  .then(() => {
-                    setPushNotifications([]);
-                    setUnreadNotificationsCount(0);
-                    showToast("Powiadomienia wyczyszczone");
-                  })
-                  .catch(() => showToast("Nie udało się wyczyścić powiadomień"));
-              }}
-              title="Wyczyść listę"
-              variant="ghost"
-            />
-          </>
-        ) : notificationItems.length > 0 ? (
-          notificationItems.map((item) => <NotificationRow item={item} key={item.id} />)
-        ) : (
-          <View style={styles.emptyNotifications}>
-            <Bell color={theme.colors.textSubtle} size={24} />
-            <Text style={styles.emptyNotificationsTitle}>Brak powiadomień</Text>
-            <Text style={styles.emptyNotificationsText}>Najważniejsze rzeczy pojawią się tutaj.</Text>
-          </View>
-        )}
-        <ActionButton
-          onPress={openNotificationSettings}
-          title="Przejdź do ustawień powiadomień"
-          variant="secondary"
-        />
-      </FormModal>
     </AppScreen>
   );
 }
@@ -324,6 +297,69 @@ interface NotificationItem {
   id: string;
   onPress: () => void;
   title: string;
+}
+
+function NotificationCenterPanel({
+  notificationItems,
+  onClear,
+  onClose,
+  onOpenSettings,
+  pushNotifications,
+}: {
+  notificationItems: NotificationItem[];
+  onClear: () => void;
+  onClose: () => void;
+  onOpenSettings: () => void;
+  pushNotifications: StoredNotification[];
+}) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+  const activeCount = pushNotifications.length || notificationItems.length;
+  const subtitle =
+    activeCount === 0
+      ? "Brak aktywnych spraw."
+      : activeCount === 1
+      ? "1 aktywna sprawa do sprawdzenia."
+      : `${activeCount} aktywne sprawy do sprawdzenia.`;
+
+  return (
+    <View style={styles.notificationPanel}>
+      <View style={styles.notificationPanelHeader}>
+        <View style={styles.notificationPanelTitleWrap}>
+          <Text style={styles.notificationPanelTitle}>Powiadomienia</Text>
+          <Text style={styles.notificationPanelSubtitle}>{subtitle}</Text>
+        </View>
+        <IconButton accessibilityLabel="Zamknij powiadomienia" onPress={onClose}>
+          <Close color={theme.colors.textMuted} size={18} />
+        </IconButton>
+      </View>
+
+      <View style={styles.notificationList}>
+        {pushNotifications.length > 0 ? (
+          <>
+            {pushNotifications.map((item) => (
+              <StoredNotificationRow item={item} key={item.id} />
+            ))}
+            <ActionButton onPress={onClear} title="Wyczyść listę" variant="ghost" />
+          </>
+        ) : notificationItems.length > 0 ? (
+          notificationItems.map((item) => <NotificationRow item={item} key={item.id} />)
+        ) : (
+          <View style={styles.emptyNotifications}>
+            <Bell color={theme.colors.textSubtle} size={24} />
+            <Text style={styles.emptyNotificationsTitle}>Brak powiadomień</Text>
+            <Text style={styles.emptyNotificationsText}>Najważniejsze rzeczy pojawią się tutaj.</Text>
+          </View>
+        )}
+      </View>
+
+      <ActionButton
+        onPress={onOpenSettings}
+        title="Przejdź do ustawień powiadomień"
+        variant="secondary"
+      />
+    </View>
+  );
 }
 
 function NotificationRow({ item }: { item: NotificationItem }) {
@@ -490,7 +526,7 @@ function QuickAction({
       <View style={[styles.quickIcon, { backgroundColor: tint(color, 0.1) }]}>
         {icon}
         <View style={styles.quickPlus}>
-          <Plus color={theme.colors.card} size={10} />
+          <Plus color={theme.colors.inverseText} size={10} />
         </View>
       </View>
       <Text numberOfLines={2} style={styles.quickLabel}>
@@ -636,6 +672,7 @@ function createStyles(colors: AppPalette) {
     },
     emptyNotifications: {
       alignItems: "center",
+      backgroundColor: colors.cardMuted,
       borderColor: colors.border,
       borderRadius: radii.card,
       borderWidth: 1,
@@ -702,11 +739,16 @@ function createStyles(colors: AppPalette) {
       lineHeight: 20,
     },
     cleaningPanel: {
-      backgroundColor: colors.card,
+      backgroundColor: colors.overlay,
       borderColor: colors.border,
       borderRadius: radii.card,
       borderWidth: 1,
+      elevation: 2,
       overflow: "hidden",
+      shadowColor: colors.primary,
+      shadowOffset: { height: 10, width: 0 },
+      shadowOpacity: 0.13,
+      shadowRadius: 22,
     },
     cleaningRow: {
       alignItems: "center",
@@ -733,14 +775,55 @@ function createStyles(colors: AppPalette) {
     notificationIcon: {
       alignItems: "center",
       backgroundColor: colors.cardMuted,
+      borderColor: colors.border,
       borderRadius: radii.control,
+      borderWidth: 1,
       height: 38,
       justifyContent: "center",
       width: 38,
     },
+    notificationList: {
+      gap: spacing.sm,
+    },
+    notificationPanel: {
+      backgroundColor: colors.overlay,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      elevation: 4,
+      gap: spacing.md,
+      padding: spacing.md,
+      shadowColor: colors.primary,
+      shadowOffset: { height: 12, width: 0 },
+      shadowOpacity: 0.18,
+      shadowRadius: 28,
+    },
+    notificationPanelHeader: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.sm,
+    },
+    notificationPanelSubtitle: {
+      color: colors.textMuted,
+      fontSize: 12,
+      letterSpacing: 0,
+      lineHeight: 17,
+    },
+    notificationPanelTitle: {
+      color: colors.text,
+      fontSize: 17,
+      fontWeight: "900",
+      letterSpacing: 0,
+      lineHeight: 22,
+    },
+    notificationPanelTitleWrap: {
+      flex: 1,
+      gap: 2,
+      minWidth: 0,
+    },
     notificationRow: {
       alignItems: "center",
-      backgroundColor: colors.card,
+      backgroundColor: colors.cardMuted,
       borderColor: colors.border,
       borderRadius: radii.card,
       borderWidth: 1,
@@ -772,10 +855,11 @@ function createStyles(colors: AppPalette) {
     },
     quickAction: {
       alignItems: "center",
-      backgroundColor: colors.card,
+      backgroundColor: colors.overlay,
       borderColor: colors.border,
       borderRadius: radii.card,
       borderWidth: 1,
+      elevation: 2,
       flex: 1,
       gap: 6,
       minHeight: 74,
@@ -783,6 +867,10 @@ function createStyles(colors: AppPalette) {
       minWidth: 0,
       paddingHorizontal: 6,
       paddingVertical: spacing.sm,
+      shadowColor: colors.primary,
+      shadowOffset: { height: 8, width: 0 },
+      shadowOpacity: 0.12,
+      shadowRadius: 18,
     },
     quickGrid: {
       flexDirection: "row",
@@ -853,12 +941,17 @@ function createStyles(colors: AppPalette) {
       width: 36,
     },
     tileList: {
-      backgroundColor: colors.card,
+      backgroundColor: colors.overlay,
       borderColor: colors.border,
       borderRadius: radii.card,
       borderWidth: 1,
+      elevation: 2,
       marginTop: spacing.xs,
       overflow: "hidden",
+      shadowColor: colors.primary,
+      shadowOffset: { height: 10, width: 0 },
+      shadowOpacity: 0.12,
+      shadowRadius: 24,
     },
     tileMeta: {
       color: colors.textMuted,

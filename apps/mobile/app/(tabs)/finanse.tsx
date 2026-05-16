@@ -9,7 +9,9 @@ import {
   Banknote,
   ChevronLeft,
   ChevronRight,
+  Minus,
   Pencil,
+  PiggyBank,
   Plus,
   ReceiptText,
   Trash2,
@@ -21,15 +23,19 @@ import {
   createBudgetMonth,
   createExpense,
   createFinanceDebt,
+  createFinanceSavingsAccount,
+  createFinanceSavingsTransaction,
   deleteBudgetItem,
   deleteFinanceDebt,
   deleteBudgetMonth,
+  deleteFinanceSavingsAccount,
   generateNextBudgetMonth,
   getBudgetMonth,
   getFinanceSummary,
   listBudgetCategories,
   listBudgetMonths,
   listFinanceDebts,
+  listFinanceSavings,
   queryKeys,
   updateBudgetItem,
   updateFinanceDebt,
@@ -37,6 +43,8 @@ import {
   type BudgetMonthDetail,
   type BudgetMonth,
   type FinanceDebt,
+  type FinanceSavingsAccount,
+  type FinanceSavingsDirection,
   upsertIncome,
 } from "../../src/api";
 import { useModulePermission } from "../../src/permissions/use-permissions";
@@ -67,6 +75,13 @@ type FinanceFormValues = {
   itemAmount: string;
   itemName: string;
   monthInput: string;
+  savingsAmount: string;
+  savingsChangedAt: string;
+  savingsName: string;
+  savingsNote: string;
+  savingsTransactionAmount: string;
+  savingsTransactionChangedAt: string;
+  savingsTransactionNote: string;
 };
 
 type BudgetItem = BudgetCategoryWithItems["items"][number];
@@ -84,7 +99,10 @@ type FinanceModal =
   | "copyAmounts"
   | "debt"
   | "month"
+  | "savingsAccount"
+  | "savingsTransaction"
   | null;
+type FinanceView = "budget" | "debts" | "savings";
 type FinanceSortKey = "category" | "owner" | "name" | "budget" | "spent" | "remaining";
 type FinanceSortDirection = "asc" | "desc";
 
@@ -139,6 +157,13 @@ export default function FinanseScreen() {
       itemAmount: "",
       itemName: "",
       monthInput: "",
+      savingsAmount: "",
+      savingsChangedAt: todayIso(),
+      savingsName: "",
+      savingsNote: "",
+      savingsTransactionAmount: "",
+      savingsTransactionChangedAt: todayIso(),
+      savingsTransactionNote: "",
     },
   });
 
@@ -153,6 +178,13 @@ export default function FinanseScreen() {
   const debtLenderName = watch("debtLenderName");
   const debtNote = watch("debtNote");
   const debtPurpose = watch("debtPurpose");
+  const savingsAmount = watch("savingsAmount");
+  const savingsChangedAt = watch("savingsChangedAt");
+  const savingsName = watch("savingsName");
+  const savingsNote = watch("savingsNote");
+  const savingsTransactionAmount = watch("savingsTransactionAmount");
+  const savingsTransactionChangedAt = watch("savingsTransactionChangedAt");
+  const savingsTransactionNote = watch("savingsTransactionNote");
   const [selectedIncomeMemberId, setSelectedIncomeMemberId] = useState("");
   const [selectedItemCategoryId, setSelectedItemCategoryId] = useState("");
   const [selectedItemOwnerId, setSelectedItemOwnerId] = useState("");
@@ -160,11 +192,13 @@ export default function FinanseScreen() {
   const [selectedExpenseCategoryId, setSelectedExpenseCategoryId] = useState("");
   const [selectedExpenseItemId, setSelectedExpenseItemId] = useState("");
   const [copyCategory, setCopyCategory] = useState(true);
-  const [activeFinanceView, setActiveFinanceView] = useState<"budget" | "debts">("budget");
+  const [activeFinanceView, setActiveFinanceView] = useState<FinanceView>("budget");
   const [selectedMonthId, setSelectedMonthId] = useState<string | null>(null);
   const [financeModal, setFinanceModal] = useState<FinanceModal>(null);
   const [editingBudgetItem, setEditingBudgetItem] = useState<BudgetItemWithCategory | null>(null);
   const [editingDebt, setEditingDebt] = useState<FinanceDebt | null>(null);
+  const [selectedSavingsAccount, setSelectedSavingsAccount] = useState<FinanceSavingsAccount | null>(null);
+  const [savingsDirection, setSavingsDirection] = useState<FinanceSavingsDirection>("add");
   const [copiedMonthDetail, setCopiedMonthDetail] = useState<BudgetMonthDetail | null>(null);
   const [copyAmountInputs, setCopyAmountInputs] = useState<Record<string, string>>({});
   const [financeFilters, setFinanceFilters] = useState<FinanceFilters>(defaultFinanceFilters);
@@ -202,6 +236,11 @@ export default function FinanseScreen() {
     queryFn: () => listFinanceDebts({ accessToken }),
     queryKey: [...queryKeys.finances, "debts"],
   });
+  const savingsQuery = useQuery({
+    enabled: canRead && Boolean(accessToken),
+    queryFn: () => listFinanceSavings({ accessToken }),
+    queryKey: [...queryKeys.finances, "savings"],
+  });
 
   const currentSummary = currentQuery.data;
   const summary =
@@ -227,6 +266,8 @@ export default function FinanseScreen() {
   const openDebts = debts.filter((debt) => !debt.isSettled);
   const settledDebts = debts.filter((debt) => debt.isSettled);
   const openDebtTotal = openDebts.reduce((sum, debt) => sum + Number(debt.amount ?? 0), 0);
+  const savings = savingsQuery.data ?? [];
+  const savingsTotal = savings.reduce((sum, account) => sum + Number(account.currentAmount ?? 0), 0);
   const monthTabs = useMemo(() => {
     const months = [...(archiveQuery.data ?? []), ...(currentMonth ? [currentMonth] : [])];
     const unique = new Map<string, BudgetMonth>();
@@ -567,6 +608,47 @@ export default function FinanseScreen() {
       await invalidateFinance();
     },
   });
+  const savingsAccountMutation = useMutation({
+    mutationFn: () =>
+      createFinanceSavingsAccount(
+        {
+          amount: parseMoney(savingsAmount),
+          changedAt: savingsChangedAt.trim(),
+          name: savingsName.trim(),
+          note: savingsNote.trim() || null,
+        },
+        { accessToken },
+      ),
+    onSuccess: async () => {
+      resetSavingsAccountForm();
+      setFinanceModal(null);
+      await invalidateFinance();
+    },
+  });
+  const savingsTransactionMutation = useMutation({
+    mutationFn: () =>
+      createFinanceSavingsTransaction(
+        selectedSavingsAccount?.id ?? "",
+        {
+          amount: parseMoney(savingsTransactionAmount),
+          changedAt: savingsTransactionChangedAt.trim(),
+          direction: savingsDirection,
+          note: savingsTransactionNote.trim() || null,
+        },
+        { accessToken },
+      ),
+    onSuccess: async () => {
+      resetSavingsTransactionForm();
+      setFinanceModal(null);
+      await invalidateFinance();
+    },
+  });
+  const deleteSavingsAccountMutation = useMutation({
+    mutationFn: (accountId: string) => deleteFinanceSavingsAccount(accountId, { accessToken }),
+    onSuccess: async () => {
+      await invalidateFinance();
+    },
+  });
   const expenseMutation = useMutation({
     mutationFn: () =>
       createExpense(
@@ -676,6 +758,7 @@ export default function FinanseScreen() {
     setFinanceModal(null);
     setEditingBudgetItem(null);
     setEditingDebt(null);
+    setSelectedSavingsAccount(null);
   }
 
   function openExpenseModal() {
@@ -723,6 +806,35 @@ export default function FinanseScreen() {
     setFinanceModal("debt");
   }
 
+  function resetSavingsAccountForm() {
+    setValue("savingsAmount", "");
+    setValue("savingsChangedAt", todayIso());
+    setValue("savingsName", "");
+    setValue("savingsNote", "");
+  }
+
+  function openCreateSavingsAccount() {
+    resetSavingsAccountForm();
+    setFinanceModal("savingsAccount");
+  }
+
+  function resetSavingsTransactionForm() {
+    setSelectedSavingsAccount(null);
+    setSavingsDirection("add");
+    setValue("savingsTransactionAmount", "");
+    setValue("savingsTransactionChangedAt", todayIso());
+    setValue("savingsTransactionNote", "");
+  }
+
+  function openSavingsTransaction(account: FinanceSavingsAccount, direction: FinanceSavingsDirection) {
+    setSelectedSavingsAccount(account);
+    setSavingsDirection(direction);
+    setValue("savingsTransactionAmount", "");
+    setValue("savingsTransactionChangedAt", todayIso());
+    setValue("savingsTransactionNote", "");
+    setFinanceModal("savingsTransaction");
+  }
+
   const canSaveIncome =
     canUpdate && Boolean(selectedIncomeMemberId) && isValidMoney(incomeAmount);
   const canSaveCategory = canCreate && Boolean(categoryName.trim());
@@ -748,6 +860,16 @@ export default function FinanseScreen() {
     Boolean(debtPurpose.trim()) &&
     isPositiveMoney(debtAmount) &&
     (!debtDueDate.trim() || /^\d{4}-\d{2}-\d{2}$/.test(debtDueDate));
+  const canSaveSavingsAccount =
+    canCreate &&
+    Boolean(savingsName.trim()) &&
+    isValidMoney(savingsAmount) &&
+    isValidDateInput(savingsChangedAt);
+  const canSaveSavingsTransaction =
+    canUpdate &&
+    Boolean(selectedSavingsAccount?.id) &&
+    isPositiveMoney(savingsTransactionAmount) &&
+    isValidDateInput(savingsTransactionChangedAt);
   const canSaveCopyAmounts =
     copiedMonthItems.length > 0 &&
     copiedMonthItems.every((item) => {
@@ -785,10 +907,11 @@ export default function FinanseScreen() {
       />
 
       <SegmentedControl
-        onChange={(value) => setActiveFinanceView(value as "budget" | "debts")}
+        onChange={(value) => setActiveFinanceView(value as FinanceView)}
         options={[
           { label: "Budżet", value: "budget" },
           { label: "Pożyczki/Debety", value: "debts" },
+          { label: "Oszczędności", value: "savings" },
         ]}
         value={activeFinanceView}
       />
@@ -1370,6 +1493,119 @@ export default function FinanseScreen() {
           </FormModal>
         </>
       ) : null}
+
+      {activeFinanceView === "savings" ? (
+        <>
+          <View style={styles.debtSummary}>
+            <View style={styles.savingsSummaryTitle}>
+              <PiggyBank color={theme.colors.primaryDark} size={20} />
+              <View>
+                <Text style={styles.debtSummaryLabel}>Oszczędności domu</Text>
+                <Text style={[styles.debtSummaryValue, styles.savingsSummaryValue]}>
+                  {formatMoney(savingsTotal)}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.debtSummaryMeta}>{savings.length} pozycji</Text>
+          </View>
+          <QueryState
+            emptyText="Brak zapisanych oszczędności."
+            error={savingsQuery.error}
+            isEmpty={!savingsQuery.isLoading && savings.length === 0}
+            isLoading={savingsQuery.isLoading}
+          />
+          <FinanceSavingsList
+            accounts={savings}
+            canDelete={canDelete}
+            canUpdate={canUpdate}
+            deleting={deleteSavingsAccountMutation.isPending}
+            onDelete={(account) => deleteSavingsAccountMutation.mutate(account.id)}
+            onTransaction={openSavingsTransaction}
+            updating={savingsTransactionMutation.isPending}
+          />
+          {canCreate ? (
+            <Pressable onPress={openCreateSavingsAccount} style={styles.fab}>
+              <Plus color={theme.colors.card} size={25} />
+            </Pressable>
+          ) : null}
+          <FormModal
+            footer={
+              <View style={styles.modalFooter}>
+                <ActionButton
+                  onPress={closeFinanceModal}
+                  style={styles.modalFooterButton}
+                  title="Anuluj"
+                  variant="secondary"
+                />
+                <ActionButton
+                  disabled={!canSaveSavingsAccount}
+                  loading={savingsAccountMutation.isPending}
+                  onPress={() => savingsAccountMutation.mutate()}
+                  style={styles.modalFooterButton}
+                  title="Dodaj"
+                />
+              </View>
+            }
+            onClose={closeFinanceModal}
+            subtitle="Pozycja będzie widoczna dla wszystkich domowników."
+            title="Dodaj oszczędności"
+            visible={financeModal === "savingsAccount"}
+          >
+            <TextField control={control} label="Nazwa" name="savingsName" placeholder="Np. Poduszka finansowa" />
+            <TextField control={control} keyboardType="decimal-pad" label="Kwota" name="savingsAmount" placeholder="0,00" />
+            <TextField control={control} label="Data ostatniej zmiany" name="savingsChangedAt" placeholder="YYYY-MM-DD" />
+            <TextField control={control} label="Notatka" name="savingsNote" placeholder="Opcjonalnie" />
+            {savingsAccountMutation.error ? (
+              <InlineAlert tone="error" text="Nie udało się dodać oszczędności." />
+            ) : null}
+          </FormModal>
+          <FormModal
+            footer={
+              <View style={styles.modalFooter}>
+                <ActionButton
+                  onPress={closeFinanceModal}
+                  style={styles.modalFooterButton}
+                  title="Anuluj"
+                  variant="secondary"
+                />
+                <ActionButton
+                  disabled={!canSaveSavingsTransaction}
+                  loading={savingsTransactionMutation.isPending}
+                  onPress={() => savingsTransactionMutation.mutate()}
+                  style={styles.modalFooterButton}
+                  title={savingsDirection === "add" ? "Dodaj" : "Odejmij"}
+                />
+              </View>
+            }
+            onClose={closeFinanceModal}
+            subtitle={
+              selectedSavingsAccount
+                ? `${selectedSavingsAccount.name} / obecnie ${formatMoney(selectedSavingsAccount.currentAmount)}`
+                : undefined
+            }
+            title={savingsDirection === "add" ? "Dodaj do oszczędności" : "Odejmij z oszczędności"}
+            visible={financeModal === "savingsTransaction"}
+          >
+            <TextField
+              control={control}
+              keyboardType="decimal-pad"
+              label="Kwota"
+              name="savingsTransactionAmount"
+              placeholder="0,00"
+            />
+            <TextField
+              control={control}
+              label="Data zmiany"
+              name="savingsTransactionChangedAt"
+              placeholder="YYYY-MM-DD"
+            />
+            <TextField control={control} label="Notatka" name="savingsTransactionNote" placeholder="Opcjonalnie" />
+            {savingsTransactionMutation.error ? (
+              <InlineAlert tone="error" text="Nie udało się zapisać zmiany oszczędności." />
+            ) : null}
+          </FormModal>
+        </>
+      ) : null}
     </AppScreen>
   );
 }
@@ -1473,6 +1709,110 @@ function FinanceDebtsList({
           </View>
         </View>
       ))}
+    </View>
+  );
+}
+
+function FinanceSavingsList({
+  accounts,
+  canDelete,
+  canUpdate,
+  deleting,
+  onDelete,
+  onTransaction,
+  updating,
+}: {
+  accounts: FinanceSavingsAccount[];
+  canDelete: boolean;
+  canUpdate: boolean;
+  deleting: boolean;
+  onDelete: (account: FinanceSavingsAccount) => void;
+  onTransaction: (account: FinanceSavingsAccount, direction: FinanceSavingsDirection) => void;
+  updating: boolean;
+}) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+
+  if (accounts.length === 0) {
+    return null;
+  }
+
+  return (
+    <View style={styles.debtList}>
+      {accounts.map((account) => {
+        const recentTransactions = account.transactions.slice(0, 3);
+
+        return (
+          <View key={account.id} style={styles.savingsCard}>
+            <View style={styles.savingsCardHeader}>
+              <View style={styles.debtCardText}>
+                <Text numberOfLines={1} style={styles.debtTitle}>
+                  {account.name}
+                </Text>
+                <Text style={styles.debtMeta}>
+                  Ostatnia zmiana: {formatDateFull(account.lastChangedAt)}
+                </Text>
+              </View>
+              <View style={styles.debtSide}>
+                <Text style={styles.savingsAmount}>{formatMoney(account.currentAmount)}</Text>
+                <View style={styles.debtActions}>
+                  {canUpdate ? (
+                    <>
+                      <IconButton
+                        accessibilityLabel="Dodaj do oszczędności"
+                        disabled={updating}
+                        onPress={() => onTransaction(account, "add")}
+                        style={styles.savingsIconButton}
+                      >
+                        <Plus color={theme.colors.primaryDark} size={16} />
+                      </IconButton>
+                      <IconButton
+                        accessibilityLabel="Odejmij z oszczędności"
+                        disabled={updating}
+                        onPress={() => onTransaction(account, "subtract")}
+                        style={styles.savingsIconButton}
+                      >
+                        <Minus color={theme.colors.danger} size={16} />
+                      </IconButton>
+                    </>
+                  ) : null}
+                  {canDelete ? (
+                    <IconButton
+                      accessibilityLabel="Usuń oszczędności"
+                      disabled={deleting}
+                      onPress={() => onDelete(account)}
+                    >
+                      <Trash2 color={theme.colors.danger} size={15} />
+                    </IconButton>
+                  ) : null}
+                </View>
+              </View>
+            </View>
+            <View style={styles.savingsHistory}>
+              {recentTransactions.length > 0 ? (
+                recentTransactions.map((transaction) => (
+                  <View key={transaction.id} style={styles.savingsTransactionRow}>
+                    <Text
+                      style={[
+                        styles.savingsDelta,
+                        transaction.direction === "add" ? styles.savingsDeltaAdd : styles.savingsDeltaSubtract,
+                      ]}
+                    >
+                      {transaction.direction === "add" ? "+" : "-"}{formatMoney(transaction.amount)}
+                    </Text>
+                    <Text numberOfLines={1} style={styles.savingsTransactionMeta}>
+                      {formatDateFull(transaction.changedAt)}
+                      {transaction.note ? ` / ${transaction.note}` : ""}
+                    </Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.savingsTransactionMeta}>Brak historii zmian.</Text>
+              )}
+            </View>
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -1900,6 +2240,10 @@ function isPositiveMoney(value: string): boolean {
   return value.trim().length > 0 && Number.isFinite(parsed) && parsed > 0;
 }
 
+function isValidDateInput(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value.trim());
+}
+
 function formatMoney(value: string | number | null | undefined): string {
   const amount = Number(value ?? 0);
   const safeAmount = Number.isFinite(amount) ? amount : 0;
@@ -1922,6 +2266,21 @@ function formatDateShort(value: string): string {
   }
 
   return `${value.slice(8, 10)}.${value.slice(5, 7)}`;
+}
+
+function formatDateFull(value: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return value;
+  }
+
+  return `${value.slice(8, 10)}.${value.slice(5, 7)}.${value.slice(0, 4)} r.`;
+}
+
+function todayIso(): string {
+  const date = new Date();
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+
+  return local.toISOString().slice(0, 10);
 }
 
 function formatMonthLong(month: BudgetMonth): string {
@@ -2154,6 +2513,70 @@ function createStyles(colors: AppPalette) {
       fontSize: 14,
       fontWeight: "900",
       letterSpacing: 0,
+    },
+    savingsAmount: {
+      color: colors.primaryDark,
+      fontSize: 15,
+      fontWeight: "900",
+      letterSpacing: 0,
+      textAlign: "right",
+    },
+    savingsCard: {
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      gap: spacing.sm,
+      padding: spacing.md,
+    },
+    savingsCardHeader: {
+      alignItems: "flex-start",
+      flexDirection: "row",
+      gap: spacing.sm,
+    },
+    savingsDelta: {
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 0,
+      minWidth: 78,
+    },
+    savingsDeltaAdd: {
+      color: colors.primaryDark,
+    },
+    savingsDeltaSubtract: {
+      color: colors.danger,
+    },
+    savingsHistory: {
+      backgroundColor: colors.cardMuted,
+      borderColor: colors.line,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      gap: spacing.xs,
+      padding: spacing.sm,
+    },
+    savingsIconButton: {
+      height: 34,
+      width: 34,
+    },
+    savingsSummaryTitle: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.sm,
+    },
+    savingsSummaryValue: {
+      color: colors.primaryDark,
+    },
+    savingsTransactionMeta: {
+      color: colors.textMuted,
+      flex: 1,
+      fontSize: 12,
+      letterSpacing: 0,
+      minWidth: 0,
+    },
+    savingsTransactionRow: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.sm,
     },
     copyAmountInput: {
       backgroundColor: colors.field,
