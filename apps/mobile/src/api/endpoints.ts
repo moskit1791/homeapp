@@ -67,6 +67,8 @@ import type {
   MealIdea,
   MealPlanAiChatRequest,
   MealPlanAiChatResponse,
+  MealPlanAiFinalizeRequest,
+  MealPlanAiFinalizeResponse,
   MealPlanDetail,
   MealPlanEntryRequest,
   MealPlanSummary,
@@ -821,6 +823,23 @@ export function chatMealPlanWithAi(
     method: 'POST',
     signal: requestOptions.signal
   });
+}
+
+export function finalizeMealPlanWithAi(
+  input: MealPlanAiFinalizeRequest,
+  options?: ApiCallOptionsInput
+): Promise<MealPlanAiFinalizeResponse> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<MealPlanAiFinalizeResponse, MealPlanAiFinalizeRequest>(
+    '/meal-plans/ai/finalize',
+    {
+      accessToken: requestOptions.accessToken,
+      body: input,
+      method: 'POST',
+      signal: requestOptions.signal
+    }
+  );
 }
 
 export function deleteMealPlanWeek(

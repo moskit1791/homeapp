@@ -51,7 +51,7 @@ import { useModulePermission, usePermissions } from "../../src/permissions/use-p
 import { useSession } from "../../src/session/session-context";
 import { radii, spacing } from "../../src/theme/tokens";
 import {
-  darkAccentOptions,
+  accentColorOptions,
   useAppTheme,
   useThemePreferences,
   type AppPalette,
@@ -68,6 +68,7 @@ import {
 import {
   Broom,
   ChartBar,
+  Check,
   ChevronRight,
   Close,
   Cog,
@@ -1765,34 +1766,37 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
         <View style={styles.settingsPanelRow}>
           <Text style={styles.settingsPanelTitle}>Wygląd</Text>
           <Text style={styles.settingsPanelMeta}>Kolor akcentu aplikacji.</Text>
-          <View style={styles.accentChoiceGrid}>
-            {darkAccentOptions.map((option) => {
+          <View style={styles.accentPaletteGrid}>
+            {accentColorOptions.map((option) => {
               const active = option.value === accent;
 
               return (
                 <Pressable
+                  accessibilityLabel={`Kolor akcentu ${option.label}`}
                   accessibilityRole="button"
                   accessibilityState={{ selected: active }}
                   key={option.value}
                   onPress={() => handleAccentChange(option.value)}
                   style={[
-                    styles.accentChoice,
-                    active && styles.accentChoiceActive,
-                    active && { borderColor: option.color },
+                    styles.accentPaletteButton,
+                    active && [
+                      styles.accentPaletteButtonActive,
+                      { borderColor: theme.colors.text },
+                    ],
                   ]}
                 >
                   <View
                     style={[
-                      styles.accentSwatch,
+                      styles.accentPaletteSwatch,
                       {
                         backgroundColor: option.color,
-                        shadowColor: "#000000",
                       },
                     ]}
-                  />
-                  <Text style={[styles.accentChoiceLabel, active && styles.accentChoiceLabelActive]}>
-                    {option.label}
-                  </Text>
+                  >
+                    {active ? (
+                      <Check color={getReadableSwatchText(option.color)} size={18} />
+                    ) : null}
+                  </View>
                 </Pressable>
               );
             })}
@@ -2471,48 +2475,63 @@ function sanitizeCacheFileName(fileName: string): string {
   return sanitized || "attachment";
 }
 
+function getReadableSwatchText(color: string): string {
+  const rgb = parseHexColor(color);
+
+  if (!rgb) {
+    return "#FFFFFF";
+  }
+
+  const luminance = (rgb.red * 0.299 + rgb.green * 0.587 + rgb.blue * 0.114) / 255;
+
+  return luminance > 0.62 ? "#111827" : "#FFFFFF";
+}
+
+function parseHexColor(color: string): { blue: number; green: number; red: number } | null {
+  if (!/^#[0-9A-F]{6}$/i.test(color)) {
+    return null;
+  }
+
+  return {
+    blue: Number.parseInt(color.slice(5, 7), 16),
+    green: Number.parseInt(color.slice(3, 5), 16),
+    red: Number.parseInt(color.slice(1, 3), 16),
+  };
+}
+
 function createStyles(colors: AppPalette) {
   return StyleSheet.create({
-    accentChoice: {
+    accentPaletteButton: {
       alignItems: "center",
-      backgroundColor: colors.card,
-      borderColor: colors.border,
-      borderRadius: radii.control,
+      borderColor: "transparent",
+      borderRadius: 999,
       borderWidth: 1,
-      flex: 1,
-      gap: spacing.xs,
-      minHeight: 74,
-      minWidth: 96,
-      paddingHorizontal: spacing.sm,
-      paddingVertical: spacing.sm,
+      height: 42,
+      justifyContent: "center",
+      padding: 4,
+      width: 42,
     },
-    accentChoiceActive: {
+    accentPaletteButtonActive: {
       backgroundColor: colors.cardMuted,
       borderWidth: 2,
     },
-    accentChoiceGrid: {
+    accentPaletteGrid: {
       flexDirection: "row",
       flexWrap: "wrap",
-      gap: spacing.sm,
+      gap: spacing.xs,
     },
-    accentChoiceLabel: {
-      color: colors.textMuted,
-      fontSize: 12,
-      fontWeight: "800",
-      letterSpacing: 0,
-    },
-    accentChoiceLabelActive: {
-      color: colors.text,
-      fontWeight: "900",
-    },
-    accentSwatch: {
+    accentPaletteSwatch: {
+      alignItems: "center",
+      borderColor: "rgba(255, 255, 255, 0.42)",
       borderRadius: 999,
+      borderWidth: 1,
       elevation: 4,
-      height: 28,
+      height: 30,
+      justifyContent: "center",
       shadowOffset: { height: 0, width: 0 },
-      shadowOpacity: 0.42,
-      shadowRadius: 10,
-      width: 28,
+      shadowOpacity: 0.22,
+      shadowRadius: 8,
+      width: 30,
     },
     avatar: {
       alignItems: "center",

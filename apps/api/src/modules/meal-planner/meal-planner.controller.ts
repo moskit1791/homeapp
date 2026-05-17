@@ -22,6 +22,7 @@ import {
   CreateMealIdeaDto,
   CreateMealPlanDto,
   MealPlanAiChatDto,
+  MealPlanAiFinalizeDto,
   MealPlanEntryTargetDto,
   MealIdeaIdParamDto,
   MealPlanIdParamDto,
@@ -89,6 +90,18 @@ export class MealPlannerController {
     @Body() dto: MealPlanAiChatDto
   ) {
     return this.mealPlannerAiService.chat(
+      this.requireHousehold(household).householdId,
+      dto
+    );
+  }
+
+  @Post('meal-plans/ai/finalize')
+  @RequirePermission('meal_planner', 'read')
+  finalizeAiPlan(
+    @CurrentHousehold() household: HouseholdContext | undefined,
+    @Body() dto: MealPlanAiFinalizeDto
+  ) {
+    return this.mealPlannerAiService.finalize(
       this.requireHousehold(household).householdId,
       dto
     );

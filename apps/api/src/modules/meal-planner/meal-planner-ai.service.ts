@@ -23,7 +23,7 @@ const mealPlanAiResponseSchema = z.object({
   assistantMessage: z.string(),
   entries: z.array(mealPlanAiEntrySchema),
   questions: z.array(z.string()),
-  status: z.enum(['ready', 'needs_clarification']),
+  status: z.enum(['ready', 'needs_clarification', 'limit_exhausted']),
   targetWeekStartDate: z.string()
 });
 
@@ -99,7 +99,7 @@ const mealPlanAiResponseJsonSchema = {
     status: {
       description:
         'ready when a usable draft exists, needs_clarification only when the pasted text cannot be turned into a meal plan.',
-      enum: ['ready', 'needs_clarification'],
+      enum: ['ready', 'needs_clarification', 'limit_exhausted'],
       type: 'string'
     },
     targetWeekStartDate: {
@@ -155,19 +155,68 @@ export class MealPlannerAiService {
 
     const targetWeekStartDate = dto.targetWeekStartDate;
     const currentDraft = normalizeDraftEntries(dto.currentDraft ?? [], mealSlotsPerDay);
+
+    try {
+      const assistantMessage = await this.callGeminiContents(
+        this.buildChatContents({
+          knownRecipes,
+          mealSlotsPerDay,
+          messages,
+          targetWeekStartDate
+        }),
+        { useGoogleSearch: true }
+      );
+
+      return {
+        assistantMessage,
+        entries: [],
+        limitExhausted: false,
+        questions: [],
+        status: 'ready',
+        targetWeekStartDate
+      };
+    } catch (error) {
+      if (isGeminiRateLimitError(error)) {
+        return this.buildLimitFallbackResponse(messages, currentDraft, targetWeekStartDate, mealSlotsPerDay);
+      }
+
+      this.logger.warn(
+        `Gemini meal plan chat failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+      throw error;
+    }
+  }
+
+  async finalize(householdId: string, dto: MealPlanAiChatDto): Promise<MealPlanAiChatResult> {
+    const messages = normalizeMessages(dto.messages);
+
+    if (!messages.some((message) => message.role === 'user')) {
+      throw new BadRequestException('Meal plan AI finalize needs a user message');
+    }
+
+    const [mealSlotsPerDay, knownRecipes] = await Promise.all([
+      this.getMealSlotsPerDay(householdId),
+      this.listKnownRecipes(householdId)
+    ]);
+
+    if (!isMondayDateOnly(dto.targetWeekStartDate)) {
+      throw new BadRequestException('Meal plan AI target week is required');
+    }
+
+    const targetWeekStartDate = dto.targetWeekStartDate;
+    const currentDraft = normalizeDraftEntries(dto.currentDraft ?? [], mealSlotsPerDay);
     const latestUserMessage = getLatestUserMessage(messages);
-    const shouldPrioritizeLinks = shouldUseGoogleSearch(messages, currentDraft);
 
     try {
       const responseText = await this.callGemini(
-        this.buildPrompt({
+        this.buildFinalizePrompt({
           currentDraft,
           knownRecipes,
           mealSlotsPerDay,
           messages,
-          targetWeekStartDate,
-          useGoogleSearch: false
-        })
+          targetWeekStartDate
+        }),
+        { useGoogleSearch: true }
       );
       const response = await this.enrichMealLinks(
         this.normalizeResponse(
@@ -182,35 +231,242 @@ export class MealPlannerAiService {
           knownRecipes,
           mealSlotsPerDay,
           messages,
-          shouldPrioritizeLinks,
+          shouldPrioritizeLinks: true,
           targetWeekStartDate
         }
       );
 
-      if (response.entries.length > 0) {
-        return response;
+      return {
+        ...response,
+        limitExhausted: false
+      };
+    } catch (error) {
+      if (isGeminiRateLimitError(error)) {
+        return this.buildLimitFallbackResponse(messages, currentDraft, targetWeekStartDate, mealSlotsPerDay);
       }
 
-      this.logger.warn('Gemini meal plan chat returned no entries');
-    } catch (error) {
       this.logger.warn(
-        `Gemini meal plan chat fallback used: ${
+        `Gemini meal plan finalize fallback used: ${
           error instanceof Error ? error.message : String(error)
         }`
       );
     }
 
-    return this.enrichMealLinks(
-      this.buildFallbackResponse(messages, currentDraft, targetWeekStartDate, mealSlotsPerDay),
+    return {
+      ...(await this.enrichMealLinks(
+        this.buildFallbackResponse(messages, currentDraft, targetWeekStartDate, mealSlotsPerDay),
+        {
+          currentDraft,
+          knownRecipes,
+          mealSlotsPerDay,
+          messages,
+          shouldPrioritizeLinks: true,
+          targetWeekStartDate
+        }
+      )),
+      limitExhausted: false
+    };
+  }
+
+  private async buildLimitFallbackResponse(
+    messages: MealPlanAiMessage[],
+    currentDraft: MealPlanAiDraftEntry[],
+    targetWeekStartDate: string,
+    mealSlotsPerDay: number
+  ): Promise<MealPlanAiChatResult> {
+    const fallback = this.buildFallbackResponse(messages, currentDraft, targetWeekStartDate, mealSlotsPerDay);
+
+    return {
+      ...fallback,
+      assistantMessage:
+        'Limit AI jest teraz wyczerpany. Dostosowalem dostepne informacje lokalnym algorytmem, bez rozmowy z AI. Sprobuj ponownie pozniej, jesli chcesz dopracowac linki albo szczegoly.',
+      limitExhausted: true,
+      status: fallback.entries.length > 0 ? 'limit_exhausted' : 'needs_clarification'
+    };
+  }
+
+  private buildChatContents(input: {
+    knownRecipes: KnownMealRecipe[];
+    mealSlotsPerDay: number;
+    messages: MealPlanAiMessage[];
+    targetWeekStartDate: string;
+  }): GeminiContent[] {
+    return [
       {
-        currentDraft,
-        knownRecipes,
-        mealSlotsPerDay,
-        messages,
-        shouldPrioritizeLinks,
-        targetWeekStartDate
-      }
+        parts: [
+          {
+            text: this.buildChatSystemPrompt(input)
+          }
+        ],
+        role: 'user'
+      },
+      ...input.messages.map((message): GeminiContent => ({
+        parts: [{ text: message.content }],
+        role: message.role === 'assistant' ? 'model' : 'user'
+      }))
+    ];
+  }
+
+  private buildChatSystemPrompt(input: {
+    knownRecipes: KnownMealRecipe[];
+    mealSlotsPerDay: number;
+    targetWeekStartDate: string;
+  }): string {
+    return [
+      'Jestes asystentem planu posilkow w polskiej aplikacji domowej.',
+      'Rozmawiasz bezposrednio z uzytkownikiem jak normalny chat. Backend nie bedzie dopowiadal nic w Twoim imieniu.',
+      'Pomagaj ulozyc tygodniowy plan jedzenia, poprawiaj go w rozmowie i szukaj linkow do przepisow, gdy uzytkownik o to prosi lub podaje zrodlo.',
+      'Masz wlaczone Google Search. Jesli rozmawiacie o linkach, szukaj realnych publicznych URL-i i pokazuj je uzytkownikowi w odpowiedzi.',
+      'Nie twierdz, ze plan jest zapisany. Zapis nastapi dopiero, gdy uzytkownik kliknie przycisk "Zapisz plan" w aplikacji.',
+      '',
+      `Docelowy poniedzialek tygodnia: ${input.targetWeekStartDate}.`,
+      `W domu skonfigurowano ${input.mealSlotsPerDay} posilkow dziennie.`,
+      'Oznaczenia zrodla: C=Cookidoo, KS=Kwestia Smaku, I/IG=Instagram, AG=AniaGotuje, Knorr=Knorr, MW=Moje Wypieki.',
+      '',
+      'Znane przepisy z domu:',
+      input.knownRecipes.length > 0 ? JSON.stringify(input.knownRecipes) : '[]'
+    ].join('\n');
+  }
+
+  private buildFinalizePrompt(input: {
+    currentDraft: MealPlanAiDraftEntry[];
+    knownRecipes: KnownMealRecipe[];
+    mealSlotsPerDay: number;
+    messages: MealPlanAiMessage[];
+    targetWeekStartDate: string;
+  }): string {
+    return [
+      this.buildPrompt({
+        ...input,
+        useGoogleSearch: true
+      }),
+      '',
+      'Tryb finalizacji:',
+      '- Uzytkownik kliknal "Zapisz plan". Na podstawie calej rozmowy przygotuj ostateczny JSON do zapisu.',
+      '- Wpisz pelny aktualny plan, nie tylko ostatnia zmiane.',
+      '- Jesli w rozmowie sa linki, zachowaj je w linkUrl.',
+      '- Jesli trzeba znalezc linki do przepisow, uzyj Google Search i uzupelnij realne URL-e.',
+      '- Odpowiadasz wylacznie JSON-em zgodnym ze schematem.'
+    ].join('\n');
+  }
+
+  private async callGeminiContents(
+    contents: GeminiContent[],
+    options: { useGoogleSearch?: boolean } = {}
+  ): Promise<string> {
+    return this.callGeminiRequest(
+      {
+        contents,
+        generationConfig: {
+          temperature: 0.55
+        }
+      },
+      options
     );
+  }
+
+  private async callGemini(
+    prompt: string,
+    options: { useGoogleSearch?: boolean } = {}
+  ): Promise<string> {
+    return this.callGeminiRequest(
+      {
+        contents: [
+          {
+            parts: [{ text: prompt }],
+            role: 'user'
+          }
+        ],
+        generationConfig: options.useGoogleSearch
+          ? {
+              temperature: 0.15
+            }
+          : {
+              responseMimeType: 'application/json',
+              responseSchema: mealPlanAiResponseJsonSchema,
+              temperature: 0.15
+            }
+      },
+      options
+    );
+  }
+
+  private async callGeminiRequest(
+    requestBody: GeminiGenerateContentRequest,
+    options: { useGoogleSearch?: boolean } = {}
+  ): Promise<string> {
+    const env = loadEnv();
+
+    if (!env.GEMINI_API_KEY) {
+      throw new ServiceUnavailableException('Meal plan AI is not configured');
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), env.GEMINI_TIMEOUT_MS);
+    const model = env.GEMINI_MODEL.startsWith('models/')
+      ? env.GEMINI_MODEL.slice('models/'.length)
+      : env.GEMINI_MODEL;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+      model
+    )}:generateContent?key=${encodeURIComponent(env.GEMINI_API_KEY)}`;
+
+    if (options.useGoogleSearch) {
+      requestBody.tools = [{ google_search: {} }];
+    }
+
+    try {
+      const response = await fetch(url, {
+        body: JSON.stringify(requestBody),
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        method: 'POST',
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        const details = await response.text();
+
+        this.logger.warn(
+          `Gemini meal plan chat failed with ${response.status}: ${details.slice(0, 500)}`
+        );
+
+        if (response.status === 429 || details.includes('RESOURCE_EXHAUSTED')) {
+          throw new GeminiRateLimitError();
+        }
+
+        throw new ServiceUnavailableException('Meal plan AI request failed');
+      }
+
+      const data = (await response.json()) as GeminiGenerateContentResponse;
+      const text = data.candidates?.[0]?.content?.parts
+        ?.map((part) => part.text ?? '')
+        .join('')
+        .trim();
+
+      if (!text) {
+        this.logger.warn('Gemini meal plan chat returned no text content');
+        throw new ServiceUnavailableException('Meal plan AI returned invalid response');
+      }
+
+      return text;
+    } catch (error) {
+      if (error instanceof GeminiRateLimitError || error instanceof ServiceUnavailableException) {
+        throw error;
+      }
+
+      if (isAbortError(error)) {
+        throw new ServiceUnavailableException('Meal plan AI request timed out');
+      }
+
+      this.logger.error(
+        'Gemini meal plan chat request failed',
+        error instanceof Error ? error.stack : undefined
+      );
+      throw new ServiceUnavailableException('Meal plan AI request failed');
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   private async enrichMealLinks(
@@ -376,9 +632,14 @@ export class MealPlannerAiService {
 
     return {
       assistantMessage,
+      limitExhausted: false,
       entries,
       questions: response.questions.map((question) => trimToLength(question, 300)).filter(Boolean),
-      status: entries.length > 0 ? response.status : 'needs_clarification',
+      status: entries.length > 0
+        ? response.status === 'limit_exhausted'
+          ? 'ready'
+          : response.status
+        : 'needs_clarification',
       targetWeekStartDate
     };
   }
@@ -405,6 +666,7 @@ export class MealPlannerAiService {
         assistantMessage:
           'Nie widze jeszcze planu posilkow. Wklej dni tygodnia i posilki, a przygotuje szkic.',
         entries: [],
+        limitExhausted: false,
         questions: ['Wkleisz plan z dniami tygodnia?'],
         status: 'needs_clarification',
         targetWeekStartDate
@@ -420,6 +682,7 @@ export class MealPlannerAiService {
     return {
       assistantMessage,
       entries,
+      limitExhausted: false,
       questions: [],
       status: 'ready',
       targetWeekStartDate
@@ -490,96 +753,6 @@ export class MealPlannerAiService {
       source: row.source,
       title: row.title
     }));
-  }
-
-  private async callGemini(
-    prompt: string,
-    options: { useGoogleSearch?: boolean } = {}
-  ): Promise<string> {
-    const env = loadEnv();
-
-    if (!env.GEMINI_API_KEY) {
-      throw new ServiceUnavailableException('Meal plan AI is not configured');
-    }
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), env.GEMINI_TIMEOUT_MS);
-    const model = env.GEMINI_MODEL.startsWith('models/')
-      ? env.GEMINI_MODEL.slice('models/'.length)
-      : env.GEMINI_MODEL;
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
-      model
-    )}:generateContent?key=${encodeURIComponent(env.GEMINI_API_KEY)}`;
-    const requestBody: GeminiGenerateContentRequest = {
-      contents: [
-        {
-          parts: [{ text: prompt }],
-          role: 'user'
-        }
-      ],
-      generationConfig: options.useGoogleSearch
-        ? {
-            temperature: 0.15
-          }
-        : {
-            responseMimeType: 'application/json',
-            responseSchema: mealPlanAiResponseJsonSchema,
-            temperature: 0.15
-          }
-    };
-
-    if (options.useGoogleSearch) {
-      requestBody.tools = [{ google_search: {} }];
-    }
-
-    try {
-      const response = await fetch(url, {
-        body: JSON.stringify(requestBody),
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        method: 'POST',
-        signal: controller.signal
-      });
-
-      if (!response.ok) {
-        const details = await response.text();
-
-        this.logger.warn(
-          `Gemini meal plan chat failed with ${response.status}: ${details.slice(0, 500)}`
-        );
-        throw new ServiceUnavailableException('Meal plan AI request failed');
-      }
-
-      const data = (await response.json()) as GeminiGenerateContentResponse;
-      const text = data.candidates?.[0]?.content?.parts
-        ?.map((part) => part.text ?? '')
-        .join('')
-        .trim();
-
-      if (!text) {
-        this.logger.warn('Gemini meal plan chat returned no text content');
-        throw new ServiceUnavailableException('Meal plan AI returned invalid response');
-      }
-
-      return text;
-    } catch (error) {
-      if (error instanceof ServiceUnavailableException) {
-        throw error;
-      }
-
-      if (isAbortError(error)) {
-        throw new ServiceUnavailableException('Meal plan AI request timed out');
-      }
-
-      this.logger.error(
-        'Gemini meal plan chat request failed',
-        error instanceof Error ? error.stack : undefined
-      );
-      throw new ServiceUnavailableException('Meal plan AI request failed');
-    } finally {
-      clearTimeout(timeout);
-    }
   }
 
   private buildPrompt(input: {
@@ -665,18 +838,6 @@ function normalizeMessages(messages: MealPlanAiChatDto['messages']): MealPlanAiM
 
 function getLatestUserMessage(messages: MealPlanAiMessage[]): MealPlanAiMessage | undefined {
   return [...messages].reverse().find((message) => message.role === 'user');
-}
-
-function shouldUseGoogleSearch(
-  messages: MealPlanAiMessage[],
-  currentDraft: MealPlanAiDraftEntry[]
-): boolean {
-  const userMessages = messages
-    .filter((message) => message.role === 'user')
-    .map((message) => message.content);
-
-  return userMessages.some((message) => isLinkRequest(message) || hasSourceHintRequest(message)) ||
-    currentDraft.some((entry) => Boolean(entry.sourceHint && !entry.linkUrl));
 }
 
 function shouldRunLinkSearch(
@@ -1056,30 +1217,24 @@ function parseSourceHint(value: string): {
   const urlMatch = value.match(/https?:\/\/[^\s),]+/i);
   const linkUrl = normalizeUrl(urlMatch?.[0] ?? '');
   const normalizedValue = urlMatch ? value.replace(urlMatch[0], ' ').trim() : value.trim();
-  const prefixMatch = normalizedValue.match(/^([A-Za-z ]{1,24})\s+(.+)$/);
+  const words = normalizedValue.split(/\s+/).filter(Boolean);
 
-  if (!prefixMatch) {
-    return {
-      linkUrl,
-      mealName: normalizedValue,
-      sourceHint: null
-    };
-  }
+  for (let prefixLength = Math.min(3, words.length - 1); prefixLength >= 1; prefixLength -= 1) {
+    const sourceHint = resolveSourceHint(words.slice(0, prefixLength).join(' '));
 
-  const sourceHint = resolveSourceHint(prefixMatch[1] ?? '');
-
-  if (!sourceHint) {
-    return {
-      linkUrl,
-      mealName: normalizedValue,
-      sourceHint: null
-    };
+    if (sourceHint) {
+      return {
+        linkUrl,
+        mealName: words.slice(prefixLength).join(' '),
+        sourceHint
+      };
+    }
   }
 
   return {
     linkUrl,
-    mealName: prefixMatch[2]?.trim() ?? normalizedValue,
-    sourceHint
+    mealName: normalizedValue,
+    sourceHint: null
   };
 }
 
@@ -1155,6 +1310,17 @@ function isAbortError(error: unknown): boolean {
   );
 }
 
+class GeminiRateLimitError extends Error {
+  constructor() {
+    super('Meal plan AI limit exhausted');
+    this.name = 'GeminiRateLimitError';
+  }
+}
+
+function isGeminiRateLimitError(error: unknown): error is GeminiRateLimitError {
+  return error instanceof GeminiRateLimitError;
+}
+
 export interface MealPlanAiMessage {
   content: string;
   role: 'user' | 'assistant';
@@ -1172,8 +1338,9 @@ export interface MealPlanAiDraftEntry {
 export interface MealPlanAiChatResult {
   assistantMessage: string;
   entries: MealPlanAiDraftEntry[];
+  limitExhausted: boolean;
   questions: string[];
-  status: 'ready' | 'needs_clarification';
+  status: 'ready' | 'needs_clarification' | 'limit_exhausted';
   targetWeekStartDate: string;
 }
 
@@ -1192,11 +1359,13 @@ interface KnownMealRecipeRow {
   updated_at: string;
 }
 
+interface GeminiContent {
+  parts: Array<{ text: string }>;
+  role: 'model' | 'user';
+}
+
 interface GeminiGenerateContentRequest {
-  contents: Array<{
-    parts: Array<{ text: string }>;
-    role: 'user';
-  }>;
+  contents: GeminiContent[];
   generationConfig: {
     responseMimeType?: 'application/json';
     responseSchema?: typeof mealPlanAiResponseJsonSchema;

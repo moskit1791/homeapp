@@ -10,6 +10,7 @@ import {
   deleteMealSlot,
   createShoppingItem,
   deleteShoppingItem,
+  finalizeMealPlanWithAi,
   getCurrentMealPlanWeek,
   getMealPlanWeek,
   getMyHousehold,
@@ -741,14 +742,39 @@ function MealsBoard({
         ...messages,
         { content: response.assistantMessage, role: "assistant" },
       ]);
-      setAiDraft(response.entries);
+      if (response.entries.length > 0) {
+        setAiDraft(response.entries);
+      }
       setAiInput("");
+      if (response.limitExhausted) {
+        setAiNotice("Limit AI jest wyczerpany. Aplikacja uzyla lokalnego algorytmu.");
+        setTimeout(() => setAiNotice(""), 3500);
+      }
     },
   });
   const aiSaveMutation = useMutation({
     mutationFn: async () => {
       if (!aiTargetWeekConfirmed || !isValidWeekStartDate(aiTargetWeekStartDate)) {
         throw new Error("Missing AI target week");
+      }
+
+      if (!aiMessages.some((message) => message.role === "user")) {
+        throw new Error("Najpierw wyslij wiadomosc do AI.");
+      }
+
+      const finalizeResponse = await finalizeMealPlanWithAi(
+        {
+          currentDraft: aiDraft,
+          messages: aiMessages,
+          targetWeekStartDate: aiTargetWeekStartDate,
+        },
+        { accessToken },
+      );
+
+      if (finalizeResponse.entries.length === 0) {
+        throw new Error(
+          finalizeResponse.assistantMessage || "AI nie przygotowalo planu do zapisu.",
+        );
       }
 
       const targetPlan = await getOrCreateMealPlanForDate({
@@ -760,13 +786,13 @@ function MealsBoard({
       });
       const weekId = targetPlan?.week?.id;
 
-      if (!weekId || aiDraft.length === 0) {
+      if (!weekId) {
         throw new Error("Missing AI meal plan draft");
       }
 
-      return upsertMealSlot(
+      const updatedPlan = await upsertMealSlot(
         weekId,
-        aiDraft.map((entry) => ({
+        finalizeResponse.entries.map((entry) => ({
           linkUrl: entry.linkUrl,
           mealName: entry.mealName,
           note: buildAiMealNote(entry),
@@ -775,15 +801,24 @@ function MealsBoard({
         })),
         { accessToken },
       );
+
+      return {
+        limitExhausted: finalizeResponse.limitExhausted,
+        updatedPlan,
+      };
     },
-    onSuccess: async (updatedPlan) => {
+    onSuccess: async ({ limitExhausted, updatedPlan }) => {
       setSelectedWeekStartDate(updatedPlan.week.weekStartDate);
       setAiModalVisible(false);
       setAiInput("");
       setAiMessages([]);
       setAiDraft([]);
       setAiTargetWeekConfirmed(false);
-      setAiNotice(`AI zapisalo ${updatedPlan.entries.length} pozycji w planie.`);
+      setAiNotice(
+        limitExhausted
+          ? `Limit AI wyczerpany, zapisano ${updatedPlan.entries.length} pozycji z lokalnego algorytmu.`
+          : `AI zapisalo ${updatedPlan.entries.length} pozycji w planie.`,
+      );
       setTimeout(() => setAiNotice(""), 3000);
       await queryClient.invalidateQueries({ queryKey: queryKeys.meal });
       await queryClient.invalidateQueries({ queryKey: queryKeys.start });
@@ -804,12 +839,14 @@ function MealsBoard({
     isValidWeekStartDate(aiTargetWeekStartDate) &&
     aiInput.trim().length >= 3 &&
     !aiChatMutation.isPending;
+  const hasAiConversation =
+    aiDraft.length > 0 || aiMessages.some((message) => message.role === "assistant");
   const canSaveAi =
     permission.canCreate &&
     permission.canUpdate &&
     aiTargetWeekConfirmed &&
     isValidWeekStartDate(aiTargetWeekStartDate) &&
-    aiDraft.length > 0 &&
+    hasAiConversation &&
     !aiChatMutation.isPending &&
     !aiSaveMutation.isPending;
   const aiDraftGroups = groupMealDraftEntries(aiDraft);
@@ -1095,7 +1132,7 @@ function MealsBoard({
                 title="Wyślij"
               />
             </View>
-            {aiDraft.length > 0 ? (
+            {hasAiConversation ? (
               <ActionButton
                 disabled={!canSaveAi}
                 loading={aiSaveMutation.isPending}
@@ -1106,7 +1143,7 @@ function MealsBoard({
           </View>
         }
         onClose={() => setAiModalVisible(false)}
-        subtitle="Wklej plan lub dopisz poprawke. Zapis nastapi dopiero po akceptacji."
+        subtitle="Rozmawiaj z AI, dopracuj plan i zapisz dopiero gotowy efekt."
         title="AI plan posilkow"
         visible={aiModalVisible}
       >
@@ -1203,10 +1240,19 @@ function MealsBoard({
           value={aiInput}
         />
         {aiChatMutation.error ? (
-          <InlineAlert tone="error" text="AI nie przygotowalo szkicu. Sprobuj wkleic plan jeszcze raz." />
+          <InlineAlert
+            tone="error"
+            text={getMealAiErrorText(
+              aiChatMutation.error,
+              "AI nie odpowiedzialo. Sprobuj wyslac wiadomosc jeszcze raz.",
+            )}
+          />
         ) : null}
         {aiSaveMutation.error ? (
-          <InlineAlert tone="error" text="Nie udalo sie zapisac planu z AI." />
+          <InlineAlert
+            tone="error"
+            text={getMealAiErrorText(aiSaveMutation.error, "Nie udalo sie zapisac planu z AI.")}
+          />
         ) : null}
       </FormModal>
     </>
@@ -1538,6 +1584,10 @@ function buildAiMealNote(entry: MealPlanAiDraftEntry): string | null {
   }
 
   return note || (sourceHint ? `Zrodlo: ${sourceHint}` : null);
+}
+
+function getMealAiErrorText(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
 }
 
 function groupMealDraftEntries(entries: MealPlanAiDraftEntry[]) {

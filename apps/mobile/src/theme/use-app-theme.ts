@@ -19,12 +19,20 @@ type Palette = { [Key in keyof typeof colors]: string } & {
   softPurple: string;
 };
 
-export type DarkAccentKey = 'violet' | 'cyan' | 'pink' | 'amber' | 'emerald' | 'sunset';
+export type DarkAccentKey = string;
 
 type DarkAccentOption = {
   color: string;
   label: string;
   value: DarkAccentKey;
+};
+
+type AccentPalette = {
+  primary: string;
+  primaryDark: string;
+  primaryDarker: string;
+  primaryLight: string;
+  primarySoft: string;
 };
 
 type StoredThemePreferences = {
@@ -41,7 +49,7 @@ type ThemePreferencesContextValue = {
 };
 
 const themePreferencesKey = 'homeapp.theme-preferences.v1';
-const defaultDarkAccent: DarkAccentKey = 'violet';
+const defaultDarkAccent: DarkAccentKey = '#B56CFF';
 
 export const darkAccentOptions: DarkAccentOption[] = [
   { color: '#B56CFF', label: 'Fiolet', value: 'violet' },
@@ -52,16 +60,64 @@ export const darkAccentOptions: DarkAccentOption[] = [
   { color: '#FF6B6B', label: 'Koral', value: 'sunset' }
 ];
 
-const darkAccentPalettes: Record<
-  DarkAccentKey,
-  {
-    primary: string;
-    primaryDark: string;
-    primaryDarker: string;
-    primaryLight: string;
-    primarySoft: string;
-  }
-> = {
+export const accentColorOptions: DarkAccentOption[] = [
+  { color: '#F87171', label: 'Red 1', value: '#F87171' },
+  { color: '#EF4444', label: 'Red 2', value: '#EF4444' },
+  { color: '#DC2626', label: 'Red 3', value: '#DC2626' },
+  { color: '#FB7185', label: 'Rose 1', value: '#FB7185' },
+  { color: '#F43F5E', label: 'Rose 2', value: '#F43F5E' },
+  { color: '#E11D48', label: 'Rose 3', value: '#E11D48' },
+  { color: '#F472B6', label: 'Pink 1', value: '#F472B6' },
+  { color: '#FF4FD8', label: 'Pink 2', value: '#FF4FD8' },
+  { color: '#DB2777', label: 'Pink 3', value: '#DB2777' },
+  { color: '#E879F9', label: 'Fuchsia 1', value: '#E879F9' },
+  { color: '#D946EF', label: 'Fuchsia 2', value: '#D946EF' },
+  { color: '#C026D3', label: 'Fuchsia 3', value: '#C026D3' },
+  { color: '#C084FC', label: 'Purple 1', value: '#C084FC' },
+  { color: '#A855F7', label: 'Purple 2', value: '#A855F7' },
+  { color: '#9333EA', label: 'Purple 3', value: '#9333EA' },
+  { color: '#B56CFF', label: 'Violet 1', value: '#B56CFF' },
+  { color: '#8B5CF6', label: 'Violet 2', value: '#8B5CF6' },
+  { color: '#7C3AED', label: 'Violet 3', value: '#7C3AED' },
+  { color: '#818CF8', label: 'Indigo 1', value: '#818CF8' },
+  { color: '#6366F1', label: 'Indigo 2', value: '#6366F1' },
+  { color: '#4F46E5', label: 'Indigo 3', value: '#4F46E5' },
+  { color: '#60A5FA', label: 'Blue 1', value: '#60A5FA' },
+  { color: '#3B82F6', label: 'Blue 2', value: '#3B82F6' },
+  { color: '#2563EB', label: 'Blue 3', value: '#2563EB' },
+  { color: '#38BDF8', label: 'Sky 1', value: '#38BDF8' },
+  { color: '#0EA5E9', label: 'Sky 2', value: '#0EA5E9' },
+  { color: '#0284C7', label: 'Sky 3', value: '#0284C7' },
+  { color: '#22D3EE', label: 'Cyan 1', value: '#22D3EE' },
+  { color: '#20E7FF', label: 'Cyan 2', value: '#20E7FF' },
+  { color: '#0891B2', label: 'Cyan 3', value: '#0891B2' },
+  { color: '#2DD4BF', label: 'Teal 1', value: '#2DD4BF' },
+  { color: '#14B8A6', label: 'Teal 2', value: '#14B8A6' },
+  { color: '#0D9488', label: 'Teal 3', value: '#0D9488' },
+  { color: '#34D399', label: 'Emerald 1', value: '#34D399' },
+  { color: '#36D399', label: 'Emerald 2', value: '#36D399' },
+  { color: '#059669', label: 'Emerald 3', value: '#059669' },
+  { color: '#4ADE80', label: 'Green 1', value: '#4ADE80' },
+  { color: '#22C55E', label: 'Green 2', value: '#22C55E' },
+  { color: '#16A34A', label: 'Green 3', value: '#16A34A' },
+  { color: '#A3E635', label: 'Lime 1', value: '#A3E635' },
+  { color: '#84CC16', label: 'Lime 2', value: '#84CC16' },
+  { color: '#65A30D', label: 'Lime 3', value: '#65A30D' },
+  { color: '#FDE047', label: 'Yellow 1', value: '#FDE047' },
+  { color: '#EAB308', label: 'Yellow 2', value: '#EAB308' },
+  { color: '#CA8A04', label: 'Yellow 3', value: '#CA8A04' },
+  { color: '#FBBF24', label: 'Amber 1', value: '#FBBF24' },
+  { color: '#FFB020', label: 'Amber 2', value: '#FFB020' },
+  { color: '#D97706', label: 'Amber 3', value: '#D97706' },
+  { color: '#FB923C', label: 'Orange 1', value: '#FB923C' },
+  { color: '#F97316', label: 'Orange 2', value: '#F97316' },
+  { color: '#EA580C', label: 'Orange 3', value: '#EA580C' },
+  { color: '#FF8A8A', label: 'Coral 1', value: '#FF8A8A' },
+  { color: '#FF6B6B', label: 'Coral 2', value: '#FF6B6B' },
+  { color: '#F9736B', label: 'Coral 3', value: '#F9736B' }
+];
+
+const darkAccentPalettes: Partial<Record<DarkAccentKey, AccentPalette>> = {
   amber: {
     primary: '#FFB020',
     primaryDark: '#FFD166',
@@ -106,7 +162,7 @@ const darkAccentPalettes: Record<
   }
 };
 
-const lightAccentPalettes: typeof darkAccentPalettes = {
+const lightAccentPalettes: Partial<Record<DarkAccentKey, AccentPalette>> = {
   amber: {
     primary: '#B45309',
     primaryDark: '#7C2D12',
@@ -149,6 +205,15 @@ const lightAccentPalettes: typeof darkAccentPalettes = {
     primaryLight: '#8B5CF6',
     primarySoft: 'rgba(109, 40, 217, 0.14)'
   }
+};
+
+const legacyAccentValues: Record<string, string> = {
+  amber: '#FFB020',
+  cyan: '#20E7FF',
+  emerald: '#36D399',
+  pink: '#FF4FD8',
+  sunset: '#FF6B6B',
+  violet: '#B56CFF'
 };
 
 const ThemePreferencesContext = createContext<ThemePreferencesContextValue>({
@@ -234,8 +299,10 @@ export function AppThemeProvider({ children }: PropsWithChildren) {
       .then((stored) => {
         const storedAccent = stored?.accent ?? stored?.darkAccent;
 
-        if (storedAccent && isDarkAccentKey(storedAccent)) {
-          setDarkAccentState(storedAccent);
+        const normalizedAccent = normalizeAccentValue(storedAccent);
+
+        if (normalizedAccent) {
+          setDarkAccentState(normalizedAccent);
         }
       })
       .catch(() => undefined);
@@ -255,17 +322,21 @@ export function AppThemeProvider({ children }: PropsWithChildren) {
       darkAccent,
       systemScheme,
       setAccent: (accent) => {
-        setDarkAccentState(accent);
+        const normalizedAccent = normalizeAccentValue(accent) ?? defaultDarkAccent;
+
+        setDarkAccentState(normalizedAccent);
         saveStoredJson<StoredThemePreferences>(themePreferencesKey, {
-          accent,
-          darkAccent: accent
+          accent: normalizedAccent,
+          darkAccent: normalizedAccent
         }).catch(() => undefined);
       },
       setDarkAccent: (accent) => {
-        setDarkAccentState(accent);
+        const normalizedAccent = normalizeAccentValue(accent) ?? defaultDarkAccent;
+
+        setDarkAccentState(normalizedAccent);
         saveStoredJson<StoredThemePreferences>(themePreferencesKey, {
-          accent,
-          darkAccent: accent
+          accent: normalizedAccent,
+          darkAccent: normalizedAccent
         }).catch(() => undefined);
       }
     }),
@@ -299,7 +370,7 @@ export function useAppTheme() {
 }
 
 function buildLightPalette(accentKey: DarkAccentKey): typeof lightPalette {
-  const accent = lightAccentPalettes[accentKey];
+  const accent = resolveLightAccentPalette(accentKey);
 
   return {
     ...lightPalette,
@@ -320,7 +391,7 @@ function buildLightPalette(accentKey: DarkAccentKey): typeof lightPalette {
 }
 
 function buildDarkPalette(accentKey: DarkAccentKey): typeof lightPalette {
-  const accent = darkAccentPalettes[accentKey];
+  const accent = resolveDarkAccentPalette(accentKey);
 
   return {
     ...darkPaletteBase,
@@ -337,6 +408,44 @@ function buildDarkPalette(accentKey: DarkAccentKey): typeof lightPalette {
     shoppingSoft: accent.primarySoft,
     softBlue: accent.primarySoft,
     softPurple: accent.primarySoft
+  };
+}
+
+function resolveLightAccentPalette(accentKey: DarkAccentKey): AccentPalette {
+  return lightAccentPalettes[accentKey] ?? createLightAccentPalette(accentKey);
+}
+
+function resolveDarkAccentPalette(accentKey: DarkAccentKey): AccentPalette {
+  return darkAccentPalettes[accentKey] ?? createDarkAccentPalette(accentKey);
+}
+
+function createLightAccentPalette(accentValue: string): AccentPalette {
+  const color = normalizeAccentValue(accentValue) ?? defaultDarkAccent;
+  const rgb = hexToRgb(color);
+  const primary = !rgb ? lightAccentPalettes.violet?.primary ?? '#6D28D9' :
+    getRelativeLuminance(rgb) > 0.32 ? mixHex(color, '#1C252E', 0.48) : color;
+
+  return {
+    primary,
+    primaryDark: mixHex(primary, '#111827', 0.22),
+    primaryDarker: mixHex(primary, '#111827', 0.55),
+    primaryLight: mixHex(primary, '#FFFFFF', 0.24),
+    primarySoft: toRgba(primary, 0.14)
+  };
+}
+
+function createDarkAccentPalette(accentValue: string): AccentPalette {
+  const color = normalizeAccentValue(accentValue) ?? defaultDarkAccent;
+  const rgb = hexToRgb(color);
+  const primary = !rgb ? darkAccentPalettes.violet?.primary ?? '#B56CFF' :
+    getRelativeLuminance(rgb) < 0.4 ? mixHex(color, '#FFFFFF', 0.34) : color;
+
+  return {
+    primary,
+    primaryDark: mixHex(primary, '#FFFFFF', 0.34),
+    primaryDarker: mixHex(primary, '#FFFFFF', 0.58),
+    primaryLight: mixHex(primary, '#FFFFFF', 0.18),
+    primarySoft: toRgba(primary, 0.17)
   };
 }
 
@@ -365,6 +474,61 @@ function mixDarkBottom(accent: string): string {
   });
 }
 
+function normalizeAccentValue(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  const legacyValue = legacyAccentValues[trimmed.toLowerCase()];
+
+  if (legacyValue) {
+    return legacyValue;
+  }
+
+  const normalizedHex = trimmed.startsWith('#') ? trimmed.toUpperCase() : `#${trimmed.toUpperCase()}`;
+
+  return hexToRgb(normalizedHex) ? normalizedHex : null;
+}
+
+function mixHex(left: string, right: string, amount: number): string {
+  const leftRgb = hexToRgb(left);
+  const rightRgb = hexToRgb(right);
+
+  if (!leftRgb || !rightRgb) {
+    return left;
+  }
+
+  return rgbToHex({
+    blue: Math.round(leftRgb.blue * (1 - amount) + rightRgb.blue * amount),
+    green: Math.round(leftRgb.green * (1 - amount) + rightRgb.green * amount),
+    red: Math.round(leftRgb.red * (1 - amount) + rightRgb.red * amount)
+  });
+}
+
+function toRgba(value: string, alpha: number): string {
+  const rgb = hexToRgb(value);
+
+  if (!rgb) {
+    return value;
+  }
+
+  return `rgba(${rgb.red}, ${rgb.green}, ${rgb.blue}, ${alpha})`;
+}
+
+function getRelativeLuminance(value: { blue: number; green: number; red: number }): number {
+  const channel = (part: number) => {
+    const normalized = part / 255;
+
+    return normalized <= 0.03928
+      ? normalized / 12.92
+      : ((normalized + 0.055) / 1.055) ** 2.4;
+  };
+
+  return channel(value.red) * 0.2126 + channel(value.green) * 0.7152 + channel(value.blue) * 0.0722;
+}
+
 function rgbToHex(value: { blue: number; green: number; red: number }): string {
   const toHex = (part: number) => Math.max(0, Math.min(255, part))
     .toString(16)
@@ -388,15 +552,4 @@ function hexToRgb(value: string): { blue: number; green: number; red: number } |
   }
 
   return { blue, green, red };
-}
-
-function isDarkAccentKey(value: string): value is DarkAccentKey {
-  return (
-    value === 'violet' ||
-    value === 'cyan' ||
-    value === 'pink' ||
-    value === 'amber' ||
-    value === 'emerald' ||
-    value === 'sunset'
-  );
 }

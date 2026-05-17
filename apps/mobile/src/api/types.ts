@@ -535,10 +535,14 @@ export interface MealPlanAiChatRequest {
 export interface MealPlanAiChatResponse {
   assistantMessage: string;
   entries: MealPlanAiDraftEntry[];
+  limitExhausted: boolean;
   questions: string[];
-  status: "needs_clarification" | "ready";
+  status: "limit_exhausted" | "needs_clarification" | "ready";
   targetWeekStartDate: string;
 }
+
+export type MealPlanAiFinalizeRequest = MealPlanAiChatRequest;
+export type MealPlanAiFinalizeResponse = MealPlanAiChatResponse;
 
 export interface CopyMealPlanRequest {
   targetWeekStartDate: string;
