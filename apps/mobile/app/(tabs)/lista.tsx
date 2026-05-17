@@ -187,7 +187,6 @@ export default function ListaScreen() {
         <ShoppingBoard
           action={params.action}
           aiOpenRequest={shoppingAiOpenRequest}
-          onOpenMealPlan={() => selectMainSegment("meals")}
           onRouteActionHandled={clearRouteAction}
         />
       ) : null}
@@ -206,12 +205,10 @@ export default function ListaScreen() {
 function ShoppingBoard({
   action,
   aiOpenRequest,
-  onOpenMealPlan,
   onRouteActionHandled,
 }: {
   action?: string;
   aiOpenRequest: number;
-  onOpenMealPlan: () => void;
   onRouteActionHandled: () => void;
 }) {
   const { session } = useSession();
@@ -227,6 +224,7 @@ function ShoppingBoard({
   const [aiNotice, setAiNotice] = useState("");
   const [aiModalVisible, setAiModalVisible] = useState(false);
   const [handledAiOpenRequest, setHandledAiOpenRequest] = useState(aiOpenRequest);
+  const [clearConfirmVisible, setClearConfirmVisible] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
 
   useEffect(() => {
@@ -277,7 +275,11 @@ function ShoppingBoard({
   });
   const clearMutation = useMutation({
     mutationFn: () => clearShoppingList(activeType, { accessToken }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.shopping }),
+    onSuccess: async () => {
+      setClearConfirmVisible(false);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.shopping });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.start });
+    },
   });
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteShoppingItem(id, { accessToken }),
@@ -350,7 +352,7 @@ function ShoppingBoard({
           <ActionButton
             disabled={clearMutation.isPending}
             loading={clearMutation.isPending}
-            onPress={() => clearMutation.mutate()}
+            onPress={() => setClearConfirmVisible(true)}
             size="small"
             title="Wyczyść całą listę"
             variant="ghost"
@@ -398,8 +400,6 @@ function ShoppingBoard({
           />
         ) : null}
       </View>
-
-      <MealPlanBanner onOpenMealPlan={onOpenMealPlan} />
 
       <FormModal
         footer={
@@ -453,6 +453,42 @@ function ShoppingBoard({
         />
         {createMutation.error ? (
           <InlineAlert tone="error" text="Nie udało się dodać produktu." />
+        ) : null}
+      </FormModal>
+      <FormModal
+        footer={
+          <View style={styles.modalFooter}>
+            <ActionButton
+              disabled={clearMutation.isPending}
+              onPress={() => setClearConfirmVisible(false)}
+              style={styles.modalFooterButton}
+              title="Anuluj"
+              variant="secondary"
+            />
+            <ActionButton
+              labelStyle={styles.dangerActionLabel}
+              loading={clearMutation.isPending}
+              onPress={() => clearMutation.mutate()}
+              style={styles.modalFooterButton}
+              title="Wyczyść"
+              variant="secondary"
+            />
+          </View>
+        }
+        onClose={() => {
+          if (!clearMutation.isPending) {
+            setClearConfirmVisible(false);
+          }
+        }}
+        subtitle={`${currentList} zostanie opróżniona.`}
+        title="Wyczyścić całą listę?"
+        visible={clearConfirmVisible}
+      >
+        <Text style={styles.confirmText}>
+          Ta akcja usunie wszystkie produkty z tej listy zakupów. Nie da się jej cofnąć.
+        </Text>
+        {clearMutation.error ? (
+          <InlineAlert tone="error" text="Nie udało się wyczyścić listy." />
         ) : null}
       </FormModal>
       <FormModal
@@ -1259,34 +1295,6 @@ function ShoppingGroupCard({
   );
 }
 
-function MealPlanBanner({ onOpenMealPlan }: { onOpenMealPlan: () => void }) {
-  const { session } = useSession();
-  const query = useQuery({
-    enabled: Boolean(session?.accessToken),
-    queryFn: () => getCurrentMealPlanWeek({ accessToken: session?.accessToken }),
-    queryKey: [...queryKeys.meal, "shopping-banner"],
-  });
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
-  const count = query.data?.entries.length ?? 0;
-  const summary = query.isLoading ? "Sprawdzam plan posiłków" : formatMealPlanSummary(count);
-
-  return (
-    <Pressable
-      accessibilityLabel="Zobacz plan posiłków"
-      accessibilityRole="button"
-      onPress={onOpenMealPlan}
-      style={({ pressed }) => [styles.mealBanner, pressed && styles.pressed]}
-    >
-      <View>
-        <Text style={styles.mealBannerTitle}>Powiązany plan posiłków</Text>
-        <Text style={styles.mealBannerMeta}>{summary}</Text>
-      </View>
-      <Text style={styles.mealBannerAction}>Zobacz plan</Text>
-    </Pressable>
-  );
-}
-
 function Chip({
   active,
   onPress,
@@ -1342,8 +1350,8 @@ function CalendarWeekPicker({
           calendarBackground: theme.colors.card,
           dayTextColor: theme.colors.text,
           monthTextColor: theme.colors.text,
-          selectedDayBackgroundColor: theme.colors.primary,
-          selectedDayTextColor: theme.colors.inverseText,
+          selectedDayBackgroundColor: theme.colors.cardMuted,
+          selectedDayTextColor: theme.colors.text,
           textDisabledColor: theme.colors.textSubtle,
           textSectionTitleColor: theme.colors.textMuted,
           todayTextColor: theme.colors.primary,
@@ -1578,10 +1586,10 @@ function buildMarkedMealWeekDates(
 
     marked[date] = {
       ...marked[date],
-      color: colors.primary,
+      color: colors.cardMuted,
       endingDay: day === 7,
       startingDay: day === 1,
-      textColor: colors.inverseText,
+      textColor: colors.text,
     };
   }
 
@@ -1650,18 +1658,6 @@ function buildMealSlotIndexes(value: number | null | undefined): number[] {
   const count = Number.isFinite(value) ? Math.max(1, Math.min(8, Number(value))) : 4;
 
   return Array.from({ length: count }, (_, index) => index);
-}
-
-function formatMealPlanSummary(count: number): string {
-  if (count === 0) {
-    return "Brak posiłków w planie na ten tydzień";
-  }
-
-  if (count === 1) {
-    return "1 posiłek w planie na ten tydzień";
-  }
-
-  return `${count} posiłków w planie na ten tydzień`;
 }
 
 function currentWeekStart(): string {
@@ -1872,7 +1868,7 @@ function createStyles(colors: AppPalette) {
     },
     calendarToggleIcon: {
       alignItems: "center",
-      backgroundColor: colors.softOrange,
+      backgroundColor: colors.cardMuted,
       borderRadius: radii.control,
       height: 36,
       justifyContent: "center",
@@ -1897,6 +1893,12 @@ function createStyles(colors: AppPalette) {
     checkBoxDone: {
       backgroundColor: colors.primary,
       borderColor: colors.primary,
+    },
+    confirmText: {
+      color: colors.textMuted,
+      fontSize: 13,
+      letterSpacing: 0,
+      lineHeight: 18,
     },
     chip: {
       alignItems: "center",
@@ -1988,6 +1990,9 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
       marginBottom: -spacing.xs,
     },
+    dangerActionLabel: {
+      color: colors.danger,
+    },
     itemDone: {
       color: colors.textMuted,
       textDecorationLine: "line-through",
@@ -2028,35 +2033,6 @@ function createStyles(colors: AppPalette) {
       flexDirection: "row",
       justifyContent: "space-between",
     },
-    mealBanner: {
-      alignItems: "center",
-      backgroundColor: colors.primarySoft,
-      borderColor: colors.border,
-      borderRadius: radii.card,
-      borderWidth: 1,
-      flexDirection: "row",
-      gap: spacing.md,
-      justifyContent: "space-between",
-      padding: spacing.md,
-    },
-    mealBannerAction: {
-      color: colors.primaryDark,
-      fontSize: 12,
-      fontWeight: "900",
-      letterSpacing: 0,
-    },
-    mealBannerMeta: {
-      color: colors.primaryDark,
-      fontSize: 12,
-      letterSpacing: 0,
-      marginTop: 2,
-    },
-    mealBannerTitle: {
-      color: colors.primaryDark,
-      fontSize: 13,
-      fontWeight: "900",
-      letterSpacing: 0,
-    },
     mealDayCard: {
       backgroundColor: colors.card,
       borderColor: colors.border,
@@ -2067,7 +2043,7 @@ function createStyles(colors: AppPalette) {
     },
     mealHero: {
       alignItems: "center",
-      backgroundColor: colors.warningSoft,
+      backgroundColor: colors.card,
       borderColor: colors.border,
       borderRadius: radii.card,
       borderWidth: 1,
@@ -2077,7 +2053,7 @@ function createStyles(colors: AppPalette) {
     },
     mealHeroIcon: {
       alignItems: "center",
-      backgroundColor: colors.card,
+      backgroundColor: colors.cardMuted,
       borderRadius: radii.control,
       height: 44,
       justifyContent: "center",
