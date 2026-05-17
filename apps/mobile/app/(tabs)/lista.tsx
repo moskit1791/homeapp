@@ -47,6 +47,7 @@ import {
   CalendarDays,
   Check,
   ChevronRight,
+  ExternalLink,
   Pencil,
   Plus,
   Sparkles,
@@ -966,7 +967,7 @@ function MealsBoard({
                 </View>
                 {entry.linkUrl ? (
                   <IconButton accessibilityLabel="Otworz link" onPress={() => Linking.openURL(entry.linkUrl!)}>
-                    <ChevronRight color={theme.colors.food} size={17} />
+                    <ExternalLink color={theme.colors.food} size={17} />
                   </IconButton>
                 ) : null}
                 <View style={styles.mealRowActions}>
@@ -1180,6 +1181,11 @@ function MealsBoard({
                         </Text>
                       ) : null}
                     </View>
+                    {entry.linkUrl ? (
+                      <IconButton accessibilityLabel="Otworz link z AI" onPress={() => Linking.openURL(entry.linkUrl!)}>
+                        <ExternalLink color={theme.colors.food} size={16} />
+                      </IconButton>
+                    ) : null}
                   </View>
                 ))}
               </View>

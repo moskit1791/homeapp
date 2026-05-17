@@ -29,6 +29,19 @@ const mealPlanAiResponseSchema = z.object({
 
 type MealPlanAiResponse = z.infer<typeof mealPlanAiResponseSchema>;
 
+const mealPlanLinkSearchResponseSchema = z.object({
+  updates: z.array(
+    z.object({
+      confidence: z.number().optional(),
+      linkUrl: z.string(),
+      note: z.string().optional(),
+      slotIndex: z.number(),
+      sourceHint: z.string().optional(),
+      weekday: z.number()
+    })
+  )
+});
+
 const mealPlanAiResponseJsonSchema = {
   properties: {
     assistantMessage: {
@@ -143,7 +156,7 @@ export class MealPlannerAiService {
     const targetWeekStartDate = dto.targetWeekStartDate;
     const currentDraft = normalizeDraftEntries(dto.currentDraft ?? [], mealSlotsPerDay);
     const latestUserMessage = getLatestUserMessage(messages);
-    const useGoogleSearch = shouldUseGoogleSearch(messages, currentDraft);
+    const shouldPrioritizeLinks = shouldUseGoogleSearch(messages, currentDraft);
 
     try {
       const responseText = await this.callGemini(
@@ -153,16 +166,25 @@ export class MealPlannerAiService {
           mealSlotsPerDay,
           messages,
           targetWeekStartDate,
-          useGoogleSearch
-        }),
-        { useGoogleSearch }
+          useGoogleSearch: false
+        })
       );
-      const response = this.normalizeResponse(
-        this.parseResponse(responseText),
-        targetWeekStartDate,
-        mealSlotsPerDay,
-        currentDraft,
-        latestUserMessage?.content ?? ''
+      const response = await this.enrichMealLinks(
+        this.normalizeResponse(
+          this.parseResponse(responseText),
+          targetWeekStartDate,
+          mealSlotsPerDay,
+          currentDraft,
+          latestUserMessage?.content ?? ''
+        ),
+        {
+          currentDraft,
+          knownRecipes,
+          mealSlotsPerDay,
+          messages,
+          shouldPrioritizeLinks,
+          targetWeekStartDate
+        }
       );
 
       if (response.entries.length > 0) {
@@ -178,7 +200,296 @@ export class MealPlannerAiService {
       );
     }
 
-    return this.buildFallbackResponse(messages, currentDraft, targetWeekStartDate, mealSlotsPerDay);
+    return this.enrichMealLinks(
+      this.buildFallbackResponse(messages, currentDraft, targetWeekStartDate, mealSlotsPerDay),
+      {
+        currentDraft,
+        knownRecipes,
+        mealSlotsPerDay,
+        messages,
+        shouldPrioritizeLinks,
+        targetWeekStartDate
+      }
+    );
+  }
+
+  private async enrichMealLinks(
+    response: MealPlanAiChatResult,
+    input: {
+      currentDraft: MealPlanAiDraftEntry[];
+      knownRecipes: KnownMealRecipe[];
+      mealSlotsPerDay: number;
+      messages: MealPlanAiMessage[];
+      shouldPrioritizeLinks: boolean;
+      targetWeekStartDate: string;
+    }
+  ): Promise<MealPlanAiChatResult> {
+    if (response.entries.length === 0) {
+      return response;
+    }
+
+    const entriesWithKnownLinks = applyKnownRecipeLinks(response.entries, input.knownRecipes);
+
+    if (!shouldRunLinkSearch(entriesWithKnownLinks, input.messages, input.currentDraft)) {
+      return {
+        ...response,
+        entries: entriesWithKnownLinks
+      };
+    }
+
+    try {
+      const updates = await this.searchMealLinksWithGemini({
+        entries: entriesWithKnownLinks,
+        mealSlotsPerDay: input.mealSlotsPerDay,
+        messages: input.messages,
+        shouldPrioritizeLinks: input.shouldPrioritizeLinks,
+        targetWeekStartDate: input.targetWeekStartDate
+      });
+      const entries = applyLinkSearchUpdates(
+        entriesWithKnownLinks,
+        updates,
+        input.mealSlotsPerDay
+      );
+
+      return {
+        ...response,
+        assistantMessage: improveLinkAssistantMessage(response.assistantMessage, entries),
+        entries
+      };
+    } catch (error) {
+      this.logger.warn(
+        `Gemini meal link search failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+
+      return {
+        ...response,
+        entries: entriesWithKnownLinks
+      };
+    }
+  }
+
+  private async searchMealLinksWithGemini(input: {
+    entries: MealPlanAiDraftEntry[];
+    mealSlotsPerDay: number;
+    messages: MealPlanAiMessage[];
+    shouldPrioritizeLinks: boolean;
+    targetWeekStartDate: string;
+  }): Promise<MealPlanAiDraftEntry[]> {
+    const candidates = input.entries
+      .filter((entry) => !entry.linkUrl && shouldSearchLinkForEntry(entry))
+      .slice(0, 28);
+
+    if (candidates.length === 0) {
+      return [];
+    }
+
+    const responseText = await this.callGemini(
+      this.buildLinkSearchPrompt({
+        candidates,
+        messages: input.messages,
+        shouldPrioritizeLinks: input.shouldPrioritizeLinks,
+        targetWeekStartDate: input.targetWeekStartDate
+      }),
+      { useGoogleSearch: true }
+    );
+    const response = mealPlanLinkSearchResponseSchema.parse(parseJsonResponse(responseText));
+    const updates = response.updates.map((update) => ({
+      linkUrl: update.linkUrl,
+      mealName:
+        candidates.find(
+          (entry) => entry.weekday === update.weekday && entry.slotIndex === update.slotIndex
+        )?.mealName ?? '',
+      note: update.note ?? '',
+      slotIndex: update.slotIndex,
+      sourceHint: update.sourceHint ?? '',
+      weekday: update.weekday
+    }));
+
+    return normalizeDraftEntries(updates, input.mealSlotsPerDay);
+  }
+
+  private buildLinkSearchPrompt(input: {
+    candidates: MealPlanAiDraftEntry[];
+    messages: MealPlanAiMessage[];
+    shouldPrioritizeLinks: boolean;
+    targetWeekStartDate: string;
+  }): string {
+    return [
+      'Jestes resolverem linkow do przepisow w polskiej aplikacji domowej.',
+      'Masz wlaczone Google Search. Twoim jedynym zadaniem jest znalezienie realnych URL-i do juz rozpisanych posilkow.',
+      '',
+      'Zasady:',
+      '- Nie zmieniaj dni, slotow ani nazw posilkow. Dopasowujesz tylko linkUrl/sourceHint/note.',
+      '- Dla kazdej pozycji wykonaj konkretne wyszukiwanie. Link jest priorytetem tej funkcji.',
+      '- Jesli sourceHint istnieje, szukaj przede wszystkim w tym serwisie: Cookidoo, Kwestia Smaku, AniaGotuje, Instagram, Knorr, Przepisy.pl albo Moje Wypieki.',
+      '- Jesli sourceHint nie istnieje, wybierz najlepiej pasujacy publiczny przepis, gdy nazwa wyglada jak konkretne danie.',
+      '- linkUrl musi prowadzic bezposrednio do przepisu albo posta z przepisem, nie do strony glownej, kategorii ani wynikow wyszukiwania.',
+      '- Nie wymyslaj adresow. Pusty linkUrl zostaw tylko dla ogolnych rzeczy typu kanapki, jajecznica, parowki, gotowy produkt albo gdy Google Search nie pokazuje pewnego wyniku.',
+      '- Jesli znajdziesz pasujacy wynik z wyszukiwania, wpisz URL. Nie pomijaj linku z nadmiernej ostroznosci.',
+      '- Odpowiadasz wylacznie JSON-em: {"updates":[{"weekday":1,"slotIndex":0,"linkUrl":"https://...","sourceHint":"Kwestia Smaku","note":"..."}]}',
+      '',
+      `Docelowy poniedzialek tygodnia: ${input.targetWeekStartDate}`,
+      `Tryb nacisku na linki: ${input.shouldPrioritizeLinks ? 'wysoki' : 'standardowy'}`,
+      '',
+      'Pozycje do uzupelnienia:',
+      JSON.stringify(input.candidates),
+      '',
+      'Kontekst rozmowy:',
+      JSON.stringify(input.messages.slice(-6))
+    ].join('\n');
+  }
+
+  private parseResponse(responseText: string): MealPlanAiResponse {
+    try {
+      return mealPlanAiResponseSchema.parse(parseJsonResponse(responseText));
+    } catch (error) {
+      this.logger.warn(
+        `Invalid Gemini meal plan chat JSON: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      throw new ServiceUnavailableException('Meal plan AI returned invalid response');
+    }
+  }
+
+  private normalizeResponse(
+    response: MealPlanAiResponse,
+    fallbackTargetWeekStartDate: string,
+    mealSlotsPerDay: number,
+    currentDraft: MealPlanAiDraftEntry[],
+    latestUserMessage: string
+  ): MealPlanAiChatResult {
+    const responseEntries = normalizeDraftEntries(response.entries, mealSlotsPerDay);
+    const entries =
+      currentDraft.length > 0 && isLinkRequest(latestUserMessage)
+        ? mergeDraftEntries(currentDraft, responseEntries, mealSlotsPerDay)
+        : responseEntries.length > 0
+          ? responseEntries
+          : currentDraft;
+    const targetWeekStartDate = isMondayDateOnly(response.targetWeekStartDate)
+      ? response.targetWeekStartDate
+      : fallbackTargetWeekStartDate;
+    const assistantMessage = response.assistantMessage.trim() || buildDefaultAssistantMessage(
+      entries,
+      targetWeekStartDate
+    );
+
+    return {
+      assistantMessage,
+      entries,
+      questions: response.questions.map((question) => trimToLength(question, 300)).filter(Boolean),
+      status: entries.length > 0 ? response.status : 'needs_clarification',
+      targetWeekStartDate
+    };
+  }
+
+  private buildFallbackResponse(
+    messages: MealPlanAiMessage[],
+    currentDraft: MealPlanAiDraftEntry[],
+    targetWeekStartDate: string,
+    mealSlotsPerDay: number
+  ): MealPlanAiChatResult {
+    const lastUserMessage = getLatestUserMessage(messages);
+    const parsedEntries = lastUserMessage
+      ? parseMealPlanText(lastUserMessage.content, mealSlotsPerDay)
+      : [];
+    const linkRequest = Boolean(lastUserMessage && isLinkRequest(lastUserMessage.content));
+    const entries = linkRequest && currentDraft.length > 0
+      ? currentDraft
+      : parsedEntries.length > 0
+        ? parsedEntries
+        : currentDraft;
+
+    if (entries.length === 0) {
+      return {
+        assistantMessage:
+          'Nie widze jeszcze planu posilkow. Wklej dni tygodnia i posilki, a przygotuje szkic.',
+        entries: [],
+        questions: ['Wkleisz plan z dniami tygodnia?'],
+        status: 'needs_clarification',
+        targetWeekStartDate
+      };
+    }
+
+    const assistantMessage = linkRequest
+      ? `Mam obecny szkic na tydzien ${targetWeekStartDate}, ale bez AI nie znalazlem pewnych nowych linkow. ` +
+        'Zostawiam niepewne adresy puste. Czy mam zapisac taki szkic?'
+      : `Rozpisalem szkic planu na tydzien ${targetWeekStartDate}. ` +
+        'Nie uzupelnilem linkow tam, gdzie nie mialem pewnego adresu. Czy zapisac taki plan?';
+
+    return {
+      assistantMessage,
+      entries,
+      questions: [],
+      status: 'ready',
+      targetWeekStartDate
+    };
+  }
+
+  private async getMealSlotsPerDay(householdId: string): Promise<number> {
+    const result = await this.database.query<{ meal_slots_per_day: number }>(
+      `
+        select meal_slots_per_day
+        from households
+        where id = $1
+        limit 1
+      `,
+      [householdId]
+    );
+    const row = result.rows[0];
+
+    if (!row) {
+      throw new BadRequestException('Household not found');
+    }
+
+    return Math.max(1, Math.min(8, Number(row.meal_slots_per_day) || 1));
+  }
+
+  private async listKnownRecipes(householdId: string): Promise<KnownMealRecipe[]> {
+    const result = await this.database.query<KnownMealRecipeRow>(
+      `
+        select distinct on (lower(title))
+          title,
+          link_url,
+          note,
+          source,
+          updated_at
+        from (
+          select
+            mi.title,
+            mi.link_url,
+            mi.note,
+            'pomysly' as source,
+            mi.updated_at
+          from meal_ideas mi
+          where mi.household_id = $1
+            and mi.link_url is not null
+            and btrim(mi.link_url) <> ''
+          union all
+          select
+            mpe.meal_name as title,
+            mpe.link_url,
+            mpe.note,
+            'plan' as source,
+            mpe.updated_at
+          from meal_plan_entries mpe
+          join meal_plan_weeks mpw on mpw.id = mpe.meal_plan_week_id
+          where mpw.household_id = $1
+            and mpe.link_url is not null
+            and btrim(mpe.link_url) <> ''
+        ) recipes
+        order by lower(title), updated_at desc
+        limit 80
+      `,
+      [householdId]
+    );
+
+    return result.rows.map((row) => ({
+      linkUrl: row.link_url,
+      note: row.note ?? '',
+      source: row.source,
+      title: row.title
+    }));
   }
 
   private async callGemini(
@@ -341,158 +652,6 @@ export class MealPlannerAiService {
     ].join('\n');
   }
 
-  private parseResponse(responseText: string): MealPlanAiResponse {
-    try {
-      return mealPlanAiResponseSchema.parse(parseJsonResponse(responseText));
-    } catch (error) {
-      this.logger.warn(
-        `Invalid Gemini meal plan chat JSON: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-      throw new ServiceUnavailableException('Meal plan AI returned invalid response');
-    }
-  }
-
-  private normalizeResponse(
-    response: MealPlanAiResponse,
-    fallbackTargetWeekStartDate: string,
-    mealSlotsPerDay: number,
-    currentDraft: MealPlanAiDraftEntry[],
-    latestUserMessage: string
-  ): MealPlanAiChatResult {
-    const responseEntries = normalizeDraftEntries(response.entries, mealSlotsPerDay);
-    const entries =
-      currentDraft.length > 0 && isLinkRequest(latestUserMessage)
-        ? mergeDraftEntries(currentDraft, responseEntries, mealSlotsPerDay)
-        : responseEntries.length > 0
-          ? responseEntries
-          : currentDraft;
-    const targetWeekStartDate = isMondayDateOnly(response.targetWeekStartDate)
-      ? response.targetWeekStartDate
-      : fallbackTargetWeekStartDate;
-    const assistantMessage = response.assistantMessage.trim() || buildDefaultAssistantMessage(
-      entries,
-      targetWeekStartDate
-    );
-
-    return {
-      assistantMessage,
-      entries,
-      questions: response.questions.map((question) => trimToLength(question, 300)).filter(Boolean),
-      status: entries.length > 0 ? response.status : 'needs_clarification',
-      targetWeekStartDate
-    };
-  }
-
-  private buildFallbackResponse(
-    messages: MealPlanAiMessage[],
-    currentDraft: MealPlanAiDraftEntry[],
-    targetWeekStartDate: string,
-    mealSlotsPerDay: number
-  ): MealPlanAiChatResult {
-    const lastUserMessage = getLatestUserMessage(messages);
-    const parsedEntries = lastUserMessage
-      ? parseMealPlanText(lastUserMessage.content, mealSlotsPerDay)
-      : [];
-    const linkRequest = Boolean(lastUserMessage && isLinkRequest(lastUserMessage.content));
-    const entries = linkRequest && currentDraft.length > 0
-      ? currentDraft
-      : parsedEntries.length > 0
-        ? parsedEntries
-        : currentDraft;
-
-    if (entries.length === 0) {
-      return {
-        assistantMessage:
-          'Nie widze jeszcze planu posilkow. Wklej dni tygodnia i posilki, a przygotuje szkic.',
-        entries: [],
-        questions: ['Wkleisz plan z dniami tygodnia?'],
-        status: 'needs_clarification',
-        targetWeekStartDate
-      };
-    }
-
-    const assistantMessage = linkRequest
-      ? `Mam obecny szkic na tydzien ${targetWeekStartDate}, ale bez AI nie znalazlem pewnych nowych linkow. ` +
-        'Zostawiam niepewne adresy puste. Czy mam zapisac taki szkic?'
-      : `Rozpisalem szkic planu na tydzien ${targetWeekStartDate}. ` +
-        'Nie uzupelnilem linkow tam, gdzie nie mialem pewnego adresu. Czy zapisac taki plan?';
-
-    return {
-      assistantMessage,
-      entries,
-      questions: [],
-      status: 'ready',
-      targetWeekStartDate
-    };
-  }
-
-  private async getMealSlotsPerDay(householdId: string): Promise<number> {
-    const result = await this.database.query<{ meal_slots_per_day: number }>(
-      `
-        select meal_slots_per_day
-        from households
-        where id = $1
-        limit 1
-      `,
-      [householdId]
-    );
-    const row = result.rows[0];
-
-    if (!row) {
-      throw new BadRequestException('Household not found');
-    }
-
-    return Math.max(1, Math.min(8, Number(row.meal_slots_per_day) || 1));
-  }
-
-  private async listKnownRecipes(householdId: string): Promise<KnownMealRecipe[]> {
-    const result = await this.database.query<KnownMealRecipeRow>(
-      `
-        select distinct on (lower(title))
-          title,
-          link_url,
-          note,
-          source,
-          updated_at
-        from (
-          select
-            mi.title,
-            mi.link_url,
-            mi.note,
-            'pomysly' as source,
-            mi.updated_at
-          from meal_ideas mi
-          where mi.household_id = $1
-            and mi.link_url is not null
-            and btrim(mi.link_url) <> ''
-          union all
-          select
-            mpe.meal_name as title,
-            mpe.link_url,
-            mpe.note,
-            'plan' as source,
-            mpe.updated_at
-          from meal_plan_entries mpe
-          join meal_plan_weeks mpw on mpw.id = mpe.meal_plan_week_id
-          where mpw.household_id = $1
-            and mpe.link_url is not null
-            and btrim(mpe.link_url) <> ''
-        ) recipes
-        order by lower(title), updated_at desc
-        limit 80
-      `,
-      [householdId]
-    );
-
-    return result.rows.map((row) => ({
-      linkUrl: row.link_url,
-      note: row.note ?? '',
-      source: row.source,
-      title: row.title
-    }));
-  }
 }
 
 function normalizeMessages(messages: MealPlanAiChatDto['messages']): MealPlanAiMessage[] {
@@ -518,6 +677,192 @@ function shouldUseGoogleSearch(
 
   return userMessages.some((message) => isLinkRequest(message) || hasSourceHintRequest(message)) ||
     currentDraft.some((entry) => Boolean(entry.sourceHint && !entry.linkUrl));
+}
+
+function shouldRunLinkSearch(
+  entries: MealPlanAiDraftEntry[],
+  messages: MealPlanAiMessage[],
+  currentDraft: MealPlanAiDraftEntry[]
+): boolean {
+  const hasMissingCandidate = entries.some(
+    (entry) => !entry.linkUrl && shouldSearchLinkForEntry(entry)
+  );
+
+  if (!hasMissingCandidate) {
+    return false;
+  }
+
+  return messages.some((message) => message.role === 'user' && looksLikeMealPlanOrLinkTask(message.content)) ||
+    currentDraft.some((entry) => Boolean(entry.sourceHint && !entry.linkUrl)) ||
+    entries.some((entry) => Boolean(entry.sourceHint && !entry.linkUrl));
+}
+
+function looksLikeMealPlanOrLinkTask(value: string): boolean {
+  return isLinkRequest(value) || hasSourceHintRequest(value) || parseDayLine(value) !== null ||
+    value.split(/\r?\n/).some((line) => parseDayLine(line.trim()) !== null);
+}
+
+function shouldSearchLinkForEntry(entry: MealPlanAiDraftEntry): boolean {
+  if (entry.linkUrl) {
+    return false;
+  }
+
+  if (entry.sourceHint) {
+    return true;
+  }
+
+  const normalized = normalizeText(entry.mealName);
+
+  if (!normalized || isGenericMealName(normalized)) {
+    return false;
+  }
+
+  return normalized.split(/[^a-z0-9]+/).filter(Boolean).length >= 2 || normalized.length >= 10;
+}
+
+function applyKnownRecipeLinks(
+  entries: MealPlanAiDraftEntry[],
+  knownRecipes: KnownMealRecipe[]
+): MealPlanAiDraftEntry[] {
+  if (knownRecipes.length === 0) {
+    return entries;
+  }
+
+  return entries.map((entry) => {
+    if (entry.linkUrl) {
+      return entry;
+    }
+
+    const match = knownRecipes.find((recipe) =>
+      areRecipeTitlesMatching(entry.mealName, recipe.title)
+    );
+    const linkUrl = normalizeUrl(match?.linkUrl ?? '');
+
+    if (!match || !linkUrl) {
+      return entry;
+    }
+
+    const recipeNote = trimToLength(match.note, 1000);
+
+    return {
+      ...entry,
+      linkUrl,
+      note: entry.note ?? (recipeNote || null),
+      sourceHint: entry.sourceHint ?? normalizeKnownRecipeSource(match.source)
+    };
+  });
+}
+
+function applyLinkSearchUpdates(
+  entries: MealPlanAiDraftEntry[],
+  updates: MealPlanAiDraftEntry[],
+  mealSlotsPerDay: number
+): MealPlanAiDraftEntry[] {
+  const updatesBySlot = new Map<string, MealPlanAiDraftEntry>();
+
+  for (const update of normalizeDraftEntries(updates, mealSlotsPerDay)) {
+    if (update.linkUrl) {
+      updatesBySlot.set(`${update.weekday}:${update.slotIndex}`, update);
+    }
+  }
+
+  if (updatesBySlot.size === 0) {
+    return entries;
+  }
+
+  return entries.map((entry) => {
+    if (entry.linkUrl) {
+      return entry;
+    }
+
+    const update = updatesBySlot.get(`${entry.weekday}:${entry.slotIndex}`);
+
+    if (!update?.linkUrl) {
+      return entry;
+    }
+
+    return {
+      ...entry,
+      linkUrl: update.linkUrl,
+      note: mergeEntryNotes(entry.note, update.note),
+      sourceHint: update.sourceHint ?? entry.sourceHint
+    };
+  });
+}
+
+function improveLinkAssistantMessage(
+  assistantMessage: string,
+  entries: MealPlanAiDraftEntry[]
+): string {
+  const linkedCount = entries.filter((entry) => Boolean(entry.linkUrl)).length;
+
+  if (linkedCount === 0 || normalizeText(assistantMessage).includes('link')) {
+    return assistantMessage;
+  }
+
+  return `${assistantMessage} Uzupelnilem ${linkedCount} linkow do przepisow.`;
+}
+
+function areRecipeTitlesMatching(left: string, right: string): boolean {
+  const normalizedLeft = normalizeText(left);
+  const normalizedRight = normalizeText(right);
+
+  if (!normalizedLeft || !normalizedRight) {
+    return false;
+  }
+
+  if (normalizedLeft === normalizedRight) {
+    return true;
+  }
+
+  return normalizedLeft.length >= 8 &&
+    normalizedRight.length >= 8 &&
+    (normalizedLeft.includes(normalizedRight) || normalizedRight.includes(normalizedLeft));
+}
+
+function normalizeKnownRecipeSource(source: string): string | null {
+  return source === 'pomysly' ? 'Pomysly' : source === 'plan' ? 'Plan posilkow' : null;
+}
+
+function mergeEntryNotes(current: string | null, update: string | null): string | null {
+  if (!update) {
+    return current;
+  }
+
+  if (!current) {
+    return update;
+  }
+
+  if (normalizeText(current).includes(normalizeText(update))) {
+    return current;
+  }
+
+  return trimToLength(`${current}\n${update}`, 1000);
+}
+
+function isGenericMealName(normalizedMealName: string): boolean {
+  const genericMeals = new Set([
+    'angielskie',
+    'gotowiec',
+    'jajecznica',
+    'kanapka',
+    'kanapki',
+    'kielbasa',
+    'kolacja',
+    'lunch',
+    'obiad',
+    'omlet',
+    'owsianka',
+    'parowki',
+    'pizza',
+    'resztki',
+    'salatka',
+    'sniadanie',
+    'tosty',
+    'zupa'
+  ]);
+
+  return genericMeals.has(normalizedMealName);
 }
 
 function hasSourceHintRequest(value: string): boolean {
@@ -635,9 +980,7 @@ function mergeDraftEntries(
 function isLinkRequest(value: string): boolean {
   const normalized = normalizeText(value);
 
-  return /\b(link|linki|url|adres|adresy|przepis|przepisy|znajdz|znajdzcie|wyszukaj)\b/.test(
-    normalized
-  );
+  return /\b(link|linki|linkow|linkami|url|urle|adres|adresy|przepis|przepisy|przepisow|przepisami|znajdz|znajdzcie|poszukaj|wyszukaj)\b/.test(normalized);
 }
 
 function parseMealPlanText(input: string, mealSlotsPerDay: number): MealPlanAiDraftEntry[] {
@@ -665,7 +1008,7 @@ function parseMealPlanText(input: string, mealSlotsPerDay: number): MealPlanAiDr
       }
 
       entries.push({
-        linkUrl: null,
+        linkUrl: parsedMeal.linkUrl,
         mealName,
         note: parsedMeal.sourceHint ? `Zrodlo: ${parsedMeal.sourceHint}` : null,
         slotIndex: index,
@@ -705,12 +1048,19 @@ function splitMeals(value: string): string[] {
     .filter(Boolean);
 }
 
-function parseSourceHint(value: string): { mealName: string; sourceHint: string | null } {
-  const normalizedValue = value.trim();
+function parseSourceHint(value: string): {
+  linkUrl: string | null;
+  mealName: string;
+  sourceHint: string | null;
+} {
+  const urlMatch = value.match(/https?:\/\/[^\s),]+/i);
+  const linkUrl = normalizeUrl(urlMatch?.[0] ?? '');
+  const normalizedValue = urlMatch ? value.replace(urlMatch[0], ' ').trim() : value.trim();
   const prefixMatch = normalizedValue.match(/^([A-Za-z ]{1,24})\s+(.+)$/);
 
   if (!prefixMatch) {
     return {
+      linkUrl,
       mealName: normalizedValue,
       sourceHint: null
     };
@@ -720,12 +1070,14 @@ function parseSourceHint(value: string): { mealName: string; sourceHint: string 
 
   if (!sourceHint) {
     return {
+      linkUrl,
       mealName: normalizedValue,
       sourceHint: null
     };
   }
 
   return {
+    linkUrl,
     mealName: prefixMatch[2]?.trim() ?? normalizedValue,
     sourceHint
   };

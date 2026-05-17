@@ -53,6 +53,7 @@ export const DotsVertical = createIcon("dots-vertical");
 export const Download = createIcon("download-outline");
 export const Eye = createIcon("eye-outline");
 export const EyeOff = createIcon("eye-off-outline");
+export const ExternalLink = createIcon("open-in-new");
 export const FileText = createIcon("file-document-outline");
 export const Filter = createIcon("filter-variant");
 export const Folder = createIcon("folder-outline");
