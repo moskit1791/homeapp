@@ -114,7 +114,15 @@ export const accentColorOptions: DarkAccentOption[] = [
   { color: '#EA580C', label: 'Orange 3', value: '#EA580C' },
   { color: '#FF8A8A', label: 'Coral 1', value: '#FF8A8A' },
   { color: '#FF6B6B', label: 'Coral 2', value: '#FF6B6B' },
-  { color: '#F9736B', label: 'Coral 3', value: '#F9736B' }
+  { color: '#F9736B', label: 'Coral 3', value: '#F9736B' },
+  { color: '#A16207', label: 'Brown 1', value: '#A16207' },
+  { color: '#92400E', label: 'Brown 2', value: '#92400E' },
+  { color: '#7C2D12', label: 'Brown 3', value: '#7C2D12' },
+  { color: '#F8FAFC', label: 'White', value: '#F8FAFC' },
+  { color: '#E5E7EB', label: 'Gray 1', value: '#E5E7EB' },
+  { color: '#94A3B8', label: 'Gray 2', value: '#94A3B8' },
+  { color: '#475569', label: 'Graphite', value: '#475569' },
+  { color: '#111827', label: 'Black', value: '#111827' }
 ];
 
 const darkAccentPalettes: Partial<Record<DarkAccentKey, AccentPalette>> = {
@@ -249,18 +257,18 @@ const lightPalette: Palette = {
 const darkPaletteBase: typeof lightPalette = {
   ...colors,
   background: '#0C1220',
-  backgroundBottom: '#080D18',
+  backgroundBottom: '#10182A',
   backgroundTop: '#1B2032',
   backdrop: 'rgba(6, 9, 18, 0.68)',
   border: 'rgba(238, 244, 255, 0.2)',
-  calendar: '#B56CFF',
+  calendar: '#38BDF8',
   card: 'rgba(38, 45, 67, 0.68)',
   cardMuted: 'rgba(48, 56, 78, 0.62)',
   danger: '#FF7A90',
   dangerSoft: 'rgba(255, 122, 144, 0.18)',
   field: 'rgba(30, 36, 54, 0.78)',
-  finance: '#66E3FF',
-  food: '#FFC766',
+  finance: '#34D399',
+  food: '#FBBF24',
   info: '#B56CFF',
   infoSoft: 'rgba(181, 108, 255, 0.18)',
   inverseText: '#050711',
@@ -272,13 +280,13 @@ const darkPaletteBase: typeof lightPalette = {
   primaryDarker: '#EBDCFF',
   primaryLight: '#CC96FF',
   primarySoft: 'rgba(181, 108, 255, 0.18)',
-  shopping: '#FF75DE',
-  shoppingSoft: 'rgba(255, 117, 222, 0.16)',
-  softBlue: 'rgba(181, 108, 255, 0.18)',
-  softGreen: 'rgba(102, 227, 255, 0.15)',
+  shopping: '#A78BFA',
+  shoppingSoft: 'rgba(167, 139, 250, 0.16)',
+  softBlue: 'rgba(56, 189, 248, 0.16)',
+  softGreen: 'rgba(52, 211, 153, 0.16)',
   softOrange: 'rgba(255, 199, 102, 0.17)',
-  softPurple: 'rgba(255, 117, 222, 0.16)',
-  successSoft: 'rgba(102, 227, 255, 0.17)',
+  softPurple: 'rgba(167, 139, 250, 0.16)',
+  successSoft: 'rgba(52, 211, 153, 0.17)',
   surface: 'rgba(38, 45, 67, 0.68)',
   surfaceMuted: 'rgba(48, 56, 78, 0.62)',
   text: '#FFFFFF',
@@ -375,18 +383,13 @@ function buildLightPalette(accentKey: DarkAccentKey): typeof lightPalette {
   return {
     ...lightPalette,
     backgroundBottom: mixLightBottom(accent.primary),
-    calendar: accent.primary,
     info: accent.primary,
     infoSoft: accent.primarySoft,
     primary: accent.primary,
     primaryDark: accent.primaryDark,
     primaryDarker: accent.primaryDarker,
     primaryLight: accent.primaryLight,
-    primarySoft: accent.primarySoft,
-    shopping: accent.primary,
-    shoppingSoft: accent.primarySoft,
-    softBlue: accent.primarySoft,
-    softPurple: accent.primarySoft
+    primarySoft: accent.primarySoft
   };
 }
 
@@ -395,7 +398,6 @@ function buildDarkPalette(accentKey: DarkAccentKey): typeof lightPalette {
 
   return {
     ...darkPaletteBase,
-    calendar: accent.primary,
     backgroundBottom: mixDarkBottom(accent.primary),
     info: accent.primary,
     infoSoft: accent.primarySoft,
@@ -403,11 +405,7 @@ function buildDarkPalette(accentKey: DarkAccentKey): typeof lightPalette {
     primaryDark: accent.primaryDark,
     primaryDarker: accent.primaryDarker,
     primaryLight: accent.primaryLight,
-    primarySoft: accent.primarySoft,
-    shopping: accent.primary,
-    shoppingSoft: accent.primarySoft,
-    softBlue: accent.primarySoft,
-    softPurple: accent.primarySoft
+    primarySoft: accent.primarySoft
   };
 }
 
@@ -456,7 +454,7 @@ function mixLightBottom(accent: string): string {
     return lightPalette.backgroundBottom;
   }
 
-  return `rgba(${rgb.red}, ${rgb.green}, ${rgb.blue}, 0.006)`;
+  return `rgba(${rgb.red}, ${rgb.green}, ${rgb.blue}, 0.04)`;
 }
 
 function mixDarkBottom(accent: string): string {
@@ -468,9 +466,9 @@ function mixDarkBottom(accent: string): string {
   }
 
   return rgbToHex({
-    blue: Math.round(base.blue * 0.986 + rgb.blue * 0.014),
-    green: Math.round(base.green * 0.986 + rgb.green * 0.014),
-    red: Math.round(base.red * 0.986 + rgb.red * 0.014)
+    blue: Math.round(base.blue * 0.9 + rgb.blue * 0.1),
+    green: Math.round(base.green * 0.9 + rgb.green * 0.1),
+    red: Math.round(base.red * 0.9 + rgb.red * 0.1)
   });
 }
 

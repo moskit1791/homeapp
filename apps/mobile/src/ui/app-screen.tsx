@@ -30,7 +30,7 @@ export function AppScreen({
   return (
     <LinearGradient
       colors={[theme.colors.backgroundTop, theme.colors.background, theme.colors.backgroundBottom]}
-      locations={[0, 0.48, 1]}
+      locations={[0, 0.58, 1]}
       style={styles.safeArea}
     >
       <SafeAreaView style={styles.safeAreaContent}>
