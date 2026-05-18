@@ -9,6 +9,7 @@ import {
 
 export const TODO_STATUSES = ["todo", "done"] as const;
 export const TODO_SCOPE_TYPES = ["household"] as const;
+export const TODO_MOVE_DIRECTIONS = ["up", "down"] as const;
 
 export class TodoItemIdParamDto {
   @IsUUID()
@@ -53,4 +54,9 @@ export class UpdateTodoItemDto {
   @IsOptional()
   @IsIn([...TODO_STATUSES])
   status?: TodoStatus;
+}
+
+export class MoveTodoItemDto {
+  @IsIn([...TODO_MOVE_DIRECTIONS])
+  direction!: "down" | "up";
 }

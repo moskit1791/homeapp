@@ -126,13 +126,13 @@ export class StartService {
   private async getTodoPreview(householdId: string): Promise<StartTodoItem[]> {
     const result = await this.database.query<TodoItemRow>(
       `
-        select id, title, scope_type, owner_member_id, created_at
+        select id, title, scope_type, owner_member_id, sort_order, created_at
         from todo_items
         where household_id = $1
           and scope_type = 'household'
           and status = 'todo'
-        order by created_at desc
-        limit 5
+        order by sort_order asc, created_at desc
+        limit 3
       `,
       [householdId]
     );
@@ -142,6 +142,7 @@ export class StartService {
       id: row.id,
       ownerMemberId: row.owner_member_id,
       scopeType: row.scope_type,
+      sortOrder: row.sort_order,
       title: row.title
     }));
   }
@@ -189,6 +190,7 @@ interface TodoItemRow {
   id: string;
   owner_member_id: string | null;
   scope_type: 'household' | 'member';
+  sort_order: number;
   title: string;
 }
 
@@ -238,5 +240,6 @@ export interface StartTodoItem {
   id: string;
   ownerMemberId: string | null;
   scopeType: 'household' | 'member';
+  sortOrder: number;
   title: string;
 }

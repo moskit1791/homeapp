@@ -75,6 +75,7 @@ import type {
   MealRandomizeRequest,
   MealRandomizeResult,
   MoveShoppingItemRequest,
+  MoveTodoItemRequest,
   Note,
   NotificationPreference,
   OkResponse,
@@ -1057,6 +1058,21 @@ export function reopenTodoItem(itemId: string, options?: ApiCallOptionsInput): P
 
   return apiRequest<TodoItem>(`/todo-items/${itemId}/reopen`, {
     accessToken: requestOptions.accessToken,
+    method: 'POST',
+    signal: requestOptions.signal
+  });
+}
+
+export function moveTodoItem(
+  itemId: string,
+  input: MoveTodoItemRequest,
+  options?: ApiCallOptionsInput
+): Promise<TodoItem> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<TodoItem, MoveTodoItemRequest>(`/todo-items/${itemId}/move`, {
+    accessToken: requestOptions.accessToken,
+    body: input,
     method: 'POST',
     signal: requestOptions.signal
   });

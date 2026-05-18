@@ -169,6 +169,7 @@ export interface StartTodoItem {
   id: string;
   ownerMemberId: string | null;
   scopeType: ScopeType;
+  sortOrder: number;
   title: string;
 }
 
@@ -620,6 +621,7 @@ export interface TodoItem {
   id: string;
   ownerMemberId: string | null;
   scopeType: ScopeType;
+  sortOrder: number;
   status: 'todo' | 'done';
   title: string;
   updatedAt: string;
@@ -636,6 +638,10 @@ export interface UpdateTodoItemRequest {
   scopeType?: 'household';
   status?: 'todo' | 'done';
   title?: string;
+}
+
+export interface MoveTodoItemRequest {
+  direction: 'down' | 'up';
 }
 
 export interface Note {

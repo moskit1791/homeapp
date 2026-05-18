@@ -849,6 +849,7 @@ function TodoSegment({
       setDescription("");
       setTodoModalVisible(false);
       await queryClient.invalidateQueries({ queryKey: queryKeys.todo });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.start });
     },
   });
   const updateMutation = useMutation({
@@ -856,13 +857,17 @@ function TodoSegment({
       item.status === "done"
         ? reopenTodoItem(item.id, { accessToken })
         : completeTodoItem(item.id, { accessToken }),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: queryKeys.todo }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.todo });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.start });
+    },
   });
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteTodoItem(id, { accessToken }),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: queryKeys.todo }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.todo });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.start });
+    },
   });
 
   const items = todoQuery.data ?? [];

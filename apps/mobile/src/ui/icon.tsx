@@ -46,6 +46,7 @@ export const CheckCircle2 = createIcon("check-circle-outline");
 export const ChevronLeft = createIcon("chevron-left");
 export const ChevronDown = createIcon("chevron-down");
 export const ChevronRight = createIcon("chevron-right");
+export const ChevronUp = createIcon("chevron-up");
 export const Close = createIcon("close");
 export const Cog = createIcon("cog-outline");
 export const Database = createIcon("database-outline");

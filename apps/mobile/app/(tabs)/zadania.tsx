@@ -10,6 +10,7 @@ import {
   deleteTodoItem,
   listNotes,
   listTodoItems,
+  moveTodoItem,
   queryKeys,
   reopenTodoItem,
   updateNote,
@@ -21,7 +22,7 @@ import { useSession } from "../../src/session/session-context";
 import { radii, spacing } from "../../src/theme/tokens";
 import { useAppTheme, type AppPalette } from "../../src/theme/use-app-theme";
 import { ActionButton, AppScreen, FormModal, IconButton, InlineAlert, QueryState, SegmentedControl } from "../../src/ui";
-import { Check, Pencil, Trash2 } from "../../src/ui/icon";
+import { Check, ChevronDown, ChevronUp, Pencil, Trash2 } from "../../src/ui/icon";
 
 type TaskSegment = "notes" | "todo";
 
@@ -286,13 +287,22 @@ function TodoBoard({
       await queryClient.invalidateQueries({ queryKey: queryKeys.start });
     },
   });
+  const moveMutation = useMutation({
+    mutationFn: (input: { direction: "down" | "up"; id: string }) =>
+      moveTodoItem(input.id, { direction: input.direction }, { accessToken }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.todo });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.start });
+    },
+  });
   const todos = [...(todoQuery.data ?? [])].sort((left, right) => {
     if (left.status !== right.status) {
       return left.status === "todo" ? -1 : 1;
     }
 
-    return right.updatedAt.localeCompare(left.updatedAt);
+    return left.sortOrder - right.sortOrder || right.createdAt.localeCompare(left.createdAt);
   });
+  const openTodoIds = todos.filter((todo) => todo.status === "todo").map((todo) => todo.id);
 
   useEffect(() => {
     if (action === "todo" && permission.canCreate) {
@@ -319,6 +329,7 @@ function TodoBoard({
       <View style={styles.cardList}>
         {todos.map((todo) => {
           const done = todo.status === "done";
+          const openIndex = openTodoIds.indexOf(todo.id);
 
           return (
             <View key={todo.id} style={[styles.todoCard, done && styles.todoCardDone]}>
@@ -337,15 +348,38 @@ function TodoBoard({
                   </Text>
                 ) : null}
               </View>
-              {permission.canDelete ? (
-                <IconButton
-                  accessibilityLabel="Usuń zadanie"
-                  disabled={deleteMutation.isPending}
-                  onPress={() => deleteMutation.mutate(todo.id)}
-                >
-                  <Trash2 color={theme.colors.danger} size={17} />
-                </IconButton>
-              ) : null}
+              <View style={styles.todoActions}>
+                {permission.canUpdate && !done ? (
+                  <View style={styles.todoOrderActions}>
+                    <IconButton
+                      accessibilityLabel="Przesuń zadanie wyżej"
+                      disabled={moveMutation.isPending || openIndex <= 0}
+                      onPress={() => moveMutation.mutate({ direction: "up", id: todo.id })}
+                    >
+                      <ChevronUp color={openIndex <= 0 ? theme.colors.textSubtle : theme.colors.primary} size={17} />
+                    </IconButton>
+                    <IconButton
+                      accessibilityLabel="Przesuń zadanie niżej"
+                      disabled={moveMutation.isPending || openIndex >= openTodoIds.length - 1}
+                      onPress={() => moveMutation.mutate({ direction: "down", id: todo.id })}
+                    >
+                      <ChevronDown
+                        color={openIndex >= openTodoIds.length - 1 ? theme.colors.textSubtle : theme.colors.primary}
+                        size={17}
+                      />
+                    </IconButton>
+                  </View>
+                ) : null}
+                {permission.canDelete ? (
+                  <IconButton
+                    accessibilityLabel="Usuń zadanie"
+                    disabled={deleteMutation.isPending}
+                    onPress={() => deleteMutation.mutate(todo.id)}
+                  >
+                    <Trash2 color={theme.colors.danger} size={17} />
+                  </IconButton>
+                ) : null}
+              </View>
             </View>
           );
         })}
@@ -583,6 +617,11 @@ function createStyles(colors: AppPalette) {
     todoCardDone: {
       opacity: 0.72,
     },
+    todoActions: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.xs,
+    },
     todoCheck: {
       alignItems: "center",
       backgroundColor: colors.card,
@@ -596,6 +635,11 @@ function createStyles(colors: AppPalette) {
     todoCheckDone: {
       backgroundColor: colors.primary,
       borderColor: colors.primary,
+    },
+    todoOrderActions: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: 2,
     },
   });
 }

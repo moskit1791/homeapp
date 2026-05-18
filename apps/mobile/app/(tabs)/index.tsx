@@ -5,11 +5,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import {
   getStartDashboard,
-  listCleaningTasks,
   listShoppingItems,
   queryKeys,
-  type CleaningTask,
   type StartCalendarEvent,
+  type StartTodoItem,
 } from "../../src/api";
 import {
   clearStoredNotifications,
@@ -26,11 +25,11 @@ import { ActionButton, AppScreen, AppToast, IconButton, QueryState } from "../..
 import {
   AccountCircle,
   Bell,
-  Broom,
   CalendarDays,
   CartPlus,
   ChevronRight,
   Close,
+  ListChecks,
   ReceiptText,
   ShoppingCart,
   Utensils,
@@ -46,8 +45,8 @@ export default function DzisiajScreen() {
   const [pushNotifications, setPushNotifications] = useState<StoredNotification[]>([]);
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
-  const cleaningPermission = useModulePermission("cleaning");
   const shoppingPermission = useModulePermission("shopping");
+  const todoPermission = useModulePermission("todo");
 
   const dashboardQuery = useQuery({
     enabled: Boolean(accessToken),
@@ -59,12 +58,6 @@ export default function DzisiajScreen() {
     queryFn: () => listShoppingItems("daily", { accessToken }),
     queryKey: [...queryKeys.shopping, "daily", "today-preview"],
   });
-  const cleaningQuery = useQuery({
-    enabled: cleaningPermission.canRead && Boolean(accessToken),
-    queryFn: () => listCleaningTasks({ accessToken }),
-    queryKey: [...queryKeys.cleaning, "today-preview"],
-  });
-
   const dashboard = dashboardQuery.data;
   const upcomingEvents = dashboard?.upcomingEvents ?? [];
   const todayEvents = upcomingEvents.filter(isTodayEvent);
@@ -75,9 +68,7 @@ export default function DzisiajScreen() {
   const openShopping = (shoppingQuery.data ?? []).filter(
     (item) => !item.isChecked,
   );
-  const todayCleaningTasks = (cleaningQuery.data ?? []).filter(
-    (task) => task.nextDueAt === todayIso(),
-  );
+  const todoPreview = (dashboard?.todoPreview ?? []).slice(0, 3);
   const openFromNotification = useCallback((route: "/(tabs)/kalendarz" | "/(tabs)/finanse" | "/(tabs)/lista" | "/(tabs)/dom" | "/(tabs)/zadania") => {
     setNotificationsVisible(false);
     router.push(route as never);
@@ -278,12 +269,16 @@ export default function DzisiajScreen() {
         />
       </View>
 
-      <CleaningTodaySection
-        error={cleaningQuery.error}
-        isLoading={cleaningQuery.isLoading}
-        onOpenCleaning={() => router.push("/(tabs)/dom" as never)}
-        tasks={todayCleaningTasks}
-      />
+      {todoPermission.canRead ? (
+        <TodoTodaySection
+          error={dashboardQuery.error}
+          isLoading={dashboardQuery.isLoading}
+          onOpenTodo={() =>
+            router.push({ pathname: "/(tabs)/zadania", params: { segment: "todo" } } as never)
+          }
+          tasks={todoPreview}
+        />
+      ) : null}
 
     </AppScreen>
   );
@@ -445,29 +440,29 @@ function HomeTile({
   );
 }
 
-function CleaningTodaySection({
+function TodoTodaySection({
   error,
   isLoading,
-  onOpenCleaning,
+  onOpenTodo,
   tasks,
 }: {
   error: unknown;
   isLoading: boolean;
-  onOpenCleaning: () => void;
-  tasks: CleaningTask[];
+  onOpenTodo: () => void;
+  tasks: StartTodoItem[];
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
 
   return (
-    <View style={styles.cleaningSection}>
+    <View style={styles.todoPreviewSection}>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Zaplanowane sprzątanie</Text>
-        <Text style={styles.sectionMeta}>Dzisiaj</Text>
+        <Text style={styles.sectionTitle}>Do zrobienia</Text>
+        <Text style={styles.sectionMeta}>Zadania</Text>
       </View>
-      <View style={styles.cleaningPanel}>
+      <View style={styles.todoPreviewPanel}>
         <QueryState
-          emptyText="Brak sprzątania na dziś."
+          emptyText="Brak rzeczy do zrobienia."
           error={error}
           isEmpty={!isLoading && tasks.length === 0}
           isLoading={isLoading}
@@ -476,20 +471,20 @@ function CleaningTodaySection({
           <Pressable
             accessibilityRole="button"
             key={task.id}
-            onPress={onOpenCleaning}
+            onPress={onOpenTodo}
             style={({ pressed }) => [
-              styles.cleaningRow,
-              index < tasks.length - 1 && styles.cleaningRowDivider,
+              styles.todoPreviewRow,
+              index < tasks.length - 1 && styles.todoPreviewRowDivider,
               pressed && styles.pressed,
             ]}
           >
-            <View style={[styles.dashboardIcon, { backgroundColor: tint(theme.colors.shopping, 0.1) }]}>
-              <Broom color={theme.colors.shopping} size={22} />
+            <View style={[styles.dashboardIcon, { backgroundColor: tint(theme.colors.primary, 0.1) }]}>
+              <ListChecks color={theme.colors.primary} size={22} />
             </View>
             <View style={styles.dashboardText}>
-              <Text numberOfLines={1} style={styles.dashboardTitle}>{task.name}</Text>
+              <Text numberOfLines={1} style={styles.dashboardTitle}>{task.title}</Text>
               <Text numberOfLines={1} style={styles.dashboardSubMeta}>
-                Termin dzisiaj / co {task.frequencyDays} dni
+                Do zrobienia
               </Text>
             </View>
             <ChevronRight color={theme.colors.textSubtle} size={20} />
@@ -735,7 +730,7 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
       lineHeight: 20,
     },
-    cleaningPanel: {
+    todoPreviewPanel: {
       backgroundColor: colors.overlay,
       borderColor: colors.border,
       borderRadius: radii.card,
@@ -747,7 +742,7 @@ function createStyles(colors: AppPalette) {
       shadowOpacity: 0.07,
       shadowRadius: 22,
     },
-    cleaningRow: {
+    todoPreviewRow: {
       alignItems: "center",
       flexDirection: "row",
       gap: spacing.md,
@@ -755,11 +750,11 @@ function createStyles(colors: AppPalette) {
       paddingHorizontal: spacing.lg,
       paddingVertical: spacing.md,
     },
-    cleaningRowDivider: {
+    todoPreviewRowDivider: {
       borderBottomColor: colors.border,
       borderBottomWidth: 1,
     },
-    cleaningSection: {
+    todoPreviewSection: {
       gap: spacing.sm,
       marginTop: spacing.sm,
     },

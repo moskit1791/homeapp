@@ -25,6 +25,7 @@ export class TodoService {
           title,
           description,
           status,
+          sort_order,
           created_at,
           updated_at
         from todo_items
@@ -33,6 +34,7 @@ export class TodoService {
           and ($2::todo_status is null or status = $2)
         order by
           status asc,
+          sort_order asc,
           created_at desc
       `,
       [householdId, status ?? null],
@@ -54,9 +56,23 @@ export class TodoService {
           scope_type,
           owner_member_id,
           title,
-          description
+          description,
+          sort_order
         )
-        values ($1, $2, $3, $4, $5)
+        values (
+          $1,
+          $2,
+          $3,
+          $4,
+          $5,
+          (
+            select coalesce(min(sort_order), 0) - 1000
+            from todo_items
+            where household_id = $1
+              and scope_type = 'household'
+              and status = 'todo'
+          )
+        )
         returning
           id,
           household_id,
@@ -65,6 +81,7 @@ export class TodoService {
           title,
           description,
           status,
+          sort_order,
           created_at,
           updated_at
       `,
@@ -121,6 +138,7 @@ export class TodoService {
           title,
           description,
           status,
+          sort_order,
           created_at,
           updated_at
       `,
@@ -152,7 +170,18 @@ export class TodoService {
     const result = await this.database.query<TodoItemRow>(
       `
         update todo_items
-        set status = $3
+        set
+          status = $3,
+          sort_order = case
+            when $3 = 'todo'::todo_status and status <> 'todo'::todo_status then (
+              select coalesce(min(sort_order), 0) - 1000
+              from todo_items
+              where household_id = $1
+                and scope_type = 'household'
+                and status = 'todo'
+            )
+            else sort_order
+          end
         where household_id = $1
           and id = $2
           and scope_type = 'household'
@@ -164,6 +193,7 @@ export class TodoService {
           title,
           description,
           status,
+          sort_order,
           created_at,
           updated_at
       `,
@@ -199,6 +229,121 @@ export class TodoService {
     return deleted;
   }
 
+  async moveItem(
+    householdId: string,
+    id: string,
+    direction: "down" | "up",
+  ): Promise<TodoItemRecord | null> {
+    const result = await this.database.transaction(async (client) => {
+      const currentResult = await client.query<TodoItemRow>(
+        `
+          select
+            id,
+            household_id,
+            scope_type,
+            owner_member_id,
+            title,
+            description,
+            status,
+            sort_order,
+            created_at,
+            updated_at
+          from todo_items
+          where household_id = $1
+            and id = $2
+            and scope_type = 'household'
+          for update
+        `,
+        [householdId, id],
+      );
+      const current = currentResult.rows[0];
+
+      if (!current) {
+        return null;
+      }
+
+      if (current.status !== "todo") {
+        return this.mapItem(current);
+      }
+
+      const neighborResult = await client.query<TodoItemRow>(
+        `
+          select
+            id,
+            household_id,
+            scope_type,
+            owner_member_id,
+            title,
+            description,
+            status,
+            sort_order,
+            created_at,
+            updated_at
+          from todo_items
+          where household_id = $1
+            and id <> $2
+            and scope_type = 'household'
+            and status = 'todo'
+            and sort_order ${direction === "up" ? "<" : ">"} $3
+          order by sort_order ${direction === "up" ? "desc" : "asc"}, created_at desc
+          limit 1
+          for update
+        `,
+        [householdId, id, current.sort_order],
+      );
+      const neighbor = neighborResult.rows[0];
+
+      if (!neighbor) {
+        return this.mapItem(current);
+      }
+
+      await client.query(
+        `
+          update todo_items
+          set sort_order = case
+            when id = $2 then $4
+            when id = $3 then $5
+            else sort_order
+          end
+          where household_id = $1
+            and id in ($2, $3)
+            and scope_type = 'household'
+        `,
+        [householdId, current.id, neighbor.id, neighbor.sort_order, current.sort_order],
+      );
+
+      const movedResult = await client.query<TodoItemRow>(
+        `
+          select
+            id,
+            household_id,
+            scope_type,
+            owner_member_id,
+            title,
+            description,
+            status,
+            sort_order,
+            created_at,
+            updated_at
+          from todo_items
+          where household_id = $1
+            and id = $2
+            and scope_type = 'household'
+          limit 1
+        `,
+        [householdId, id],
+      );
+
+      return movedResult.rows[0] ? this.mapItem(movedResult.rows[0]) : null;
+    });
+
+    if (result) {
+      this.realtime.publish(householdId, "todo.changed", result.id);
+    }
+
+    return result;
+  }
+
   private async findItem(
     householdId: string,
     id: string,
@@ -213,6 +358,7 @@ export class TodoService {
           title,
           description,
           status,
+          sort_order,
           created_at,
           updated_at
         from todo_items
@@ -235,6 +381,7 @@ export class TodoService {
       id: row.id,
       ownerMemberId: row.owner_member_id,
       scopeType: row.scope_type,
+      sortOrder: row.sort_order,
       status: row.status,
       title: row.title,
       updatedAt: row.updated_at,
@@ -249,6 +396,7 @@ interface TodoItemRow {
   id: string;
   owner_member_id: string | null;
   scope_type: ScopeType;
+  sort_order: number;
   status: TodoStatus;
   title: string;
   updated_at: string;
@@ -261,6 +409,7 @@ export interface TodoItemRecord {
   id: string;
   ownerMemberId: string | null;
   scopeType: ScopeType;
+  sortOrder: number;
   status: TodoStatus;
   title: string;
   updatedAt: string;

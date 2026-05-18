@@ -51,7 +51,6 @@ import { useModulePermission, usePermissions } from "../../src/permissions/use-p
 import { useSession } from "../../src/session/session-context";
 import { radii, spacing } from "../../src/theme/tokens";
 import {
-  accentColorOptions,
   useAppTheme,
   useThemePreferences,
   type AppPalette,
@@ -83,6 +82,15 @@ import {
 
 type HomeSegment = "cleaning" | "annual_costs" | "data_entries" | "attachments";
 type ImageAttachmentMimeType = Extract<Attachment["mimeType"], "image/jpeg" | "image/png" | "image/webp">;
+type AccentWheelPoint = {
+  color: string;
+  left: number;
+  top: number;
+};
+
+const accentWheelSize = 172;
+const accentWheelDotSize = 16;
+const accentWheelPoints = buildAccentWheelPoints();
 
 type PickedAttachmentPhoto = {
   fileName: string;
@@ -1766,41 +1774,7 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
         <View style={styles.settingsPanelRow}>
           <Text style={styles.settingsPanelTitle}>Wygląd</Text>
           <Text style={styles.settingsPanelMeta}>Kolor akcentu aplikacji.</Text>
-          <View style={styles.accentPaletteGrid}>
-            {accentColorOptions.map((option) => {
-              const active = option.value === accent;
-
-              return (
-                <Pressable
-                  accessibilityLabel={`Kolor akcentu ${option.label}`}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: active }}
-                  key={option.value}
-                  onPress={() => handleAccentChange(option.value)}
-                  style={[
-                    styles.accentPaletteButton,
-                    active && [
-                      styles.accentPaletteButtonActive,
-                      { borderColor: theme.colors.text },
-                    ],
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.accentPaletteSwatch,
-                      {
-                        backgroundColor: option.color,
-                      },
-                    ]}
-                  >
-                    {active ? (
-                      <Check color={getReadableSwatchText(option.color)} size={18} />
-                    ) : null}
-                  </View>
-                </Pressable>
-              );
-            })}
-          </View>
+          <AccentColorWheel accent={accent} onChange={handleAccentChange} />
         </View>
         <View style={styles.settingsPanelRow}>
           <Text style={styles.settingsPanelTitle}>Powiadomienia konfiguracja</Text>
@@ -1975,6 +1949,53 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
       />
     </FormModal>
     </>
+  );
+}
+
+function AccentColorWheel({
+  accent,
+  onChange,
+}: {
+  accent: DarkAccentKey;
+  onChange: (accent: DarkAccentKey) => void;
+}) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+  const selectedAccent = normalizeHexAccent(accent) ?? accent;
+
+  return (
+    <View style={styles.accentWheelCard}>
+      <View style={styles.accentWheel}>
+        {accentWheelPoints.map((point) => {
+          const active = point.color === selectedAccent;
+
+          return (
+            <Pressable
+              accessibilityLabel={`Kolor akcentu ${point.color}`}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              key={`${point.color}-${point.left}-${point.top}`}
+              onPress={() => onChange(point.color)}
+              style={[
+                styles.accentWheelPoint,
+                {
+                  backgroundColor: point.color,
+                  left: point.left,
+                  top: point.top,
+                },
+                active && styles.accentWheelPointActive,
+              ]}
+            >
+              {active ? <Check color={getReadableSwatchText(point.color)} size={10} /> : null}
+            </Pressable>
+          );
+        })}
+      </View>
+      <View style={styles.accentWheelPreviewRow}>
+        <View style={[styles.accentWheelPreview, { backgroundColor: selectedAccent }]} />
+        <Text style={styles.settingsPanelMeta}>{selectedAccent}</Text>
+      </View>
+    </View>
   );
 }
 
@@ -2487,6 +2508,78 @@ function getReadableSwatchText(color: string): string {
   return luminance > 0.62 ? "#111827" : "#FFFFFF";
 }
 
+function buildAccentWheelPoints(): AccentWheelPoint[] {
+  const center = accentWheelSize / 2;
+  const radiusMax = accentWheelSize / 2 - accentWheelDotSize / 2;
+  const rings = [
+    { count: 1, radius: 0, saturation: 0 },
+    { count: 12, radius: 0.22, saturation: 0.28 },
+    { count: 18, radius: 0.4, saturation: 0.48 },
+    { count: 24, radius: 0.58, saturation: 0.68 },
+    { count: 30, radius: 0.78, saturation: 0.86 },
+    { count: 42, radius: 1, saturation: 1 },
+  ];
+
+  return rings.flatMap((ring, ringIndex) => {
+    if (ring.count === 1) {
+      return [
+        {
+          color: "#F8FAFC",
+          left: center - accentWheelDotSize / 2,
+          top: center - accentWheelDotSize / 2,
+        },
+      ];
+    }
+
+    return Array.from({ length: ring.count }, (_, index) => {
+      const angle = -90 + (360 / ring.count) * index + ringIndex * 5;
+      const radians = (angle * Math.PI) / 180;
+      const radius = radiusMax * ring.radius;
+
+      return {
+        color: hsvToHex((angle + 360) % 360, ring.saturation, 1),
+        left: Math.round(center + Math.cos(radians) * radius - accentWheelDotSize / 2),
+        top: Math.round(center + Math.sin(radians) * radius - accentWheelDotSize / 2),
+      };
+    });
+  });
+}
+
+function hsvToHex(hue: number, saturation: number, value: number): string {
+  const chroma = value * saturation;
+  const x = chroma * (1 - Math.abs(((hue / 60) % 2) - 1));
+  const match = value - chroma;
+  const [red, green, blue] =
+    hue < 60 ? [chroma, x, 0] :
+    hue < 120 ? [x, chroma, 0] :
+    hue < 180 ? [0, chroma, x] :
+    hue < 240 ? [0, x, chroma] :
+    hue < 300 ? [x, 0, chroma] :
+    [chroma, 0, x];
+
+  return rgbToHex({
+    blue: Math.round((blue + match) * 255),
+    green: Math.round((green + match) * 255),
+    red: Math.round((red + match) * 255),
+  });
+}
+
+function normalizeHexAccent(value: string): string | null {
+  const trimmed = value.trim();
+  const hex = trimmed.startsWith("#") ? trimmed.toUpperCase() : `#${trimmed.toUpperCase()}`;
+
+  return /^#[0-9A-F]{6}$/.test(hex) ? hex : null;
+}
+
+function rgbToHex(value: { blue: number; green: number; red: number }): string {
+  const toHex = (part: number) => Math.max(0, Math.min(255, part))
+    .toString(16)
+    .padStart(2, "0")
+    .toUpperCase();
+
+  return `#${toHex(value.red)}${toHex(value.green)}${toHex(value.blue)}`;
+}
+
 function parseHexColor(color: string): { blue: number; green: number; red: number } | null {
   if (!/^#[0-9A-F]{6}$/i.test(color)) {
     return null;
@@ -2501,37 +2594,57 @@ function parseHexColor(color: string): { blue: number; green: number; red: numbe
 
 function createStyles(colors: AppPalette) {
   return StyleSheet.create({
-    accentPaletteButton: {
+    accentWheel: {
       alignItems: "center",
-      borderColor: "transparent",
+      height: accentWheelSize,
+      justifyContent: "center",
+      position: "relative",
+      width: accentWheelSize,
+    },
+    accentWheelCard: {
+      alignItems: "center",
+      alignSelf: "center",
+      backgroundColor: "#F8FAFC",
+      borderColor: "rgba(17, 24, 39, 0.12)",
+      borderRadius: 13,
+      borderWidth: 1,
+      gap: spacing.sm,
+      padding: spacing.md,
+      width: 216,
+    },
+    accentWheelPoint: {
+      alignItems: "center",
+      borderColor: "rgba(255, 255, 255, 0.62)",
       borderRadius: 999,
       borderWidth: 1,
-      height: 42,
+      elevation: 1,
+      height: accentWheelDotSize,
       justifyContent: "center",
-      padding: 4,
-      width: 42,
+      position: "absolute",
+      shadowColor: "#000000",
+      shadowOffset: { height: 1, width: 0 },
+      shadowOpacity: 0.1,
+      shadowRadius: 2,
+      width: accentWheelDotSize,
     },
-    accentPaletteButtonActive: {
-      backgroundColor: colors.cardMuted,
+    accentWheelPointActive: {
+      borderColor: "#111827",
       borderWidth: 2,
+      transform: [{ scale: 1.2 }],
+      zIndex: 2,
     },
-    accentPaletteGrid: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: spacing.xs,
-    },
-    accentPaletteSwatch: {
-      alignItems: "center",
-      borderColor: "rgba(255, 255, 255, 0.42)",
+    accentWheelPreview: {
+      borderColor: "rgba(17, 24, 39, 0.18)",
       borderRadius: 999,
       borderWidth: 1,
-      elevation: 4,
-      height: 30,
+      height: 22,
+      width: 22,
+    },
+    accentWheelPreviewRow: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.xs,
       justifyContent: "center",
-      shadowOffset: { height: 0, width: 0 },
-      shadowOpacity: 0.22,
-      shadowRadius: 8,
-      width: 30,
     },
     avatar: {
       alignItems: "center",

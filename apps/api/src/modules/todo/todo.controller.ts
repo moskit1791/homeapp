@@ -20,6 +20,7 @@ import { PermissionGuard } from "../permissions/guards/permission.guard";
 import {
   CreateTodoItemDto,
   ListTodoItemsQueryDto,
+  MoveTodoItemDto,
   TodoItemIdParamDto,
   UpdateTodoItemDto,
 } from "./dto/todo.dto";
@@ -103,6 +104,26 @@ export class TodoController {
       this.requireHousehold(household).householdId,
       params.id,
       "todo",
+    );
+
+    if (!item) {
+      throw new NotFoundException("Todo item not found");
+    }
+
+    return item;
+  }
+
+  @Post(":id/move")
+  @RequirePermission("todo", "update")
+  async moveItem(
+    @CurrentHousehold() household: HouseholdContext | undefined,
+    @Param() params: TodoItemIdParamDto,
+    @Body() dto: MoveTodoItemDto,
+  ) {
+    const item = await this.todoService.moveItem(
+      this.requireHousehold(household).householdId,
+      params.id,
+      dto.direction,
     );
 
     if (!item) {
