@@ -8,6 +8,7 @@ import {
   listShoppingItems,
   queryKeys,
   type StartCalendarEvent,
+  type StartMealEntry,
   type StartTodoItem,
 } from "../../src/api";
 import {
@@ -64,7 +65,15 @@ export default function DzisiajScreen() {
   const tomorrowEvents = upcomingEvents.filter(isTomorrowEvent);
   const nextEvent = todayEvents[0] ?? upcomingEvents[0];
   const mealEntries = dashboard?.mealPlan?.entries ?? [];
-  const nextMeal = mealEntries.find((entry) => entry.weekday === todayWeekday());
+  const currentWeekday = todayWeekday();
+  const todayMeals = useMemo(
+    () => getTodayMeals(mealEntries, currentWeekday),
+    [currentWeekday, mealEntries],
+  );
+  const todayMealNames = todayMeals
+    .map((entry) => entry.mealName.trim())
+    .filter(Boolean);
+  const todayMealSummary = formatMealNames(todayMealNames);
   const openShopping = (shoppingQuery.data ?? []).filter(
     (item) => !item.isChecked,
   );
@@ -213,7 +222,7 @@ export default function DzisiajScreen() {
             icon={<ReceiptText color={theme.colors.finance} size={29} />}
             label="Wydatek"
             onPress={() =>
-              router.push({ pathname: "/(tabs)/finanse", params: { action: "expense" } } as never)
+              router.push({ pathname: "/(tabs)/finanse", params: { action: "expense", intent: String(Date.now()) } } as never)
             }
             showDivider
           />
@@ -235,11 +244,11 @@ export default function DzisiajScreen() {
         <HomeTile
           accent={theme.colors.calendar}
           icon={<CalendarDays color={theme.colors.calendar} size={24} />}
-          meta={nextEvent ? eventMeta(nextEvent) : "Brak planu na dziś"}
+          meta={todayEvents[0] ? eventMeta(todayEvents[0]) : "Brak planu na dziś"}
           onPress={() => openCalendarForDate(todayIso())}
           showDivider
           title="Wydarzenia dzisiaj"
-          value={String(todayEvents.length || upcomingEvents.length)}
+          value={String(todayEvents.length)}
         />
         <HomeTile
           accent={theme.colors.calendar}
@@ -262,10 +271,11 @@ export default function DzisiajScreen() {
         <HomeTile
           accent={theme.colors.food}
           icon={<Utensils color={theme.colors.food} size={24} />}
-          meta={nextMeal ? formatMealMeta(nextMeal.weekday, nextMeal.slotIndex) : "Ułóż plan posiłków"}
+          meta={todayMealNames.length > 0 ? "Plan posiłków na dziś" : "Ułóż plan posiłków"}
           onPress={() => router.push({ pathname: "/(tabs)/lista", params: { segment: "meals" } } as never)}
-          title="Dzisiejszy posiłek"
-          value={nextMeal?.mealName ?? "Brak planu"}
+          title={todayMealNames.length > 1 ? "Dzisiejsze posiłki" : "Dzisiejszy posiłek"}
+          value={todayMealSummary || "Brak planu"}
+          valueLines={2}
         />
       </View>
 
@@ -402,6 +412,7 @@ function HomeTile({
   showDivider = false,
   title,
   value,
+  valueLines = 1,
 }: {
   accent: string;
   icon: ReactNode;
@@ -410,6 +421,7 @@ function HomeTile({
   showDivider?: boolean;
   title: string;
   value: string;
+  valueLines?: number;
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
@@ -428,7 +440,7 @@ function HomeTile({
       <View style={[styles.dashboardIcon, { backgroundColor: tint(accent, 0.1) }]}>{icon}</View>
       <View style={styles.dashboardText}>
         <Text numberOfLines={1} style={styles.dashboardTitle}>{title}</Text>
-        <Text numberOfLines={1} style={styles.dashboardMeta}>
+        <Text numberOfLines={valueLines} style={styles.dashboardMeta}>
           {value}
         </Text>
         <Text numberOfLines={1} style={styles.dashboardSubMeta}>
@@ -563,22 +575,15 @@ function greetingTitle(): string {
   return hour >= 18 || hour < 5 ? "Dobry wieczór" : "Dzień dobry";
 }
 
-function formatMealMeta(weekday: number, slotIndex: number): string {
-  return `${weekdayLabel(weekday)}, posiłek ${slotIndex + 1}`;
+function getTodayMeals(entries: StartMealEntry[], weekday: number): StartMealEntry[] {
+  return entries
+    .filter((entry) => entry.weekday === weekday)
+    .slice()
+    .sort((left, right) => left.slotIndex - right.slotIndex);
 }
 
-function weekdayLabel(day: number): string {
-  return (
-    [
-      "poniedziałek",
-      "wtorek",
-      "środa",
-      "czwartek",
-      "piątek",
-      "sobota",
-      "niedziela",
-    ][day - 1] ?? `dzień ${day}`
-  );
+function formatMealNames(names: string[]): string {
+  return names.join(", ");
 }
 
 function eventMeta(event: StartCalendarEvent): string {

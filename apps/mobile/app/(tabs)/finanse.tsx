@@ -148,7 +148,7 @@ const financeSortOptions: Array<{ id: FinanceSortKey; label: string }> = [
 export default function FinanseScreen() {
   const { session } = useSession();
   const queryClient = useQueryClient();
-  const params = useLocalSearchParams<{ action?: string }>();
+  const params = useLocalSearchParams<{ action?: string; intent?: string }>();
   const router = useRouter();
   const theme = useAppTheme();
   const styles = useMemo(() => createStyles(theme.colors), [theme.colors]);
@@ -430,7 +430,9 @@ export default function FinanseScreen() {
       return;
     }
 
-    if (params.action !== "expense" || handledRouteAction === params.action) {
+    const routeActionKey = `${params.action}:${params.intent ?? ""}`;
+
+    if (params.action !== "expense" || handledRouteAction === routeActionKey) {
       return;
     }
 
@@ -439,9 +441,9 @@ export default function FinanseScreen() {
     setSelectedExpenseItemId("");
     setValue("expenseAmount", "");
     setFinanceModal("expense");
-    setHandledRouteAction(params.action);
-    router.setParams({ action: undefined });
-  }, [handledRouteAction, params.action, router]);
+    setHandledRouteAction(routeActionKey);
+    router.setParams({ action: undefined, intent: undefined });
+  }, [handledRouteAction, params.action, params.intent, router, setValue]);
 
   useEffect(() => {
     if (!selectedIncomeMemberId && incomes[0]) {

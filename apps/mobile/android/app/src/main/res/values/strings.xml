@@ -1,3 +1,5 @@
 <resources>
   <string name="app_name">HomeApp</string>
+  <string name="widget_quick_actions_name">HomeApp akcje</string>
+  <string name="widget_quick_actions_description">Szybkie dodawanie notatki, wydarzenia, wydatku, zakupów i rzeczy do zrobienia.</string>
 </resources>

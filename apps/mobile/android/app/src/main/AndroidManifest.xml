@@ -30,5 +30,11 @@
         <data android:scheme="com.homeapp.mobile"/>
       </intent-filter>
     </activity>
+    <receiver android:name=".HomeQuickActionsWidgetProvider" android:exported="true" android:label="@string/widget_quick_actions_name">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+      </intent-filter>
+      <meta-data android:name="android.appwidget.provider" android:resource="@xml/home_quick_actions_widget_info"/>
+    </receiver>
   </application>
 </manifest>
