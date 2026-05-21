@@ -106,8 +106,8 @@ android {
         applicationId 'com.homeapp.mobile'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 66
-        versionName "0.1.66"
+        versionCode 67
+        versionName "0.1.67"
     }
     signingConfigs {
         debug {
