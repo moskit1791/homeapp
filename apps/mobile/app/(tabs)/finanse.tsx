@@ -48,6 +48,8 @@ import {
   type FinanceDebt,
   type FinanceSavingsAccount,
   type FinanceSavingsDirection,
+  type FinanceTotalSummary,
+  type PersonFinanceSummary,
   upsertIncome,
 } from "../../src/api";
 import { useModulePermission } from "../../src/permissions/use-permissions";
@@ -99,6 +101,7 @@ type BudgetCategoryGroup = {
 
 type FinanceModal =
   | "menu"
+  | "incomeBreakdown"
   | "income"
   | "category"
   | "item"
@@ -256,6 +259,7 @@ export default function FinanseScreen() {
       ? selectedArchiveQuery.data
       : currentSummary;
   const totals = summary?.summary;
+  const personSummaries = summary?.personSummary ?? [];
   const incomes = summary?.incomes ?? [];
   const categories = summary?.categories ?? [];
   const visibleFlatItems = useMemo<BudgetItemWithCategory[]>(
@@ -267,9 +271,17 @@ export default function FinanseScreen() {
   );
   const currentMonth = currentSummary?.month;
   const visibleMonth = summary?.month;
-  const budgetAmount = Number(totals?.totalBudgetAmount ?? 0);
-  const spentAmount = Number(totals?.totalSpentAmount ?? 0);
-  const remainingAmount = Number(totals?.totalRemainingAmount ?? 0);
+  const selectedPersonSummary = personSummaries.find(
+    (person) => person.ownerMemberId === financeFilters.ownerMemberId,
+  );
+  const scopedTotals = getFinanceScopeTotals(
+    totals,
+    selectedPersonSummary,
+    Boolean(financeFilters.ownerMemberId),
+  );
+  const budgetAmount = Number(scopedTotals.totalBudgetAmount);
+  const spentAmount = Number(scopedTotals.totalSpentAmount);
+  const remainingAmount = Number(scopedTotals.totalRemainingAmount);
   const debts = debtsQuery.data ?? [];
   const openDebts = debts.filter((debt) => !debt.isSettled);
   const settledDebts = debts.filter((debt) => debt.isSettled);
@@ -1018,25 +1030,26 @@ export default function FinanseScreen() {
               color={theme.colors.finance}
               icon={<Banknote color={theme.colors.finance} size={17} />}
               label="Dochody"
-              value={formatMoney(totals?.incomeAmount)}
+              onPress={() => setFinanceModal("incomeBreakdown")}
+              value={formatMoney(scopedTotals.incomeAmount)}
             />
             <FinanceMetric
               color={theme.colors.text}
               icon={<WalletCards color={theme.colors.textMuted} size={17} />}
               label="Budżet"
-              value={formatMoney(totals?.totalBudgetAmount)}
+              value={formatMoney(scopedTotals.totalBudgetAmount)}
             />
             <FinanceMetric
               color={theme.colors.warning}
               icon={<ReceiptText color={theme.colors.warning} size={17} />}
               label="Wydane"
-              value={formatMoney(totals?.totalSpentAmount)}
+              value={formatMoney(scopedTotals.totalSpentAmount)}
             />
             <FinanceMetric
               color={remainingAmount < 0 ? theme.colors.danger : theme.colors.primaryDark}
               icon={<Archive color={remainingAmount < 0 ? theme.colors.danger : theme.colors.primaryDark} size={17} />}
               label="Zostaje"
-              value={formatMoney(totals?.totalRemainingAmount)}
+              value={formatMoney(scopedTotals.totalRemainingAmount)}
             />
           </View>
 
@@ -1679,6 +1692,21 @@ export default function FinanseScreen() {
           </FormModal>
         </>
       ) : null}
+      <FormModal
+        onClose={closeFinanceModal}
+        subtitle="Podgląd dochodów i budżetu w wybranym miesiącu."
+        title="Dochody domowników"
+        visible={financeModal === "incomeBreakdown"}
+      >
+        <IncomeBreakdownList
+          rows={personSummaries}
+          selectedOwnerMemberId={financeFilters.ownerMemberId}
+          totals={totals}
+        />
+        {canUpdate ? (
+          <ActionButton onPress={() => setFinanceModal("income")} title="Zmień dochód" variant="secondary" />
+        ) : null}
+      </FormModal>
     </AppScreen>
   );
 }
@@ -1687,18 +1715,19 @@ function FinanceMetric({
   color,
   icon,
   label,
+  onPress,
   value,
 }: {
   color: string;
   icon: ReactNode;
   label: string;
+  onPress?: () => void;
   value: string;
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
-
-  return (
-    <View style={styles.metric}>
+  const content = (
+    <>
       <View style={styles.metricTop}>
         {icon}
         <Text style={styles.metricLabel}>{label}</Text>
@@ -1706,6 +1735,73 @@ function FinanceMetric({
       <Text numberOfLines={1} style={[styles.metricValue, { color }]}>
         {value}
       </Text>
+    </>
+  );
+
+  if (onPress) {
+    return (
+      <Pressable
+        accessibilityLabel={label}
+        accessibilityRole="button"
+        onPress={onPress}
+        style={({ pressed }) => [styles.metric, pressed && styles.metricPressed]}
+      >
+        {content}
+      </Pressable>
+    );
+  }
+
+  return (
+    <View style={styles.metric}>
+      {content}
+    </View>
+  );
+}
+
+function IncomeBreakdownList({
+  rows,
+  selectedOwnerMemberId,
+  totals,
+}: {
+  rows: PersonFinanceSummary[];
+  selectedOwnerMemberId: string;
+  totals: FinanceTotalSummary | undefined;
+}) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+  const total = totals ?? emptyFinanceTotals;
+
+  if (rows.length === 0) {
+    return <InlineAlert text="Brak dochodów w tym miesiącu." />;
+  }
+
+  return (
+    <View style={styles.incomeBreakdownList}>
+      {rows.map((row) => {
+        const isSelected = selectedOwnerMemberId === row.ownerMemberId;
+
+        return (
+          <View
+            key={row.ownerMemberId}
+            style={[styles.incomeBreakdownRow, isSelected && styles.incomeBreakdownRowActive]}
+          >
+            <View style={styles.incomeBreakdownText}>
+              <Text numberOfLines={1} style={styles.incomeBreakdownName}>
+                {row.displayName || row.email}
+              </Text>
+              <Text style={styles.incomeBreakdownMeta}>
+                Budżet {formatMoney(row.totalBudgetAmount)} / wydano {formatMoney(row.totalSpentAmount)} / zostaje{" "}
+                {formatMoney(row.totalRemainingAmount)}
+              </Text>
+            </View>
+            <Text style={styles.incomeBreakdownValue}>{formatMoney(row.incomeAmount)}</Text>
+          </View>
+        );
+      })}
+      <View style={styles.incomeBreakdownTotal}>
+        <Text style={styles.totalLabel}>RAZEM DOM</Text>
+        <Text style={styles.totalValue}>{formatMoney(total.incomeAmount)}</Text>
+      </View>
     </View>
   );
 }
@@ -2303,6 +2399,30 @@ function ChoiceSelector({
       value={selectedId}
     />
   );
+}
+
+const emptyFinanceTotals: FinanceTotalSummary = {
+  incomeAmount: "0.00",
+  totalBudgetAmount: "0.00",
+  totalRemainingAmount: "0.00",
+  totalSpentAmount: "0.00",
+};
+
+function getFinanceScopeTotals(
+  totals: FinanceTotalSummary | undefined,
+  personSummary: PersonFinanceSummary | undefined,
+  isPersonScope: boolean,
+): FinanceTotalSummary {
+  if (!isPersonScope) {
+    return totals ?? emptyFinanceTotals;
+  }
+
+  return {
+    incomeAmount: personSummary?.incomeAmount ?? "0.00",
+    totalBudgetAmount: personSummary?.totalBudgetAmount ?? "0.00",
+    totalRemainingAmount: personSummary?.totalRemainingAmount ?? "0.00",
+    totalSpentAmount: personSummary?.totalSpentAmount ?? "0.00",
+  };
 }
 
 function applyFinanceFilters(
@@ -3172,6 +3292,57 @@ function createStyles(colors: AppPalette) {
       paddingHorizontal: spacing.sm,
       paddingVertical: 8,
     },
+    incomeBreakdownList: {
+      gap: spacing.sm,
+    },
+    incomeBreakdownMeta: {
+      color: colors.textMuted,
+      fontSize: 11,
+      letterSpacing: 0,
+      lineHeight: 16,
+    },
+    incomeBreakdownName: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    incomeBreakdownRow: {
+      alignItems: "center",
+      backgroundColor: colors.cardMuted,
+      borderColor: colors.border,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      padding: spacing.sm,
+    },
+    incomeBreakdownRowActive: {
+      borderColor: colors.primary,
+      borderWidth: 2,
+    },
+    incomeBreakdownText: {
+      flex: 1,
+      gap: 2,
+      minWidth: 0,
+    },
+    incomeBreakdownTotal: {
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      padding: spacing.sm,
+    },
+    incomeBreakdownValue: {
+      color: colors.finance,
+      fontSize: 14,
+      fontWeight: "900",
+      letterSpacing: 0,
+      textAlign: "right",
+    },
     metric: {
       backgroundColor: colors.card,
       borderColor: colors.border,
@@ -3182,6 +3353,9 @@ function createStyles(colors: AppPalette) {
       minHeight: 70,
       paddingHorizontal: spacing.sm,
       paddingVertical: spacing.sm,
+    },
+    metricPressed: {
+      opacity: 0.78,
     },
     metricLabel: {
       color: colors.textMuted,
