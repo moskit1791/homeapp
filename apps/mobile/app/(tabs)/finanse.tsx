@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import type { ReactNode, RefObject } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
-import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { findNodeHandle, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import {
   Archive,
   Banknote,
@@ -155,6 +155,7 @@ export default function FinanseScreen() {
   const router = useRouter();
   const theme = useAppTheme();
   const styles = useMemo(() => createStyles(theme.colors), [theme.colors]);
+  const screenScrollRef = useRef<ScrollView>(null);
   const { canCreate, canDelete, canRead, canUpdate, permissionsQuery } = useModulePermission("finances");
   const accessToken = session?.accessToken;
   const { control, setValue, watch } = useForm<FinanceFormValues>({
@@ -953,7 +954,7 @@ export default function FinanseScreen() {
   }
 
   return (
-    <AppScreen title="Finanse">
+    <AppScreen scrollRef={screenScrollRef} title="Finanse">
       <QueryState
         emptyText="Brak danych finansowych."
         error={currentQuery.error ?? (showingArchiveMonth ? selectedArchiveQuery.error : null)}
@@ -1075,6 +1076,7 @@ export default function FinanseScreen() {
               canUpdate={canEditVisibleMonth}
               onEdit={openEditBudgetItem}
               rows={filteredRows}
+              scrollRef={screenScrollRef}
             />
           )}
 
@@ -2252,14 +2254,40 @@ function FinanceCategoryCards({
   canUpdate,
   onEdit,
   rows,
+  scrollRef,
 }: {
   canUpdate: boolean;
   onEdit: (item: BudgetItemWithCategory) => void;
   rows: BudgetItemWithCategory[];
+  scrollRef: RefObject<ScrollView>;
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const detailsRef = useRef<View>(null);
+
+  useEffect(() => {
+    if (!selectedCategoryId) {
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      const scrollNode = scrollRef.current ? findNodeHandle(scrollRef.current) : null;
+
+      if (!scrollNode || !detailsRef.current) {
+        scrollRef.current?.scrollToEnd({ animated: true });
+        return;
+      }
+
+      detailsRef.current.measureLayout(
+        scrollNode,
+        (_x, y) => scrollRef.current?.scrollTo({ animated: true, y: Math.max(0, y - 12) }),
+        () => scrollRef.current?.scrollToEnd({ animated: true }),
+      );
+    }, 80);
+
+    return () => clearTimeout(timeout);
+  }, [scrollRef, selectedCategoryId]);
 
   if (rows.length === 0) {
     return <InlineAlert text="Brak pozycji pasujących do filtrów." />;
@@ -2274,7 +2302,11 @@ function FinanceCategoryCards({
         {groups.map((group, index) => {
           const accent = getCategoryAccent(index);
           const active = selectedCategoryId === group.category.id;
-          const progress = getBudgetProgress(group);
+          const remainingProgress = getBudgetRemainingProgress(group);
+          const amountText =
+            group.remaining >= 0
+              ? `zostaje ${formatMoney(group.remaining)} / ${group.planned > 0 ? formatMoney(group.planned) : "bez limitu"}`
+              : `po limicie ${formatMoney(Math.abs(group.remaining))}`;
 
           return (
             <Pressable
@@ -2295,16 +2327,19 @@ function FinanceCategoryCards({
               <Text numberOfLines={2} style={styles.categoryCardTitle}>
                 {group.category.name}
               </Text>
-              <Text numberOfLines={2} style={styles.categoryCardAmount}>
-                {formatMoney(group.spent)} / {group.planned > 0 ? formatMoney(group.planned) : "bez limitu"}
+              <Text
+                numberOfLines={2}
+                style={[styles.categoryCardAmount, group.remaining < 0 && styles.dangerText]}
+              >
+                {amountText}
               </Text>
               <View style={styles.categoryProgressTrack}>
                 <View
                   style={[
                     styles.categoryProgressFill,
                     {
-                      backgroundColor: progress > 1 ? theme.colors.danger : accent.color,
-                      width: `${Math.min(progress, 1) * 100}%`,
+                      backgroundColor: accent.color,
+                      width: `${remainingProgress * 100}%`,
                     },
                   ]}
                 />
@@ -2315,7 +2350,7 @@ function FinanceCategoryCards({
       </View>
 
       {selectedGroup ? (
-        <View style={styles.categoryDetails}>
+        <View ref={detailsRef} style={styles.categoryDetails}>
           <View style={styles.categoryDetailsHeader}>
             <Text style={styles.categoryDetailsTitle}>{selectedGroup.category.name}</Text>
             <Text style={styles.categoryDetailsMeta}>
@@ -2552,12 +2587,12 @@ function getCategoryAccent(index: number): { border: string; color: string; soft
   };
 }
 
-function getBudgetProgress(group: BudgetCategoryGroup): number {
+function getBudgetRemainingProgress(group: BudgetCategoryGroup): number {
   if (group.planned <= 0) {
     return 0;
   }
 
-  return Math.max(0, group.spent / group.planned);
+  return Math.max(0, Math.min(group.remaining / group.planned, 1));
 }
 
 function withHexOpacity(color: string, opacity: number): string {

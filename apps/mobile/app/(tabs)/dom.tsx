@@ -1019,14 +1019,14 @@ function AttachmentsPanel() {
       ? currentPermission
       : await ImagePicker.requestMediaLibraryPermissionsAsync();
 
-    if (permissionResult.granted) {
+    if (hasFullPhotoLibraryAccess(permissionResult)) {
       setUploadNeedsSettings(false);
       return true;
     }
 
     const message = permissionResult.canAskAgain
-      ? "Nadaj dostęp do galerii zdjęć, żeby dodać załącznik."
-      : "Dostęp do galerii zdjęć jest zablokowany. Włącz go w ustawieniach telefonu.";
+      ? "Nadaj pełny dostęp do galerii zdjęć, żeby dodać załącznik."
+      : "Dostęp do galerii zdjęć jest zablokowany albo ograniczony. Włącz pełny dostęp w ustawieniach telefonu.";
 
     setUploadError(message);
     setUploadNeedsSettings(true);
@@ -2462,11 +2462,11 @@ async function downloadAttachmentFile(
 
     const permissions = await MediaLibrary.requestPermissionsAsync(true, ["photo"]);
 
-    if (!permissions.granted) {
+    if (!hasFullPhotoLibraryAccess(permissions)) {
       throw new PhotoLibraryPermissionError(
         permissions.canAskAgain
-          ? "Nadaj dostęp do galerii zdjęć, żeby zapisać zdjęcie w telefonie."
-          : "Dostęp do galerii zdjęć jest zablokowany. Włącz go w ustawieniach telefonu.",
+          ? "Nadaj pełny dostęp do galerii zdjęć, żeby zapisać zdjęcie w telefonie."
+          : "Dostęp do galerii zdjęć jest zablokowany albo ograniczony. Włącz pełny dostęp w ustawieniach telefonu.",
       );
     }
 
@@ -2496,6 +2496,10 @@ class PhotoLibraryPermissionError extends Error {
     super(message);
     this.name = "PhotoLibraryPermissionError";
   }
+}
+
+function hasFullPhotoLibraryAccess(permission: { accessPrivileges?: string | null; granted: boolean }): boolean {
+  return permission.granted && permission.accessPrivileges !== "limited" && permission.accessPrivileges !== "none";
 }
 
 function sanitizeCacheFileName(fileName: string): string {

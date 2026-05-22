@@ -1,4 +1,4 @@
-import { PropsWithChildren, ReactNode } from 'react';
+import { PropsWithChildren, ReactNode, RefObject } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ScrollView, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,6 +9,7 @@ interface AppScreenProps extends PropsWithChildren {
   actions?: ReactNode;
   contentStyle?: StyleProp<ViewStyle>;
   leading?: ReactNode;
+  scrollRef?: RefObject<ScrollView>;
   subtitle?: string;
   title: string;
   titleAlign?: 'left' | 'center';
@@ -19,6 +20,7 @@ export function AppScreen({
   children,
   contentStyle,
   leading,
+  scrollRef,
   subtitle,
   title,
   titleAlign = 'left'
@@ -37,6 +39,7 @@ export function AppScreen({
         <ScrollView
           contentContainerStyle={[styles.content, contentStyle]}
           keyboardShouldPersistTaps="handled"
+          ref={scrollRef}
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.header}>

@@ -271,7 +271,7 @@ export default function DzisiajScreen() {
         <HomeTile
           accent={theme.colors.food}
           icon={<Utensils color={theme.colors.food} size={24} />}
-          meta={todayMealNames.length > 0 ? "Plan posiłków na dziś" : "Ułóż plan posiłków"}
+          meta={todayMealNames.length > 0 ? undefined : "Ułóż plan posiłków"}
           onPress={() => router.push({ pathname: "/(tabs)/lista", params: { segment: "meals" } } as never)}
           title={todayMealNames.length > 1 ? "Dzisiejsze posiłki" : "Dzisiejszy posiłek"}
           value={todayMealSummary || "Brak planu"}
@@ -416,7 +416,7 @@ function HomeTile({
 }: {
   accent: string;
   icon: ReactNode;
-  meta: string;
+  meta?: string;
   onPress: () => void;
   showDivider?: boolean;
   title: string;
@@ -428,7 +428,7 @@ function HomeTile({
 
   return (
     <Pressable
-      accessibilityLabel={`${title}: ${value}. ${meta}`}
+      accessibilityLabel={meta ? `${title}: ${value}. ${meta}` : `${title}: ${value}`}
       accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [
@@ -443,9 +443,11 @@ function HomeTile({
         <Text numberOfLines={valueLines} style={styles.dashboardMeta}>
           {value}
         </Text>
-        <Text numberOfLines={1} style={styles.dashboardSubMeta}>
-          {meta}
-        </Text>
+        {meta ? (
+          <Text numberOfLines={1} style={styles.dashboardSubMeta}>
+            {meta}
+          </Text>
+        ) : null}
       </View>
       <ChevronRight color={theme.colors.textSubtle} size={20} />
     </Pressable>
