@@ -588,7 +588,7 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
     }
 
     return {
-      createdAt: row.created_at,
+      createdAt: this.formatTimestamp(row.created_at),
       eventDate: this.formatDateOnly(row.event_date),
       eventTime: row.event_time,
       householdId: row.household_id,
@@ -597,10 +597,10 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
       ownerMemberId: row.owner_member_id,
       recurrenceRule: row.recurrence_rule,
       reminderOffsetMinutes: row.reminder_offset_minutes,
-      reminderSentAt: row.reminder_sent_at,
+      reminderSentAt: row.reminder_sent_at ? this.formatTimestamp(row.reminder_sent_at) : null,
       scopeType: row.scope_type,
       title: row.title,
-      updatedAt: row.updated_at
+      updatedAt: this.formatTimestamp(row.updated_at)
     };
   }
 
@@ -615,10 +615,18 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
 
     return `${year}-${month}-${day}`;
   }
+
+  private formatTimestamp(value: Date | string): string {
+    if (typeof value === 'string') {
+      return value;
+    }
+
+    return value.toISOString();
+  }
 }
 
 interface CalendarEventRow {
-  created_at: string;
+  created_at: Date | string;
   event_date: Date | string;
   event_time: string | null;
   household_id: string;
@@ -627,10 +635,10 @@ interface CalendarEventRow {
   owner_member_id: string | null;
   recurrence_rule: string | null;
   reminder_offset_minutes: number | null;
-  reminder_sent_at: string | null;
+  reminder_sent_at: Date | string | null;
   scope_type: CalendarScopeType;
   title: string;
-  updated_at: string;
+  updated_at: Date | string;
 }
 
 export interface CalendarEventRecord {
