@@ -1014,10 +1014,12 @@ function AttachmentsPanel() {
   }
 
   async function ensurePhotoLibraryPermission(): Promise<boolean> {
-    const currentPermission = await ImagePicker.getMediaLibraryPermissionsAsync();
-    const permissionResult = currentPermission.granted
+    const currentPermission = await MediaLibrary.getPermissionsAsync(false, ["photo"]);
+    const permissionResult = hasFullPhotoLibraryAccess(currentPermission)
       ? currentPermission
-      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+      : currentPermission.canAskAgain
+        ? await MediaLibrary.requestPermissionsAsync(false, ["photo"])
+        : currentPermission;
 
     if (hasFullPhotoLibraryAccess(permissionResult)) {
       setUploadNeedsSettings(false);
