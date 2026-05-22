@@ -2179,7 +2179,7 @@ function FinanceSheet({
 
           return (
           <View key={group.category.id}>
-            <View style={[styles.categoryRow, { backgroundColor: accent.soft, borderTopColor: accent.border }]}>
+            <View style={[styles.categoryRow, { backgroundColor: theme.colors.cardMuted, borderTopColor: accent.border }]}>
               <View style={styles.categoryRowMain}>
                 <View style={[styles.categoryColorBar, { backgroundColor: accent.color }]} />
                 <View style={styles.categoryRowTitleBlock}>
@@ -2321,8 +2321,8 @@ function FinanceCategoryCards({
                 active && { borderColor: accent.color },
               ]}
             >
-              <View style={[styles.categoryCardIcon, { backgroundColor: accent.soft }]}>
-                <ReceiptText color={accent.color} size={24} />
+              <View style={[styles.categoryCardIcon, { backgroundColor: accent.color }]}>
+                <ReceiptText color={accent.onColor} size={20} />
               </View>
               <Text numberOfLines={2} style={styles.categoryCardTitle}>
                 {group.category.name}
@@ -2566,7 +2566,7 @@ function groupRowsByCategory(rows: BudgetItemWithCategory[]): BudgetCategoryGrou
   return [...groups.values()];
 }
 
-function getCategoryAccent(index: number): { border: string; color: string; soft: string; text: string } {
+function getCategoryAccent(index: number): { border: string; color: string; onColor: string; text: string } {
   const colors = [
     "#FF7A59",
     "#2F80ED",
@@ -2580,9 +2580,9 @@ function getCategoryAccent(index: number): { border: string; color: string; soft
   const color = colors[index % colors.length] ?? "#FF7A59";
 
   return {
-    border: withHexOpacity(color, 0.36),
+    border: color,
     color,
-    soft: withHexOpacity(color, 0.16),
+    onColor: getReadableTextColor(color),
     text: color,
   };
 }
@@ -2595,18 +2595,24 @@ function getBudgetRemainingProgress(group: BudgetCategoryGroup): number {
   return Math.max(0, Math.min(group.remaining / group.planned, 1));
 }
 
-function withHexOpacity(color: string, opacity: number): string {
+function getReadableTextColor(color: string): string {
   const normalized = color.replace("#", "");
 
   if (normalized.length !== 6) {
-    return color;
+    return "#FFFFFF";
   }
 
-  const alpha = Math.round(Math.max(0, Math.min(1, opacity)) * 255)
-    .toString(16)
-    .padStart(2, "0");
+  const red = Number.parseInt(normalized.slice(0, 2), 16);
+  const green = Number.parseInt(normalized.slice(2, 4), 16);
+  const blue = Number.parseInt(normalized.slice(4, 6), 16);
 
-  return `#${normalized}${alpha}`;
+  if ([red, green, blue].some((part) => Number.isNaN(part))) {
+    return "#FFFFFF";
+  }
+
+  const luminance = (red * 0.299 + green * 0.587 + blue * 0.114) / 255;
+
+  return luminance > 0.62 ? "#111827" : "#FFFFFF";
 }
 
 function getCategoryItems(category: BudgetCategoryWithItems): BudgetItem[] {
@@ -2789,13 +2795,14 @@ function createStyles(colors: AppPalette) {
       borderRadius: radii.card,
       borderWidth: 1,
       elevation: 2,
-      gap: spacing.sm,
-      minHeight: 148,
-      padding: spacing.md,
+      gap: 7,
+      minHeight: 120,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 10,
       shadowColor: "#000000",
-      shadowOffset: { height: 8, width: 0 },
-      shadowOpacity: 0.06,
-      shadowRadius: 18,
+      shadowOffset: { height: 6, width: 0 },
+      shadowOpacity: 0.05,
+      shadowRadius: 12,
       width: "48.5%",
     },
     categoryCardActive: {
@@ -2803,9 +2810,9 @@ function createStyles(colors: AppPalette) {
     },
     categoryCardAmount: {
       color: colors.textMuted,
-      fontSize: 12,
+      fontSize: 11,
       letterSpacing: 0,
-      lineHeight: 17,
+      lineHeight: 15,
     },
     categoryCardGrid: {
       flexDirection: "row",
@@ -2816,20 +2823,20 @@ function createStyles(colors: AppPalette) {
     categoryCardIcon: {
       alignItems: "center",
       borderRadius: 999,
-      height: 44,
+      height: 36,
       justifyContent: "center",
-      width: 44,
+      width: 36,
     },
     categoryCardsSection: {
       gap: spacing.sm,
     },
     categoryCardTitle: {
       color: colors.text,
-      fontSize: 15,
+      fontSize: 13,
       fontWeight: "900",
       letterSpacing: 0,
-      lineHeight: 20,
-      minHeight: 40,
+      lineHeight: 17,
+      minHeight: 34,
     },
     categoryColorBar: {
       borderRadius: 999,

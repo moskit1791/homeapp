@@ -1,5 +1,5 @@
 import { createContext, createElement, PropsWithChildren, useContext, useEffect, useMemo, useState } from 'react';
-import { Appearance, type ColorSchemeName } from 'react-native';
+import { Appearance, StyleSheet, type ColorSchemeName } from 'react-native';
 import { loadStoredJson, saveStoredJson } from '../session/secure-session-store';
 import { colors, radii, shadows, spacing } from './tokens';
 
@@ -38,18 +38,37 @@ type AccentPalette = {
 type StoredThemePreferences = {
   accent?: DarkAccentKey;
   darkAccent?: DarkAccentKey;
+  fontScale?: number;
 };
 
 type ThemePreferencesContextValue = {
   accent: DarkAccentKey;
   darkAccent: DarkAccentKey;
+  fontScale: number;
   systemScheme: ColorSchemeName;
   setAccent: (accent: DarkAccentKey) => void;
   setDarkAccent: (accent: DarkAccentKey) => void;
+  setFontScale: (scale: number) => void;
 };
 
 const themePreferencesKey = 'homeapp.theme-preferences.v1';
 const defaultDarkAccent: DarkAccentKey = '#B56CFF';
+const defaultFontScale = 1;
+const fontScaleMin = 0.9;
+const fontScaleMax = 1.3;
+const darkCard = '#262D43';
+const darkCardMuted = '#30384E';
+const darkField = '#1E2436';
+const darkModalSurface = '#121622';
+const darkOverlay = '#20273B';
+
+type StyleSheetCreate = typeof StyleSheet.create;
+
+const baseStyleSheetCreate = StyleSheet.create.bind(StyleSheet) as StyleSheetCreate;
+let runtimeFontScale = defaultFontScale;
+let fontScaleStyleSheetInstalled = false;
+
+installFontScaleStyleSheet();
 
 export const darkAccentOptions: DarkAccentOption[] = [
   { color: '#B56CFF', label: 'Fiolet', value: 'violet' },
@@ -131,42 +150,42 @@ const darkAccentPalettes: Partial<Record<DarkAccentKey, AccentPalette>> = {
     primaryDark: '#FFD166',
     primaryDarker: '#FFE2A3',
     primaryLight: '#FFC857',
-    primarySoft: 'rgba(255, 176, 32, 0.18)'
+    primarySoft: solidDarkSoft('#FFB020')
   },
   emerald: {
     primary: '#36D399',
     primaryDark: '#8BF0C7',
     primaryDarker: '#C9FBE6',
     primaryLight: '#63E6B5',
-    primarySoft: 'rgba(54, 211, 153, 0.17)'
+    primarySoft: solidDarkSoft('#36D399')
   },
   sunset: {
     primary: '#FF6B6B',
     primaryDark: '#FFA3A3',
     primaryDarker: '#FFD6D6',
     primaryLight: '#FF8A8A',
-    primarySoft: 'rgba(255, 107, 107, 0.17)'
+    primarySoft: solidDarkSoft('#FF6B6B')
   },
   cyan: {
     primary: '#20E7FF',
     primaryDark: '#9AF6FF',
     primaryDarker: '#D6FBFF',
     primaryLight: '#6EF0FF',
-    primarySoft: 'rgba(32, 231, 255, 0.17)'
+    primarySoft: solidDarkSoft('#20E7FF')
   },
   pink: {
     primary: '#FF4FD8',
     primaryDark: '#FF9BE9',
     primaryDarker: '#FFD5F5',
     primaryLight: '#FF7DE2',
-    primarySoft: 'rgba(255, 79, 216, 0.17)'
+    primarySoft: solidDarkSoft('#FF4FD8')
   },
   violet: {
     primary: '#B56CFF',
     primaryDark: '#D7B2FF',
     primaryDarker: '#EBDCFF',
     primaryLight: '#CC96FF',
-    primarySoft: 'rgba(181, 108, 255, 0.18)'
+    primarySoft: solidDarkSoft('#B56CFF')
   }
 };
 
@@ -227,9 +246,11 @@ const legacyAccentValues: Record<string, string> = {
 const ThemePreferencesContext = createContext<ThemePreferencesContextValue>({
   accent: defaultDarkAccent,
   darkAccent: defaultDarkAccent,
+  fontScale: defaultFontScale,
   systemScheme: Appearance.getColorScheme(),
   setAccent: () => undefined,
-  setDarkAccent: () => undefined
+  setDarkAccent: () => undefined,
+  setFontScale: () => undefined
 });
 
 const lightPalette: Palette = {
@@ -262,44 +283,45 @@ const darkPaletteBase: typeof lightPalette = {
   backdrop: 'rgba(6, 9, 18, 0.68)',
   border: 'rgba(238, 244, 255, 0.2)',
   calendar: '#38BDF8',
-  card: 'rgba(38, 45, 67, 0.68)',
-  cardMuted: 'rgba(48, 56, 78, 0.62)',
+  card: darkCard,
+  cardMuted: darkCardMuted,
   danger: '#FF7A90',
-  dangerSoft: 'rgba(255, 122, 144, 0.18)',
-  field: 'rgba(30, 36, 54, 0.78)',
+  dangerSoft: solidDarkSoft('#FF7A90'),
+  field: darkField,
   finance: '#34D399',
   food: '#FBBF24',
   info: '#B56CFF',
-  infoSoft: 'rgba(181, 108, 255, 0.18)',
+  infoSoft: solidDarkSoft('#B56CFF'),
   inverseText: '#050711',
   line: 'rgba(238, 244, 255, 0.14)',
-  modalSurface: 'rgba(18, 22, 34, 0.95)',
-  overlay: 'rgba(32, 39, 59, 0.72)',
+  modalSurface: darkModalSurface,
+  overlay: darkOverlay,
   primary: '#B56CFF',
   primaryDark: '#D7B2FF',
   primaryDarker: '#EBDCFF',
   primaryLight: '#CC96FF',
-  primarySoft: 'rgba(181, 108, 255, 0.18)',
+  primarySoft: solidDarkSoft('#B56CFF'),
   shopping: '#A78BFA',
-  shoppingSoft: 'rgba(167, 139, 250, 0.16)',
-  softBlue: 'rgba(56, 189, 248, 0.16)',
-  softGreen: 'rgba(52, 211, 153, 0.16)',
-  softOrange: 'rgba(255, 199, 102, 0.17)',
-  softPurple: 'rgba(167, 139, 250, 0.16)',
-  successSoft: 'rgba(52, 211, 153, 0.17)',
-  surface: 'rgba(38, 45, 67, 0.68)',
-  surfaceMuted: 'rgba(48, 56, 78, 0.62)',
+  shoppingSoft: solidDarkSoft('#A78BFA'),
+  softBlue: solidDarkSoft('#38BDF8'),
+  softGreen: solidDarkSoft('#34D399'),
+  softOrange: solidDarkSoft('#FFC766'),
+  softPurple: solidDarkSoft('#A78BFA'),
+  successSoft: solidDarkSoft('#34D399'),
+  surface: darkCard,
+  surfaceMuted: darkCardMuted,
   text: '#FFFFFF',
   textMuted: '#E2E7F3',
   textSubtle: '#B8C2D8',
   warning: '#FFD977',
-  warningSoft: 'rgba(255, 217, 119, 0.17)'
+  warningSoft: solidDarkSoft('#FFD977')
 };
 
 export type AppPalette = typeof lightPalette;
 
 export function AppThemeProvider({ children }: PropsWithChildren) {
   const [darkAccent, setDarkAccentState] = useState<DarkAccentKey>(defaultDarkAccent);
+  const [fontScale, setFontScaleState] = useState(defaultFontScale);
   const [systemScheme, setSystemScheme] = useState<ColorSchemeName>(() => Appearance.getColorScheme());
 
   useEffect(() => {
@@ -311,6 +333,13 @@ export function AppThemeProvider({ children }: PropsWithChildren) {
 
         if (normalizedAccent) {
           setDarkAccentState(normalizedAccent);
+        }
+
+        if (stored?.fontScale) {
+          const normalizedFontScale = normalizeFontScale(stored.fontScale);
+
+          runtimeFontScale = normalizedFontScale;
+          setFontScaleState(normalizedFontScale);
         }
       })
       .catch(() => undefined);
@@ -328,6 +357,7 @@ export function AppThemeProvider({ children }: PropsWithChildren) {
     () => ({
       accent: darkAccent,
       darkAccent,
+      fontScale,
       systemScheme,
       setAccent: (accent) => {
         const normalizedAccent = normalizeAccentValue(accent) ?? defaultDarkAccent;
@@ -335,7 +365,8 @@ export function AppThemeProvider({ children }: PropsWithChildren) {
         setDarkAccentState(normalizedAccent);
         saveStoredJson<StoredThemePreferences>(themePreferencesKey, {
           accent: normalizedAccent,
-          darkAccent: normalizedAccent
+          darkAccent: normalizedAccent,
+          fontScale
         }).catch(() => undefined);
       },
       setDarkAccent: (accent) => {
@@ -344,11 +375,23 @@ export function AppThemeProvider({ children }: PropsWithChildren) {
         setDarkAccentState(normalizedAccent);
         saveStoredJson<StoredThemePreferences>(themePreferencesKey, {
           accent: normalizedAccent,
-          darkAccent: normalizedAccent
+          darkAccent: normalizedAccent,
+          fontScale
+        }).catch(() => undefined);
+      },
+      setFontScale: (scale) => {
+        const normalizedFontScale = normalizeFontScale(scale);
+
+        runtimeFontScale = normalizedFontScale;
+        setFontScaleState(normalizedFontScale);
+        saveStoredJson<StoredThemePreferences>(themePreferencesKey, {
+          accent: darkAccent,
+          darkAccent,
+          fontScale: normalizedFontScale
         }).catch(() => undefined);
       }
     }),
-    [darkAccent, systemScheme]
+    [darkAccent, fontScale, systemScheme]
   );
 
   return createElement(ThemePreferencesContext.Provider, { value }, children);
@@ -359,7 +402,7 @@ export function useThemePreferences() {
 }
 
 export function useAppTheme() {
-  const { darkAccent, systemScheme } = useThemePreferences();
+  const { darkAccent, fontScale, systemScheme } = useThemePreferences();
   const isDark = systemScheme === 'dark';
   const palette = useMemo(
     () => (isDark ? buildDarkPalette(darkAccent) : buildLightPalette(darkAccent)),
@@ -370,11 +413,55 @@ export function useAppTheme() {
     accent: darkAccent,
     colors: palette,
     darkAccent,
+    fontScale,
     isDark,
     radii,
     shadows,
     spacing
   };
+}
+
+export function normalizeFontScale(value: number): number {
+  if (!Number.isFinite(value)) {
+    return defaultFontScale;
+  }
+
+  return Math.min(fontScaleMax, Math.max(fontScaleMin, Math.round(value * 20) / 20));
+}
+
+function installFontScaleStyleSheet() {
+  if (fontScaleStyleSheetInstalled) {
+    return;
+  }
+
+  fontScaleStyleSheetInstalled = true;
+  const createStyleSheet = baseStyleSheetCreate as unknown as (styles: unknown) => unknown;
+
+  (StyleSheet as unknown as { create: StyleSheetCreate }).create = ((styles: Parameters<StyleSheetCreate>[0]) =>
+    createStyleSheet(scaleStyleSheetFonts(styles))) as StyleSheetCreate;
+}
+
+function scaleStyleSheetFonts<T>(styles: T): T {
+  if (runtimeFontScale === defaultFontScale || !styles || typeof styles !== 'object') {
+    return styles;
+  }
+
+  if (Array.isArray(styles)) {
+    return styles.map((style) => scaleStyleSheetFonts(style)) as T;
+  }
+
+  const scaled: Record<string, unknown> = {};
+
+  Object.entries(styles as Record<string, unknown>).forEach(([key, value]) => {
+    if ((key === 'fontSize' || key === 'lineHeight') && typeof value === 'number') {
+      scaled[key] = Math.round(value * runtimeFontScale * 10) / 10;
+      return;
+    }
+
+    scaled[key] = value && typeof value === 'object' ? scaleStyleSheetFonts(value) : value;
+  });
+
+  return scaled as T;
 }
 
 function buildLightPalette(accentKey: DarkAccentKey): typeof lightPalette {
@@ -443,8 +530,12 @@ function createDarkAccentPalette(accentValue: string): AccentPalette {
     primaryDark: mixHex(primary, '#FFFFFF', 0.34),
     primaryDarker: mixHex(primary, '#FFFFFF', 0.58),
     primaryLight: mixHex(primary, '#FFFFFF', 0.18),
-    primarySoft: toRgba(primary, 0.17)
+    primarySoft: solidDarkSoft(primary)
   };
+}
+
+function solidDarkSoft(color: string): string {
+  return mixHex(color, darkCard, 0.58);
 }
 
 function mixLightBottom(accent: string): string {

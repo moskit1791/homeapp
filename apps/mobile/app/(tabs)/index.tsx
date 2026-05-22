@@ -30,7 +30,6 @@ import {
   CartPlus,
   ChevronRight,
   Close,
-  ListChecks,
   ReceiptText,
   ShoppingCart,
   Utensils,
@@ -437,7 +436,7 @@ function HomeTile({
         pressed && styles.pressed,
       ]}
     >
-      <View style={[styles.dashboardIcon, { backgroundColor: tint(accent, 0.1) }]}>{icon}</View>
+      <View style={[styles.dashboardIcon, { borderColor: accent }]}>{icon}</View>
       <View style={styles.dashboardText}>
         <Text numberOfLines={1} style={styles.dashboardTitle}>{title}</Text>
         <Text numberOfLines={valueLines} style={styles.dashboardMeta}>
@@ -492,14 +491,8 @@ function TodoTodaySection({
               pressed && styles.pressed,
             ]}
           >
-            <View style={[styles.dashboardIcon, { backgroundColor: tint(theme.colors.primary, 0.1) }]}>
-              <ListChecks color={theme.colors.primary} size={22} />
-            </View>
             <View style={styles.dashboardText}>
               <Text numberOfLines={1} style={styles.dashboardTitle}>{task.title}</Text>
-              <Text numberOfLines={1} style={styles.dashboardSubMeta}>
-                Do zrobienia
-              </Text>
             </View>
             <ChevronRight color={theme.colors.textSubtle} size={20} />
           </Pressable>
@@ -622,20 +615,6 @@ function formatDateTime(value: string): string {
   }).format(date);
 }
 
-function tint(color: string, opacity: number): string {
-  const value = color.replace("#", "");
-
-  if (value.length !== 6) {
-    return color;
-  }
-
-  const alpha = Math.round(opacity * 255)
-    .toString(16)
-    .padStart(2, "0");
-
-  return `#${value}${alpha}`;
-}
-
 function createStyles(colors: AppPalette) {
   return StyleSheet.create({
     avatar: {
@@ -696,6 +675,8 @@ function createStyles(colors: AppPalette) {
     dashboardIcon: {
       alignItems: "center",
       borderRadius: radii.control,
+      borderWidth: 2,
+      backgroundColor: colors.cardMuted,
       height: 46,
       justifyContent: "center",
       width: 46,
@@ -752,8 +733,8 @@ function createStyles(colors: AppPalette) {
     todoPreviewRow: {
       alignItems: "center",
       flexDirection: "row",
-      gap: spacing.md,
-      minHeight: 76,
+      gap: spacing.sm,
+      minHeight: 58,
       paddingHorizontal: spacing.lg,
       paddingVertical: spacing.md,
     },

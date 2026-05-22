@@ -6,7 +6,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as MediaLibrary from "expo-media-library";
 import * as Sharing from "expo-sharing";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ActivityIndicator, Alert, Image, Linking, Modal, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Alert, Image, Linking, Modal, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions, type LayoutChangeEvent } from "react-native";
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import {
@@ -76,12 +76,14 @@ import {
   Download,
   FileText,
   Folder,
+  MailPlus,
   Pencil,
   Trash2,
   Users,
 } from "../../src/ui/icon";
 
 type HomeSegment = "cleaning" | "annual_costs" | "data_entries" | "attachments";
+type SettingsView = "main" | "appearance" | "members";
 type ImageAttachmentMimeType = Extract<Attachment["mimeType"], "image/jpeg" | "image/png" | "image/webp">;
 const neutralAccentValues = new Set([
   "#A16207",
@@ -93,6 +95,8 @@ const neutralAccentValues = new Set([
   "#475569",
   "#111827",
 ]);
+const fontScaleSliderMin = 0.9;
+const fontScaleSliderMax = 1.3;
 
 type PickedAttachmentPhoto = {
   fileName: string;
@@ -1413,10 +1417,11 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
   const householdPermission = useModulePermission("household_members");
   const router = useRouter();
   const theme = useAppTheme();
-  const { accent, setAccent } = useThemePreferences();
+  const { accent, fontScale, setAccent, setFontScale } = useThemePreferences();
   const styles = createStyles(theme.colors);
   const accessToken = session?.accessToken;
   const [settingsVisible, setSettingsVisible] = useState(false);
+  const [settingsView, setSettingsView] = useState<SettingsView>("main");
   const [notificationsVisible, setNotificationsVisible] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [homeName, setHomeName] = useState("");
@@ -1447,6 +1452,7 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
 
   useEffect(() => {
     if (openOnMount) {
+      setSettingsView("main");
       setSettingsVisible(true);
     }
   }, [openOnMount]);
@@ -1549,13 +1555,25 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
     onSuccess: async () => {
       setDeleteConfirmVisible(false);
       setSettingsVisible(false);
+      setSettingsView("main");
       queryClient.clear();
       await logout();
     },
   });
 
+  function openSettings() {
+    setSettingsView("main");
+    setSettingsVisible(true);
+  }
+
+  function closeSettings() {
+    setSettingsVisible(false);
+    setSettingsView("main");
+  }
+
   async function handleLogout() {
     setSettingsVisible(false);
+    setSettingsView("main");
     queryClient.clear();
     await logout();
   }
@@ -1575,6 +1593,7 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
 
   function openNotificationConfiguration() {
     setSettingsVisible(false);
+    setSettingsView("main");
     setNotificationsVisible(true);
   }
 
@@ -1590,33 +1609,55 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
     householdPermission.canCreate &&
     Boolean(memberInviteEmail.trim()) &&
     !inviteMemberMutation.isPending;
+  const selectedAccent = normalizeHexAccent(accent) ?? "#B56CFF";
+  const settingsTitle =
+    settingsView === "appearance"
+      ? "Kolor i czcionka"
+      : settingsView === "members"
+        ? "Członkowie domu"
+        : "Ustawienia i konto";
+  const settingsSubtitle =
+    settingsView === "appearance"
+      ? "Personalizacja wyglądu aplikacji."
+      : settingsView === "members"
+        ? "Domownicy, zaproszenia i uprawnienia."
+        : "Profil, powiadomienia i konfiguracja domu.";
 
   return (
     <>
-    <IconButton accessibilityLabel="Otwórz ustawienia i konto" onPress={() => setSettingsVisible(true)}>
+    <IconButton accessibilityLabel="Otwórz ustawienia i konto" onPress={openSettings}>
       <Cog color={theme.colors.text} size={19} />
     </IconButton>
     <FormModal
       footer={
         <View style={styles.modalFooter}>
+          {settingsView === "main" ? (
+            <ActionButton
+              labelStyle={styles.logoutButtonLabel}
+              onPress={handleLogout}
+              style={[styles.modalFooterButton, styles.logoutButton]}
+              title="Wyloguj się"
+              variant="secondary"
+            />
+          ) : (
+            <ActionButton
+              onPress={() => setSettingsView("main")}
+              style={styles.modalFooterButton}
+              title="Wróć"
+              variant="secondary"
+            />
+          )}
           <ActionButton
-            labelStyle={styles.logoutButtonLabel}
-            onPress={handleLogout}
-            style={[styles.modalFooterButton, styles.logoutButton]}
-            title="Wyloguj się"
-            variant="secondary"
-          />
-          <ActionButton
-            onPress={() => setSettingsVisible(false)}
+            onPress={closeSettings}
             style={styles.modalFooterButton}
             title="Zamknij"
             variant="secondary"
           />
         </View>
       }
-      onClose={() => setSettingsVisible(false)}
-      subtitle="Profil, powiadomienia i bezpieczeństwo konta."
-      title="Ustawienia i konto"
+      onClose={closeSettings}
+      subtitle={settingsSubtitle}
+      title={settingsTitle}
       visible={settingsVisible}
     >
       {toast ? (
@@ -1625,7 +1666,8 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
         </View>
       ) : null}
       <View style={styles.settingsPanel}>
-        <View style={styles.settingsPanelRow}>
+        {settingsView === "main" ? (
+          <View style={styles.settingsPanelRow}>
           <Text style={styles.settingsPanelTitle}>Dom</Text>
           <Text style={styles.settingsPanelMeta}>
             Nazwa domu, waluta i liczba posiłków dziennie.
@@ -1683,7 +1725,54 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
             <InlineAlert tone="error" text="Nie udało się zapisać ustawień domu." />
           ) : null}
         </View>
-        {householdPermission.canRead ? (
+        ) : null}
+        {settingsView === "main" && householdPermission.canRead ? (
+          <View style={styles.settingsPanelRow}>
+            <View style={styles.settingsMembersHeader}>
+              <View style={[styles.moduleIcon, { backgroundColor: theme.colors.softBlue }]}>
+                <Users color={theme.colors.calendar} size={22} />
+              </View>
+              <View style={styles.itemText}>
+                <Text style={styles.settingsPanelTitle}>Członkowie i zaproszenia</Text>
+                <Text style={styles.settingsPanelMeta}>
+                  {householdQuery.data?.name ?? "Dom"} / {members.length} osób
+                </Text>
+              </View>
+              <View style={styles.memberAvatars}>
+                {members.slice(0, 3).map((member) => (
+                  <MiniAvatar key={member.id} member={member} />
+                ))}
+              </View>
+            </View>
+            <ActionButton
+              onPress={() => setSettingsView("members")}
+              title="Zarządzaj domownikami"
+              variant="secondary"
+            />
+          </View>
+        ) : null}
+        {settingsView === "main" ? (
+          <View style={styles.settingsPanelRow}>
+            <View style={styles.settingsMembersHeader}>
+              <View style={[styles.moduleIcon, { backgroundColor: selectedAccent }]}>
+                <Pencil color={getReadableSwatchText(selectedAccent)} size={21} />
+              </View>
+              <View style={styles.itemText}>
+                <Text style={styles.settingsPanelTitle}>Kolor i rozmiar tekstu</Text>
+                <Text style={styles.settingsPanelMeta}>
+                  {selectedAccent} / {Math.round(fontScale * 100)}%
+                </Text>
+              </View>
+              <View style={[styles.accentPalettePreview, { backgroundColor: selectedAccent }]} />
+            </View>
+            <ActionButton
+              onPress={() => setSettingsView("appearance")}
+              title="Zmień wygląd"
+              variant="secondary"
+            />
+          </View>
+        ) : null}
+        {settingsView === "members" && householdPermission.canRead ? (
           <View style={styles.settingsPanelRow}>
             <View style={styles.settingsMembersHeader}>
               <View style={[styles.moduleIcon, { backgroundColor: theme.colors.softBlue }]}>
@@ -1706,23 +1795,34 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
               isLoading={membersQuery.isLoading}
             />
             {householdPermission.canCreate ? (
-              <View style={styles.formRow}>
-                <TextInput
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  onChangeText={setMemberInviteEmail}
-                  placeholder="email@dom.pl"
-                  placeholderTextColor={theme.colors.textSubtle}
-                  style={[styles.input, styles.flexInput]}
-                  value={memberInviteEmail}
-                />
-                <ActionButton
-                  disabled={!canInviteMember}
-                  loading={inviteMemberMutation.isPending}
-                  onPress={() => inviteMemberMutation.mutate()}
-                  title="Zaproś"
-                  variant="secondary"
-                />
+              <View style={styles.inviteSection}>
+                <View style={styles.settingsMembersHeader}>
+                  <View style={[styles.moduleIcon, { backgroundColor: theme.colors.primarySoft }]}>
+                    <MailPlus color={theme.colors.primaryDark} size={21} />
+                  </View>
+                  <View style={styles.itemText}>
+                    <Text style={styles.itemName}>Zaproszenie do domu</Text>
+                    <Text style={styles.itemMeta}>Wyślij zaproszenie na adres e-mail.</Text>
+                  </View>
+                </View>
+                <View style={styles.formRow}>
+                  <TextInput
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    onChangeText={setMemberInviteEmail}
+                    placeholder="email@dom.pl"
+                    placeholderTextColor={theme.colors.textSubtle}
+                    style={[styles.input, styles.flexInput]}
+                    value={memberInviteEmail}
+                  />
+                  <ActionButton
+                    disabled={!canInviteMember}
+                    loading={inviteMemberMutation.isPending}
+                    onPress={() => inviteMemberMutation.mutate()}
+                    title="Zaproś"
+                    variant="secondary"
+                  />
+                </View>
               </View>
             ) : null}
             <View style={styles.itemList}>
@@ -1775,11 +1875,27 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
             ) : null}
           </View>
         ) : null}
-        <View style={styles.settingsPanelRow}>
-          <Text style={styles.settingsPanelTitle}>Wygląd</Text>
-          <Text style={styles.settingsPanelMeta}>Kolor akcentu aplikacji.</Text>
-          <AccentPalettePicker accent={accent} onChange={handleAccentChange} />
-        </View>
+        {settingsView === "members" && !householdPermission.canRead ? (
+          <InlineAlert tone="error" text="Nie masz uprawnień do podglądu domowników." />
+        ) : null}
+        {settingsView === "appearance" ? (
+          <>
+            <View style={styles.settingsPanelRow}>
+              <Text style={styles.settingsPanelTitle}>Rozmiar tekstu</Text>
+              <Text style={styles.settingsPanelMeta}>
+                Przesuń suwak, żeby zwiększyć albo zmniejszyć czcionkę w aplikacji.
+              </Text>
+              <FontScaleControl value={fontScale} onChange={setFontScale} />
+            </View>
+            <View style={styles.settingsPanelRow}>
+              <Text style={styles.settingsPanelTitle}>Kolor</Text>
+              <Text style={styles.settingsPanelMeta}>Kolor akcentu aplikacji.</Text>
+              <AccentPalettePicker accent={accent} onChange={handleAccentChange} />
+            </View>
+          </>
+        ) : null}
+        {settingsView === "main" ? (
+          <>
         <View style={styles.settingsPanelRow}>
           <Text style={styles.settingsPanelTitle}>Powiadomienia konfiguracja</Text>
           <Text style={styles.settingsPanelMeta}>
@@ -1813,6 +1929,8 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
             />
           ) : null}
         </View>
+          </>
+        ) : null}
       </View>
     </FormModal>
     <Modal
@@ -2004,6 +2122,63 @@ function AccentPalettePicker({
       <View style={styles.accentPalettePreviewRow}>
         <View style={[styles.accentPalettePreview, { backgroundColor: selectedAccent }]} />
         <Text style={styles.settingsPanelMeta}>{selectedAccent}</Text>
+      </View>
+    </View>
+  );
+}
+
+function FontScaleControl({
+  onChange,
+  value,
+}: {
+  onChange: (value: number) => void;
+  value: number;
+}) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+  const [trackWidth, setTrackWidth] = useState(1);
+  const normalizedValue = clampFontScale(value);
+  const progress = (normalizedValue - fontScaleSliderMin) / (fontScaleSliderMax - fontScaleSliderMin);
+  const progressWidth = Math.round(trackWidth * progress);
+
+  function handleTrackLayout(event: LayoutChangeEvent) {
+    setTrackWidth(Math.max(1, event.nativeEvent.layout.width));
+  }
+
+  function updateFromTrack(locationX: number) {
+    const ratio = Math.min(1, Math.max(0, locationX / trackWidth));
+    const nextValue = fontScaleSliderMin + (fontScaleSliderMax - fontScaleSliderMin) * ratio;
+
+    onChange(clampFontScale(nextValue));
+  }
+
+  return (
+    <View style={styles.fontScaleControl}>
+      <View style={styles.fontScalePreview}>
+        <Text style={styles.fontScalePreviewSmall}>Mały</Text>
+        <Text style={styles.fontScalePreviewLarge}>Duży tekst</Text>
+        <Text style={styles.fontScaleValue}>{Math.round(normalizedValue * 100)}%</Text>
+      </View>
+      <View
+        accessibilityLabel="Rozmiar czcionki"
+        accessibilityRole="adjustable"
+        accessible
+        onLayout={handleTrackLayout}
+        onMoveShouldSetResponder={() => true}
+        onResponderGrant={(event) => updateFromTrack(event.nativeEvent.locationX)}
+        onResponderMove={(event) => updateFromTrack(event.nativeEvent.locationX)}
+        onStartShouldSetResponder={() => true}
+        style={styles.fontScaleTrack}
+      >
+        <View style={styles.fontScaleRail}>
+          <View style={[styles.fontScaleFill, { width: progressWidth }]} />
+        </View>
+        <View style={[styles.fontScaleThumb, { left: progressWidth }]} />
+      </View>
+      <View style={styles.fontScaleLabels}>
+        <Text style={styles.fontScaleLabel}>90%</Text>
+        <Text style={styles.fontScaleLabel}>100%</Text>
+        <Text style={styles.fontScaleLabel}>130%</Text>
       </View>
     </View>
   );
@@ -2529,6 +2704,16 @@ function normalizeHexAccent(value: string): string | null {
   return /^#[0-9A-F]{6}$/.test(hex) ? hex : null;
 }
 
+function clampFontScale(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 1;
+  }
+
+  const clamped = Math.min(fontScaleSliderMax, Math.max(fontScaleSliderMin, value));
+
+  return Math.round(clamped * 20) / 20;
+}
+
 function parseHexColor(color: string): { blue: number; green: number; red: number } | null {
   if (!/^#[0-9A-F]{6}$/i.test(color)) {
     return null;
@@ -2663,6 +2848,78 @@ function createStyles(colors: AppPalette) {
       fontWeight: "800",
       letterSpacing: 0,
       marginBottom: spacing.xs,
+    },
+    fontScaleControl: {
+      gap: spacing.sm,
+    },
+    fontScaleFill: {
+      backgroundColor: colors.primary,
+      height: "100%",
+    },
+    fontScaleLabel: {
+      color: colors.textMuted,
+      fontSize: 11,
+      fontWeight: "800",
+      letterSpacing: 0,
+    },
+    fontScaleLabels: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+    },
+    fontScalePreview: {
+      alignItems: "center",
+      backgroundColor: colors.cardMuted,
+      borderColor: colors.border,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+    },
+    fontScalePreviewLarge: {
+      color: colors.text,
+      flex: 1,
+      fontSize: 18,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    fontScalePreviewSmall: {
+      color: colors.textMuted,
+      fontSize: 12,
+      fontWeight: "800",
+      letterSpacing: 0,
+    },
+    fontScaleRail: {
+      backgroundColor: colors.cardMuted,
+      borderRadius: 999,
+      height: 8,
+      overflow: "hidden",
+    },
+    fontScaleThumb: {
+      backgroundColor: colors.primary,
+      borderColor: colors.card,
+      borderRadius: 999,
+      borderWidth: 3,
+      height: 24,
+      marginLeft: -12,
+      position: "absolute",
+      top: 6,
+      width: 24,
+    },
+    fontScaleTrack: {
+      height: 36,
+      justifyContent: "center",
+      position: "relative",
+    },
+    fontScaleValue: {
+      color: colors.primaryDark,
+      fontSize: 13,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    inviteSection: {
+      gap: spacing.sm,
     },
     itemList: {
       gap: spacing.sm,
