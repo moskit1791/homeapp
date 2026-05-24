@@ -470,21 +470,21 @@ function TodayOverviewGrid({
       <View style={styles.todayMiniColumn}>
         <MiniTodayCard
           accent={theme.colors.shopping}
-          backgroundIcon={<ShoppingCart color={`${theme.colors.shopping}55`} size={74} />}
           icon={<ShoppingCart color={theme.colors.shopping} size={20} />}
           label={productLabel(shoppingCount)}
           meta="na liście zakupów"
           onPress={onOpenShopping}
           value={String(shoppingCount)}
+          variant="shopping"
         />
         <MiniTodayCard
           accent={theme.colors.food}
-          backgroundIcon={<Utensils color={`${theme.colors.food}55`} size={74} />}
           icon={<Utensils color={theme.colors.food} size={20} />}
           label={mealLabel(mealCount)}
           meta="na dziś"
           onPress={onOpenMeals}
           value={String(mealCount)}
+          variant="meal"
         />
       </View>
     </View>
@@ -493,20 +493,20 @@ function TodayOverviewGrid({
 
 function MiniTodayCard({
   accent,
-  backgroundIcon,
   icon,
   label,
   meta,
   onPress,
   value,
+  variant,
 }: {
   accent: string;
-  backgroundIcon: ReactNode;
   icon: ReactNode;
   label: string;
   meta: string;
   onPress: () => void;
   value: string;
+  variant: "meal" | "shopping";
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
@@ -523,7 +523,7 @@ function MiniTodayCard({
       ]}
     >
       <View pointerEvents="none" style={[styles.miniTodayGlow, { backgroundColor: `${accent}24` }]} />
-      <View pointerEvents="none" style={styles.miniTodayGhostIcon}>{backgroundIcon}</View>
+      <MiniTodayGraphic accent={accent} variant={variant} />
       <View
         style={[
           styles.miniTodayIcon,
@@ -536,6 +536,37 @@ function MiniTodayCard({
       <Text numberOfLines={2} style={styles.miniTodayLabel}>{label}</Text>
       <Text numberOfLines={2} style={styles.miniTodayMeta}>{meta}</Text>
     </Pressable>
+  );
+}
+
+function MiniTodayGraphic({ accent, variant }: { accent: string; variant: "meal" | "shopping" }) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+
+  if (variant === "meal") {
+    return (
+      <View pointerEvents="none" style={styles.miniTodayGraphic}>
+        <View style={[styles.mealSteam, styles.mealSteamLeft, { backgroundColor: `${accent}66` }]} />
+        <View style={[styles.mealSteam, styles.mealSteamMiddle, { backgroundColor: `${accent}77` }]} />
+        <View style={[styles.mealSteam, styles.mealSteamRight, { backgroundColor: `${accent}66` }]} />
+        <View style={[styles.mealBowl, { backgroundColor: `${accent}D9`, borderColor: `${accent}F2` }]}>
+          <View style={[styles.mealBowlLip, { backgroundColor: `${accent}66` }]} />
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View pointerEvents="none" style={styles.miniTodayGraphic}>
+      <View style={[styles.basketHandle, { borderColor: `${accent}99` }]} />
+      <View style={[styles.basketBody, { backgroundColor: `${accent}36`, borderColor: `${accent}CC` }]}>
+        <View style={[styles.basketDot, { backgroundColor: `${accent}F2` }]} />
+        <View style={[styles.basketDot, { backgroundColor: `${accent}C7` }]} />
+        <View style={[styles.basketDot, { backgroundColor: `${accent}E0` }]} />
+        <View style={[styles.basketDot, { backgroundColor: `${accent}AA` }]} />
+        <View style={[styles.basketDot, { backgroundColor: `${accent}D9` }]} />
+      </View>
+    </View>
   );
 }
 
@@ -781,6 +812,75 @@ function createStyles(colors: AppPalette) {
       lineHeight: 24,
       marginTop: 4,
     },
+    basketBody: {
+      alignContent: "flex-start",
+      borderRadius: radii.card,
+      borderWidth: 2,
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 3,
+      height: 36,
+      justifyContent: "center",
+      overflow: "hidden",
+      paddingHorizontal: 8,
+      paddingTop: 5,
+      transform: [{ rotate: "-9deg" }],
+      width: 62,
+    },
+    basketDot: {
+      borderRadius: 999,
+      height: 9,
+      width: 9,
+    },
+    basketHandle: {
+      borderLeftWidth: 2,
+      borderRightWidth: 2,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      borderTopWidth: 2,
+      bottom: 25,
+      height: 30,
+      position: "absolute",
+      transform: [{ rotate: "-9deg" }],
+      width: 48,
+    },
+    mealBowl: {
+      borderBottomLeftRadius: 34,
+      borderBottomRightRadius: 34,
+      borderTopLeftRadius: 12,
+      borderTopRightRadius: 12,
+      borderWidth: 1,
+      height: 32,
+      overflow: "hidden",
+      width: 66,
+    },
+    mealBowlLip: {
+      borderRadius: 999,
+      height: 8,
+      left: 4,
+      position: "absolute",
+      right: 4,
+      top: 3,
+    },
+    mealSteam: {
+      borderRadius: 999,
+      height: 22,
+      position: "absolute",
+      top: 2,
+      width: 3,
+    },
+    mealSteamLeft: {
+      left: 21,
+      transform: [{ rotate: "-16deg" }],
+    },
+    mealSteamMiddle: {
+      left: 34,
+      transform: [{ rotate: "8deg" }],
+    },
+    mealSteamRight: {
+      right: 21,
+      transform: [{ rotate: "17deg" }],
+    },
     miniTodayCard: {
       backgroundColor: colors.card,
       borderRadius: radii.card,
@@ -799,11 +899,6 @@ function createStyles(colors: AppPalette) {
       shadowOpacity: 0.1,
       shadowRadius: 18,
     },
-    miniTodayGhostIcon: {
-      bottom: -10,
-      position: "absolute",
-      right: -14,
-    },
     miniTodayGlow: {
       borderRadius: 999,
       bottom: -32,
@@ -811,6 +906,15 @@ function createStyles(colors: AppPalette) {
       position: "absolute",
       right: -30,
       width: 86,
+    },
+    miniTodayGraphic: {
+      alignItems: "center",
+      bottom: -2,
+      height: 72,
+      justifyContent: "flex-end",
+      position: "absolute",
+      right: -8,
+      width: 76,
     },
     miniTodayIcon: {
       alignItems: "center",
@@ -820,6 +924,7 @@ function createStyles(colors: AppPalette) {
       justifyContent: "center",
       marginBottom: spacing.xs,
       width: 34,
+      zIndex: 1,
     },
     miniTodayLabel: {
       color: colors.text,
@@ -828,6 +933,7 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
       lineHeight: 13,
       maxWidth: 72,
+      zIndex: 1,
     },
     miniTodayMeta: {
       color: colors.textMuted,
@@ -835,6 +941,8 @@ function createStyles(colors: AppPalette) {
       fontWeight: "700",
       letterSpacing: 0,
       lineHeight: 13,
+      maxWidth: 68,
+      zIndex: 1,
     },
     miniTodayValue: {
       color: colors.text,
@@ -842,6 +950,7 @@ function createStyles(colors: AppPalette) {
       fontWeight: "900",
       letterSpacing: 0,
       lineHeight: 31,
+      zIndex: 1,
     },
     todayMiniColumn: {
       flex: 1,
