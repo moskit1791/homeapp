@@ -2199,15 +2199,17 @@ function FinanceSheet({
           <Text style={styles.amountHeaderCell}>Zostaje</Text>
           <Text style={styles.actionHeaderCell}>Akcje</Text>
         </View>
-        {groups.map((group) => {
+        {groups.map((group, index) => {
+          const accent = getCategoryAccent(index);
           const collapsed = collapsedCategoryIds.has(group.category.id);
 
           return (
           <View key={group.category.id}>
-            <View style={styles.categoryRow}>
+            <View style={[styles.categoryRow, { backgroundColor: theme.colors.cardMuted, borderTopColor: accent.border }]}>
               <View style={styles.categoryRowMain}>
+                <View style={[styles.categoryColorBar, { backgroundColor: accent.color }]} />
                 <View style={styles.categoryRowTitleBlock}>
-                  <Text style={styles.categoryRowText}>
+                  <Text style={[styles.categoryRowText, { color: accent.text }]}>
                     {group.category.name.toUpperCase()}
                   </Text>
                   <Text style={styles.categoryRowMeta}>
@@ -2223,9 +2225,9 @@ function FinanceSheet({
                 style={styles.categoryToggleCell}
               >
                 {collapsed ? (
-                  <ChevronRight color={theme.colors.textMuted} size={20} />
+                  <ChevronRight color={accent.text} size={20} />
                 ) : (
-                  <ChevronDown color={theme.colors.textMuted} size={20} />
+                  <ChevronDown color={accent.text} size={20} />
                 )}
               </Pressable>
             </View>
@@ -2257,16 +2259,6 @@ function FinanceSheet({
                 </View>
               </View>
             ))}
-            {collapsed ? null : <View style={styles.sumRow}>
-              <Text style={[styles.sumCell, styles.personCell]}>Suma</Text>
-              <Text style={[styles.sumCell, styles.categoryCell]}>{group.category.name}</Text>
-              <Text style={styles.amountSumCell}>{formatMoney(group.planned, currencyCode)}</Text>
-              <Text style={styles.amountSumCell}>{formatMoney(group.spent, currencyCode)}</Text>
-              <Text style={[styles.amountSumCell, group.remaining < 0 && styles.dangerText]}>
-                {formatMoney(group.remaining, currencyCode)}
-              </Text>
-              <View style={styles.actionSumCell} />
-            </View>}
           </View>
         );
         })}

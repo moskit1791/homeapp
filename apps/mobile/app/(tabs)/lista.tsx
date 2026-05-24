@@ -32,6 +32,7 @@ import {
   upsertMealSlot,
 } from "../../src/api";
 import { hasModuleRead, useModulePermission, usePermissions } from "../../src/permissions/use-permissions";
+import { loadStoredJson, saveStoredJson } from "../../src/session/secure-session-store";
 import { useSession } from "../../src/session/session-context";
 import { radii, spacing } from "../../src/theme/tokens";
 import { useAppTheme, type AppPalette } from "../../src/theme/use-app-theme";
@@ -52,11 +53,16 @@ import {
   Pencil,
   Plus,
   Sparkles,
+  TableLarge,
   Trash2,
   Utensils,
+  ViewGrid,
 } from "../../src/ui/icon";
 
 type MainSegment = "shopping" | "meals";
+type MealLayout = "list" | "cards";
+
+const mealLayoutStorageKey = "homeapp.meals.layout.v1";
 
 const listTypes: Array<{ label: string; value: ShoppingListType }> = [
   { label: "Dzisiaj", value: "daily" },
@@ -98,6 +104,8 @@ export default function ListaScreen() {
   const [shoppingAiOpenRequest, setShoppingAiOpenRequest] = useState(0);
   const [mealAiOpenRequest, setMealAiOpenRequest] = useState(0);
   const [mealViewResetRequest, setMealViewResetRequest] = useState(0);
+  const [mealLayout, setMealLayout] = useState<MealLayout>("list");
+  const [mealLayoutLoaded, setMealLayoutLoaded] = useState(false);
   const clearRouteAction = useCallback(() => {
     router.setParams({ action: undefined });
   }, [router]);
@@ -132,12 +140,50 @@ export default function ListaScreen() {
     }, [activeSegment]),
   );
 
+  useEffect(() => {
+    let isMounted = true;
+
+    loadStoredJson<{ layout?: MealLayout }>(mealLayoutStorageKey)
+      .then((storedLayout) => {
+        if (!isMounted) {
+          return;
+        }
+
+        if (storedLayout?.layout === "list" || storedLayout?.layout === "cards") {
+          setMealLayout(storedLayout.layout);
+        }
+
+        setMealLayoutLoaded(true);
+      })
+      .catch(() => {
+        if (isMounted) {
+          setMealLayoutLoaded(true);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!mealLayoutLoaded) {
+      return;
+    }
+
+    saveStoredJson(mealLayoutStorageKey, { layout: mealLayout });
+  }, [mealLayout, mealLayoutLoaded]);
+
   function selectMainSegment(segment: MainSegment) {
     setActiveSegment(segment);
 
     if (segment === "meals") {
       setMealViewResetRequest((value) => value + 1);
     }
+  }
+
+  function toggleMealLayout() {
+    setMealLayout((layout) => (layout === "list" ? "cards" : "list"));
   }
 
   if (permissionsQuery.isLoading) {
@@ -167,14 +213,33 @@ export default function ListaScreen() {
           >
             <Sparkles color={theme.colors.primary} size={22} />
           </IconButton>
-        ) : activeSegment === "meals" && mealPermission.canCreate && mealPermission.canUpdate ? (
-          <IconButton
-            accessibilityLabel="AI do planu posilkow"
-            onPress={() => setMealAiOpenRequest((value) => value + 1)}
-            style={styles.aiHeaderButton}
-          >
-            <Sparkles color={theme.colors.food} size={22} />
-          </IconButton>
+        ) : activeSegment === "meals" ? (
+          <View style={styles.headerActions}>
+            {mealPermission.canCreate && mealPermission.canUpdate ? (
+              <IconButton
+                accessibilityLabel="AI do planu posilkow"
+                onPress={() => setMealAiOpenRequest((value) => value + 1)}
+                style={styles.aiHeaderButton}
+              >
+                <Sparkles color={theme.colors.food} size={22} />
+              </IconButton>
+            ) : null}
+            <IconButton
+              accessibilityLabel={
+                mealLayout === "list"
+                  ? "Zmien uklad posilkow na kafelki"
+                  : "Zmien uklad posilkow na liste"
+              }
+              onPress={toggleMealLayout}
+              style={styles.mealLayoutButton}
+            >
+              {mealLayout === "list" ? (
+                <ViewGrid color={theme.colors.food} size={21} />
+              ) : (
+                <TableLarge color={theme.colors.food} size={21} />
+              )}
+            </IconButton>
+          </View>
         ) : undefined
       }
       title="Lista"
@@ -196,6 +261,7 @@ export default function ListaScreen() {
         <MealsBoard
           action={params.action}
           aiOpenRequest={mealAiOpenRequest}
+          layout={mealLayout}
           onRouteActionHandled={clearRouteAction}
           resetRequest={mealViewResetRequest}
         />
@@ -541,11 +607,13 @@ function ShoppingBoard({
 function MealsBoard({
   action,
   aiOpenRequest,
+  layout,
   onRouteActionHandled,
   resetRequest,
 }: {
   action?: string;
   aiOpenRequest: number;
+  layout: MealLayout;
   onRouteActionHandled: () => void;
   resetRequest: number;
 }) {
@@ -829,6 +897,7 @@ function MealsBoard({
   );
   const groupedEntries = groupMeals(entries);
   const mealSlots = buildMealSlotIndexes(householdQuery.data?.mealSlotsPerDay);
+  const mealWeekCards = buildMealWeekCards(entries, selectedWeekStartDate, mealSlots);
   const canSave =
     permission.canUpdate &&
     Boolean(mealName.trim()) &&
@@ -882,6 +951,14 @@ function MealsBoard({
     setWeekday(weekdayFromIsoDate(nextDate));
     setSlotIndex(0);
     setMealDate(nextDate);
+    setCalendarExpanded(false);
+    setModalVisible(true);
+  }
+
+  function openCreateMealModalForDay(day: number, nextSlotIndex: number) {
+    setWeekday(day);
+    setSlotIndex(nextSlotIndex);
+    setMealDate(dateForWeekday(selectedWeekStartDate, day));
     setCalendarExpanded(false);
     setModalVisible(true);
   }
@@ -985,8 +1062,65 @@ function MealsBoard({
         isLoading={currentQuery.isLoading || selectedPlanQuery.isLoading}
       />
 
-      <View style={styles.groupList}>
-        {groupedEntries.map((group) => (
+      {layout === "cards" ? (
+        <View style={styles.mealGrid}>
+          {mealWeekCards.map((day) => (
+            <View
+              key={day.day}
+              style={[styles.mealTile, day.day === weekday ? styles.mealTileActive : null]}
+            >
+              <View style={styles.mealTileHeader}>
+                <View style={styles.itemText}>
+                  <Text style={styles.mealTileDay}>{weekdayShort(day.day)}</Text>
+                  <Text style={styles.mealTileDate}>{formatIsoDateShort(day.date)}</Text>
+                </View>
+                <View style={styles.mealTileCountPill}>
+                  <Text style={styles.mealTileCount}>{day.entries.length}/{mealSlots.length}</Text>
+                </View>
+              </View>
+              <View style={styles.mealTileList}>
+                {day.entries.slice(0, 4).map((entry) => (
+                  <Pressable
+                    disabled={!permission.canUpdate}
+                    key={entry.id}
+                    onPress={() => openEditMealModal(entry)}
+                    style={({ pressed }) => [styles.mealTileRow, pressed && styles.pressed]}
+                  >
+                    <Text style={styles.mealTileSlot}>{entry.slotIndex + 1}</Text>
+                    <Text numberOfLines={1} style={styles.mealTileName}>
+                      {entry.mealName}
+                    </Text>
+                    {entry.linkUrl ? (
+                      <IconButton accessibilityLabel="Otworz link" onPress={() => Linking.openURL(entry.linkUrl!)}>
+                        <ExternalLink color={theme.colors.food} size={15} />
+                      </IconButton>
+                    ) : null}
+                  </Pressable>
+                ))}
+                {day.entries.length === 0 ? (
+                  <Text style={styles.mealTileEmpty}>Brak posilkow</Text>
+                ) : null}
+                {day.entries.length > 4 ? (
+                  <Text style={styles.mealTileOverflow}>+{day.entries.length - 4} dalej</Text>
+                ) : null}
+              </View>
+              {permission.canUpdate ? (
+                <Pressable
+                  onPress={() => openCreateMealModalForDay(day.day, day.nextSlotIndex)}
+                  style={({ pressed }) => [styles.mealTileAdd, pressed && styles.pressed]}
+                >
+                  <Plus color={theme.colors.food} size={16} />
+                  <Text style={styles.mealTileAddText}>Dodaj</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      {layout === "list" ? (
+        <View style={styles.groupList}>
+          {groupedEntries.map((group) => (
           <View key={group.day} style={styles.mealDayCard}>
             <Text style={styles.groupTitle}>{weekdayLabel(group.day)}</Text>
             {group.entries.map((entry) => (
@@ -1026,8 +1160,9 @@ function MealsBoard({
               </View>
             ))}
           </View>
-        ))}
-      </View>
+          ))}
+        </View>
+      ) : null}
 
       <FormModal
         footer={
@@ -1710,6 +1845,27 @@ function groupMeals(entries: MealPlanEntry[]) {
   }));
 }
 
+function buildMealWeekCards(entries: MealPlanEntry[], weekStartDate: string, mealSlots: number[]) {
+  const groups = new Map<number, MealPlanEntry[]>();
+
+  entries.forEach((entry) => {
+    groups.set(entry.weekday, [...(groups.get(entry.weekday) ?? []), entry]);
+  });
+
+  return [1, 2, 3, 4, 5, 6, 7].map((day) => {
+    const dayEntries = groups.get(day) ?? [];
+    const usedSlots = new Set(dayEntries.map((entry) => entry.slotIndex));
+    const nextSlotIndex = mealSlots.find((slot) => !usedSlots.has(slot)) ?? mealSlots[0] ?? 0;
+
+    return {
+      date: dateForWeekday(weekStartDate, day),
+      day,
+      entries: dayEntries,
+      nextSlotIndex,
+    };
+  });
+}
+
 function buildMealSlotIndexes(value: number | null | undefined): number[] {
   const count = Number.isFinite(value) ? Math.max(1, Math.min(8, Number(value))) : 4;
 
@@ -1785,6 +1941,12 @@ function formatDateShort(date: Date): string {
   return `${String(date.getDate()).padStart(2, "0")}.${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
+function formatIsoDateShort(value: string): string {
+  const date = new Date(`${value}T12:00:00`);
+
+  return Number.isNaN(date.getTime()) ? value.slice(5) : formatDateShort(date);
+}
+
 function weekdayLabel(day: number): string {
   return (
     [
@@ -1828,6 +1990,11 @@ function createStyles(colors: AppPalette) {
       shadowOffset: { height: 8, width: 0 },
       shadowOpacity: 0.28,
       shadowRadius: 14,
+    },
+    headerActions: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.sm,
     },
     aiIcon: {
       alignItems: "center",
@@ -2120,6 +2287,20 @@ function createStyles(colors: AppPalette) {
       gap: spacing.xs,
       minWidth: 0,
     },
+    mealGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: spacing.sm,
+    },
+    mealLayoutButton: {
+      backgroundColor: colors.card,
+      borderColor: colors.food,
+      elevation: 4,
+      shadowColor: colors.food,
+      shadowOffset: { height: 6, width: 0 },
+      shadowOpacity: 0.18,
+      shadowRadius: 12,
+    },
     mealRow: {
       alignItems: "center",
       flexDirection: "row",
@@ -2143,6 +2324,114 @@ function createStyles(colors: AppPalette) {
       fontSize: 12,
       fontWeight: "900",
       letterSpacing: 0,
+    },
+    mealTile: {
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      flexBasis: "47%",
+      flexGrow: 1,
+      gap: spacing.sm,
+      minHeight: 178,
+      minWidth: 150,
+      padding: spacing.sm,
+    },
+    mealTileActive: {
+      backgroundColor: colors.cardMuted,
+      borderColor: colors.food,
+    },
+    mealTileAdd: {
+      alignItems: "center",
+      borderColor: colors.border,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: spacing.xs,
+      justifyContent: "center",
+      minHeight: 32,
+    },
+    mealTileAddText: {
+      color: colors.food,
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    mealTileCount: {
+      color: colors.food,
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    mealTileCountPill: {
+      alignItems: "center",
+      backgroundColor: colors.field,
+      borderRadius: 999,
+      minWidth: 38,
+      paddingHorizontal: spacing.xs,
+      paddingVertical: 4,
+    },
+    mealTileDate: {
+      color: colors.textMuted,
+      fontSize: 11,
+      fontWeight: "800",
+      letterSpacing: 0,
+    },
+    mealTileDay: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    mealTileEmpty: {
+      color: colors.textMuted,
+      fontSize: 12,
+      fontWeight: "700",
+      letterSpacing: 0,
+      lineHeight: 16,
+    },
+    mealTileHeader: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.sm,
+      justifyContent: "space-between",
+    },
+    mealTileList: {
+      gap: spacing.xs,
+      minHeight: 88,
+    },
+    mealTileName: {
+      color: colors.text,
+      flex: 1,
+      fontSize: 12,
+      fontWeight: "800",
+      letterSpacing: 0,
+      lineHeight: 16,
+      minWidth: 0,
+    },
+    mealTileOverflow: {
+      color: colors.textMuted,
+      fontSize: 11,
+      fontWeight: "800",
+      letterSpacing: 0,
+    },
+    mealTileRow: {
+      alignItems: "center",
+      backgroundColor: colors.field,
+      borderRadius: radii.control,
+      flexDirection: "row",
+      gap: spacing.xs,
+      minHeight: 30,
+      paddingLeft: spacing.xs,
+      paddingRight: 2,
+    },
+    mealTileSlot: {
+      color: colors.food,
+      fontSize: 11,
+      fontWeight: "900",
+      letterSpacing: 0,
+      minWidth: 14,
+      textAlign: "center",
     },
     modalFooter: {
       flexDirection: "row",

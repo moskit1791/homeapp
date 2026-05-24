@@ -56,6 +56,7 @@ import {
   useThemePreferences,
   type AppPalette,
   type DarkAccentKey,
+  type ThemeMode,
 } from "../../src/theme/use-app-theme";
 import {
   currencyOptions,
@@ -104,6 +105,11 @@ const neutralAccentValues = new Set([
 ]);
 const fontScaleSliderMin = 0.9;
 const fontScaleSliderMax = 1.3;
+const themeModeOptions: Array<{ label: string; value: ThemeMode }> = [
+  { label: "System", value: "system" },
+  { label: "Jasny", value: "light" },
+  { label: "Ciemny", value: "dark" },
+];
 
 type PickedAttachmentPhoto = {
   fileName: string;
@@ -1431,7 +1437,7 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
   const householdPermission = useModulePermission("household_members");
   const router = useRouter();
   const theme = useAppTheme();
-  const { accent, fontScale, setAccent, setFontScale } = useThemePreferences();
+  const { accent, fontScale, setAccent, setFontScale, setThemeMode, themeMode } = useThemePreferences();
   const styles = createStyles(theme.colors);
   const accessToken = session?.accessToken;
   const [settingsVisible, setSettingsVisible] = useState(false);
@@ -1605,6 +1611,11 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
     showToast("Kolor zapisany");
   }
 
+  function handleThemeModeChange(mode: ThemeMode) {
+    setThemeMode(mode);
+    showToast("Tryb zapisany");
+  }
+
   function openNotificationConfiguration() {
     setSettingsVisible(false);
     setSettingsView("main");
@@ -1624,9 +1635,10 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
     Boolean(memberInviteEmail.trim()) &&
     !inviteMemberMutation.isPending;
   const selectedAccent = normalizeHexAccent(accent) ?? "#B56CFF";
+  const themeModeLabel = themeModeOptions.find((option) => option.value === themeMode)?.label ?? "System";
   const settingsTitle =
     settingsView === "appearance"
-      ? "Kolor i czcionka"
+      ? "Wygląd aplikacji"
       : settingsView === "members"
         ? "Członkowie domu"
         : "Ustawienia i konto";
@@ -1769,9 +1781,9 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
                 <Pencil color={getReadableSwatchText(selectedAccent)} size={21} />
               </View>
               <View style={styles.itemText}>
-                <Text style={styles.settingsPanelTitle}>Kolor i rozmiar tekstu</Text>
+                <Text style={styles.settingsPanelTitle}>Wygląd aplikacji</Text>
                 <Text style={styles.settingsPanelMeta}>
-                  {selectedAccent} / {Math.round(fontScale * 100)}%
+                  {themeModeLabel} / {selectedAccent} / {Math.round(fontScale * 100)}%
                 </Text>
               </View>
               <View style={[styles.accentPalettePreview, { backgroundColor: selectedAccent }]} />
@@ -1891,6 +1903,17 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
         ) : null}
         {settingsView === "appearance" ? (
           <>
+            <View style={styles.settingsPanelRow}>
+              <Text style={styles.settingsPanelTitle}>Tryb</Text>
+              <Text style={styles.settingsPanelMeta}>
+                Wybierz jasny, ciemny albo systemowy wygląd aplikacji.
+              </Text>
+              <SegmentedControl
+                onChange={handleThemeModeChange}
+                options={themeModeOptions}
+                value={themeMode}
+              />
+            </View>
             <View style={styles.settingsPanelRow}>
               <Text style={styles.settingsPanelTitle}>Rozmiar tekstu</Text>
               <Text style={styles.settingsPanelMeta}>

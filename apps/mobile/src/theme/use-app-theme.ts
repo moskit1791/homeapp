@@ -20,6 +20,7 @@ type Palette = { [Key in keyof typeof colors]: string } & {
 };
 
 export type DarkAccentKey = string;
+export type ThemeMode = 'system' | 'light' | 'dark';
 
 type DarkAccentOption = {
   color: string;
@@ -39,6 +40,7 @@ type StoredThemePreferences = {
   accent?: DarkAccentKey;
   darkAccent?: DarkAccentKey;
   fontScale?: number;
+  themeMode?: ThemeMode;
 };
 
 type ThemePreferencesContextValue = {
@@ -46,14 +48,17 @@ type ThemePreferencesContextValue = {
   darkAccent: DarkAccentKey;
   fontScale: number;
   systemScheme: ColorSchemeName;
+  themeMode: ThemeMode;
   setAccent: (accent: DarkAccentKey) => void;
   setDarkAccent: (accent: DarkAccentKey) => void;
   setFontScale: (scale: number) => void;
+  setThemeMode: (mode: ThemeMode) => void;
 };
 
 const themePreferencesKey = 'homeapp.theme-preferences.v1';
 const defaultDarkAccent: DarkAccentKey = '#B56CFF';
 const defaultFontScale = 1;
+const defaultThemeMode: ThemeMode = 'system';
 const fontScaleMin = 0.9;
 const fontScaleMax = 1.3;
 const darkCard = '#262D43';
@@ -248,9 +253,11 @@ const ThemePreferencesContext = createContext<ThemePreferencesContextValue>({
   darkAccent: defaultDarkAccent,
   fontScale: defaultFontScale,
   systemScheme: Appearance.getColorScheme(),
+  themeMode: defaultThemeMode,
   setAccent: () => undefined,
   setDarkAccent: () => undefined,
-  setFontScale: () => undefined
+  setFontScale: () => undefined,
+  setThemeMode: () => undefined
 });
 
 const lightPalette: Palette = {
@@ -322,6 +329,7 @@ export type AppPalette = typeof lightPalette;
 export function AppThemeProvider({ children }: PropsWithChildren) {
   const [darkAccent, setDarkAccentState] = useState<DarkAccentKey>(defaultDarkAccent);
   const [fontScale, setFontScaleState] = useState(defaultFontScale);
+  const [themeMode, setThemeModeState] = useState<ThemeMode>(defaultThemeMode);
   const [systemScheme, setSystemScheme] = useState<ColorSchemeName>(() => Appearance.getColorScheme());
 
   useEffect(() => {
@@ -341,6 +349,10 @@ export function AppThemeProvider({ children }: PropsWithChildren) {
           runtimeFontScale = normalizedFontScale;
           setFontScaleState(normalizedFontScale);
         }
+
+        if (stored?.themeMode) {
+          setThemeModeState(normalizeThemeMode(stored.themeMode));
+        }
       })
       .catch(() => undefined);
   }, []);
@@ -359,6 +371,7 @@ export function AppThemeProvider({ children }: PropsWithChildren) {
       darkAccent,
       fontScale,
       systemScheme,
+      themeMode,
       setAccent: (accent) => {
         const normalizedAccent = normalizeAccentValue(accent) ?? defaultDarkAccent;
 
@@ -366,7 +379,8 @@ export function AppThemeProvider({ children }: PropsWithChildren) {
         saveStoredJson<StoredThemePreferences>(themePreferencesKey, {
           accent: normalizedAccent,
           darkAccent: normalizedAccent,
-          fontScale
+          fontScale,
+          themeMode
         }).catch(() => undefined);
       },
       setDarkAccent: (accent) => {
@@ -376,7 +390,8 @@ export function AppThemeProvider({ children }: PropsWithChildren) {
         saveStoredJson<StoredThemePreferences>(themePreferencesKey, {
           accent: normalizedAccent,
           darkAccent: normalizedAccent,
-          fontScale
+          fontScale,
+          themeMode
         }).catch(() => undefined);
       },
       setFontScale: (scale) => {
@@ -387,11 +402,23 @@ export function AppThemeProvider({ children }: PropsWithChildren) {
         saveStoredJson<StoredThemePreferences>(themePreferencesKey, {
           accent: darkAccent,
           darkAccent,
-          fontScale: normalizedFontScale
+          fontScale: normalizedFontScale,
+          themeMode
+        }).catch(() => undefined);
+      },
+      setThemeMode: (mode) => {
+        const normalizedThemeMode = normalizeThemeMode(mode);
+
+        setThemeModeState(normalizedThemeMode);
+        saveStoredJson<StoredThemePreferences>(themePreferencesKey, {
+          accent: darkAccent,
+          darkAccent,
+          fontScale,
+          themeMode: normalizedThemeMode
         }).catch(() => undefined);
       }
     }),
-    [darkAccent, fontScale, systemScheme]
+    [darkAccent, fontScale, systemScheme, themeMode]
   );
 
   return createElement(ThemePreferencesContext.Provider, { value }, children);
@@ -402,8 +429,9 @@ export function useThemePreferences() {
 }
 
 export function useAppTheme() {
-  const { darkAccent, fontScale, systemScheme } = useThemePreferences();
-  const isDark = systemScheme === 'dark';
+  const { darkAccent, fontScale, systemScheme, themeMode } = useThemePreferences();
+  const effectiveScheme = themeMode === 'system' ? systemScheme : themeMode;
+  const isDark = effectiveScheme === 'dark';
   const palette = useMemo(
     () => (isDark ? buildDarkPalette(darkAccent) : buildLightPalette(darkAccent)),
     [darkAccent, isDark]
@@ -413,11 +441,13 @@ export function useAppTheme() {
     accent: darkAccent,
     colors: palette,
     darkAccent,
+    effectiveScheme,
     fontScale,
     isDark,
     radii,
     shadows,
-    spacing
+    spacing,
+    themeMode
   };
 }
 
@@ -427,6 +457,10 @@ export function normalizeFontScale(value: number): number {
   }
 
   return Math.min(fontScaleMax, Math.max(fontScaleMin, Math.round(value * 20) / 20));
+}
+
+function normalizeThemeMode(value: string | null | undefined): ThemeMode {
+  return value === 'light' || value === 'dark' || value === 'system' ? value : defaultThemeMode;
 }
 
 function installFontScaleStyleSheet() {
