@@ -1,25 +1,28 @@
 import type { ModuleKey } from "@homeapp/shared-types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useLocalSearchParams } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import {
   CalendarEvent,
   EffectivePermission,
   Note,
   TodoItem,
   completeTodoItem,
+  connectGoogleCalendar,
   createCalendarEvent,
   createNote,
   createTodoItem,
   deleteCalendarEvent,
   deleteNote,
   deleteTodoItem,
+  getGoogleCalendarStatus,
   listCalendarEvents,
   listNotes,
   listTodoItems,
   queryKeys,
   reopenTodoItem,
+  syncGoogleCalendar,
   updateCalendarEvent,
   updateNote,
 } from "../../src/api";
@@ -43,6 +46,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Google,
   Pencil,
   Plus,
   Trash2,
@@ -90,6 +94,7 @@ export default function KalendarzScreen() {
   const [eventTime, setEventTime] = useState("");
   const [eventNote, setEventNote] = useState("");
   const [eventReminder, setEventReminder] = useState<ReminderValue>("1440");
+  const [googleNotice, setGoogleNotice] = useState("");
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [eventModalVisible, setEventModalVisible] = useState(false);
   const [handledRouteDate, setHandledRouteDate] = useState<string | null>(null);
@@ -114,6 +119,11 @@ export default function KalendarzScreen() {
     (event) => event.eventDate === selectedDate,
   );
   const queryClient = useQueryClient();
+  const googleCalendarQuery = useQuery({
+    enabled: calendarPermission.canRead && Boolean(accessToken),
+    queryFn: () => getGoogleCalendarStatus({ accessToken }),
+    queryKey: [...queryKeys.calendar, "google", "status"],
+  });
   const saveEventMutation = useMutation({
     mutationFn: () =>
       editingEvent
@@ -150,6 +160,24 @@ export default function KalendarzScreen() {
     mutationFn: (event: CalendarEvent) =>
       deleteCalendarEvent(getEditableCalendarEventId(event), { accessToken }),
     onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.calendar });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.start });
+    },
+  });
+  const connectGoogleMutation = useMutation({
+    mutationFn: () => connectGoogleCalendar({ accessToken }),
+    onSuccess: async (result) => {
+      setGoogleNotice("Otwieram Google. Po akceptacji wrĂłÄ‡ do aplikacji i uruchom synchronizacjÄ™.");
+      await Linking.openURL(result.authorizationUrl);
+    },
+  });
+  const syncGoogleMutation = useMutation({
+    mutationFn: () => syncGoogleCalendar({ accessToken }),
+    onSuccess: async (result) => {
+      setGoogleNotice(
+        `Google Calendar: dodano ${result.importedCount}, zaktualizowano ${result.updatedCount}.`,
+      );
+      await googleCalendarQuery.refetch();
       await queryClient.invalidateQueries({ queryKey: queryKeys.calendar });
       await queryClient.invalidateQueries({ queryKey: queryKeys.start });
     },
@@ -193,6 +221,14 @@ export default function KalendarzScreen() {
     routeIntent,
     selectedDate,
   ]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (calendarPermission.canRead && accessToken) {
+        void googleCalendarQuery.refetch();
+      }
+    }, [accessToken, calendarPermission.canRead, googleCalendarQuery.refetch]),
+  );
 
   function openCreateEvent(date = selectedDate) {
     setEditingEvent(null);
@@ -244,6 +280,15 @@ export default function KalendarzScreen() {
     const nextDate = dateToIso(addDays(parseIsoDate(selectedDate), daysToMove));
 
     selectDate(nextDate);
+  }
+
+  function handleGoogleCalendarPress() {
+    if (googleCalendarQuery.data?.connected) {
+      syncGoogleMutation.mutate();
+      return;
+    }
+
+    connectGoogleMutation.mutate();
   }
 
   if (permissionsQuery.isLoading) {
@@ -319,6 +364,44 @@ export default function KalendarzScreen() {
           </>
         ) : null}
       </View>
+
+      {calendarPermission.canRead ? (
+        <View style={styles.googleSyncPanel}>
+          <View style={styles.googleSyncHeader}>
+            <View style={styles.googleSyncIcon}>
+              <Google color="#DB4437" size={18} />
+            </View>
+            <View style={styles.googleSyncText}>
+              <Text style={styles.googleSyncTitle}>Google Calendar</Text>
+              <Text style={styles.googleSyncMeta}>
+                {googleCalendarQuery.data?.connected
+                  ? [
+                      googleCalendarQuery.data.googleAccountEmail ?? "Konto podpiÄ™te",
+                      googleCalendarQuery.data.lastSyncedAt
+                        ? `ostatnio ${formatDateTime(googleCalendarQuery.data.lastSyncedAt)}`
+                        : "gotowe do synchronizacji",
+                    ].join(" / ")
+                  : "PodpiÄ™cie konta jest osobne dla kaĹĽdego domownika."}
+              </Text>
+            </View>
+          </View>
+          <ActionButton
+            disabled={
+              !calendarPermission.canCreate ||
+              connectGoogleMutation.isPending ||
+              syncGoogleMutation.isPending
+            }
+            loading={connectGoogleMutation.isPending || syncGoogleMutation.isPending}
+            onPress={handleGoogleCalendarPress}
+            size="small"
+            title={googleCalendarQuery.data?.connected ? "Synchronizuj" : "PoĹ‚Ä…cz Google"}
+          />
+        </View>
+      ) : null}
+      {googleNotice ? <InlineAlert text={googleNotice} /> : null}
+      {connectGoogleMutation.error || syncGoogleMutation.error ? (
+        <InlineAlert text="Nie udaĹ‚o siÄ™ zsynchronizowaÄ‡ Google Calendar." tone="error" />
+      ) : null}
 
       {calendarPermission.canRead ? (
         calendarView === "month" ? (
@@ -1646,6 +1729,49 @@ function createStyles(colors: AppPalette) {
     formRow: {
       flexDirection: "row",
       gap: spacing.sm,
+    },
+    googleSyncHeader: {
+      alignItems: "center",
+      flex: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      minWidth: 0,
+    },
+    googleSyncIcon: {
+      alignItems: "center",
+      backgroundColor: colors.cardMuted,
+      borderRadius: 999,
+      height: 34,
+      justifyContent: "center",
+      width: 34,
+    },
+    googleSyncMeta: {
+      color: colors.textMuted,
+      fontSize: 12,
+      fontWeight: "700",
+      letterSpacing: 0,
+      lineHeight: 16,
+    },
+    googleSyncPanel: {
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      padding: spacing.md,
+    },
+    googleSyncText: {
+      flex: 1,
+      gap: 2,
+      minWidth: 0,
+    },
+    googleSyncTitle: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: "900",
+      letterSpacing: 0,
     },
     headerActions: {
       alignItems: "center",

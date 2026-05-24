@@ -613,6 +613,25 @@ export interface CreateCalendarEventRequest {
 
 export type UpdateCalendarEventRequest = Partial<CreateCalendarEventRequest>;
 
+export interface GoogleCalendarConnectionStatus {
+  connected: boolean;
+  connectedAt: string | null;
+  googleAccountEmail: string | null;
+  lastSyncedAt: string | null;
+}
+
+export interface GoogleCalendarConnectResponse {
+  authorizationUrl: string;
+}
+
+export interface GoogleCalendarSyncResponse {
+  from: string;
+  importedCount: number;
+  skippedCount: number;
+  to: string;
+  updatedCount: number;
+}
+
 export interface TodoItem {
   createdAt: string;
   description: string | null;

@@ -56,6 +56,9 @@ import type {
   ForgotPasswordResponse,
   FinanceDebt,
   FinanceSavingsAccount,
+  GoogleCalendarConnectResponse,
+  GoogleCalendarConnectionStatus,
+  GoogleCalendarSyncResponse,
   GoogleLoginRequest,
   Income,
   IncomeSummary,
@@ -997,6 +1000,41 @@ export function deleteCalendarEvent(
   return apiRequest<OkResponse>(`/calendar/events/${eventId}`, {
     accessToken: requestOptions.accessToken,
     method: 'DELETE',
+    signal: requestOptions.signal
+  });
+}
+
+export function getGoogleCalendarStatus(
+  options?: ApiCallOptionsInput
+): Promise<GoogleCalendarConnectionStatus> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<GoogleCalendarConnectionStatus>('/calendar/google/status', {
+    accessToken: requestOptions.accessToken,
+    signal: requestOptions.signal
+  });
+}
+
+export function connectGoogleCalendar(
+  options?: ApiCallOptionsInput
+): Promise<GoogleCalendarConnectResponse> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<GoogleCalendarConnectResponse>('/calendar/google/connect', {
+    accessToken: requestOptions.accessToken,
+    method: 'POST',
+    signal: requestOptions.signal
+  });
+}
+
+export function syncGoogleCalendar(
+  options?: ApiCallOptionsInput
+): Promise<GoogleCalendarSyncResponse> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<GoogleCalendarSyncResponse>('/calendar/google/sync', {
+    accessToken: requestOptions.accessToken,
+    method: 'POST',
     signal: requestOptions.signal
   });
 }

@@ -38,6 +38,24 @@ const exactMessages: Record<string, string> = {
   Forbidden: "Brak uprawnień.",
   "Google OAuth requires GOOGLE_OAUTH_CLIENT_ID":
     "Logowanie Google nie jest jeszcze skonfigurowane.",
+  "Google Calendar sync is not configured":
+    "Synchronizacja Google Calendar nie jest jeszcze skonfigurowana.",
+  "Google Calendar token encryption key is invalid":
+    "Klucz szyfrowania Google Calendar jest nieprawidĹ‚owy.",
+  "Google Calendar is not connected":
+    "Najpierw poĹ‚Ä…cz konto Google Calendar.",
+  "Google Calendar OAuth callback is missing code or state":
+    "Google Calendar nie zwrĂłciĹ‚ kompletu danych poĹ‚Ä…czenia.",
+  "Google Calendar did not return a refresh token":
+    "Google Calendar nie zwrĂłciĹ‚ tokenu odĹ›wieĹĽania. SprĂłbuj ponownie podpiÄ…Ä‡ konto.",
+  "Google Calendar token exchange failed":
+    "Nie udaĹ‚o siÄ™ wymieniÄ‡ kodu Google Calendar na token.",
+  "Google Calendar sync request failed":
+    "Nie udaĹ‚o siÄ™ pobraÄ‡ wydarzeĹ„ z Google Calendar.",
+  "Invalid Google Calendar OAuth state":
+    "Stan poĹ‚Ä…czenia Google Calendar jest nieprawidĹ‚owy.",
+  "Google Calendar OAuth state expired":
+    "PoĹ‚Ä…czenie Google Calendar wygasĹ‚o. SprĂłbuj ponownie.",
   "Household not found": "Nie znaleziono domu.",
   "Income owner member is not active in household":
     "Wybrany właściciel dochodu nie jest aktywnym domownikiem.",
