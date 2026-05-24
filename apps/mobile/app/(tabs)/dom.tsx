@@ -58,12 +58,19 @@ import {
   type DarkAccentKey,
 } from "../../src/theme/use-app-theme";
 import {
+  currencyOptions,
+  formatCurrencyAmount,
+  normalizeCurrencyCode,
+  type SupportedCurrencyCode,
+} from "../../src/utils/currency";
+import {
   ActionButton,
   AppScreen,
   FormModal,
   IconButton,
   InlineAlert,
   QueryState,
+  SegmentedControl,
 } from "../../src/ui";
 import {
   Broom,
@@ -558,6 +565,11 @@ function AnnualCostsPanel() {
     queryFn: () => listAnnualCostHistory(year, { accessToken }),
     queryKey: [...queryKeys.annualCosts, "history", year],
   });
+  const householdQuery = useQuery({
+    enabled: Boolean(accessToken),
+    queryFn: () => getMyHousehold({ accessToken }),
+    queryKey: [...queryKeys.household, "me"],
+  });
   const createMutation = useMutation({
     mutationFn: () =>
       createAnnualCost(
@@ -599,6 +611,7 @@ function AnnualCostsPanel() {
   });
   const costs = costsQuery.data ?? [];
   const history = historyQuery.data ?? [];
+  const currencyCode = normalizeCurrencyCode(householdQuery.data?.currencyCode);
   const paidCostIds = new Set(history.map((item) => item.annualCostId));
   const canAdd = permission.canCreate && Boolean(name.trim()) && !createMutation.isPending;
   const canSavePayment =
@@ -638,6 +651,7 @@ function AnnualCostsPanel() {
             canUpdate={permission.canUpdate}
             completing={completeMutation.isPending}
             cost={cost}
+            currencyCode={currencyCode}
             key={cost.id}
             onComplete={() => openPaymentModal(cost)}
             paidThisYear={paidCostIds.has(cost.id)}
@@ -1425,7 +1439,7 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
   const [notificationsVisible, setNotificationsVisible] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [homeName, setHomeName] = useState("");
-  const [currencyCode, setCurrencyCode] = useState("PLN");
+  const [currencyCode, setCurrencyCode] = useState<SupportedCurrencyCode>("PLN");
   const [mealSlotsPerDay, setMealSlotsPerDay] = useState("4");
   const [memberInviteEmail, setMemberInviteEmail] = useState("");
   const [toast, setToast] = useState<string | null>(null);
@@ -1465,7 +1479,7 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
     }
 
     setHomeName(household.name);
-    setCurrencyCode(household.currencyCode);
+    setCurrencyCode(normalizeCurrencyCode(household.currencyCode));
     setMealSlotsPerDay(String(household.mealSlotsPerDay));
   }, [householdQuery.data]);
 
@@ -1478,7 +1492,7 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
     mutationFn: () =>
       updateMyHousehold(
         {
-          currencyCode: currencyCode.trim().toUpperCase(),
+          currencyCode,
           mealSlotsPerDay: Number(mealSlotsPerDay),
           name: homeName.trim(),
         },
@@ -1683,14 +1697,12 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
           <View style={styles.formRow}>
             <View style={styles.flexInput}>
               <Text style={styles.inputLabel}>Waluta</Text>
-              <TextInput
-                autoCapitalize="characters"
-                editable={householdPermission.canUpdate}
-                maxLength={3}
-                onChangeText={setCurrencyCode}
-                placeholder="PLN"
-                placeholderTextColor={theme.colors.textSubtle}
-                style={styles.input}
+              <SegmentedControl
+                onChange={setCurrencyCode}
+                options={currencyOptions.map((option) => ({
+                  label: option.label,
+                  value: option.value,
+                }))}
                 value={currencyCode}
               />
             </View>
@@ -1712,7 +1724,6 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
             disabled={
               !householdPermission.canUpdate ||
               !homeName.trim() ||
-              !/^[A-Za-z]{3}$/.test(currencyCode.trim()) ||
               Number(mealSlotsPerDay) < 1 ||
               Number(mealSlotsPerDay) > 8
             }
@@ -2289,6 +2300,7 @@ function CostRow({
   canUpdate,
   completing,
   cost,
+  currencyCode,
   onComplete,
   paidThisYear,
 }: {
@@ -2296,6 +2308,7 @@ function CostRow({
   canUpdate: boolean;
   completing: boolean;
   cost: AnnualCost;
+  currencyCode: SupportedCurrencyCode;
   onComplete: () => void;
   paidThisYear: boolean;
 }) {
@@ -2307,7 +2320,7 @@ function CostRow({
       <View style={[styles.itemMarker, { backgroundColor: accent.color }]} />
       <View style={styles.itemText}>
         <Text style={styles.itemName}>{cost.name}</Text>
-        <Text style={styles.itemMeta}>{cost.nextDueDate} / {formatMoney(cost.defaultAmount)}</Text>
+        <Text style={styles.itemMeta}>{cost.nextDueDate} / {formatMoney(cost.defaultAmount, currencyCode)}</Text>
       </View>
       {paidThisYear ? (
         <View style={styles.paidBadge}>
@@ -2562,14 +2575,15 @@ function parseOptionalNumber(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function formatMoney(value: string | number | null | undefined): string {
+function formatMoney(
+  value: string | number | null | undefined,
+  currencyCode: SupportedCurrencyCode,
+): string {
   if (value === null || value === undefined || value === "") {
     return "bez kwoty";
   }
 
-  return `${Number(value).toLocaleString("pl-PL", {
-    maximumFractionDigits: 0,
-  })} zł`;
+  return formatCurrencyAmount(value, currencyCode);
 }
 
 function formatBytes(value: number): string {

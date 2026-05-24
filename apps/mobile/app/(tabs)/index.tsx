@@ -30,6 +30,8 @@ import {
   CartPlus,
   ChevronRight,
   Close,
+  MoreHorizontal,
+  NotePlus,
   ReceiptText,
   ShoppingCart,
   Utensils,
@@ -61,7 +63,6 @@ export default function DzisiajScreen() {
   const dashboard = dashboardQuery.data;
   const upcomingEvents = dashboard?.upcomingEvents ?? [];
   const todayEvents = upcomingEvents.filter(isTodayEvent);
-  const tomorrowEvents = upcomingEvents.filter(isTomorrowEvent);
   const nextEvent = todayEvents[0] ?? upcomingEvents[0];
   const mealEntries = dashboard?.mealPlan?.entries ?? [];
   const currentWeekday = todayWeekday();
@@ -69,10 +70,6 @@ export default function DzisiajScreen() {
     () => getTodayMeals(mealEntries, currentWeekday),
     [currentWeekday, mealEntries],
   );
-  const todayMealNames = todayMeals
-    .map((entry) => entry.mealName.trim())
-    .filter(Boolean);
-  const todayMealSummary = formatMealNames(todayMealNames);
   const openShopping = (shoppingQuery.data ?? []).filter(
     (item) => !item.isChecked,
   );
@@ -232,59 +229,33 @@ export default function DzisiajScreen() {
             showDivider
           />
           <QuickAction
-            icon={<Utensils color={theme.colors.food} size={29} />}
-            label="Posiłek"
-            onPress={() => router.push({ pathname: "/(tabs)/lista", params: { action: "addMeal", segment: "meals" } } as never)}
+            icon={<NotePlus color={theme.colors.primaryDark} size={29} />}
+            label="Notatka"
+            onPress={() =>
+              router.push({ pathname: "/(tabs)/zadania", params: { action: "note", segment: "notes" } } as never)
+            }
           />
         </View>
       </View>
 
-      <View style={styles.tileList}>
-        <HomeTile
-          accent={theme.colors.calendar}
-          icon={<CalendarDays color={theme.colors.calendar} size={24} />}
-          meta={todayEvents[0] ? eventMeta(todayEvents[0]) : "Brak planu na dziś"}
-          onPress={() => openCalendarForDate(todayIso())}
-          showDivider
-          title="Wydarzenia dzisiaj"
-          value={String(todayEvents.length)}
-        />
-        <HomeTile
-          accent={theme.colors.calendar}
-          icon={<CalendarDays color={theme.colors.calendar} size={24} />}
-          meta={tomorrowEvents[0] ? eventMeta(tomorrowEvents[0]) : "Brak planu na jutro"}
-          onPress={() => openCalendarForDate(offsetIsoDate(1))}
-          showDivider
-          title="Wydarzenia jutro"
-          value={String(tomorrowEvents.length)}
-        />
-        <HomeTile
-          accent={theme.colors.shopping}
-          icon={<ShoppingCart color={theme.colors.shopping} size={24} />}
-          meta={openShopping.length === 1 ? "1 pozycja czeka" : `${openShopping.length} pozycji czeka`}
-          onPress={() => router.push({ pathname: "/(tabs)/lista", params: { segment: "shopping" } } as never)}
-          showDivider
-          title="Zakupy do zrobienia"
-          value={`${openShopping.length} pozycji`}
-        />
-        <HomeTile
-          accent={theme.colors.food}
-          icon={<Utensils color={theme.colors.food} size={24} />}
-          meta={todayMealNames.length > 0 ? undefined : "Ułóż plan posiłków"}
-          onPress={() => router.push({ pathname: "/(tabs)/lista", params: { segment: "meals" } } as never)}
-          title={todayMealNames.length > 1 ? "Dzisiejsze posiłki" : "Dzisiejszy posiłek"}
-          value={todayMealSummary || "Brak planu"}
-          valueLines={2}
-        />
-      </View>
+      <NextEventCard
+        event={nextEvent}
+        onPress={() =>
+          nextEvent ? openCalendarForDate(nextEvent.eventDate) : openCalendarForDate(todayIso(), "create")
+        }
+      />
 
       {todoPermission.canRead ? (
-        <TodoTodaySection
+        <TodayOverviewGrid
           error={dashboardQuery.error}
           isLoading={dashboardQuery.isLoading}
+          mealCount={todayMeals.length}
+          onOpenMeals={() => router.push({ pathname: "/(tabs)/lista", params: { segment: "meals" } } as never)}
+          onOpenShopping={() => router.push({ pathname: "/(tabs)/lista", params: { segment: "shopping" } } as never)}
           onOpenTodo={() =>
             router.push({ pathname: "/(tabs)/zadania", params: { segment: "todo" } } as never)
           }
+          shoppingCount={openShopping.length}
           tasks={todoPreview}
         />
       ) : null}
@@ -403,102 +374,155 @@ function StoredNotificationRow({ item }: { item: StoredNotification }) {
   );
 }
 
-function HomeTile({
-  accent,
-  icon,
-  meta,
+function NextEventCard({
+  event,
   onPress,
-  showDivider = false,
-  title,
-  value,
-  valueLines = 1,
 }: {
-  accent: string;
-  icon: ReactNode;
-  meta?: string;
+  event: StartCalendarEvent | undefined;
   onPress: () => void;
-  showDivider?: boolean;
-  title: string;
-  value: string;
-  valueLines?: number;
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
+  const eventDateTime = event ? formatEventDateTime(event) : "Brak wydarzeń";
+  const eventDetails = event?.title ?? "Dodaj wydarzenie do kalendarza";
 
   return (
     <Pressable
-      accessibilityLabel={meta ? `${title}: ${value}. ${meta}` : `${title}: ${value}`}
+      accessibilityLabel={`Najbliższe wydarzenie: ${eventDateTime}. ${eventDetails}`}
       accessibilityRole="button"
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.dashboardRow,
-        showDivider && styles.dashboardRowDivider,
-        pressed && styles.pressed,
-      ]}
+      style={({ pressed }) => [styles.nextEventCard, pressed && styles.pressed]}
     >
-      <View style={[styles.dashboardIcon, { borderColor: accent }]}>{icon}</View>
-      <View style={styles.dashboardText}>
-        <Text numberOfLines={1} style={styles.dashboardTitle}>{title}</Text>
-        <Text numberOfLines={valueLines} style={styles.dashboardMeta}>
-          {value}
-        </Text>
-        {meta ? (
-          <Text numberOfLines={1} style={styles.dashboardSubMeta}>
-            {meta}
-          </Text>
-        ) : null}
+      <Text style={styles.nextEventEyebrow}>PLAN DNIA</Text>
+      <Text style={styles.nextEventTitle}>Najbliższe wydarzenie</Text>
+      <View style={styles.nextEventBody}>
+        <View style={styles.nextEventIcon}>
+          <CalendarDays color={theme.colors.calendar} size={24} />
+        </View>
+        <View style={styles.nextEventText}>
+          <Text numberOfLines={1} style={styles.nextEventTime}>{eventDateTime}</Text>
+          <Text numberOfLines={2} style={styles.nextEventDetails}>{eventDetails}</Text>
+        </View>
       </View>
-      <ChevronRight color={theme.colors.textSubtle} size={20} />
     </Pressable>
   );
 }
 
-function TodoTodaySection({
+function TodayOverviewGrid({
   error,
   isLoading,
+  mealCount,
+  onOpenMeals,
+  onOpenShopping,
   onOpenTodo,
+  shoppingCount,
   tasks,
 }: {
   error: unknown;
   isLoading: boolean;
+  mealCount: number;
+  onOpenMeals: () => void;
+  onOpenShopping: () => void;
   onOpenTodo: () => void;
+  shoppingCount: number;
   tasks: StartTodoItem[];
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
 
   return (
-    <View style={styles.todoPreviewSection}>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Do zrobienia</Text>
-        <Text style={styles.sectionMeta}>Zadania</Text>
-      </View>
-      <View style={styles.todoPreviewPanel}>
-        <QueryState
-          emptyText="Brak rzeczy do zrobienia."
-          error={error}
-          isEmpty={!isLoading && tasks.length === 0}
-          isLoading={isLoading}
-        />
-        {tasks.map((task, index) => (
-          <Pressable
-            accessibilityRole="button"
-            key={task.id}
-            onPress={onOpenTodo}
-            style={({ pressed }) => [
-              styles.todoPreviewRow,
-              index < tasks.length - 1 && styles.todoPreviewRowDivider,
-              pressed && styles.pressed,
-            ]}
-          >
-            <View style={styles.dashboardText}>
-              <Text numberOfLines={1} style={styles.dashboardTitle}>{task.title}</Text>
+    <View style={styles.todayOverviewGrid}>
+      <Pressable
+        accessibilityLabel="Do zrobienia"
+        accessibilityRole="button"
+        onPress={onOpenTodo}
+        style={({ pressed }) => [styles.todoCompactCard, pressed && styles.pressed]}
+      >
+        <View style={styles.todoCompactHeader}>
+          <Text style={styles.todoCompactTitle}>Do zrobienia</Text>
+          <MoreHorizontal color={theme.colors.textMuted} size={20} />
+        </View>
+        <View style={styles.todoCompactList}>
+          <QueryState
+            emptyText="Brak rzeczy do zrobienia."
+            error={error}
+            isEmpty={!isLoading && tasks.length === 0}
+            isLoading={isLoading}
+          />
+          {tasks.map((task, index) => (
+            <View
+              key={task.id}
+              style={[
+                styles.todoCompactRow,
+                index < tasks.length - 1 && styles.todoCompactRowDivider,
+              ]}
+            >
+              <View style={styles.todoCircle} />
+              <Text numberOfLines={1} style={styles.todoCompactText}>{task.title}</Text>
             </View>
-            <ChevronRight color={theme.colors.textSubtle} size={20} />
-          </Pressable>
-        ))}
+          ))}
+        </View>
+        <View style={styles.todoSeeAll}>
+          <Text style={styles.todoSeeAllText}>Zobacz wszystkie</Text>
+          <ChevronRight color={theme.colors.primaryDark} size={16} />
+        </View>
+      </Pressable>
+      <View style={styles.todayMiniColumn}>
+        <MiniTodayCard
+          accent={theme.colors.shopping}
+          icon={<ShoppingCart color={theme.colors.shopping} size={20} />}
+          label={productLabel(shoppingCount)}
+          meta="na liście zakupów"
+          onPress={onOpenShopping}
+          value={String(shoppingCount)}
+        />
+        <MiniTodayCard
+          accent={theme.colors.food}
+          icon={<Utensils color={theme.colors.food} size={20} />}
+          label={mealLabel(mealCount)}
+          meta="na dziś"
+          onPress={onOpenMeals}
+          value={String(mealCount)}
+        />
       </View>
     </View>
+  );
+}
+
+function MiniTodayCard({
+  accent,
+  icon,
+  label,
+  meta,
+  onPress,
+  value,
+}: {
+  accent: string;
+  icon: ReactNode;
+  label: string;
+  meta: string;
+  onPress: () => void;
+  value: string;
+}) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+
+  return (
+    <Pressable
+      accessibilityLabel={`${value} ${label} ${meta}`}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.miniTodayCard,
+        { borderColor: accent },
+        pressed && styles.pressed,
+      ]}
+    >
+      <View style={[styles.miniTodayIcon, { borderColor: accent }]}>{icon}</View>
+      <Text style={styles.miniTodayValue}>{value}</Text>
+      <Text numberOfLines={1} style={styles.miniTodayLabel}>{label}</Text>
+      <Text numberOfLines={2} style={styles.miniTodayMeta}>{meta}</Text>
+    </Pressable>
   );
 }
 
@@ -539,19 +563,8 @@ function isTodayEvent(event: StartCalendarEvent): boolean {
   return event.eventDate === todayIso();
 }
 
-function isTomorrowEvent(event: StartCalendarEvent): boolean {
-  return event.eventDate === offsetIsoDate(1);
-}
-
 function todayIso(): string {
   return isoFromDate(new Date());
-}
-
-function offsetIsoDate(days: number): string {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-
-  return isoFromDate(date);
 }
 
 function isoFromDate(date: Date): string {
@@ -577,14 +590,32 @@ function getTodayMeals(entries: StartMealEntry[], weekday: number): StartMealEnt
     .sort((left, right) => left.slotIndex - right.slotIndex);
 }
 
-function formatMealNames(names: string[]): string {
-  return names.join(", ");
-}
-
 function eventMeta(event: StartCalendarEvent): string {
   return [formatShortDate(event.eventDate), event.eventTime?.slice(0, 5)]
     .filter(Boolean)
     .join(" / ");
+}
+
+function formatEventDateTime(event: StartCalendarEvent): string {
+  return [formatShortDate(event.eventDate), event.eventTime?.slice(0, 5) ?? "cały dzień"]
+    .filter(Boolean)
+    .join(" / ");
+}
+
+function productLabel(count: number): string {
+  if (count === 1) {
+    return "produkt";
+  }
+
+  return count > 1 && count < 5 ? "produkty" : "produktów";
+}
+
+function mealLabel(count: number): string {
+  if (count === 1) {
+    return "posiłek";
+  }
+
+  return count > 1 && count < 5 ? "posiłki" : "posiłków";
 }
 
 function formatShortDate(value: string): string {
@@ -671,6 +702,200 @@ function createStyles(colors: AppPalette) {
       fontWeight: "900",
       letterSpacing: 0,
       textAlign: "center",
+    },
+    nextEventBody: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.md,
+      marginTop: spacing.md,
+    },
+    nextEventCard: {
+      backgroundColor: colors.overlay,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      elevation: 2,
+      marginTop: spacing.sm,
+      minHeight: 138,
+      overflow: "hidden",
+      padding: spacing.lg,
+      shadowColor: "#000000",
+      shadowOffset: { height: 12, width: 0 },
+      shadowOpacity: 0.08,
+      shadowRadius: 28,
+    },
+    nextEventDetails: {
+      color: colors.textMuted,
+      fontSize: 13,
+      fontWeight: "700",
+      letterSpacing: 0,
+      lineHeight: 18,
+    },
+    nextEventEyebrow: {
+      color: colors.primaryDark,
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 0,
+      textTransform: "uppercase",
+    },
+    nextEventIcon: {
+      alignItems: "center",
+      backgroundColor: colors.cardMuted,
+      borderColor: colors.calendar,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      height: 48,
+      justifyContent: "center",
+      width: 48,
+    },
+    nextEventText: {
+      flex: 1,
+      gap: 2,
+      minWidth: 0,
+    },
+    nextEventTime: {
+      color: colors.text,
+      fontSize: 18,
+      fontWeight: "900",
+      letterSpacing: 0,
+      lineHeight: 23,
+    },
+    nextEventTitle: {
+      color: colors.text,
+      fontSize: 18,
+      fontWeight: "900",
+      letterSpacing: 0,
+      lineHeight: 24,
+      marginTop: 4,
+    },
+    miniTodayCard: {
+      backgroundColor: colors.overlay,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      elevation: 2,
+      flex: 1,
+      justifyContent: "center",
+      minHeight: 96,
+      padding: spacing.sm,
+      shadowColor: "#000000",
+      shadowOffset: { height: 8, width: 0 },
+      shadowOpacity: 0.07,
+      shadowRadius: 18,
+    },
+    miniTodayIcon: {
+      alignItems: "center",
+      backgroundColor: colors.cardMuted,
+      borderRadius: 999,
+      borderWidth: 1,
+      height: 34,
+      justifyContent: "center",
+      marginBottom: spacing.xs,
+      width: 34,
+    },
+    miniTodayLabel: {
+      color: colors.text,
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 0,
+      lineHeight: 15,
+    },
+    miniTodayMeta: {
+      color: colors.textMuted,
+      fontSize: 10,
+      fontWeight: "700",
+      letterSpacing: 0,
+      lineHeight: 13,
+    },
+    miniTodayValue: {
+      color: colors.text,
+      fontSize: 28,
+      fontWeight: "900",
+      letterSpacing: 0,
+      lineHeight: 31,
+    },
+    todayMiniColumn: {
+      flex: 0.82,
+      gap: spacing.sm,
+      minWidth: 112,
+    },
+    todayOverviewGrid: {
+      alignItems: "stretch",
+      flexDirection: "row",
+      gap: spacing.sm,
+      marginTop: spacing.sm,
+    },
+    todoCircle: {
+      borderColor: colors.textSubtle,
+      borderRadius: 999,
+      borderWidth: 1.5,
+      height: 17,
+      width: 17,
+    },
+    todoCompactCard: {
+      backgroundColor: colors.overlay,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      elevation: 2,
+      flex: 1.28,
+      gap: spacing.sm,
+      minHeight: 204,
+      padding: spacing.md,
+      shadowColor: "#000000",
+      shadowOffset: { height: 10, width: 0 },
+      shadowOpacity: 0.07,
+      shadowRadius: 22,
+    },
+    todoCompactHeader: {
+      alignItems: "center",
+      flexDirection: "row",
+      justifyContent: "space-between",
+    },
+    todoCompactList: {
+      flex: 1,
+      gap: 0,
+    },
+    todoCompactRow: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.sm,
+      minHeight: 36,
+    },
+    todoCompactRowDivider: {
+      borderBottomColor: colors.border,
+      borderBottomWidth: 1,
+    },
+    todoCompactText: {
+      color: colors.text,
+      flex: 1,
+      fontSize: 12,
+      fontWeight: "800",
+      letterSpacing: 0,
+      lineHeight: 16,
+      minWidth: 0,
+    },
+    todoCompactTitle: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    todoSeeAll: {
+      alignItems: "center",
+      borderColor: colors.border,
+      borderRadius: 999,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: 3,
+      justifyContent: "center",
+      minHeight: 28,
+      paddingHorizontal: spacing.sm,
+    },
+    todoSeeAllText: {
+      color: colors.primaryDark,
+      fontSize: 10,
+      fontWeight: "900",
+      letterSpacing: 0,
     },
     dashboardIcon: {
       alignItems: "center",

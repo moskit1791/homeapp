@@ -35,6 +35,7 @@ import {
   generateNextBudgetMonth,
   getBudgetMonth,
   getFinanceSummary,
+  getMyHousehold,
   listBudgetCategories,
   listBudgetMonths,
   listFinanceDebts,
@@ -57,6 +58,11 @@ import { loadStoredJson, saveStoredJson } from "../../src/session/secure-session
 import { useSession } from "../../src/session/session-context";
 import { radii, spacing } from "../../src/theme/tokens";
 import { useAppTheme, type AppPalette } from "../../src/theme/use-app-theme";
+import {
+  formatCurrencyAmount,
+  normalizeCurrencyCode,
+  type SupportedCurrencyCode,
+} from "../../src/utils/currency";
 import {
   ActionButton,
   AppScreen,
@@ -253,7 +259,13 @@ export default function FinanseScreen() {
     queryFn: () => listFinanceSavings({ accessToken }),
     queryKey: [...queryKeys.finances, "savings"],
   });
+  const householdQuery = useQuery({
+    enabled: Boolean(accessToken),
+    queryFn: () => getMyHousehold({ accessToken }),
+    queryKey: [...queryKeys.household, "me"],
+  });
 
+  const currencyCode = normalizeCurrencyCode(householdQuery.data?.currencyCode);
   const currentSummary = currentQuery.data;
   const summary =
     selectedMonthId && selectedMonthId !== currentSummary?.month.id
@@ -1032,25 +1044,25 @@ export default function FinanseScreen() {
               icon={<Banknote color={theme.colors.finance} size={17} />}
               label="Dochody"
               onPress={() => setFinanceModal("incomeBreakdown")}
-              value={formatMoney(scopedTotals.incomeAmount)}
+              value={formatMoney(scopedTotals.incomeAmount, currencyCode)}
             />
             <FinanceMetric
               color={theme.colors.text}
               icon={<WalletCards color={theme.colors.textMuted} size={17} />}
               label="Budżet"
-              value={formatMoney(scopedTotals.totalBudgetAmount)}
+              value={formatMoney(scopedTotals.totalBudgetAmount, currencyCode)}
             />
             <FinanceMetric
               color={theme.colors.warning}
               icon={<ReceiptText color={theme.colors.warning} size={17} />}
               label="Wydane"
-              value={formatMoney(scopedTotals.totalSpentAmount)}
+              value={formatMoney(scopedTotals.totalSpentAmount, currencyCode)}
             />
             <FinanceMetric
               color={remainingAmount < 0 ? theme.colors.danger : theme.colors.primaryDark}
               icon={<Archive color={remainingAmount < 0 ? theme.colors.danger : theme.colors.primaryDark} size={17} />}
               label="Zostaje"
-              value={formatMoney(scopedTotals.totalRemainingAmount)}
+              value={formatMoney(scopedTotals.totalRemainingAmount, currencyCode)}
             />
           </View>
 
@@ -1068,12 +1080,14 @@ export default function FinanseScreen() {
           {budgetLayout === "table" ? (
             <FinanceSheet
               canUpdate={canEditVisibleMonth}
+              currencyCode={currencyCode}
               onEdit={openEditBudgetItem}
               rows={filteredRows}
             />
           ) : (
             <FinanceCategoryCards
               canUpdate={canEditVisibleMonth}
+              currencyCode={currencyCode}
               onEdit={openEditBudgetItem}
               rows={filteredRows}
               scrollRef={screenScrollRef}
@@ -1082,10 +1096,10 @@ export default function FinanseScreen() {
 
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>RAZEM</Text>
-            <Text style={styles.totalValue}>{formatMoney(budgetAmount)}</Text>
-            <Text style={styles.totalValue}>{formatMoney(spentAmount)}</Text>
+            <Text style={styles.totalValue}>{formatMoney(budgetAmount, currencyCode)}</Text>
+            <Text style={styles.totalValue}>{formatMoney(spentAmount, currencyCode)}</Text>
             <Text style={[styles.totalValue, remainingAmount < 0 && styles.dangerText]}>
-              {formatMoney(remainingAmount)}
+              {formatMoney(remainingAmount, currencyCode)}
             </Text>
           </View>
 
@@ -1522,7 +1536,7 @@ export default function FinanseScreen() {
           <View style={styles.debtSummary}>
             <View>
               <Text style={styles.debtSummaryLabel}>Do oddania</Text>
-              <Text style={styles.debtSummaryValue}>{formatMoney(openDebtTotal)}</Text>
+              <Text style={styles.debtSummaryValue}>{formatMoney(openDebtTotal, currencyCode)}</Text>
             </View>
             <Text style={styles.debtSummaryMeta}>
               {openDebts.length} aktywne / {settledDebts.length} spłacone
@@ -1537,6 +1551,7 @@ export default function FinanseScreen() {
           <FinanceDebtsList
             canDelete={canDelete}
             canUpdate={canUpdate}
+            currencyCode={currencyCode}
             deleting={deleteDebtMutation.isPending}
             debts={debts}
             onDelete={(debt) => deleteDebtMutation.mutate(debt.id)}
@@ -1592,7 +1607,7 @@ export default function FinanseScreen() {
               <View>
                 <Text style={styles.debtSummaryLabel}>Oszczędności domu</Text>
                 <Text style={[styles.debtSummaryValue, styles.savingsSummaryValue]}>
-                  {formatMoney(savingsTotal)}
+                  {formatMoney(savingsTotal, currencyCode)}
                 </Text>
               </View>
             </View>
@@ -1608,6 +1623,7 @@ export default function FinanseScreen() {
             accounts={savings}
             canDelete={canDelete}
             canUpdate={canUpdate}
+            currencyCode={currencyCode}
             deleting={deleteSavingsAccountMutation.isPending}
             onDelete={(account) => deleteSavingsAccountMutation.mutate(account.id)}
             onTransaction={openSavingsTransaction}
@@ -1669,7 +1685,7 @@ export default function FinanseScreen() {
             onClose={closeFinanceModal}
             subtitle={
               selectedSavingsAccount
-                ? `${selectedSavingsAccount.name} / obecnie ${formatMoney(selectedSavingsAccount.currentAmount)}`
+                ? `${selectedSavingsAccount.name} / obecnie ${formatMoney(selectedSavingsAccount.currentAmount, currencyCode)}`
                 : undefined
             }
             title={savingsDirection === "add" ? "Dodaj do oszczędności" : "Odejmij z oszczędności"}
@@ -1701,6 +1717,7 @@ export default function FinanseScreen() {
         visible={financeModal === "incomeBreakdown"}
       >
         <IncomeBreakdownList
+          currencyCode={currencyCode}
           rows={personSummaries}
           selectedOwnerMemberId={financeFilters.ownerMemberId}
           totals={totals}
@@ -1761,10 +1778,12 @@ function FinanceMetric({
 }
 
 function IncomeBreakdownList({
+  currencyCode,
   rows,
   selectedOwnerMemberId,
   totals,
 }: {
+  currencyCode: SupportedCurrencyCode;
   rows: PersonFinanceSummary[];
   selectedOwnerMemberId: string;
   totals: FinanceTotalSummary | undefined;
@@ -1792,17 +1811,18 @@ function IncomeBreakdownList({
                 {row.displayName || row.email}
               </Text>
               <Text style={styles.incomeBreakdownMeta}>
-                Budżet {formatMoney(row.totalBudgetAmount)} / wydano {formatMoney(row.totalSpentAmount)} / zostaje{" "}
-                {formatMoney(row.totalRemainingAmount)}
+                Budżet {formatMoney(row.totalBudgetAmount, currencyCode)} / wydano{" "}
+                {formatMoney(row.totalSpentAmount, currencyCode)} / zostaje{" "}
+                {formatMoney(row.totalRemainingAmount, currencyCode)}
               </Text>
             </View>
-            <Text style={styles.incomeBreakdownValue}>{formatMoney(row.incomeAmount)}</Text>
+            <Text style={styles.incomeBreakdownValue}>{formatMoney(row.incomeAmount, currencyCode)}</Text>
           </View>
         );
       })}
       <View style={styles.incomeBreakdownTotal}>
         <Text style={styles.totalLabel}>RAZEM DOM</Text>
-        <Text style={styles.totalValue}>{formatMoney(total.incomeAmount)}</Text>
+        <Text style={styles.totalValue}>{formatMoney(total.incomeAmount, currencyCode)}</Text>
       </View>
     </View>
   );
@@ -1811,6 +1831,7 @@ function IncomeBreakdownList({
 function FinanceDebtsList({
   canDelete,
   canUpdate,
+  currencyCode,
   debts,
   deleting,
   onDelete,
@@ -1820,6 +1841,7 @@ function FinanceDebtsList({
 }: {
   canDelete: boolean;
   canUpdate: boolean;
+  currencyCode: SupportedCurrencyCode;
   debts: FinanceDebt[];
   deleting: boolean;
   onDelete: (debt: FinanceDebt) => void;
@@ -1850,7 +1872,7 @@ function FinanceDebtsList({
           </View>
           <View style={styles.debtSide}>
             <Text style={[styles.debtAmount, debt.isSettled && styles.debtSettledText]}>
-              {formatMoney(debt.amount)}
+              {formatMoney(debt.amount, currencyCode)}
             </Text>
             <View style={styles.debtActions}>
               {canUpdate ? (
@@ -1888,6 +1910,7 @@ function FinanceSavingsList({
   accounts,
   canDelete,
   canUpdate,
+  currencyCode,
   deleting,
   onDelete,
   onTransaction,
@@ -1896,6 +1919,7 @@ function FinanceSavingsList({
   accounts: FinanceSavingsAccount[];
   canDelete: boolean;
   canUpdate: boolean;
+  currencyCode: SupportedCurrencyCode;
   deleting: boolean;
   onDelete: (account: FinanceSavingsAccount) => void;
   onTransaction: (account: FinanceSavingsAccount, direction: FinanceSavingsDirection) => void;
@@ -1925,7 +1949,7 @@ function FinanceSavingsList({
                 </Text>
               </View>
               <View style={styles.debtSide}>
-                <Text style={styles.savingsAmount}>{formatMoney(account.currentAmount)}</Text>
+                <Text style={styles.savingsAmount}>{formatMoney(account.currentAmount, currencyCode)}</Text>
                 <View style={styles.debtActions}>
                   {canUpdate ? (
                     <>
@@ -1969,7 +1993,7 @@ function FinanceSavingsList({
                         transaction.direction === "add" ? styles.savingsDeltaAdd : styles.savingsDeltaSubtract,
                       ]}
                     >
-                      {transaction.direction === "add" ? "+" : "-"}{formatMoney(transaction.amount)}
+                      {transaction.direction === "add" ? "+" : "-"}{formatMoney(transaction.amount, currencyCode)}
                     </Text>
                     <Text numberOfLines={1} style={styles.savingsTransactionMeta}>
                       {formatDateFull(transaction.changedAt)}
@@ -2131,10 +2155,12 @@ function FilterChip({
 
 function FinanceSheet({
   canUpdate,
+  currencyCode,
   onEdit,
   rows,
 }: {
   canUpdate: boolean;
+  currencyCode: SupportedCurrencyCode;
   onEdit: (item: BudgetItemWithCategory) => void;
   rows: BudgetItemWithCategory[];
 }) {
@@ -2173,21 +2199,20 @@ function FinanceSheet({
           <Text style={styles.amountHeaderCell}>Zostaje</Text>
           <Text style={styles.actionHeaderCell}>Akcje</Text>
         </View>
-        {groups.map((group, index) => {
-          const accent = getCategoryAccent(index);
+        {groups.map((group) => {
           const collapsed = collapsedCategoryIds.has(group.category.id);
 
           return (
           <View key={group.category.id}>
-            <View style={[styles.categoryRow, { backgroundColor: theme.colors.cardMuted, borderTopColor: accent.border }]}>
+            <View style={styles.categoryRow}>
               <View style={styles.categoryRowMain}>
-                <View style={[styles.categoryColorBar, { backgroundColor: accent.color }]} />
                 <View style={styles.categoryRowTitleBlock}>
-                  <Text style={[styles.categoryRowText, { color: accent.text }]}>
+                  <Text style={styles.categoryRowText}>
                     {group.category.name.toUpperCase()}
                   </Text>
                   <Text style={styles.categoryRowMeta}>
-                    {group.items.length} pozycji / {formatMoney(group.spent)} z {formatMoney(group.planned)}
+                    {group.items.length} pozycji / {formatMoney(group.spent, currencyCode)} z{" "}
+                    {formatMoney(group.planned, currencyCode)}
                   </Text>
                 </View>
               </View>
@@ -2198,9 +2223,9 @@ function FinanceSheet({
                 style={styles.categoryToggleCell}
               >
                 {collapsed ? (
-                  <ChevronRight color={accent.text} size={20} />
+                  <ChevronRight color={theme.colors.textMuted} size={20} />
                 ) : (
-                  <ChevronDown color={accent.text} size={20} />
+                  <ChevronDown color={theme.colors.textMuted} size={20} />
                 )}
               </Pressable>
             </View>
@@ -2212,8 +2237,8 @@ function FinanceSheet({
                 <Text numberOfLines={1} style={[styles.bodyCell, styles.categoryCell]}>
                   {item.name}
                 </Text>
-                <Text style={styles.amountCell}>{formatMoney(item.budgetAmount)}</Text>
-                <Text style={styles.amountCell}>{formatMoney(item.spentAmount)}</Text>
+                <Text style={styles.amountCell}>{formatMoney(item.budgetAmount, currencyCode)}</Text>
+                <Text style={styles.amountCell}>{formatMoney(item.spentAmount, currencyCode)}</Text>
                 <Text
                   style={[
                     styles.amountCell,
@@ -2221,7 +2246,7 @@ function FinanceSheet({
                     Number(item.remainingAmount ?? 0) >= 0 && styles.positiveText,
                   ]}
                 >
-                  {item.budgetAmount ? formatMoney(item.remainingAmount ?? 0) : "bez limitu"}
+                  {item.budgetAmount ? formatMoney(item.remainingAmount ?? 0, currencyCode) : "bez limitu"}
                 </Text>
                 <View style={styles.actionCell}>
                   {canUpdate ? (
@@ -2235,10 +2260,10 @@ function FinanceSheet({
             {collapsed ? null : <View style={styles.sumRow}>
               <Text style={[styles.sumCell, styles.personCell]}>Suma</Text>
               <Text style={[styles.sumCell, styles.categoryCell]}>{group.category.name}</Text>
-              <Text style={styles.amountSumCell}>{formatMoney(group.planned)}</Text>
-              <Text style={styles.amountSumCell}>{formatMoney(group.spent)}</Text>
+              <Text style={styles.amountSumCell}>{formatMoney(group.planned, currencyCode)}</Text>
+              <Text style={styles.amountSumCell}>{formatMoney(group.spent, currencyCode)}</Text>
               <Text style={[styles.amountSumCell, group.remaining < 0 && styles.dangerText]}>
-                {formatMoney(group.remaining)}
+                {formatMoney(group.remaining, currencyCode)}
               </Text>
               <View style={styles.actionSumCell} />
             </View>}
@@ -2252,11 +2277,13 @@ function FinanceSheet({
 
 function FinanceCategoryCards({
   canUpdate,
+  currencyCode,
   onEdit,
   rows,
   scrollRef,
 }: {
   canUpdate: boolean;
+  currencyCode: SupportedCurrencyCode;
   onEdit: (item: BudgetItemWithCategory) => void;
   rows: BudgetItemWithCategory[];
   scrollRef: RefObject<ScrollView>;
@@ -2305,8 +2332,10 @@ function FinanceCategoryCards({
           const remainingProgress = getBudgetRemainingProgress(group);
           const amountText =
             group.remaining >= 0
-              ? `zostaje ${formatMoney(group.remaining)} / ${group.planned > 0 ? formatMoney(group.planned) : "bez limitu"}`
-              : `po limicie ${formatMoney(Math.abs(group.remaining))}`;
+              ? `zostaje ${formatMoney(group.remaining, currencyCode)} / ${
+                  group.planned > 0 ? formatMoney(group.planned, currencyCode) : "bez limitu"
+                }`
+              : `po limicie ${formatMoney(Math.abs(group.remaining), currencyCode)}`;
 
           return (
             <Pressable
@@ -2354,7 +2383,7 @@ function FinanceCategoryCards({
           <View style={styles.categoryDetailsHeader}>
             <Text style={styles.categoryDetailsTitle}>{selectedGroup.category.name}</Text>
             <Text style={styles.categoryDetailsMeta}>
-              {selectedGroup.items.length} pozycji / zostaje {formatMoney(selectedGroup.remaining)}
+              {selectedGroup.items.length} pozycji / zostaje {formatMoney(selectedGroup.remaining, currencyCode)}
             </Text>
           </View>
           {selectedGroup.items.map((item) => (
@@ -2368,8 +2397,8 @@ function FinanceCategoryCards({
                 </Text>
               </View>
               <View style={styles.categoryDetailsAmounts}>
-                <Text style={styles.categoryDetailsAmount}>{formatMoney(item.budgetAmount)}</Text>
-                <Text style={styles.categoryDetailsSpent}>wydano {formatMoney(item.spentAmount)}</Text>
+                <Text style={styles.categoryDetailsAmount}>{formatMoney(item.budgetAmount, currencyCode)}</Text>
+                <Text style={styles.categoryDetailsSpent}>wydano {formatMoney(item.spentAmount, currencyCode)}</Text>
                 <Text
                   style={[
                     styles.categoryDetailsRemaining,
@@ -2377,7 +2406,7 @@ function FinanceCategoryCards({
                     Number(item.remainingAmount ?? 0) >= 0 && styles.positiveText,
                   ]}
                 >
-                  {item.budgetAmount ? formatMoney(item.remainingAmount ?? 0) : "bez limitu"}
+                  {item.budgetAmount ? formatMoney(item.remainingAmount ?? 0, currencyCode) : "bez limitu"}
                 </Text>
               </View>
               {canUpdate ? (
@@ -2659,14 +2688,11 @@ function isPositiveMoney(value: string): boolean {
   return value.trim().length > 0 && Number.isFinite(parsed) && parsed > 0;
 }
 
-function formatMoney(value: string | number | null | undefined): string {
-  const amount = Number(value ?? 0);
-  const safeAmount = Number.isFinite(amount) ? amount : 0;
-
-  return `${safeAmount.toLocaleString("pl-PL", {
-    maximumFractionDigits: 2,
-    minimumFractionDigits: Number.isInteger(safeAmount) ? 0 : 2,
-  })} zł`;
+function formatMoney(
+  value: string | number | null | undefined,
+  currencyCode: SupportedCurrencyCode,
+): string {
+  return formatCurrencyAmount(value, currencyCode);
 }
 
 function formatMoneyInput(value: string | number | null | undefined): string {
