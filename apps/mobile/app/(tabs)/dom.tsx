@@ -2292,7 +2292,7 @@ function CleaningRow({
 
   return (
     <View style={[styles.itemRow, task.isOverdue && styles.warningRow]}>
-      <View style={[styles.itemMarker, { backgroundColor: task.isOverdue ? theme.colors.warning : accent.color }]} />
+      <View style={[styles.itemMarker, { backgroundColor: task.isOverdue ? theme.colors.danger : accent.color }]} />
       <View style={styles.itemText}>
         <Text style={styles.itemName}>{task.name}</Text>
         <Text style={styles.itemMeta}>Termin: {task.nextDueAt} / co {task.frequencyDays} dni</Text>
@@ -2305,12 +2305,12 @@ function CleaningRow({
         variant="secondary"
       />
       {canUpdate ? (
-        <IconButton accessibilityLabel="Edytuj sprzatanie" onPress={onEdit}>
+        <IconButton accessibilityLabel="Edytuj sprzątanie" onPress={onEdit}>
           <Pencil color={theme.colors.primary} size={17} />
         </IconButton>
       ) : null}
       {canDelete ? (
-        <IconButton accessibilityLabel="Usun sprzatanie" disabled={deleting} onPress={onDelete}>
+        <IconButton accessibilityLabel="Usuń sprzątanie" disabled={deleting} onPress={onDelete}>
           <Trash2 color={theme.colors.danger} size={17} />
         </IconButton>
       ) : null}
@@ -3376,7 +3376,8 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
     },
     warningRow: {
-      backgroundColor: colors.warningSoft,
+      backgroundColor: colors.dangerSoft,
+      borderColor: `${colors.danger}55`,
     },
     zoomCanvas: {
       alignItems: "center",

@@ -167,7 +167,7 @@ export default function KalendarzScreen() {
   const connectGoogleMutation = useMutation({
     mutationFn: () => connectGoogleCalendar({ accessToken }),
     onSuccess: async (result) => {
-      setGoogleNotice("Otwieram Google. Po akceptacji wrĂłÄ‡ do aplikacji i uruchom synchronizacjÄ™.");
+      setGoogleNotice("Otwieram Google. Po akceptacji wróć do aplikacji i uruchom synchronizację.");
       await Linking.openURL(result.authorizationUrl);
     },
   });
@@ -291,6 +291,9 @@ export default function KalendarzScreen() {
     connectGoogleMutation.mutate();
   }
 
+  const googleCalendarConnected = Boolean(googleCalendarQuery.data?.connected);
+  const googleCalendarPending = connectGoogleMutation.isPending || syncGoogleMutation.isPending;
+
   if (permissionsQuery.isLoading) {
     return (
       <AppScreen title="Kalendarz">
@@ -310,14 +313,28 @@ export default function KalendarzScreen() {
   return (
     <AppScreen
       actions={
-        calendarPermission.canCreate ? (
+        calendarPermission.canCreate || calendarPermission.canRead ? (
           <View style={styles.headerActions}>
-            <IconButton
-              accessibilityLabel="Dodaj wydarzenie"
-              onPress={() => openCreateEvent()}
-            >
-              <CalendarPlus color={theme.colors.text} size={18} />
-            </IconButton>
+            {calendarPermission.canRead ? (
+              <IconButton
+                accessibilityLabel={
+                  googleCalendarConnected ? "Synchronizuj Google Calendar" : "Połącz Google Calendar"
+                }
+                disabled={googleCalendarPending || (googleCalendarConnected && !calendarPermission.canCreate)}
+                onPress={handleGoogleCalendarPress}
+                style={styles.googleHeaderButton}
+              >
+                <Google color={googleCalendarPending ? theme.colors.textSubtle : "#DB4437"} size={18} />
+              </IconButton>
+            ) : null}
+            {calendarPermission.canCreate ? (
+              <IconButton
+                accessibilityLabel="Dodaj wydarzenie"
+                onPress={() => openCreateEvent()}
+              >
+                <CalendarPlus color={theme.colors.text} size={18} />
+              </IconButton>
+            ) : null}
           </View>
         ) : undefined
       }
@@ -365,42 +382,9 @@ export default function KalendarzScreen() {
         ) : null}
       </View>
 
-      {calendarPermission.canRead ? (
-        <View style={styles.googleSyncPanel}>
-          <View style={styles.googleSyncHeader}>
-            <View style={styles.googleSyncIcon}>
-              <Google color="#DB4437" size={18} />
-            </View>
-            <View style={styles.googleSyncText}>
-              <Text style={styles.googleSyncTitle}>Google Calendar</Text>
-              <Text style={styles.googleSyncMeta}>
-                {googleCalendarQuery.data?.connected
-                  ? [
-                      googleCalendarQuery.data.googleAccountEmail ?? "Konto podpiÄ™te",
-                      googleCalendarQuery.data.lastSyncedAt
-                        ? `ostatnio ${formatDateTime(googleCalendarQuery.data.lastSyncedAt)}`
-                        : "gotowe do synchronizacji",
-                    ].join(" / ")
-                  : "PodpiÄ™cie konta jest osobne dla kaĹĽdego domownika."}
-              </Text>
-            </View>
-          </View>
-          <ActionButton
-            disabled={
-              !calendarPermission.canCreate ||
-              connectGoogleMutation.isPending ||
-              syncGoogleMutation.isPending
-            }
-            loading={connectGoogleMutation.isPending || syncGoogleMutation.isPending}
-            onPress={handleGoogleCalendarPress}
-            size="small"
-            title={googleCalendarQuery.data?.connected ? "Synchronizuj" : "PoĹ‚Ä…cz Google"}
-          />
-        </View>
-      ) : null}
       {googleNotice ? <InlineAlert text={googleNotice} /> : null}
       {connectGoogleMutation.error || syncGoogleMutation.error ? (
-        <InlineAlert text="Nie udaĹ‚o siÄ™ zsynchronizowaÄ‡ Google Calendar." tone="error" />
+        <InlineAlert text="Nie udało się zsynchronizować Google Calendar." tone="error" />
       ) : null}
 
       {calendarPermission.canRead ? (
@@ -1730,48 +1714,10 @@ function createStyles(colors: AppPalette) {
       flexDirection: "row",
       gap: spacing.sm,
     },
-    googleSyncHeader: {
-      alignItems: "center",
-      flex: 1,
-      flexDirection: "row",
-      gap: spacing.sm,
-      minWidth: 0,
-    },
-    googleSyncIcon: {
-      alignItems: "center",
+    googleHeaderButton: {
       backgroundColor: colors.cardMuted,
-      borderRadius: 999,
-      height: 34,
-      justifyContent: "center",
-      width: 34,
-    },
-    googleSyncMeta: {
-      color: colors.textMuted,
-      fontSize: 12,
-      fontWeight: "700",
-      letterSpacing: 0,
-      lineHeight: 16,
-    },
-    googleSyncPanel: {
-      alignItems: "center",
-      backgroundColor: colors.card,
       borderColor: colors.border,
-      borderRadius: radii.card,
       borderWidth: 1,
-      flexDirection: "row",
-      gap: spacing.sm,
-      padding: spacing.md,
-    },
-    googleSyncText: {
-      flex: 1,
-      gap: 2,
-      minWidth: 0,
-    },
-    googleSyncTitle: {
-      color: colors.text,
-      fontSize: 14,
-      fontWeight: "900",
-      letterSpacing: 0,
     },
     headerActions: {
       alignItems: "center",

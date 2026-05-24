@@ -470,6 +470,7 @@ function TodayOverviewGrid({
       <View style={styles.todayMiniColumn}>
         <MiniTodayCard
           accent={theme.colors.shopping}
+          backgroundIcon={<ShoppingCart color={`${theme.colors.shopping}55`} size={74} />}
           icon={<ShoppingCart color={theme.colors.shopping} size={20} />}
           label={productLabel(shoppingCount)}
           meta="na liście zakupów"
@@ -478,6 +479,7 @@ function TodayOverviewGrid({
         />
         <MiniTodayCard
           accent={theme.colors.food}
+          backgroundIcon={<Utensils color={`${theme.colors.food}55`} size={74} />}
           icon={<Utensils color={theme.colors.food} size={20} />}
           label={mealLabel(mealCount)}
           meta="na dziś"
@@ -491,6 +493,7 @@ function TodayOverviewGrid({
 
 function MiniTodayCard({
   accent,
+  backgroundIcon,
   icon,
   label,
   meta,
@@ -498,6 +501,7 @@ function MiniTodayCard({
   value,
 }: {
   accent: string;
+  backgroundIcon: ReactNode;
   icon: ReactNode;
   label: string;
   meta: string;
@@ -518,9 +522,18 @@ function MiniTodayCard({
         pressed && styles.pressed,
       ]}
     >
-      <View style={[styles.miniTodayIcon, { borderColor: accent }]}>{icon}</View>
+      <View pointerEvents="none" style={[styles.miniTodayGlow, { backgroundColor: `${accent}24` }]} />
+      <View pointerEvents="none" style={styles.miniTodayGhostIcon}>{backgroundIcon}</View>
+      <View
+        style={[
+          styles.miniTodayIcon,
+          { backgroundColor: `${accent}24`, borderColor: accent },
+        ]}
+      >
+        {icon}
+      </View>
       <Text style={styles.miniTodayValue}>{value}</Text>
-      <Text numberOfLines={1} style={styles.miniTodayLabel}>{label}</Text>
+      <Text numberOfLines={2} style={styles.miniTodayLabel}>{label}</Text>
       <Text numberOfLines={2} style={styles.miniTodayMeta}>{meta}</Text>
     </Pressable>
   );
@@ -769,22 +782,38 @@ function createStyles(colors: AppPalette) {
       marginTop: 4,
     },
     miniTodayCard: {
-      backgroundColor: colors.overlay,
+      backgroundColor: colors.card,
       borderRadius: radii.card,
       borderWidth: 1,
       elevation: 2,
+      flexBasis: 0,
       flex: 1,
-      justifyContent: "center",
-      minHeight: 96,
+      justifyContent: "flex-start",
+      minHeight: 98,
+      minWidth: 0,
+      overflow: "hidden",
       padding: spacing.sm,
+      position: "relative",
       shadowColor: "#000000",
       shadowOffset: { height: 8, width: 0 },
-      shadowOpacity: 0.07,
+      shadowOpacity: 0.1,
       shadowRadius: 18,
+    },
+    miniTodayGhostIcon: {
+      bottom: -10,
+      position: "absolute",
+      right: -14,
+    },
+    miniTodayGlow: {
+      borderRadius: 999,
+      bottom: -32,
+      height: 86,
+      position: "absolute",
+      right: -30,
+      width: 86,
     },
     miniTodayIcon: {
       alignItems: "center",
-      backgroundColor: colors.cardMuted,
       borderRadius: 999,
       borderWidth: 1,
       height: 34,
@@ -794,10 +823,11 @@ function createStyles(colors: AppPalette) {
     },
     miniTodayLabel: {
       color: colors.text,
-      fontSize: 12,
+      fontSize: 11,
       fontWeight: "900",
       letterSpacing: 0,
-      lineHeight: 15,
+      lineHeight: 13,
+      maxWidth: 72,
     },
     miniTodayMeta: {
       color: colors.textMuted,
@@ -814,9 +844,10 @@ function createStyles(colors: AppPalette) {
       lineHeight: 31,
     },
     todayMiniColumn: {
-      flex: 0.82,
+      flex: 1,
+      flexBasis: 0,
       gap: spacing.sm,
-      minWidth: 112,
+      minWidth: 92,
     },
     todayOverviewGrid: {
       alignItems: "stretch",
@@ -837,8 +868,10 @@ function createStyles(colors: AppPalette) {
       borderRadius: radii.card,
       borderWidth: 1,
       elevation: 2,
-      flex: 1.28,
+      flex: 3,
+      flexBasis: 0,
       gap: spacing.sm,
+      minWidth: 0,
       minHeight: 204,
       padding: spacing.md,
       shadowColor: "#000000",
