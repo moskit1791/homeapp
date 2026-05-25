@@ -2,7 +2,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type ImageSourcePropType,
+} from "react-native";
 import {
   getStartDashboard,
   listShoppingItems,
@@ -22,7 +29,13 @@ import { useModulePermission } from "../../src/permissions/use-permissions";
 import { useSession } from "../../src/session/session-context";
 import { radii, spacing } from "../../src/theme/tokens";
 import { useAppTheme, type AppPalette } from "../../src/theme/use-app-theme";
-import { ActionButton, AppScreen, AppToast, IconButton, QueryState } from "../../src/ui";
+import {
+  ActionButton,
+  AppScreen,
+  AppToast,
+  IconButton,
+  QueryState,
+} from "../../src/ui";
 import {
   AccountCircle,
   Bell,
@@ -36,6 +49,8 @@ import {
   ShoppingCart,
   Utensils,
 } from "../../src/ui/icon";
+import mealCardImage from "../../assets/today-meal.png";
+import shoppingCardImage from "../../assets/today-shopping.png";
 
 export default function DzisiajScreen() {
   const { session } = useSession();
@@ -44,7 +59,9 @@ export default function DzisiajScreen() {
   const styles = createStyles(theme.colors);
   const accessToken = session?.accessToken;
   const [notificationsVisible, setNotificationsVisible] = useState(false);
-  const [pushNotifications, setPushNotifications] = useState<StoredNotification[]>([]);
+  const [pushNotifications, setPushNotifications] = useState<
+    StoredNotification[]
+  >([]);
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
   const shoppingPermission = useModulePermission("shopping");
@@ -74,23 +91,42 @@ export default function DzisiajScreen() {
     (item) => !item.isChecked,
   );
   const todoPreview = (dashboard?.todoPreview ?? []).slice(0, 3);
-  const openFromNotification = useCallback((route: "/(tabs)/kalendarz" | "/(tabs)/finanse" | "/(tabs)/lista" | "/(tabs)/dom" | "/(tabs)/zadania") => {
-    setNotificationsVisible(false);
-    router.push(route as never);
-  }, [router]);
-  const openCalendarForDate = useCallback((date: string, action?: "create") => {
-    router.push({
-      pathname: "/(tabs)/kalendarz",
-      params: { action, date, intent: String(Date.now()) },
-    } as never);
-  }, [router]);
-  const openCalendarNotification = useCallback((date: string) => {
-    setNotificationsVisible(false);
-    openCalendarForDate(date);
-  }, [openCalendarForDate]);
+  const openFromNotification = useCallback(
+    (
+      route:
+        | "/(tabs)/kalendarz"
+        | "/(tabs)/finanse"
+        | "/(tabs)/lista"
+        | "/(tabs)/dom"
+        | "/(tabs)/zadania",
+    ) => {
+      setNotificationsVisible(false);
+      router.push(route as never);
+    },
+    [router],
+  );
+  const openCalendarForDate = useCallback(
+    (date: string, action?: "create") => {
+      router.push({
+        pathname: "/(tabs)/kalendarz",
+        params: { action, date, intent: String(Date.now()) },
+      } as never);
+    },
+    [router],
+  );
+  const openCalendarNotification = useCallback(
+    (date: string) => {
+      setNotificationsVisible(false);
+      openCalendarForDate(date);
+    },
+    [openCalendarForDate],
+  );
   const openNotificationSettings = useCallback(() => {
     setNotificationsVisible(false);
-    router.push({ pathname: "/(tabs)/dom", params: { settings: "1" } } as never);
+    router.push({
+      pathname: "/(tabs)/dom",
+      params: { settings: "1" },
+    } as never);
   }, [router]);
   const refreshNotificationCenter = useCallback(async (markRead: boolean) => {
     const stored = await listStoredNotifications();
@@ -133,13 +169,19 @@ export default function DzisiajScreen() {
         icon: <CalendarDays color={theme.colors.calendar} size={20} />,
         id: "today-events",
         onPress: () => openCalendarNotification(todayIso()),
-        title: todayEvents.length === 1 ? "Masz 1 wydarzenie dzisiaj" : `Masz ${todayEvents.length} wydarzenia dzisiaj`,
+        title:
+          todayEvents.length === 1
+            ? "Masz 1 wydarzenie dzisiaj"
+            : `Masz ${todayEvents.length} wydarzenia dzisiaj`,
       });
     }
 
     if (openShopping.length > 0) {
       items.push({
-        body: openShopping.length === 1 ? "1 produkt czeka na liście." : `${openShopping.length} produktów czeka na liście.`,
+        body:
+          openShopping.length === 1
+            ? "1 produkt czeka na liście."
+            : `${openShopping.length} produktów czeka na liście.`,
         icon: <ShoppingCart color={theme.colors.shopping} size={20} />,
         id: "shopping-open",
         onPress: () => openFromNotification("/(tabs)/lista"),
@@ -167,8 +209,17 @@ export default function DzisiajScreen() {
             onPress={() => setNotificationsVisible(true)}
           >
             <View style={styles.bellWrap}>
-              <Bell color={unreadNotificationsCount > 0 ? theme.colors.warning : theme.colors.text} size={19} />
-              {unreadNotificationsCount > 0 ? <View style={styles.bellDot} /> : null}
+              <Bell
+                color={
+                  unreadNotificationsCount > 0
+                    ? theme.colors.warning
+                    : theme.colors.text
+                }
+                size={19}
+              />
+              {unreadNotificationsCount > 0 ? (
+                <View style={styles.bellDot} />
+              ) : null}
             </View>
           </IconButton>
         </View>
@@ -182,7 +233,10 @@ export default function DzisiajScreen() {
       titleAlign="center"
     >
       <AppToast offsetTop={74} text={toast} />
-      <QueryState error={dashboardQuery.error} isLoading={dashboardQuery.isLoading} />
+      <QueryState
+        error={dashboardQuery.error}
+        isLoading={dashboardQuery.isLoading}
+      />
 
       {notificationsVisible ? (
         <NotificationCenterPanel
@@ -218,21 +272,32 @@ export default function DzisiajScreen() {
             icon={<ReceiptText color={theme.colors.finance} size={29} />}
             label="Wydatek"
             onPress={() =>
-              router.push({ pathname: "/(tabs)/finanse", params: { action: "expense", intent: String(Date.now()) } } as never)
+              router.push({
+                pathname: "/(tabs)/finanse",
+                params: { action: "expense", intent: String(Date.now()) },
+              } as never)
             }
             showDivider
           />
           <QuickAction
             icon={<CartPlus color={theme.colors.shopping} size={29} />}
             label="Zakupy"
-            onPress={() => router.push({ pathname: "/(tabs)/lista", params: { action: "addShopping", segment: "shopping" } } as never)}
+            onPress={() =>
+              router.push({
+                pathname: "/(tabs)/lista",
+                params: { action: "addShopping", segment: "shopping" },
+              } as never)
+            }
             showDivider
           />
           <QuickAction
             icon={<NotePlus color={theme.colors.primaryDark} size={29} />}
             label="Notatka"
             onPress={() =>
-              router.push({ pathname: "/(tabs)/zadania", params: { action: "note", segment: "notes" } } as never)
+              router.push({
+                pathname: "/(tabs)/zadania",
+                params: { action: "note", segment: "notes" },
+              } as never)
             }
           />
         </View>
@@ -241,7 +306,9 @@ export default function DzisiajScreen() {
       <NextEventCard
         event={nextEvent}
         onPress={() =>
-          nextEvent ? openCalendarForDate(nextEvent.eventDate) : openCalendarForDate(todayIso(), "create")
+          nextEvent
+            ? openCalendarForDate(nextEvent.eventDate)
+            : openCalendarForDate(todayIso(), "create")
         }
       />
 
@@ -250,16 +317,28 @@ export default function DzisiajScreen() {
           error={dashboardQuery.error}
           isLoading={dashboardQuery.isLoading}
           mealCount={todayMeals.length}
-          onOpenMeals={() => router.push({ pathname: "/(tabs)/lista", params: { segment: "meals" } } as never)}
-          onOpenShopping={() => router.push({ pathname: "/(tabs)/lista", params: { segment: "shopping" } } as never)}
+          onOpenMeals={() =>
+            router.push({
+              pathname: "/(tabs)/lista",
+              params: { segment: "meals" },
+            } as never)
+          }
+          onOpenShopping={() =>
+            router.push({
+              pathname: "/(tabs)/lista",
+              params: { segment: "shopping" },
+            } as never)
+          }
           onOpenTodo={() =>
-            router.push({ pathname: "/(tabs)/zadania", params: { segment: "todo" } } as never)
+            router.push({
+              pathname: "/(tabs)/zadania",
+              params: { segment: "todo" },
+            } as never)
           }
           shoppingCount={openShopping.length}
           tasks={todoPreview}
         />
       ) : null}
-
     </AppScreen>
   );
 }
@@ -292,8 +371,8 @@ function NotificationCenterPanel({
     activeCount === 0
       ? "Brak aktywnych spraw."
       : activeCount === 1
-      ? "1 aktywna sprawa do sprawdzenia."
-      : `${activeCount} aktywne sprawy do sprawdzenia.`;
+        ? "1 aktywna sprawa do sprawdzenia."
+        : `${activeCount} aktywne sprawy do sprawdzenia.`;
 
   return (
     <View style={styles.notificationPanel}>
@@ -302,7 +381,10 @@ function NotificationCenterPanel({
           <Text style={styles.notificationPanelTitle}>Powiadomienia</Text>
           <Text style={styles.notificationPanelSubtitle}>{subtitle}</Text>
         </View>
-        <IconButton accessibilityLabel="Zamknij powiadomienia" onPress={onClose}>
+        <IconButton
+          accessibilityLabel="Zamknij powiadomienia"
+          onPress={onClose}
+        >
           <Close color={theme.colors.textMuted} size={18} />
         </IconButton>
       </View>
@@ -313,15 +395,23 @@ function NotificationCenterPanel({
             {pushNotifications.map((item) => (
               <StoredNotificationRow item={item} key={item.id} />
             ))}
-            <ActionButton onPress={onClear} title="Wyczyść listę" variant="ghost" />
+            <ActionButton
+              onPress={onClear}
+              title="Wyczyść listę"
+              variant="ghost"
+            />
           </>
         ) : notificationItems.length > 0 ? (
-          notificationItems.map((item) => <NotificationRow item={item} key={item.id} />)
+          notificationItems.map((item) => (
+            <NotificationRow item={item} key={item.id} />
+          ))
         ) : (
           <View style={styles.emptyNotifications}>
             <Bell color={theme.colors.textSubtle} size={24} />
             <Text style={styles.emptyNotificationsTitle}>Brak powiadomień</Text>
-            <Text style={styles.emptyNotificationsText}>Najważniejsze rzeczy pojawią się tutaj.</Text>
+            <Text style={styles.emptyNotificationsText}>
+              Najważniejsze rzeczy pojawią się tutaj.
+            </Text>
           </View>
         )}
       </View>
@@ -344,7 +434,10 @@ function NotificationRow({ item }: { item: NotificationItem }) {
       accessibilityLabel={`${item.title}. ${item.body}`}
       accessibilityRole="button"
       onPress={item.onPress}
-      style={({ pressed }) => [styles.notificationRow, pressed && styles.pressed]}
+      style={({ pressed }) => [
+        styles.notificationRow,
+        pressed && styles.pressed,
+      ]}
     >
       <View style={styles.notificationIcon}>{item.icon}</View>
       <View style={styles.notificationText}>
@@ -367,8 +460,12 @@ function StoredNotificationRow({ item }: { item: StoredNotification }) {
       </View>
       <View style={styles.notificationText}>
         <Text style={styles.notificationTitle}>{item.title}</Text>
-        {item.body ? <Text style={styles.notificationBody}>{item.body}</Text> : null}
-        <Text style={styles.notificationTime}>{formatDateTime(item.receivedAt)}</Text>
+        {item.body ? (
+          <Text style={styles.notificationBody}>{item.body}</Text>
+        ) : null}
+        <Text style={styles.notificationTime}>
+          {formatDateTime(item.receivedAt)}
+        </Text>
       </View>
     </View>
   );
@@ -400,8 +497,12 @@ function NextEventCard({
           <CalendarDays color={theme.colors.calendar} size={24} />
         </View>
         <View style={styles.nextEventText}>
-          <Text numberOfLines={1} style={styles.nextEventTime}>{eventDateTime}</Text>
-          <Text numberOfLines={2} style={styles.nextEventDetails}>{eventDetails}</Text>
+          <Text numberOfLines={1} style={styles.nextEventTime}>
+            {eventDateTime}
+          </Text>
+          <Text numberOfLines={2} style={styles.nextEventDetails}>
+            {eventDetails}
+          </Text>
         </View>
       </View>
     </Pressable>
@@ -436,7 +537,10 @@ function TodayOverviewGrid({
         accessibilityLabel="Do zrobienia"
         accessibilityRole="button"
         onPress={onOpenTodo}
-        style={({ pressed }) => [styles.todoCompactCard, pressed && styles.pressed]}
+        style={({ pressed }) => [
+          styles.todoCompactCard,
+          pressed && styles.pressed,
+        ]}
       >
         <View style={styles.todoCompactHeader}>
           <Text style={styles.todoCompactTitle}>Do zrobienia</Text>
@@ -458,7 +562,9 @@ function TodayOverviewGrid({
               ]}
             >
               <View style={styles.todoCircle} />
-              <Text numberOfLines={1} style={styles.todoCompactText}>{task.title}</Text>
+              <Text numberOfLines={1} style={styles.todoCompactText}>
+                {task.title}
+              </Text>
             </View>
           ))}
         </View>
@@ -470,21 +576,21 @@ function TodayOverviewGrid({
       <View style={styles.todayMiniColumn}>
         <MiniTodayCard
           accent={theme.colors.shopping}
+          illustration={shoppingCardImage}
           icon={<ShoppingCart color={theme.colors.shopping} size={20} />}
           label={productLabel(shoppingCount)}
           meta="na liście zakupów"
           onPress={onOpenShopping}
           value={String(shoppingCount)}
-          variant="shopping"
         />
         <MiniTodayCard
           accent={theme.colors.food}
+          illustration={mealCardImage}
           icon={<Utensils color={theme.colors.food} size={20} />}
           label={mealLabel(mealCount)}
           meta="na dziś"
           onPress={onOpenMeals}
           value={String(mealCount)}
-          variant="meal"
         />
       </View>
     </View>
@@ -493,23 +599,22 @@ function TodayOverviewGrid({
 
 function MiniTodayCard({
   accent,
+  illustration,
   icon,
   label,
   meta,
   onPress,
   value,
-  variant,
 }: {
   accent: string;
+  illustration: ImageSourcePropType;
   icon: ReactNode;
   label: string;
   meta: string;
   onPress: () => void;
   value: string;
-  variant: "meal" | "shopping";
 }) {
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
+  const styles = createStyles(useAppTheme().colors);
 
   return (
     <Pressable
@@ -518,55 +623,35 @@ function MiniTodayCard({
       onPress={onPress}
       style={({ pressed }) => [
         styles.miniTodayCard,
-        { borderColor: accent },
+        { borderColor: `${accent}7A`, shadowColor: accent },
         pressed && styles.pressed,
       ]}
     >
-      <View pointerEvents="none" style={[styles.miniTodayGlow, { backgroundColor: `${accent}24` }]} />
-      <MiniTodayGraphic accent={accent} variant={variant} />
+      <View
+        pointerEvents="none"
+        style={[styles.miniTodayGlow, { backgroundColor: `${accent}1F` }]}
+      />
+      <Image
+        resizeMode="contain"
+        source={illustration}
+        style={styles.miniTodayImage}
+      />
       <View
         style={[
           styles.miniTodayIcon,
-          { backgroundColor: `${accent}24`, borderColor: accent },
+          { backgroundColor: `${accent}26`, borderColor: `${accent}99` },
         ]}
       >
         {icon}
       </View>
       <Text style={styles.miniTodayValue}>{value}</Text>
-      <Text numberOfLines={2} style={styles.miniTodayLabel}>{label}</Text>
-      <Text numberOfLines={2} style={styles.miniTodayMeta}>{meta}</Text>
+      <Text numberOfLines={2} style={styles.miniTodayLabel}>
+        {label}
+      </Text>
+      <Text numberOfLines={2} style={styles.miniTodayMeta}>
+        {meta}
+      </Text>
     </Pressable>
-  );
-}
-
-function MiniTodayGraphic({ accent, variant }: { accent: string; variant: "meal" | "shopping" }) {
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
-
-  if (variant === "meal") {
-    return (
-      <View pointerEvents="none" style={styles.miniTodayGraphic}>
-        <View style={[styles.mealSteam, styles.mealSteamLeft, { backgroundColor: `${accent}66` }]} />
-        <View style={[styles.mealSteam, styles.mealSteamMiddle, { backgroundColor: `${accent}77` }]} />
-        <View style={[styles.mealSteam, styles.mealSteamRight, { backgroundColor: `${accent}66` }]} />
-        <View style={[styles.mealBowl, { backgroundColor: `${accent}D9`, borderColor: `${accent}F2` }]}>
-          <View style={[styles.mealBowlLip, { backgroundColor: `${accent}66` }]} />
-        </View>
-      </View>
-    );
-  }
-
-  return (
-    <View pointerEvents="none" style={styles.miniTodayGraphic}>
-      <View style={[styles.basketHandle, { borderColor: `${accent}99` }]} />
-      <View style={[styles.basketBody, { backgroundColor: `${accent}36`, borderColor: `${accent}CC` }]}>
-        <View style={[styles.basketDot, { backgroundColor: `${accent}F2` }]} />
-        <View style={[styles.basketDot, { backgroundColor: `${accent}C7` }]} />
-        <View style={[styles.basketDot, { backgroundColor: `${accent}E0` }]} />
-        <View style={[styles.basketDot, { backgroundColor: `${accent}AA` }]} />
-        <View style={[styles.basketDot, { backgroundColor: `${accent}D9` }]} />
-      </View>
-    </View>
   );
 }
 
@@ -627,7 +712,10 @@ function greetingTitle(): string {
   return hour >= 18 || hour < 5 ? "Dobry wieczór" : "Dzień dobry";
 }
 
-function getTodayMeals(entries: StartMealEntry[], weekday: number): StartMealEntry[] {
+function getTodayMeals(
+  entries: StartMealEntry[],
+  weekday: number,
+): StartMealEntry[] {
   return entries
     .filter((entry) => entry.weekday === weekday)
     .slice()
@@ -641,7 +729,10 @@ function eventMeta(event: StartCalendarEvent): string {
 }
 
 function formatEventDateTime(event: StartCalendarEvent): string {
-  return [formatShortDate(event.eventDate), event.eventTime?.slice(0, 5) ?? "cały dzień"]
+  return [
+    formatShortDate(event.eventDate),
+    event.eventTime?.slice(0, 5) ?? "cały dzień",
+  ]
     .filter(Boolean)
     .join(" / ");
 }
@@ -812,122 +903,50 @@ function createStyles(colors: AppPalette) {
       lineHeight: 24,
       marginTop: 4,
     },
-    basketBody: {
-      alignContent: "flex-start",
-      borderRadius: radii.card,
-      borderWidth: 2,
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 3,
-      height: 36,
-      justifyContent: "center",
-      overflow: "hidden",
-      paddingHorizontal: 8,
-      paddingTop: 5,
-      transform: [{ rotate: "-9deg" }],
-      width: 62,
-    },
-    basketDot: {
-      borderRadius: 999,
-      height: 9,
-      width: 9,
-    },
-    basketHandle: {
-      borderLeftWidth: 2,
-      borderRightWidth: 2,
-      borderTopLeftRadius: 24,
-      borderTopRightRadius: 24,
-      borderTopWidth: 2,
-      bottom: 25,
-      height: 30,
-      position: "absolute",
-      transform: [{ rotate: "-9deg" }],
-      width: 48,
-    },
-    mealBowl: {
-      borderBottomLeftRadius: 34,
-      borderBottomRightRadius: 34,
-      borderTopLeftRadius: 12,
-      borderTopRightRadius: 12,
-      borderWidth: 1,
-      height: 32,
-      overflow: "hidden",
-      width: 66,
-    },
-    mealBowlLip: {
-      borderRadius: 999,
-      height: 8,
-      left: 4,
-      position: "absolute",
-      right: 4,
-      top: 3,
-    },
-    mealSteam: {
-      borderRadius: 999,
-      height: 22,
-      position: "absolute",
-      top: 2,
-      width: 3,
-    },
-    mealSteamLeft: {
-      left: 21,
-      transform: [{ rotate: "-16deg" }],
-    },
-    mealSteamMiddle: {
-      left: 34,
-      transform: [{ rotate: "8deg" }],
-    },
-    mealSteamRight: {
-      right: 21,
-      transform: [{ rotate: "17deg" }],
-    },
     miniTodayCard: {
-      backgroundColor: colors.card,
-      borderRadius: radii.card,
+      backgroundColor: "#101426",
+      borderRadius: 14,
       borderWidth: 1,
-      elevation: 2,
+      elevation: 5,
       flexBasis: 0,
       flex: 1,
       justifyContent: "flex-start",
       minHeight: 98,
       minWidth: 0,
       overflow: "hidden",
-      padding: spacing.sm,
+      padding: 10,
       position: "relative",
-      shadowColor: "#000000",
       shadowOffset: { height: 8, width: 0 },
-      shadowOpacity: 0.1,
+      shadowOpacity: 0.28,
       shadowRadius: 18,
     },
     miniTodayGlow: {
       borderRadius: 999,
-      bottom: -32,
-      height: 86,
+      bottom: -44,
+      height: 118,
       position: "absolute",
-      right: -30,
-      width: 86,
+      right: -44,
+      width: 118,
     },
-    miniTodayGraphic: {
-      alignItems: "center",
-      bottom: -2,
-      height: 72,
-      justifyContent: "flex-end",
+    miniTodayImage: {
+      bottom: -18,
+      height: 104,
       position: "absolute",
-      right: -8,
-      width: 76,
+      right: -24,
+      width: 104,
     },
     miniTodayIcon: {
       alignItems: "center",
       borderRadius: 999,
       borderWidth: 1,
-      height: 34,
+      height: 32,
       justifyContent: "center",
       marginBottom: spacing.xs,
-      width: 34,
+      width: 32,
       zIndex: 1,
     },
     miniTodayLabel: {
-      color: colors.text,
+      color: "#FFFFFF",
       fontSize: 11,
       fontWeight: "900",
       letterSpacing: 0,
@@ -936,7 +955,7 @@ function createStyles(colors: AppPalette) {
       zIndex: 1,
     },
     miniTodayMeta: {
-      color: colors.textMuted,
+      color: "#C8D2EA",
       fontSize: 10,
       fontWeight: "700",
       letterSpacing: 0,
@@ -945,11 +964,11 @@ function createStyles(colors: AppPalette) {
       zIndex: 1,
     },
     miniTodayValue: {
-      color: colors.text,
-      fontSize: 28,
+      color: "#FFFFFF",
+      fontSize: 30,
       fontWeight: "900",
       letterSpacing: 0,
-      lineHeight: 31,
+      lineHeight: 32,
       zIndex: 1,
     },
     todayMiniColumn: {

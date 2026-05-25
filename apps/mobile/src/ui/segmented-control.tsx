@@ -1,6 +1,6 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { radii, spacing } from '../theme/tokens';
-import { useAppTheme, type AppPalette } from '../theme/use-app-theme';
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { radii, spacing } from "../theme/tokens";
+import { useAppTheme, type AppPalette } from "../theme/use-app-theme";
 
 export interface SegmentOption<TValue extends string> {
   label: string;
@@ -16,7 +16,7 @@ interface SegmentedControlProps<TValue extends string> {
 export function SegmentedControl<TValue extends string>({
   onChange,
   options,
-  value
+  value,
 }: SegmentedControlProps<TValue>) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
@@ -36,10 +36,12 @@ export function SegmentedControl<TValue extends string>({
             style={({ pressed }) => [
               styles.option,
               active && styles.active,
-              pressed && styles.pressed
+              pressed && styles.pressed,
             ]}
           >
-            <Text style={[styles.label, active && styles.activeLabel]}>{option.label}</Text>
+            <Text style={[styles.label, active && styles.activeLabel]}>
+              {option.label}
+            </Text>
           </Pressable>
         );
       })}
@@ -49,40 +51,45 @@ export function SegmentedControl<TValue extends string>({
 
 function createStyles(colors: AppPalette) {
   return StyleSheet.create({
-  active: {
-    backgroundColor: colors.primarySoft,
-    borderColor: colors.primary
-  },
-  activeLabel: {
-    color: colors.primaryDark
-  },
-  label: {
-    color: colors.textMuted,
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 0
-  },
-  option: {
-    alignItems: 'center',
-    borderColor: 'transparent',
-    borderWidth: 1,
-    borderRadius: radii.control,
-    flex: 1,
-    justifyContent: 'center',
-    minHeight: 34,
-    paddingHorizontal: spacing.xs
-  },
-  pressed: {
-    opacity: 0.78
-  },
-  root: {
-    backgroundColor: colors.card,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: radii.control,
-    flexDirection: 'row',
-    gap: 4,
-    padding: 4
-  }
-});
+    active: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primaryLight,
+      elevation: 2,
+      shadowColor: colors.primary,
+      shadowOffset: { height: 0, width: 0 },
+      shadowOpacity: 0.24,
+      shadowRadius: 10,
+    },
+    activeLabel: {
+      color: colors.inverseText,
+    },
+    label: {
+      color: colors.textMuted,
+      fontSize: 13,
+      fontWeight: "800",
+      letterSpacing: 0,
+    },
+    option: {
+      alignItems: "center",
+      borderColor: "transparent",
+      borderWidth: 1,
+      borderRadius: radii.control,
+      flex: 1,
+      justifyContent: "center",
+      minHeight: 34,
+      paddingHorizontal: spacing.xs,
+    },
+    pressed: {
+      opacity: 0.78,
+    },
+    root: {
+      backgroundColor: colors.cardMuted,
+      borderColor: colors.border,
+      borderWidth: 1,
+      borderRadius: radii.control,
+      flexDirection: "row",
+      gap: 4,
+      padding: 4,
+    },
+  });
 }

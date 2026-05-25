@@ -1,15 +1,23 @@
-import { ActivityIndicator, Pressable, StyleProp, StyleSheet, Text, TextStyle, ViewStyle } from 'react-native';
-import { useAppTheme, type AppPalette } from '../theme/use-app-theme';
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleProp,
+  StyleSheet,
+  Text,
+  TextStyle,
+  ViewStyle,
+} from "react-native";
+import { useAppTheme, type AppPalette } from "../theme/use-app-theme";
 
 interface ActionButtonProps {
   disabled?: boolean;
   labelStyle?: StyleProp<TextStyle>;
   loading?: boolean;
   onPress: () => void;
-  size?: 'medium' | 'small';
+  size?: "medium" | "small";
   style?: StyleProp<ViewStyle>;
   title: string;
-  variant?: 'primary' | 'secondary' | 'ghost';
+  variant?: "primary" | "secondary" | "ghost";
 }
 
 export function ActionButton({
@@ -17,10 +25,10 @@ export function ActionButton({
   labelStyle,
   loading = false,
   onPress,
-  size = 'medium',
+  size = "medium",
   style,
   title,
-  variant = 'primary'
+  variant = "primary",
 }: ActionButtonProps) {
   const isDisabled = disabled || loading;
   const theme = useAppTheme();
@@ -38,13 +46,21 @@ export function ActionButton({
         styles[variant],
         isDisabled && styles.disabled,
         pressed && !isDisabled && styles.pressed,
-        style
+        style,
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={variant === 'primary' ? theme.colors.inverseText : theme.colors.primary} />
+        <ActivityIndicator
+          color={
+            variant === "primary"
+              ? theme.colors.inverseText
+              : theme.colors.primary
+          }
+        />
       ) : (
-        <Text style={[styles.label, styles[`${variant}Label`], labelStyle]}>{title}</Text>
+        <Text style={[styles.label, styles[`${variant}Label`], labelStyle]}>
+          {title}
+        </Text>
       )}
     </Pressable>
   );
@@ -52,56 +68,56 @@ export function ActionButton({
 
 function createStyles(colors: AppPalette) {
   return StyleSheet.create({
-  button: {
-    alignItems: 'center',
-    borderRadius: 8,
-    borderWidth: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 16
-  },
-  disabled: {
-    opacity: 0.56
-  },
-  ghost: {
-    backgroundColor: 'transparent',
-    borderColor: 'transparent'
-  },
-  ghostLabel: {
-    color: colors.textMuted
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: 0
-  },
-  medium: {
-    minHeight: 46
-  },
-  pressed: {
-    opacity: 0.82
-  },
-  primary: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-    elevation: 2,
-    shadowColor: '#000000',
-    shadowOffset: { height: 0, width: 0 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12
-  },
-  primaryLabel: {
-    color: colors.inverseText
-  },
-  secondary: {
-    backgroundColor: colors.surfaceMuted,
-    borderColor: colors.border
-  },
-  secondaryLabel: {
-    color: colors.text
-  },
-  small: {
-    minHeight: 36,
-    paddingHorizontal: 12
-  }
-});
+    button: {
+      alignItems: "center",
+      borderRadius: 8,
+      borderWidth: 1,
+      justifyContent: "center",
+      paddingHorizontal: 16,
+    },
+    disabled: {
+      opacity: 0.56,
+    },
+    ghost: {
+      backgroundColor: "transparent",
+      borderColor: "transparent",
+    },
+    ghostLabel: {
+      color: colors.textMuted,
+    },
+    label: {
+      fontSize: 14,
+      fontWeight: "800",
+      letterSpacing: 0,
+    },
+    medium: {
+      minHeight: 46,
+    },
+    pressed: {
+      opacity: 0.82,
+    },
+    primary: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primaryLight,
+      elevation: 3,
+      shadowColor: colors.primary,
+      shadowOffset: { height: 0, width: 0 },
+      shadowOpacity: 0.28,
+      shadowRadius: 12,
+    },
+    primaryLabel: {
+      color: colors.inverseText,
+    },
+    secondary: {
+      backgroundColor: colors.card,
+      borderColor: colors.primary,
+    },
+    secondaryLabel: {
+      color: colors.primaryDark,
+    },
+    small: {
+      minHeight: 36,
+      paddingHorizontal: 12,
+    },
+  });
 }

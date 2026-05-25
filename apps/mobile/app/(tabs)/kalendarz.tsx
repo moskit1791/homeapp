@@ -2,7 +2,14 @@ import type { ModuleKey } from "@homeapp/shared-types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  Linking,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import {
   CalendarEvent,
   EffectivePermission,
@@ -26,7 +33,10 @@ import {
   updateCalendarEvent,
   updateNote,
 } from "../../src/api";
-import { hasModuleRead, usePermissions } from "../../src/permissions/use-permissions";
+import {
+  hasModuleRead,
+  usePermissions,
+} from "../../src/permissions/use-permissions";
 import { useSession } from "../../src/session/session-context";
 import { radii, spacing } from "../../src/theme/tokens";
 import { useAppTheme, type AppPalette } from "../../src/theme/use-app-theme";
@@ -56,7 +66,11 @@ type CalendarViewMode = "month" | "week";
 type _AgendaSegment = "notes" | "todo";
 type ReminderValue = "none" | "15" | "60" | "1440";
 
-const _agendaSegments: Array<{ label: string; moduleKey: ModuleKey; value: _AgendaSegment }> = [
+const _agendaSegments: Array<{
+  label: string;
+  moduleKey: ModuleKey;
+  value: _AgendaSegment;
+}> = [
   { label: "Notatki", moduleKey: "notes", value: "notes" },
   { label: "Do zrobienia", moduleKey: "todo", value: "todo" },
 ];
@@ -74,6 +88,14 @@ const calendarViewOptions: Array<{ label: string; value: CalendarViewMode }> = [
 ];
 
 const weekdayLabels = ["Pon", "Wto", "Śro", "Czw", "Pią", "Sob", "Nie"];
+const googleCalendarMarkerColors = [
+  "#22D3EE",
+  "#A78BFA",
+  "#F472B6",
+  "#FBBF24",
+  "#34D399",
+  "#FB7185",
+];
 
 export default function KalendarzScreen() {
   const { session } = useSession();
@@ -86,7 +108,9 @@ export default function KalendarzScreen() {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
   const accessToken = session?.accessToken;
-  const [visibleMonth, setVisibleMonth] = useState(() => monthAnchor(new Date()));
+  const [visibleMonth, setVisibleMonth] = useState(() =>
+    monthAnchor(new Date()),
+  );
   const [selectedDate, setSelectedDate] = useState(todayIso());
   const [calendarView, setCalendarView] = useState<CalendarViewMode>("week");
   const [eventTitle, setEventTitle] = useState("");
@@ -101,7 +125,9 @@ export default function KalendarzScreen() {
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [eventModalVisible, setEventModalVisible] = useState(false);
   const [handledRouteDate, setHandledRouteDate] = useState<string | null>(null);
-  const [handledRouteAction, setHandledRouteAction] = useState<string | null>(null);
+  const [handledRouteAction, setHandledRouteAction] = useState<string | null>(
+    null,
+  );
   const permissions = permissionsQuery.data;
   const calendarPermission = getPermission(permissions, "calendar");
   const canUseScreen = hasModuleRead(permissions, ["calendar"]);
@@ -116,7 +142,13 @@ export default function KalendarzScreen() {
   const monthEventsQuery = useQuery({
     enabled: calendarPermission.canRead && Boolean(accessToken),
     queryFn: () => listCalendarEvents(range.from, range.to, { accessToken }),
-    queryKey: [...queryKeys.calendar, "range", calendarView, range.from, range.to],
+    queryKey: [
+      ...queryKeys.calendar,
+      "range",
+      calendarView,
+      range.from,
+      range.to,
+    ],
   });
   const selectedDayEvents = (monthEventsQuery.data ?? []).filter(
     (event) => event.eventDate === selectedDate,
@@ -170,7 +202,10 @@ export default function KalendarzScreen() {
   const connectGoogleMutation = useMutation({
     mutationFn: () => connectGoogleCalendar({ accessToken }),
     onSuccess: async (result) => {
-      showCalendarToast("Otwieram Google. Po akceptacji wróć do aplikacji.", "info");
+      showCalendarToast(
+        "Otwieram Google. Po akceptacji wróć do aplikacji.",
+        "info",
+      );
       await Linking.openURL(result.authorizationUrl);
     },
   });
@@ -193,14 +228,23 @@ export default function KalendarzScreen() {
         setCalendarView("month");
         selectDate(focusDate);
         await queryClient.prefetchQuery({
-          queryFn: () => listCalendarEvents(focusRange.from, focusRange.to, { accessToken }),
-          queryKey: [...queryKeys.calendar, "range", "month", focusRange.from, focusRange.to],
+          queryFn: () =>
+            listCalendarEvents(focusRange.from, focusRange.to, { accessToken }),
+          queryKey: [
+            ...queryKeys.calendar,
+            "range",
+            "month",
+            focusRange.from,
+            focusRange.to,
+          ],
         });
       }
     },
   });
   const canSaveEvent =
-    (editingEvent ? calendarPermission.canUpdate : calendarPermission.canCreate) &&
+    (editingEvent
+      ? calendarPermission.canUpdate
+      : calendarPermission.canCreate) &&
     Boolean(eventTitle.trim()) &&
     /^\d{4}-\d{2}-\d{2}$/.test(eventDate) &&
     isOptionalTimeInputValid(eventTime);
@@ -209,7 +253,11 @@ export default function KalendarzScreen() {
     const targetDate = routeDate && isIsoDate(routeDate) ? routeDate : null;
     const dateKey = `${targetDate ?? ""}:${routeIntent ?? ""}`;
 
-    if (targetDate && handledRouteDate !== dateKey && targetDate !== selectedDate) {
+    if (
+      targetDate &&
+      handledRouteDate !== dateKey &&
+      targetDate !== selectedDate
+    ) {
       selectDate(targetDate);
     }
 
@@ -217,7 +265,11 @@ export default function KalendarzScreen() {
       setHandledRouteDate(dateKey);
     }
 
-    if (routeAction !== "create" || !targetDate || !calendarPermission.canCreate) {
+    if (
+      routeAction !== "create" ||
+      !targetDate ||
+      !calendarPermission.canCreate
+    ) {
       return;
     }
 
@@ -257,7 +309,10 @@ export default function KalendarzScreen() {
     return () => clearTimeout(timeoutId);
   }, [calendarToast]);
 
-  function showCalendarToast(text: string, tone: "info" | "success" = "success") {
+  function showCalendarToast(
+    text: string,
+    tone: "info" | "success" = "success",
+  ) {
     setCalendarToast({ text, tone });
   }
 
@@ -299,7 +354,11 @@ export default function KalendarzScreen() {
   function shiftVisiblePeriod(direction: -1 | 1) {
     if (calendarView === "month") {
       const nextMonth = addMonths(visibleMonth, direction);
-      const nextDate = isoFromParts(nextMonth.getFullYear(), nextMonth.getMonth(), 1);
+      const nextDate = isoFromParts(
+        nextMonth.getFullYear(),
+        nextMonth.getMonth(),
+        1,
+      );
 
       setVisibleMonth(nextMonth);
       setSelectedDate(nextDate);
@@ -323,7 +382,8 @@ export default function KalendarzScreen() {
   }
 
   const googleCalendarConnected = Boolean(googleCalendarQuery.data?.connected);
-  const googleCalendarPending = connectGoogleMutation.isPending || syncGoogleMutation.isPending;
+  const googleCalendarPending =
+    connectGoogleMutation.isPending || syncGoogleMutation.isPending;
 
   if (permissionsQuery.isLoading) {
     return (
@@ -349,13 +409,23 @@ export default function KalendarzScreen() {
             {calendarPermission.canRead ? (
               <IconButton
                 accessibilityLabel={
-                  googleCalendarConnected ? "Synchronizuj Google Calendar" : "Połącz Google Calendar"
+                  googleCalendarConnected
+                    ? "Synchronizuj Google Calendar"
+                    : "Połącz Google Calendar"
                 }
-                disabled={googleCalendarPending || (googleCalendarConnected && !calendarPermission.canCreate)}
+                disabled={
+                  googleCalendarPending ||
+                  (googleCalendarConnected && !calendarPermission.canCreate)
+                }
                 onPress={handleGoogleCalendarPress}
                 style={styles.googleHeaderButton}
               >
-                <Google color={googleCalendarPending ? theme.colors.textSubtle : "#DB4437"} size={18} />
+                <Google
+                  color={
+                    googleCalendarPending ? theme.colors.textSubtle : "#DB4437"
+                  }
+                  size={18}
+                />
               </IconButton>
             ) : null}
             {calendarPermission.canCreate ? (
@@ -401,10 +471,7 @@ export default function KalendarzScreen() {
         </View>
         {calendarView !== "month" ? (
           <>
-            <WeekStrip
-              onSelectDate={selectDate}
-              selectedDate={selectedDate}
-            />
+            <WeekStrip onSelectDate={selectDate} selectedDate={selectedDate} />
             <SelectedDaySummary
               date={selectedDate}
               eventCount={selectedDayEvents.length}
@@ -425,18 +492,21 @@ export default function KalendarzScreen() {
         </View>
       ) : null}
       {connectGoogleMutation.error || syncGoogleMutation.error ? (
-        <InlineAlert text="Nie udało się zsynchronizować Google Calendar." tone="error" />
+        <InlineAlert
+          text="Nie udało się zsynchronizować Google Calendar."
+          tone="error"
+        />
       ) : null}
 
       {calendarPermission.canRead ? (
         calendarView === "month" ? (
-        <CalendarMonth
-          events={monthEventsQuery.data ?? []}
-          isLoading={monthEventsQuery.isLoading}
-          month={visibleMonth}
-          onSelectDate={selectDate}
-          selectedDate={selectedDate}
-        />
+          <CalendarMonth
+            events={monthEventsQuery.data ?? []}
+            isLoading={monthEventsQuery.isLoading}
+            month={visibleMonth}
+            onSelectDate={selectDate}
+            selectedDate={selectedDate}
+          />
         ) : (
           <AgendaTimeline
             canCreate={calendarPermission.canCreate}
@@ -501,7 +571,11 @@ export default function KalendarzScreen() {
           </View>
         }
         onClose={closeEventModal}
-        subtitle={editingEvent ? "Zmieniasz wpis w kalendarzu domowym." : "Wpis trafi do kalendarza domowego."}
+        subtitle={
+          editingEvent
+            ? "Zmieniasz wpis w kalendarzu domowym."
+            : "Wpis trafi do kalendarza domowego."
+        }
         title={editingEvent ? "Edytuj wydarzenie" : "Dodaj wydarzenie"}
         visible={eventModalVisible}
       >
@@ -540,7 +614,11 @@ export default function KalendarzScreen() {
         />
         <View style={styles.formGroup}>
           <Text style={styles.formLabel}>Przypomnienie</Text>
-          <SegmentedControl onChange={setEventReminder} options={reminderOptions} value={eventReminder} />
+          <SegmentedControl
+            onChange={setEventReminder}
+            options={reminderOptions}
+            value={eventReminder}
+          />
         </View>
         {saveEventMutation.error ? (
           <InlineAlert text="Nie udało się dodać wydarzenia." tone="error" />
@@ -566,11 +644,10 @@ function CalendarMonth({
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
   const days = getCalendarDays(month);
-  const eventsByDate = new Map<string, number>();
-
-  events.forEach((event) => {
-    eventsByDate.set(event.eventDate, (eventsByDate.get(event.eventDate) ?? 0) + 1);
-  });
+  const eventMarkersByDate = useMemo(
+    () => buildEventMarkersByDate(events, theme.colors),
+    [events, theme.colors],
+  );
 
   return (
     <View style={styles.calendarCard}>
@@ -585,7 +662,9 @@ function CalendarMonth({
         {days.map((day) => {
           const isToday = day.iso === todayIso();
           const isSelected = day.iso === selectedDate;
-          const hasEvents = day.iso ? (eventsByDate.get(day.iso) ?? 0) > 0 : false;
+          const markers = day.iso
+            ? (eventMarkersByDate.get(day.iso) ?? [])
+            : [];
 
           return (
             <View key={`${day.iso}-${day.label}`} style={styles.dayCell}>
@@ -616,7 +695,16 @@ function CalendarMonth({
                 </Text>
               </Pressable>
               <View style={styles.dotSlot}>
-                {hasEvents ? <View style={styles.eventDot} /> : null}
+                {markers.length > 0 ? (
+                  <View style={styles.eventDotsRow}>
+                    {markers.map((color, index) => (
+                      <View
+                        key={`${day.iso}-${color}-${index}`}
+                        style={[styles.eventDot, { backgroundColor: color }]}
+                      />
+                    ))}
+                  </View>
+                ) : null}
               </View>
             </View>
           );
@@ -659,7 +747,9 @@ function WeekStrip({
               pressed && styles.weekDayPressed,
             ]}
           >
-            <Text style={[styles.weekDayName, active && styles.weekDayNameActive]}>
+            <Text
+              style={[styles.weekDayName, active && styles.weekDayNameActive]}
+            >
               {weekdayLabels[index]}
             </Text>
             <Text
@@ -697,7 +787,9 @@ function SelectedDaySummary({
         <Text numberOfLines={1} style={styles.selectedDayTitle}>
           {formatDateLong(date)}
         </Text>
-        <Text style={styles.selectedDayMeta}>{formatEventCount(eventCount)}</Text>
+        <Text style={styles.selectedDayMeta}>
+          {formatEventCount(eventCount)}
+        </Text>
       </View>
     </View>
   );
@@ -733,12 +825,7 @@ function AgendaTimeline({
   const sortedEvents = [...events].sort(compareCalendarEvents);
 
   if (isLoading || error) {
-    return (
-      <QueryState
-        error={error}
-        isLoading={isLoading}
-      />
-    );
+    return <QueryState error={error} isLoading={isLoading} />;
   }
 
   if (sortedEvents.length === 0) {
@@ -748,11 +835,13 @@ function AgendaTimeline({
           <CalendarClock color={theme.colors.primary} size={22} />
         </View>
         <Text style={styles.agendaEmptyTitle}>Brak wydarzeń</Text>
-        <Text style={styles.agendaEmptyText}>
-          {formatDateLong(date)}
-        </Text>
+        <Text style={styles.agendaEmptyText}>{formatDateLong(date)}</Text>
         {canCreate ? (
-          <ActionButton onPress={onCreate} size="small" title="Dodaj wydarzenie" />
+          <ActionButton
+            onPress={onCreate}
+            size="small"
+            title="Dodaj wydarzenie"
+          />
         ) : null}
       </View>
     );
@@ -762,12 +851,15 @@ function AgendaTimeline({
     <View style={styles.timeline}>
       {sortedEvents.map((event, index) => {
         const accent = getAgendaAccent(theme.colors, event, index);
-        const secondaryText = event.note?.trim() || formatTimelineHour(event.eventTime);
+        const secondaryText =
+          event.note?.trim() || formatTimelineHour(event.eventTime);
 
         return (
           <View key={event.id} style={styles.timelineRow}>
             <View style={styles.timelineTime}>
-              <Text style={styles.timelineHour}>{formatTimelineHour(event.eventTime)}</Text>
+              <Text style={styles.timelineHour}>
+                {formatTimelineHour(event.eventTime)}
+              </Text>
             </View>
             <Pressable
               accessibilityRole={canUpdate ? "button" : undefined}
@@ -779,10 +871,17 @@ function AgendaTimeline({
                 pressed && styles.agendaCardPressed,
               ]}
             >
-              <View style={[styles.agendaAccent, { backgroundColor: accent.color }]} />
+              <View
+                style={[styles.agendaAccent, { backgroundColor: accent.color }]}
+              />
               <View style={styles.agendaContent}>
                 <View style={styles.agendaHeader}>
-                  <View style={[styles.agendaIcon, { backgroundColor: accent.iconSoft }]}>
+                  <View
+                    style={[
+                      styles.agendaIcon,
+                      { backgroundColor: accent.iconSoft },
+                    ]}
+                  >
                     <CalendarDays color={accent.color} size={15} />
                   </View>
                   <View style={styles.agendaTitleBlock}>
@@ -853,37 +952,53 @@ function UpcomingEvents({
 
   return (
     <View style={styles.eventStrip}>
-      {events.map((event) => (
-        <View key={event.id} style={styles.eventPill}>
-          <CalendarDays color={theme.colors.calendar} size={16} />
-          <View style={styles.eventPillText}>
-            <Text numberOfLines={1} style={styles.eventTitle}>
-              {event.title}
-            </Text>
-            <Text style={styles.eventMeta}>
-              {[formatDate(event.eventDate), event.eventTime?.slice(0, 5)].filter(Boolean).join(" / ")}
-            </Text>
-          </View>
-          {canUpdate || canDelete ? (
-            <View style={styles.eventPillActions}>
-              {canUpdate ? (
-                <IconButton accessibilityLabel="Edytuj wydarzenie" onPress={() => onEdit(event)}>
-                  <Pencil color={theme.colors.textMuted} size={15} />
-                </IconButton>
-              ) : null}
-              {canDelete ? (
-                <IconButton
-                  accessibilityLabel="Usuń wydarzenie"
-                  disabled={deleting}
-                  onPress={() => onDelete(event)}
-                >
-                  <Trash2 color={theme.colors.danger} size={15} />
-                </IconButton>
-              ) : null}
+      {events.map((event, index) => {
+        const accent = getAgendaAccent(theme.colors, event, index);
+        const meta = [
+          [formatDate(event.eventDate), event.eventTime?.slice(0, 5)]
+            .filter(Boolean)
+            .join(" / "),
+          event.sourceType === "google" ? "Google Calendar" : null,
+        ]
+          .filter(Boolean)
+          .join(" · ");
+
+        return (
+          <View key={event.id} style={styles.eventPill}>
+            <View
+              style={[styles.eventSourceDot, { backgroundColor: accent.color }]}
+            />
+            <CalendarDays color={accent.color} size={16} />
+            <View style={styles.eventPillText}>
+              <Text numberOfLines={1} style={styles.eventTitle}>
+                {event.title}
+              </Text>
+              <Text style={styles.eventMeta}>{meta}</Text>
             </View>
-          ) : null}
-        </View>
-      ))}
+            {canUpdate || canDelete ? (
+              <View style={styles.eventPillActions}>
+                {canUpdate ? (
+                  <IconButton
+                    accessibilityLabel="Edytuj wydarzenie"
+                    onPress={() => onEdit(event)}
+                  >
+                    <Pencil color={theme.colors.textMuted} size={15} />
+                  </IconButton>
+                ) : null}
+                {canDelete ? (
+                  <IconButton
+                    accessibilityLabel="Usuń wydarzenie"
+                    disabled={deleting}
+                    onPress={() => onDelete(event)}
+                  >
+                    <Trash2 color={theme.colors.danger} size={15} />
+                  </IconButton>
+                ) : null}
+              </View>
+            ) : null}
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -903,7 +1018,11 @@ function _NotesBoard({ accessToken }: { accessToken?: string | null }) {
     queryKey: queryKeys.notes,
   });
   const createMutation = useMutation({
-    mutationFn: () => createNote({ description: description.trim(), title: title.trim() }, { accessToken }),
+    mutationFn: () =>
+      createNote(
+        { description: description.trim(), title: title.trim() },
+        { accessToken },
+      ),
     onSuccess: async () => {
       reset();
       setModalVisible(false);
@@ -913,7 +1032,11 @@ function _NotesBoard({ accessToken }: { accessToken?: string | null }) {
   });
   const updateMutation = useMutation({
     mutationFn: () =>
-      updateNote(editingId ?? "", { description: description.trim(), title: title.trim() }, { accessToken }),
+      updateNote(
+        editingId ?? "",
+        { description: description.trim(), title: title.trim() },
+        { accessToken },
+      ),
     onSuccess: async () => {
       reset();
       setModalVisible(false);
@@ -922,7 +1045,8 @@ function _NotesBoard({ accessToken }: { accessToken?: string | null }) {
   });
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteNote(id, { accessToken }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.notes }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.notes }),
   });
   const notes = notesQuery.data ?? [];
   const isEditing = Boolean(editingId);
@@ -945,7 +1069,11 @@ function _NotesBoard({ accessToken }: { accessToken?: string | null }) {
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Notatki prywatne</Text>
         {permission.canCreate ? (
-          <ActionButton onPress={() => setModalVisible(true)} size="small" title="+ Dodaj" />
+          <ActionButton
+            onPress={() => setModalVisible(true)}
+            size="small"
+            title="+ Dodaj"
+          />
         ) : null}
       </View>
       <QueryState
@@ -956,7 +1084,13 @@ function _NotesBoard({ accessToken }: { accessToken?: string | null }) {
       />
       <View style={styles.noteList}>
         {notes.slice(0, 8).map((note) => (
-          <View key={note.id} style={[styles.noteCard, { backgroundColor: theme.colors.warningSoft }]}>
+          <View
+            key={note.id}
+            style={[
+              styles.noteCard,
+              { backgroundColor: theme.colors.warningSoft },
+            ]}
+          >
             <View style={styles.noteContent}>
               <Text numberOfLines={1} style={styles.noteTitle}>
                 {note.title}
@@ -966,7 +1100,9 @@ function _NotesBoard({ accessToken }: { accessToken?: string | null }) {
                   {note.description}
                 </Text>
               ) : null}
-              <Text style={styles.noteMeta}>{formatDateTime(note.updatedAt)}</Text>
+              <Text style={styles.noteMeta}>
+                {formatDateTime(note.updatedAt)}
+              </Text>
             </View>
             <View style={styles.rowActions}>
               {permission.canUpdate ? (
@@ -975,7 +1111,10 @@ function _NotesBoard({ accessToken }: { accessToken?: string | null }) {
                 </IconButton>
               ) : null}
               {permission.canDelete ? (
-                <IconButton disabled={deleteMutation.isPending} onPress={() => deleteMutation.mutate(note.id)}>
+                <IconButton
+                  disabled={deleteMutation.isPending}
+                  onPress={() => deleteMutation.mutate(note.id)}
+                >
                   <Trash2 color={theme.colors.danger} size={17} />
                 </IconButton>
               ) : null}
@@ -999,7 +1138,9 @@ function _NotesBoard({ accessToken }: { accessToken?: string | null }) {
             <ActionButton
               disabled={!title.trim() || (isEditing && !permission.canUpdate)}
               loading={createMutation.isPending || updateMutation.isPending}
-              onPress={() => (isEditing ? updateMutation.mutate() : createMutation.mutate())}
+              onPress={() =>
+                isEditing ? updateMutation.mutate() : createMutation.mutate()
+              }
               style={styles.modalFooterButton}
               title={isEditing ? "Zapisz" : "Dodaj"}
             />
@@ -1009,7 +1150,11 @@ function _NotesBoard({ accessToken }: { accessToken?: string | null }) {
           reset();
           setModalVisible(false);
         }}
-        subtitle={isEditing ? "Edytujesz swoją prywatną notatkę." : "Nowa notatka będzie widoczna tylko dla Ciebie."}
+        subtitle={
+          isEditing
+            ? "Edytujesz swoją prywatną notatkę."
+            : "Nowa notatka będzie widoczna tylko dla Ciebie."
+        }
         title={isEditing ? "Edytuj notatkę" : "Nowa notatka"}
         visible={modalVisible}
       >
@@ -1072,11 +1217,13 @@ function _TodoBoard({ accessToken }: { accessToken?: string | null }) {
       item.status === "done"
         ? reopenTodoItem(item.id, { accessToken })
         : completeTodoItem(item.id, { accessToken }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.todo }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.todo }),
   });
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteTodoItem(id, { accessToken }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.todo }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.todo }),
   });
   const items = todoQuery.data ?? [];
   const sorted = [...items].sort((left, right) => {
@@ -1092,7 +1239,11 @@ function _TodoBoard({ accessToken }: { accessToken?: string | null }) {
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Do zrobienia dzisiaj</Text>
         {permission.canCreate ? (
-          <ActionButton onPress={() => setModalVisible(true)} size="small" title="+ Dodaj" />
+          <ActionButton
+            onPress={() => setModalVisible(true)}
+            size="small"
+            title="+ Dodaj"
+          />
         ) : null}
       </View>
       <QueryState
@@ -1106,7 +1257,10 @@ function _TodoBoard({ accessToken }: { accessToken?: string | null }) {
           const done = item.status === "done";
 
           return (
-            <View key={item.id} style={[styles.todoCard, done && styles.todoCardDone]}>
+            <View
+              key={item.id}
+              style={[styles.todoCard, done && styles.todoCardDone]}
+            >
               <Pressable
                 disabled={!permission.canUpdate || updateMutation.isPending}
                 onPress={() => updateMutation.mutate(item)}
@@ -1115,7 +1269,9 @@ function _TodoBoard({ accessToken }: { accessToken?: string | null }) {
                 {done ? <Check color={theme.colors.card} size={15} /> : null}
               </Pressable>
               <View style={styles.noteContent}>
-                <Text style={[styles.noteTitle, done && styles.doneText]}>{item.title}</Text>
+                <Text style={[styles.noteTitle, done && styles.doneText]}>
+                  {item.title}
+                </Text>
                 {item.description ? (
                   <Text numberOfLines={2} style={styles.noteText}>
                     {item.description}
@@ -1123,7 +1279,10 @@ function _TodoBoard({ accessToken }: { accessToken?: string | null }) {
                 ) : null}
               </View>
               {permission.canDelete ? (
-                <IconButton disabled={deleteMutation.isPending} onPress={() => deleteMutation.mutate(item.id)}>
+                <IconButton
+                  disabled={deleteMutation.isPending}
+                  onPress={() => deleteMutation.mutate(item.id)}
+                >
                   <Trash2 color={theme.colors.danger} size={17} />
                 </IconButton>
               ) : null}
@@ -1171,7 +1330,10 @@ function _TodoBoard({ accessToken }: { accessToken?: string | null }) {
           value={description}
         />
         {createMutation.error ? (
-          <InlineAlert text="Nie udało się dodać rzeczy do zrobienia." tone="error" />
+          <InlineAlert
+            text="Nie udało się dodać rzeczy do zrobienia."
+            tone="error"
+          />
         ) : null}
       </FormModal>
     </>
@@ -1197,7 +1359,11 @@ function getPermission(
   };
 }
 
-function getVisibleRange(month: Date, selectedDate: string, view: CalendarViewMode) {
+function getVisibleRange(
+  month: Date,
+  selectedDate: string,
+  view: CalendarViewMode,
+) {
   if (view === "month") {
     return getMonthRange(month);
   }
@@ -1226,7 +1392,8 @@ function getCalendarDays(month: Date) {
   const firstOffset = (firstDay.getDay() + 6) % 7;
   const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
   const daysInPreviousMonth = new Date(year, monthIndex, 0).getDate();
-  const days: Array<{ inMonth: boolean; iso: string | null; label: number }> = [];
+  const days: Array<{ inMonth: boolean; iso: string | null; label: number }> =
+    [];
 
   for (let index = firstOffset - 1; index >= 0; index -= 1) {
     days.push({
@@ -1286,7 +1453,9 @@ function getWeekRange(value: string) {
 function getWeekDays(value: string) {
   const weekStart = getWeekStart(parseIsoDate(value));
 
-  return Array.from({ length: 7 }, (_, index) => dateToIso(addDays(weekStart, index)));
+  return Array.from({ length: 7 }, (_, index) =>
+    dateToIso(addDays(weekStart, index)),
+  );
 }
 
 function getWeekStart(date: Date) {
@@ -1335,7 +1504,11 @@ function formatMonthTitle(date: Date): string {
   return title.charAt(0).toUpperCase() + title.slice(1);
 }
 
-function formatPeriodTitle(view: CalendarViewMode, visibleMonth: Date, selectedDate: string): string {
+function formatPeriodTitle(
+  view: CalendarViewMode,
+  visibleMonth: Date,
+  selectedDate: string,
+): string {
   if (view === "month") {
     return formatMonthTitle(visibleMonth);
   }
@@ -1416,7 +1589,14 @@ function isOptionalTimeInputValid(value: string): boolean {
   const hours = Number(hoursPart);
   const minutes = Number(minutesPart);
 
-  return Number.isInteger(hours) && Number.isInteger(minutes) && hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59;
+  return (
+    Number.isInteger(hours) &&
+    Number.isInteger(minutes) &&
+    hours >= 0 &&
+    hours <= 23 &&
+    minutes >= 0 &&
+    minutes <= 59
+  );
 }
 
 function normalizeEventTime(value: string): string | null {
@@ -1444,16 +1624,80 @@ function formatTimelineHour(value: string | null): string {
   return value.slice(0, 5);
 }
 
-function getAgendaAccent(colors: AppPalette, _event: CalendarEvent, index: number) {
-  const shades = [colors.primary, colors.primaryLight, colors.primaryDark];
-  const color = shades[index % shades.length] ?? colors.primary;
+function buildEventMarkersByDate(
+  events: CalendarEvent[],
+  colors: AppPalette,
+): Map<string, string[]> {
+  const markersByDate = new Map<string, string[]>();
+  const seenMarkersByDate = new Map<string, Set<string>>();
+
+  events.forEach((event, index) => {
+    const marker = getCalendarEventMarkerColor(colors, event, index);
+    const markerKey = `${event.sourceType}:${getCalendarEventSourceKey(event)}:${marker}`;
+    const seen = seenMarkersByDate.get(event.eventDate) ?? new Set<string>();
+
+    if (seen.has(markerKey)) {
+      return;
+    }
+
+    seen.add(markerKey);
+    seenMarkersByDate.set(event.eventDate, seen);
+    markersByDate.set(
+      event.eventDate,
+      [...(markersByDate.get(event.eventDate) ?? []), marker].slice(0, 4),
+    );
+  });
+
+  return markersByDate;
+}
+
+function getAgendaAccent(
+  colors: AppPalette,
+  event: CalendarEvent,
+  index: number,
+) {
+  const color = getCalendarEventMarkerColor(colors, event, index);
 
   return {
-    border: withAlpha(color, 0.34),
+    border: withAlpha(color, event.sourceType === "google" ? 0.36 : 0.22),
     color,
-    iconSoft: withAlpha(color, 0.14),
-    soft: index === 0 ? colors.primarySoft : withAlpha(color, 0.12),
+    iconSoft: withAlpha(color, 0.12),
+    soft: event.sourceType === "google" ? withAlpha(color, 0.08) : colors.card,
   };
+}
+
+function getCalendarEventMarkerColor(
+  colors: AppPalette,
+  event: CalendarEvent,
+  index = 0,
+): string {
+  if (event.sourceType !== "google") {
+    return index % 2 === 0 ? colors.calendar : colors.textSubtle;
+  }
+
+  const sourceKey = getCalendarEventSourceKey(event);
+
+  return (
+    googleCalendarMarkerColors[
+      hashString(sourceKey) % googleCalendarMarkerColors.length
+    ] ?? "#22D3EE"
+  );
+}
+
+function getCalendarEventSourceKey(event: CalendarEvent): string {
+  return (
+    event.googleCalendarOwnerMemberId ??
+    event.ownerMemberId ??
+    event.googleCalendarConnectionId ??
+    event.googleCalendarAccountEmail ??
+    event.id
+  );
+}
+
+function hashString(value: string): number {
+  return value
+    .split("")
+    .reduce((hash, char) => ((hash << 5) - hash + char.charCodeAt(0)) >>> 0, 0);
 }
 
 function withAlpha(color: string, opacity: number) {
@@ -1484,7 +1728,9 @@ function reminderValueToMinutes(value: ReminderValue): number | null {
   return value === "none" ? null : Number(value);
 }
 
-function minutesToReminderValue(value: number | null | undefined): ReminderValue {
+function minutesToReminderValue(
+  value: number | null | undefined,
+): ReminderValue {
   if (value === 15 || value === 60 || value === 1440) {
     return String(value) as ReminderValue;
   }
@@ -1586,7 +1832,9 @@ function createStyles(colors: AppPalette) {
     },
     agendaEmptyIcon: {
       alignItems: "center",
-      backgroundColor: colors.primarySoft,
+      backgroundColor: colors.cardMuted,
+      borderColor: colors.border,
+      borderWidth: 1,
       borderRadius: 999,
       height: 44,
       justifyContent: "center",
@@ -1709,6 +1957,12 @@ function createStyles(colors: AppPalette) {
       height: 8,
       justifyContent: "center",
     },
+    eventDotsRow: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: 3,
+      justifyContent: "center",
+    },
     eventDot: {
       backgroundColor: colors.warning,
       borderRadius: 999,
@@ -1746,6 +2000,11 @@ function createStyles(colors: AppPalette) {
     eventStrip: {
       flexDirection: "column",
       gap: spacing.sm,
+    },
+    eventSourceDot: {
+      borderRadius: 999,
+      height: 8,
+      width: 8,
     },
     eventTitle: {
       color: colors.text,
@@ -1915,7 +2174,9 @@ function createStyles(colors: AppPalette) {
     },
     selectedDayIcon: {
       alignItems: "center",
-      backgroundColor: colors.primarySoft,
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderWidth: 1,
       borderRadius: 999,
       height: 36,
       justifyContent: "center",
@@ -2033,8 +2294,8 @@ function createStyles(colors: AppPalette) {
       paddingVertical: spacing.xs,
     },
     weekDayActive: {
-      backgroundColor: colors.primary,
-      borderColor: colors.primary,
+      backgroundColor: colors.card,
+      borderColor: colors.primaryLight,
     },
     weekDayName: {
       color: colors.textMuted,
@@ -2043,7 +2304,7 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
     },
     weekDayNameActive: {
-      color: colors.inverseText,
+      color: colors.primaryDark,
     },
     weekDayNumber: {
       color: colors.text,
@@ -2052,7 +2313,7 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
     },
     weekDayNumberActive: {
-      color: colors.inverseText,
+      color: colors.primaryDarker,
     },
     weekDayNumberToday: {
       color: colors.primaryDark,

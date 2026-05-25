@@ -6,8 +6,8 @@ import type {
   RealtimeEvent as SharedRealtimeEvent,
   RealtimeEventType,
   ScopeType,
-  ShoppingListType
-} from '@homeapp/shared-types';
+  ShoppingListType,
+} from "@homeapp/shared-types";
 
 export type RealtimeEvent = SharedRealtimeEvent;
 
@@ -145,9 +145,13 @@ export interface StartFinanceMonth {
 export interface StartCalendarEvent {
   eventDate: string;
   eventTime: string | null;
+  googleCalendarAccountEmail: string | null;
+  googleCalendarConnectionId: string | null;
+  googleCalendarOwnerMemberId: string | null;
   id: string;
   ownerMemberId: string | null;
-  scopeType: 'household';
+  scopeType: ScopeType;
+  sourceType: "google" | "manual";
   title: string;
 }
 
@@ -589,6 +593,9 @@ export interface MealRandomizeResult {
 export interface CalendarEvent {
   eventDate: string;
   eventTime: string | null;
+  googleCalendarAccountEmail: string | null;
+  googleCalendarConnectionId: string | null;
+  googleCalendarOwnerMemberId: string | null;
   id: string;
   note: string | null;
   ownerMemberId: string | null;
@@ -597,6 +604,7 @@ export interface CalendarEvent {
   reminderSentAt?: string | null;
   scopeType: ScopeType;
   sourceEventId?: string;
+  sourceType: "google" | "manual";
   title: string;
 }
 
@@ -642,7 +650,7 @@ export interface TodoItem {
   ownerMemberId: string | null;
   scopeType: ScopeType;
   sortOrder: number;
-  status: 'todo' | 'done';
+  status: "todo" | "done";
   title: string;
   updatedAt: string;
 }
@@ -655,13 +663,13 @@ export interface CreateTodoItemRequest {
 
 export interface UpdateTodoItemRequest {
   description?: string;
-  scopeType?: 'household';
-  status?: 'todo' | 'done';
+  scopeType?: "household";
+  status?: "todo" | "done";
   title?: string;
 }
 
 export interface MoveTodoItemRequest {
-  direction: 'down' | 'up';
+  direction: "down" | "up";
 }
 
 export interface Note {
@@ -685,7 +693,7 @@ export interface CleaningTask {
   completionWindowDays: number;
   createdAt: string;
   frequencyDays: number;
-  frequencyMode: 'preset' | 'custom_days';
+  frequencyMode: "preset" | "custom_days";
   householdId: string;
   id: string;
   isOverdue: boolean;
@@ -697,7 +705,7 @@ export interface CleaningTask {
 export interface CreateCleaningTaskRequest {
   completionWindowDays?: number;
   frequencyDays: number;
-  frequencyMode: 'preset' | 'custom_days';
+  frequencyMode: "preset" | "custom_days";
   name: string;
   nextDueAt: string;
 }
@@ -764,7 +772,7 @@ export interface Attachment {
   fileName: string;
   householdId: string;
   id: string;
-  mimeType: 'image/jpeg' | 'image/png' | 'image/webp' | 'application/pdf';
+  mimeType: "image/jpeg" | "image/png" | "image/webp" | "application/pdf";
   storagePath: string;
   updatedAt: string;
 }
@@ -772,7 +780,7 @@ export interface Attachment {
 export interface CreateAttachmentRequest {
   caption?: string;
   fileName: string;
-  mimeType: Attachment['mimeType'];
+  mimeType: Attachment["mimeType"];
   storagePath: string;
 }
 
@@ -783,20 +791,20 @@ export interface UpdateAttachmentRequest {
 
 export interface CreateAttachmentUploadUrlRequest {
   fileName: string;
-  mimeType: Attachment['mimeType'];
+  mimeType: Attachment["mimeType"];
 }
 
 export interface AttachmentUploadContract {
   fileName: string;
-  method: 'POST';
-  mimeType: Attachment['mimeType'];
+  method: "POST";
+  mimeType: Attachment["mimeType"];
   storagePath: string;
   uploadUrl: string;
 }
 
 export interface LocalAttachmentUploadResponse {
   fileName: string;
-  mimeType: Attachment['mimeType'];
+  mimeType: Attachment["mimeType"];
   size: number;
   storagePath: string;
 }
@@ -804,12 +812,12 @@ export interface LocalAttachmentUploadResponse {
 export interface UploadAttachmentFileRequest {
   fileName: string;
   fileUri: string;
-  mimeType: Attachment['mimeType'];
+  mimeType: Attachment["mimeType"];
   storagePath: string;
   uploadUrl: string;
 }
 
-export type PushPlatform = 'android' | 'ios' | 'web' | 'unknown';
+export type PushPlatform = "android" | "ios" | "web" | "unknown";
 
 export interface RegisterPushTokenRequest {
   deviceName?: string;
@@ -844,7 +852,7 @@ export interface PushSendResult {
     };
     id?: string;
     message?: string;
-    status: 'ok' | 'error';
+    status: "ok" | "error";
   }>;
 }
 

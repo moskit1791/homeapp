@@ -2,32 +2,33 @@ import {
   BadRequestException,
   Injectable,
   NotImplementedException,
-  UnauthorizedException
-} from '@nestjs/common';
+  UnauthorizedException,
+} from "@nestjs/common";
 import {
   createCipheriv,
   createDecipheriv,
   createHmac,
   randomBytes,
-  timingSafeEqual
-} from 'node:crypto';
-import { PoolClient } from 'pg';
-import { loadEnv } from '../../shared/env';
-import { HouseholdContext, UserContext } from '../../shared/request-context';
-import { DatabaseService } from '../database/database.service';
-import { RealtimeService } from '../realtime/realtime.service';
+  timingSafeEqual,
+} from "node:crypto";
+import { PoolClient } from "pg";
+import { loadEnv } from "../../shared/env";
+import { HouseholdContext, UserContext } from "../../shared/request-context";
+import { DatabaseService } from "../database/database.service";
+import { RealtimeService } from "../realtime/realtime.service";
 
-const calendarScope = 'https://www.googleapis.com/auth/calendar.events.readonly';
-const googleOAuthUrl = 'https://accounts.google.com/o/oauth2/v2/auth';
-const googleTokenUrl = 'https://oauth2.googleapis.com/token';
-const googleUserInfoUrl = 'https://www.googleapis.com/oauth2/v3/userinfo';
-const warsawTimeZone = 'Europe/Warsaw';
+const calendarScope =
+  "https://www.googleapis.com/auth/calendar.events.readonly";
+const googleOAuthUrl = "https://accounts.google.com/o/oauth2/v2/auth";
+const googleTokenUrl = "https://oauth2.googleapis.com/token";
+const googleUserInfoUrl = "https://www.googleapis.com/oauth2/v3/userinfo";
+const warsawTimeZone = "Europe/Warsaw";
 
 @Injectable()
 export class CalendarGoogleService {
   constructor(
     private readonly database: DatabaseService,
-    private readonly realtime: RealtimeService
+    private readonly realtime: RealtimeService,
   ) {}
 
   async getConnectionStatus(household: HouseholdContext, user: UserContext) {
@@ -35,9 +36,13 @@ export class CalendarGoogleService {
 
     return {
       connected: Boolean(connection),
-      connectedAt: connection?.connected_at ? this.formatTimestamp(connection.connected_at) : null,
+      connectedAt: connection?.connected_at
+        ? this.formatTimestamp(connection.connected_at)
+        : null,
       googleAccountEmail: connection?.google_account_email ?? null,
-      lastSyncedAt: connection?.last_synced_at ? this.formatTimestamp(connection.last_synced_at) : null
+      lastSyncedAt: connection?.last_synced_at
+        ? this.formatTimestamp(connection.last_synced_at)
+        : null,
     };
   }
 
@@ -48,46 +53,66 @@ export class CalendarGoogleService {
       exp: Math.floor(Date.now() / 1000) + 10 * 60,
       householdId: household.householdId,
       memberId: household.memberId,
-      userId: user.userId
+      userId: user.userId,
     });
     const params = new URLSearchParams({
-      access_type: 'offline',
+      access_type: "offline",
       client_id: config.clientId,
-      include_granted_scopes: 'true',
+      include_granted_scopes: "true",
       login_hint: user.email,
-      prompt: 'consent',
+      prompt: "consent",
       redirect_uri: config.redirectUri,
-      response_type: 'code',
-      scope: ['openid', 'email', calendarScope].join(' '),
-      state
+      response_type: "code",
+      scope: ["openid", "email", calendarScope].join(" "),
+      state,
     });
 
     return { authorizationUrl: `${googleOAuthUrl}?${params.toString()}` };
   }
 
-  async handleOAuthCallback(input: { code?: string; error?: string; state?: string }) {
+  async handleOAuthCallback(input: {
+    code?: string;
+    error?: string;
+    state?: string;
+  }) {
     if (input.error) {
-      throw new BadRequestException(`Google Calendar OAuth failed: ${input.error}`);
+      throw new BadRequestException(
+        `Google Calendar OAuth failed: ${input.error}`,
+      );
     }
 
     if (!input.code || !input.state) {
-      throw new BadRequestException('Google Calendar OAuth callback is missing code or state');
+      throw new BadRequestException(
+        "Google Calendar OAuth callback is missing code or state",
+      );
     }
 
     const config = this.loadConfig();
     const state = this.verifyState(input.state);
-    const tokenResponse = await this.exchangeAuthorizationCode(input.code, config);
-    const existing = await this.findConnectionByMember(state.householdId, state.memberId, state.userId);
-    const refreshToken = tokenResponse.refresh_token ?? existing?.refresh_token_ciphertext;
+    const tokenResponse = await this.exchangeAuthorizationCode(
+      input.code,
+      config,
+    );
+    const existing = await this.findConnectionByMember(
+      state.householdId,
+      state.memberId,
+      state.userId,
+    );
+    const refreshToken =
+      tokenResponse.refresh_token ?? existing?.refresh_token_ciphertext;
 
     if (!refreshToken) {
-      throw new BadRequestException('Google Calendar did not return a refresh token');
+      throw new BadRequestException(
+        "Google Calendar did not return a refresh token",
+      );
     }
 
     const encryptedRefreshToken = tokenResponse.refresh_token
       ? this.encrypt(tokenResponse.refresh_token, config.encryptionKey)
       : refreshToken;
-    const googleAccountEmail = await this.fetchGoogleAccountEmail(tokenResponse.access_token);
+    const googleAccountEmail = await this.fetchGoogleAccountEmail(
+      tokenResponse.access_token,
+    );
 
     await this.database.query(
       `
@@ -114,8 +139,8 @@ export class CalendarGoogleService {
         state.userId,
         googleAccountEmail,
         encryptedRefreshToken,
-        tokenResponse.scope || calendarScope
-      ]
+        tokenResponse.scope || calendarScope,
+      ],
     );
 
     return { googleAccountEmail };
@@ -126,15 +151,18 @@ export class CalendarGoogleService {
     const connection = await this.findConnection(household, user);
 
     if (!connection) {
-      throw new BadRequestException('Google Calendar is not connected');
+      throw new BadRequestException("Google Calendar is not connected");
     }
 
-    const refreshToken = this.decrypt(connection.refresh_token_ciphertext, config.encryptionKey);
+    const refreshToken = this.decrypt(
+      connection.refresh_token_ciphertext,
+      config.encryptionKey,
+    );
     const accessToken = await this.refreshAccessToken(refreshToken, config);
     const range = this.getDefaultSyncRange();
     const googleEvents = await this.fetchGoogleEvents(accessToken, range);
     const importableEvents = googleEvents
-      .filter((event) => event.status !== 'cancelled')
+      .filter((event) => event.status !== "cancelled")
       .map((event) => this.mapGoogleEvent(event))
       .filter((event): event is ImportedGoogleEvent => Boolean(event));
     let importedCount = 0;
@@ -144,14 +172,18 @@ export class CalendarGoogleService {
 
     await this.database.transaction(async (client) => {
       for (const event of importableEvents) {
-        const result = await this.upsertImportedEvent(client, connection, event);
+        affectedEventDates.add(event.eventDate);
 
-        if (result === 'inserted') {
+        const result = await this.upsertImportedEvent(
+          client,
+          connection,
+          event,
+        );
+
+        if (result === "inserted") {
           importedCount += 1;
-          affectedEventDates.add(event.eventDate);
-        } else if (result === 'updated') {
+        } else if (result === "updated") {
           updatedCount += 1;
-          affectedEventDates.add(event.eventDate);
         } else {
           skippedCount += 1;
         }
@@ -163,11 +195,15 @@ export class CalendarGoogleService {
           set last_synced_at = now()
           where id = $1
         `,
-        [connection.id]
+        [connection.id],
       );
     });
 
-    this.realtime.publish(household.householdId, 'calendar.changed', 'google-sync');
+    this.realtime.publish(
+      household.householdId,
+      "calendar.changed",
+      "google-sync",
+    );
 
     return {
       from: range.from,
@@ -175,15 +211,15 @@ export class CalendarGoogleService {
       importedCount,
       skippedCount,
       to: range.to,
-      updatedCount
+      updatedCount,
     };
   }
 
   private async upsertImportedEvent(
     client: PoolClient,
     connection: GoogleCalendarConnectionRow,
-    event: ImportedGoogleEvent
-  ): Promise<'inserted' | 'skipped' | 'updated'> {
+    event: ImportedGoogleEvent,
+  ): Promise<"inserted" | "skipped" | "updated"> {
     const existing = await client.query<{ calendar_event_id: string }>(
       `
         select calendar_event_id
@@ -191,7 +227,7 @@ export class CalendarGoogleService {
         where connection_id = $1
           and google_event_id = $2
       `,
-      [connection.id, event.googleEventId]
+      [connection.id, event.googleEventId],
     );
     const existingId = existing.rows[0]?.calendar_event_id;
 
@@ -216,8 +252,8 @@ export class CalendarGoogleService {
           event.title,
           event.eventDate,
           event.eventTime,
-          event.note
-        ]
+          event.note,
+        ],
       );
       await client.query(
         `
@@ -226,10 +262,10 @@ export class CalendarGoogleService {
           where connection_id = $1
             and google_event_id = $2
         `,
-        [connection.id, event.googleEventId, event.googleUpdatedAt]
+        [connection.id, event.googleEventId, event.googleUpdatedAt],
       );
 
-      return 'updated';
+      return "updated";
     }
 
     const inserted = await client.query<{ id: string }>(
@@ -254,13 +290,13 @@ export class CalendarGoogleService {
         event.title,
         event.eventDate,
         event.eventTime,
-        event.note
-      ]
+        event.note,
+      ],
     );
     const eventId = inserted.rows[0]?.id;
 
     if (!eventId) {
-      return 'skipped';
+      return "skipped";
     }
 
     await client.query(
@@ -274,17 +310,25 @@ export class CalendarGoogleService {
         values ($1, $2, $3, $4)
         on conflict (connection_id, google_event_id) do nothing
       `,
-      [connection.id, event.googleEventId, eventId, event.googleUpdatedAt]
+      [connection.id, event.googleEventId, eventId, event.googleUpdatedAt],
     );
 
-    return 'inserted';
+    return "inserted";
   }
 
   private async findConnection(household: HouseholdContext, user: UserContext) {
-    return this.findConnectionByMember(household.householdId, household.memberId, user.userId);
+    return this.findConnectionByMember(
+      household.householdId,
+      household.memberId,
+      user.userId,
+    );
   }
 
-  private async findConnectionByMember(householdId: string, memberId: string, userId: string) {
+  private async findConnectionByMember(
+    householdId: string,
+    memberId: string,
+    userId: string,
+  ) {
     const result = await this.database.query<GoogleCalendarConnectionRow>(
       `
         select id, household_id, household_member_id, user_id, google_account_email,
@@ -294,7 +338,7 @@ export class CalendarGoogleService {
           and household_member_id = $2
           and user_id = $3
       `,
-      [householdId, memberId, userId]
+      [householdId, memberId, userId],
     );
 
     return result.rows[0] ?? null;
@@ -309,14 +353,18 @@ export class CalendarGoogleService {
       !env.GOOGLE_CALENDAR_REDIRECT_URI ||
       !env.GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY
     ) {
-      throw new NotImplementedException('Google Calendar sync is not configured');
+      throw new NotImplementedException(
+        "Google Calendar sync is not configured",
+      );
     }
 
     return {
       clientId: env.GOOGLE_CALENDAR_CLIENT_ID,
       clientSecret: env.GOOGLE_CALENDAR_CLIENT_SECRET,
-      encryptionKey: this.normalizeEncryptionKey(env.GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY),
-      redirectUri: env.GOOGLE_CALENDAR_REDIRECT_URI
+      encryptionKey: this.normalizeEncryptionKey(
+        env.GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY,
+      ),
+      redirectUri: env.GOOGLE_CALENDAR_REDIRECT_URI,
     };
   }
 
@@ -324,7 +372,7 @@ export class CalendarGoogleService {
     const env = loadEnv();
     const body = this.base64UrlEncode(JSON.stringify(payload));
     const signature = this.base64UrlEncode(
-      createHmac('sha256', env.JWT_ACCESS_SECRET).update(body).digest()
+      createHmac("sha256", env.JWT_ACCESS_SECRET).update(body).digest(),
     );
 
     return `${body}.${signature}`;
@@ -332,14 +380,14 @@ export class CalendarGoogleService {
 
   private verifyState(value: string): GoogleCalendarOAuthState {
     const env = loadEnv();
-    const [body, signature] = value.split('.');
+    const [body, signature] = value.split(".");
 
     if (!body || !signature) {
-      throw new BadRequestException('Invalid Google Calendar OAuth state');
+      throw new BadRequestException("Invalid Google Calendar OAuth state");
     }
 
     const expected = this.base64UrlEncode(
-      createHmac('sha256', env.JWT_ACCESS_SECRET).update(body).digest()
+      createHmac("sha256", env.JWT_ACCESS_SECRET).update(body).digest(),
     );
     const signatureBuffer = Buffer.from(signature);
     const expectedBuffer = Buffer.from(expected);
@@ -348,34 +396,42 @@ export class CalendarGoogleService {
       signatureBuffer.length !== expectedBuffer.length ||
       !timingSafeEqual(signatureBuffer, expectedBuffer)
     ) {
-      throw new UnauthorizedException('Invalid Google Calendar OAuth state');
+      throw new UnauthorizedException("Invalid Google Calendar OAuth state");
     }
 
-    const parsed = JSON.parse(this.base64UrlDecode(body).toString('utf8')) as GoogleCalendarOAuthState;
+    const parsed = JSON.parse(
+      this.base64UrlDecode(body).toString("utf8"),
+    ) as GoogleCalendarOAuthState;
 
     if (!parsed.exp || parsed.exp < Math.floor(Date.now() / 1000)) {
-      throw new UnauthorizedException('Google Calendar OAuth state expired');
+      throw new UnauthorizedException("Google Calendar OAuth state expired");
     }
 
     return parsed;
   }
 
-  private async exchangeAuthorizationCode(code: string, config: GoogleCalendarConfig) {
+  private async exchangeAuthorizationCode(
+    code: string,
+    config: GoogleCalendarConfig,
+  ) {
     return this.postGoogleToken<GoogleTokenResponse>({
       client_id: config.clientId,
       client_secret: config.clientSecret,
       code,
-      grant_type: 'authorization_code',
-      redirect_uri: config.redirectUri
+      grant_type: "authorization_code",
+      redirect_uri: config.redirectUri,
     });
   }
 
-  private async refreshAccessToken(refreshToken: string, config: GoogleCalendarConfig) {
+  private async refreshAccessToken(
+    refreshToken: string,
+    config: GoogleCalendarConfig,
+  ) {
     const response = await this.postGoogleToken<GoogleTokenResponse>({
       client_id: config.clientId,
       client_secret: config.clientSecret,
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
     });
 
     return response.access_token;
@@ -384,20 +440,22 @@ export class CalendarGoogleService {
   private async postGoogleToken<T>(params: Record<string, string>): Promise<T> {
     const response = await fetch(googleTokenUrl, {
       body: new URLSearchParams(params).toString(),
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      method: 'POST'
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      method: "POST",
     });
 
     if (!response.ok) {
-      throw new BadRequestException('Google Calendar token exchange failed');
+      throw new BadRequestException("Google Calendar token exchange failed");
     }
 
     return response.json() as Promise<T>;
   }
 
-  private async fetchGoogleAccountEmail(accessToken: string): Promise<string | null> {
+  private async fetchGoogleAccountEmail(
+    accessToken: string,
+  ): Promise<string | null> {
     const response = await fetch(googleUserInfoUrl, {
-      headers: { Authorization: `Bearer ${accessToken}` }
+      headers: { Authorization: `Bearer ${accessToken}` },
     });
 
     if (!response.ok) {
@@ -409,31 +467,34 @@ export class CalendarGoogleService {
     return profile.email ?? null;
   }
 
-  private async fetchGoogleEvents(accessToken: string, range: { from: string; to: string }) {
+  private async fetchGoogleEvents(
+    accessToken: string,
+    range: { from: string; to: string },
+  ) {
     const events: GoogleCalendarEvent[] = [];
     let pageToken: string | undefined;
 
     do {
       const params = new URLSearchParams({
-        maxResults: '2500',
-        orderBy: 'startTime',
-        singleEvents: 'true',
+        maxResults: "2500",
+        orderBy: "startTime",
+        singleEvents: "true",
         timeMax: `${range.to}T23:59:59+01:00`,
         timeMin: `${range.from}T00:00:00+01:00`,
-        timeZone: warsawTimeZone
+        timeZone: warsawTimeZone,
       });
 
       if (pageToken) {
-        params.set('pageToken', pageToken);
+        params.set("pageToken", pageToken);
       }
 
       const response = await fetch(
         `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params.toString()}`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
+        { headers: { Authorization: `Bearer ${accessToken}` } },
       );
 
       if (!response.ok) {
-        throw new BadRequestException('Google Calendar sync request failed');
+        throw new BadRequestException("Google Calendar sync request failed");
       }
 
       const data = (await response.json()) as GoogleCalendarEventsResponse;
@@ -445,7 +506,9 @@ export class CalendarGoogleService {
     return events;
   }
 
-  private mapGoogleEvent(event: GoogleCalendarEvent): ImportedGoogleEvent | null {
+  private mapGoogleEvent(
+    event: GoogleCalendarEvent,
+  ): ImportedGoogleEvent | null {
     const start = event.start?.date ?? event.start?.dateTime;
 
     if (!event.id || !start) {
@@ -454,11 +517,12 @@ export class CalendarGoogleService {
 
     const hasTime = Boolean(event.start?.dateTime);
     const eventDate = start.slice(0, 10);
-    const eventTime = hasTime && start.length >= 16 ? start.slice(11, 16) : null;
+    const eventTime =
+      hasTime && start.length >= 16 ? start.slice(11, 16) : null;
     const noteParts = [
       event.location ? `Miejsce: ${event.location}` : null,
       event.description ? event.description : null,
-      'Źródło: Google Calendar'
+      "Źródło: Google Calendar",
     ].filter(Boolean);
 
     return {
@@ -466,8 +530,11 @@ export class CalendarGoogleService {
       eventTime,
       googleEventId: event.id,
       googleUpdatedAt: event.updated ?? null,
-      note: noteParts.join('\n\n').slice(0, 4000) || null,
-      title: (event.summary?.trim() || 'Wydarzenie z Google Calendar').slice(0, 240)
+      note: noteParts.join("\n\n").slice(0, 4000) || null,
+      title: (event.summary?.trim() || "Wydarzenie z Google Calendar").slice(
+        0,
+        240,
+      ),
     };
   }
 
@@ -476,17 +543,17 @@ export class CalendarGoogleService {
     const from = new Date(now);
     const to = new Date(now);
 
-    from.setDate(now.getDate() - 30);
-    to.setDate(now.getDate() + 365);
+    from.setDate(now.getDate() - 365);
+    to.setDate(now.getDate() + 1095);
 
     return {
       from: this.formatDate(from),
-      to: this.formatDate(to)
+      to: this.formatDate(to),
     };
   }
 
   private normalizeEncryptionKey(value: string): Buffer {
-    const decoded = Buffer.from(value, 'base64');
+    const decoded = Buffer.from(value, "base64");
 
     if (decoded.length === 32) {
       return decoded;
@@ -498,57 +565,73 @@ export class CalendarGoogleService {
       return raw;
     }
 
-    throw new NotImplementedException('Google Calendar token encryption key is invalid');
+    throw new NotImplementedException(
+      "Google Calendar token encryption key is invalid",
+    );
   }
 
   private encrypt(value: string, key: Buffer): string {
     const iv = randomBytes(12);
-    const cipher = createCipheriv('aes-256-gcm', key, iv);
-    const encrypted = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
+    const cipher = createCipheriv("aes-256-gcm", key, iv);
+    const encrypted = Buffer.concat([
+      cipher.update(value, "utf8"),
+      cipher.final(),
+    ]);
     const authTag = cipher.getAuthTag();
 
-    return [iv, authTag, encrypted].map((part) => this.base64UrlEncode(part)).join('.');
+    return [iv, authTag, encrypted]
+      .map((part) => this.base64UrlEncode(part))
+      .join(".");
   }
 
   private decrypt(value: string, key: Buffer): string {
-    const parts = value.split('.').map((part) => this.base64UrlDecode(part));
+    const parts = value.split(".").map((part) => this.base64UrlDecode(part));
     const [iv, authTag, encrypted] = parts;
 
     if (!iv || !authTag || !encrypted) {
-      throw new UnauthorizedException('Invalid Google Calendar OAuth state');
+      throw new UnauthorizedException("Invalid Google Calendar OAuth state");
     }
 
-    const decipher = createDecipheriv('aes-256-gcm', key, iv);
+    const decipher = createDecipheriv("aes-256-gcm", key, iv);
 
     decipher.setAuthTag(authTag);
 
-    return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
+    return Buffer.concat([
+      decipher.update(encrypted),
+      decipher.final(),
+    ]).toString("utf8");
   }
 
   private base64UrlEncode(value: string | Buffer): string {
-    const buffer = typeof value === 'string' ? Buffer.from(value, 'utf8') : value;
+    const buffer =
+      typeof value === "string" ? Buffer.from(value, "utf8") : value;
 
     return buffer
-      .toString('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/g, '');
+      .toString("base64")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/g, "");
   }
 
   private base64UrlDecode(value: string): Buffer {
-    const padded = value.padEnd(value.length + ((4 - (value.length % 4)) % 4), '=');
+    const padded = value.padEnd(
+      value.length + ((4 - (value.length % 4)) % 4),
+      "=",
+    );
 
-    return Buffer.from(padded.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+    return Buffer.from(padded.replace(/-/g, "+").replace(/_/g, "/"), "base64");
   }
 
   private formatDate(date: Date): string {
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
-      date.getDate()
-    ).padStart(2, '0')}`;
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+      date.getDate(),
+    ).padStart(2, "0")}`;
   }
 
   private formatTimestamp(value: Date | string): string {
-    return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+    return value instanceof Date
+      ? value.toISOString()
+      : new Date(value).toISOString();
   }
 }
 
