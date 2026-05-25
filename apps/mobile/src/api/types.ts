@@ -625,6 +625,7 @@ export interface GoogleCalendarConnectResponse {
 }
 
 export interface GoogleCalendarSyncResponse {
+  eventDates: string[];
   from: string;
   importedCount: number;
   skippedCount: number;

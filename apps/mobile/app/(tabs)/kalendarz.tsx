@@ -94,7 +94,10 @@ export default function KalendarzScreen() {
   const [eventTime, setEventTime] = useState("");
   const [eventNote, setEventNote] = useState("");
   const [eventReminder, setEventReminder] = useState<ReminderValue>("1440");
-  const [googleNotice, setGoogleNotice] = useState("");
+  const [calendarToast, setCalendarToast] = useState<{
+    text: string;
+    tone: "info" | "success";
+  } | null>(null);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [eventModalVisible, setEventModalVisible] = useState(false);
   const [handledRouteDate, setHandledRouteDate] = useState<string | null>(null);
@@ -167,19 +170,33 @@ export default function KalendarzScreen() {
   const connectGoogleMutation = useMutation({
     mutationFn: () => connectGoogleCalendar({ accessToken }),
     onSuccess: async (result) => {
-      setGoogleNotice("Otwieram Google. Po akceptacji wróć do aplikacji i uruchom synchronizację.");
+      showCalendarToast("Otwieram Google. Po akceptacji wróć do aplikacji.", "info");
       await Linking.openURL(result.authorizationUrl);
     },
   });
   const syncGoogleMutation = useMutation({
     mutationFn: () => syncGoogleCalendar({ accessToken }),
     onSuccess: async (result) => {
-      setGoogleNotice(
+      const focusDate = pickGoogleSyncFocusDate(result.eventDates);
+
+      showCalendarToast(
         `Google Calendar: dodano ${result.importedCount}, zaktualizowano ${result.updatedCount}.`,
       );
       await googleCalendarQuery.refetch();
       await queryClient.invalidateQueries({ queryKey: queryKeys.calendar });
       await queryClient.invalidateQueries({ queryKey: queryKeys.start });
+
+      if (focusDate) {
+        const focusMonth = monthAnchor(parseIsoDate(focusDate));
+        const focusRange = getMonthRange(focusMonth);
+
+        setCalendarView("month");
+        selectDate(focusDate);
+        await queryClient.prefetchQuery({
+          queryFn: () => listCalendarEvents(focusRange.from, focusRange.to, { accessToken }),
+          queryKey: [...queryKeys.calendar, "range", "month", focusRange.from, focusRange.to],
+        });
+      }
     },
   });
   const canSaveEvent =
@@ -229,6 +246,20 @@ export default function KalendarzScreen() {
       }
     }, [accessToken, calendarPermission.canRead, googleCalendarQuery.refetch]),
   );
+
+  useEffect(() => {
+    if (!calendarToast) {
+      return undefined;
+    }
+
+    const timeoutId = setTimeout(() => setCalendarToast(null), 3600);
+
+    return () => clearTimeout(timeoutId);
+  }, [calendarToast]);
+
+  function showCalendarToast(text: string, tone: "info" | "success" = "success") {
+    setCalendarToast({ text, tone });
+  }
 
   function openCreateEvent(date = selectedDate) {
     setEditingEvent(null);
@@ -382,7 +413,17 @@ export default function KalendarzScreen() {
         ) : null}
       </View>
 
-      {googleNotice ? <InlineAlert text={googleNotice} /> : null}
+      {calendarToast ? (
+        <View
+          pointerEvents="none"
+          style={[
+            styles.calendarToast,
+            calendarToast.tone === "info" && styles.calendarToastInfo,
+          ]}
+        >
+          <Text style={styles.calendarToastText}>{calendarToast.text}</Text>
+        </View>
+      ) : null}
       {connectGoogleMutation.error || syncGoogleMutation.error ? (
         <InlineAlert text="Nie udało się zsynchronizować Google Calendar." tone="error" />
       ) : null}
@@ -1164,6 +1205,12 @@ function getVisibleRange(month: Date, selectedDate: string, view: CalendarViewMo
   return getWeekRange(selectedDate);
 }
 
+function pickGoogleSyncFocusDate(eventDates: string[]) {
+  const validDates = eventDates.filter(isIsoDate).sort();
+
+  return validDates.find((date) => date >= todayIso()) ?? validDates[0] ?? null;
+}
+
 function getRouteParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
@@ -1479,6 +1526,32 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
       paddingHorizontal: spacing.sm,
       paddingTop: spacing.xs,
+    },
+    calendarToast: {
+      alignSelf: "center",
+      backgroundColor: colors.successSoft,
+      borderColor: `${colors.primary}33`,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      elevation: 6,
+      maxWidth: "92%",
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      position: "absolute",
+      top: 62,
+      zIndex: 20,
+    },
+    calendarToastInfo: {
+      backgroundColor: colors.softBlue,
+      borderColor: colors.border,
+    },
+    calendarToastText: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: "800",
+      letterSpacing: 0,
+      lineHeight: 18,
+      textAlign: "center",
     },
     agendaAccent: {
       alignSelf: "stretch",

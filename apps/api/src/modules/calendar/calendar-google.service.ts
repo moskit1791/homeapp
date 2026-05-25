@@ -140,6 +140,7 @@ export class CalendarGoogleService {
     let importedCount = 0;
     let updatedCount = 0;
     let skippedCount = googleEvents.length - importableEvents.length;
+    const affectedEventDates = new Set<string>();
 
     await this.database.transaction(async (client) => {
       for (const event of importableEvents) {
@@ -147,8 +148,10 @@ export class CalendarGoogleService {
 
         if (result === 'inserted') {
           importedCount += 1;
+          affectedEventDates.add(event.eventDate);
         } else if (result === 'updated') {
           updatedCount += 1;
+          affectedEventDates.add(event.eventDate);
         } else {
           skippedCount += 1;
         }
@@ -168,6 +171,7 @@ export class CalendarGoogleService {
 
     return {
       from: range.from,
+      eventDates: Array.from(affectedEventDates).sort(),
       importedCount,
       skippedCount,
       to: range.to,
