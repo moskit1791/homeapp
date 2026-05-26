@@ -50,6 +50,7 @@ import {
 import { useSession } from "../../src/session/session-context";
 import { radii, spacing } from "../../src/theme/tokens";
 import { useAppTheme, type AppPalette } from "../../src/theme/use-app-theme";
+import { useDebouncedOptimisticToggle } from "../../src/utils/use-debounced-optimistic-toggle";
 import {
   ActionButton,
   AppScreen,
@@ -72,6 +73,17 @@ const segments: Array<{
   { key: "todo", label: "Do zrobienia", moduleKey: "todo" },
   { key: "notes", label: "Notatki", moduleKey: "notes" },
 ];
+
+function setTodoDoneValue(item: TodoItem, done: boolean): TodoItem {
+  const now = new Date().toISOString();
+
+  return {
+    ...item,
+    doneAt: done ? now : null,
+    status: done ? "done" : "todo",
+    updatedAt: now,
+  };
+}
 
 export default function PlanScreen() {
   const { session } = useSession();
@@ -829,10 +841,12 @@ function TodoSegment({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [todoModalVisible, setTodoModalVisible] = useState(false);
+  const [toggleError, setToggleError] = useState("");
+  const todoItemsQueryKey = useMemo(() => [...queryKeys.todo, "items"] as const, []);
   const todoQuery = useQuery({
     enabled: Boolean(accessToken),
     queryFn: () => listTodoItems(undefined, { accessToken }),
-    queryKey: [...queryKeys.todo, "items"],
+    queryKey: todoItemsQueryKey,
   });
   const createMutation = useMutation({
     mutationFn: () =>
@@ -852,15 +866,22 @@ function TodoSegment({
       await queryClient.invalidateQueries({ queryKey: queryKeys.start });
     },
   });
-  const updateMutation = useMutation({
-    mutationFn: (item: TodoItem) =>
-      item.status === "done"
-        ? reopenTodoItem(item.id, { accessToken })
-        : completeTodoItem(item.id, { accessToken }),
-    onSuccess: async () => {
+  const todoToggle = useDebouncedOptimisticToggle<TodoItem>({
+    getId: (item) => item.id,
+    getValue: (item) => item.status === "done",
+    onError: () => {
+      setToggleError("Nie udało się zapisać zmiany. Cofnąłem stan zadania.");
+      setTimeout(() => setToggleError(""), 2600);
+    },
+    onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.todo });
       await queryClient.invalidateQueries({ queryKey: queryKeys.start });
     },
+    queryClient,
+    queryKey: todoItemsQueryKey,
+    setValue: setTodoDoneValue,
+    sync: (id, done) =>
+      done ? completeTodoItem(id, { accessToken }) : reopenTodoItem(id, { accessToken }),
   });
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteTodoItem(id, { accessToken }),
@@ -899,6 +920,7 @@ function TodoSegment({
           isEmpty={!todoQuery.isLoading && items.length === 0}
           isLoading={todoQuery.isLoading}
         />
+        {toggleError ? <InlineAlert text={toggleError} tone="error" /> : null}
         <View style={styles.itemList}>
           {[...openItems, ...doneItems].map((item) => (
             <TodoRow
@@ -907,9 +929,12 @@ function TodoSegment({
               deleting={deleteMutation.isPending}
               item={item}
               key={item.id}
-              onDelete={() => deleteMutation.mutate(item.id)}
-              onToggle={() => updateMutation.mutate(item)}
-              updating={updateMutation.isPending}
+              onDelete={() => {
+                todoToggle.cancel(item.id);
+                deleteMutation.mutate(item.id);
+              }}
+              onToggle={() => todoToggle.toggle(item.id)}
+              updating={todoToggle.isSyncing(item.id)}
             />
           ))}
         </View>

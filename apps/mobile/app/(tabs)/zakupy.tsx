@@ -25,6 +25,7 @@ import { useModulePermission } from "../../src/permissions/use-permissions";
 import { useSession } from "../../src/session/session-context";
 import { useAppTheme, type AppPalette } from "../../src/theme/use-app-theme";
 import { radii, spacing } from "../../src/theme/tokens";
+import { useDebouncedOptimisticToggle } from "../../src/utils/use-debounced-optimistic-toggle";
 import {
   ActionButton,
   AppScreen,
@@ -62,7 +63,12 @@ export default function ZakupyScreen() {
   const [isAiVisible, setAiVisible] = useState(false);
   const [isCreateVisible, setCreateVisible] = useState(false);
   const [handledRouteAction, setHandledRouteAction] = useState<string | null>(null);
+  const [toggleError, setToggleError] = useState("");
   const accessToken = session?.accessToken;
+  const shoppingItemsQueryKey = useMemo(
+    () => [...queryKeys.shopping, activeType, "items"] as const,
+    [activeType],
+  );
 
   const listsQuery = useQuery({
     enabled: canRead && Boolean(accessToken),
@@ -73,7 +79,7 @@ export default function ZakupyScreen() {
   const itemsQuery = useQuery({
     enabled: canRead && Boolean(accessToken),
     queryFn: () => listShoppingItems(activeType, { accessToken }),
-    queryKey: [...queryKeys.shopping, activeType, "items"],
+    queryKey: shoppingItemsQueryKey,
   });
 
   const createMutation = useMutation({
@@ -110,10 +116,31 @@ export default function ZakupyScreen() {
     },
   });
 
-  const checkMutation = useMutation({
-    mutationFn: (id: string) => checkShoppingItem(id, { accessToken }),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: queryKeys.shopping }),
+  const shoppingToggle = useDebouncedOptimisticToggle<ShoppingItem>({
+    getId: (item) => item.id,
+    getValue: (item) => item.isChecked,
+    onError: () => {
+      setToggleError("Nie udało się zapisać zmiany. Cofnąłem stan produktu.");
+      setTimeout(() => setToggleError(""), 2600);
+    },
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.shopping });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.start });
+    },
+    queryClient,
+    queryKey: shoppingItemsQueryKey,
+    setValue: (item, isChecked) => {
+      const now = new Date().toISOString();
+
+      return {
+        ...item,
+        checkedAt: isChecked ? now : null,
+        isChecked,
+        updatedAt: now,
+      };
+    },
+    sync: (id, desiredValue) =>
+      desiredValue ? checkShoppingItem(id, { accessToken }) : Promise.resolve(),
   });
 
   const deleteMutation = useMutation({
@@ -252,6 +279,7 @@ export default function ZakupyScreen() {
           title="Lista jest pusta"
         />
       ) : null}
+      {toggleError ? <InlineAlert text={toggleError} tone="error" /> : null}
 
       {uncheckedItems.length > 0 ? (
         <View style={styles.group}>
@@ -264,9 +292,12 @@ export default function ZakupyScreen() {
               deleting={deleteMutation.isPending}
               item={item}
               key={item.id}
-              onCheck={() => checkMutation.mutate(item.id)}
-              onDelete={() => deleteMutation.mutate(item.id)}
-              updating={checkMutation.isPending}
+              onCheck={() => shoppingToggle.toggle(item.id)}
+              onDelete={() => {
+                shoppingToggle.cancel(item.id);
+                deleteMutation.mutate(item.id);
+              }}
+              updating={shoppingToggle.isSyncing(item.id)}
             />
           ))}
         </View>
@@ -283,9 +314,12 @@ export default function ZakupyScreen() {
               deleting={deleteMutation.isPending}
               item={item}
               key={item.id}
-              onCheck={() => checkMutation.mutate(item.id)}
-              onDelete={() => deleteMutation.mutate(item.id)}
-              updating={checkMutation.isPending}
+              onCheck={() => shoppingToggle.toggle(item.id)}
+              onDelete={() => {
+                shoppingToggle.cancel(item.id);
+                deleteMutation.mutate(item.id);
+              }}
+              updating={shoppingToggle.isSyncing(item.id)}
             />
           ))}
         </View>

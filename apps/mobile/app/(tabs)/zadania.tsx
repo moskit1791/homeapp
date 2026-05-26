@@ -21,6 +21,7 @@ import { hasModuleRead, useModulePermission, usePermissions } from "../../src/pe
 import { useSession } from "../../src/session/session-context";
 import { radii, spacing } from "../../src/theme/tokens";
 import { useAppTheme, type AppPalette } from "../../src/theme/use-app-theme";
+import { useDebouncedOptimisticToggle } from "../../src/utils/use-debounced-optimistic-toggle";
 import { ActionButton, AppScreen, FormModal, IconButton, InlineAlert, QueryState, SegmentedControl } from "../../src/ui";
 import { Check, ChevronDown, ChevronUp, Pencil, Trash2 } from "../../src/ui/icon";
 
@@ -30,6 +31,17 @@ const taskSegments: Array<{ label: string; value: TaskSegment }> = [
   { label: "Notatki", value: "notes" },
   { label: "Do zrobienia", value: "todo" },
 ];
+
+function setTodoDoneValue(item: TodoItem, done: boolean): TodoItem {
+  const now = new Date().toISOString();
+
+  return {
+    ...item,
+    doneAt: done ? now : null,
+    status: done ? "done" : "todo",
+    updatedAt: now,
+  };
+}
 
 export default function ZadaniaScreen() {
   const { session } = useSession();
@@ -256,10 +268,12 @@ function TodoBoard({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
+  const [toggleError, setToggleError] = useState("");
+  const todoItemsQueryKey = useMemo(() => [...queryKeys.todo, "items"] as const, []);
   const todoQuery = useQuery({
     enabled: permission.canRead && Boolean(accessToken),
     queryFn: () => listTodoItems(undefined, { accessToken }),
-    queryKey: [...queryKeys.todo, "items"],
+    queryKey: todoItemsQueryKey,
   });
   const createMutation = useMutation({
     mutationFn: () =>
@@ -272,13 +286,22 @@ function TodoBoard({
       await queryClient.invalidateQueries({ queryKey: queryKeys.start });
     },
   });
-  const toggleMutation = useMutation({
-    mutationFn: (item: TodoItem) =>
-      item.status === "done" ? reopenTodoItem(item.id, { accessToken }) : completeTodoItem(item.id, { accessToken }),
-    onSuccess: async () => {
+  const todoToggle = useDebouncedOptimisticToggle<TodoItem>({
+    getId: (item) => item.id,
+    getValue: (item) => item.status === "done",
+    onError: () => {
+      setToggleError("Nie udało się zapisać zmiany. Cofnąłem stan zadania.");
+      setTimeout(() => setToggleError(""), 2600);
+    },
+    onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.todo });
       await queryClient.invalidateQueries({ queryKey: queryKeys.start });
     },
+    queryClient,
+    queryKey: todoItemsQueryKey,
+    setValue: setTodoDoneValue,
+    sync: (id, done) =>
+      done ? completeTodoItem(id, { accessToken }) : reopenTodoItem(id, { accessToken }),
   });
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteTodoItem(id, { accessToken }),
@@ -326,6 +349,7 @@ function TodoBoard({
         isEmpty={!todoQuery.isLoading && todos.length === 0}
         isLoading={todoQuery.isLoading}
       />
+      {toggleError ? <InlineAlert text={toggleError} tone="error" /> : null}
       <View style={styles.cardList}>
         {todos.map((todo) => {
           const done = todo.status === "done";
@@ -334,8 +358,8 @@ function TodoBoard({
           return (
             <View key={todo.id} style={[styles.todoCard, done && styles.todoCardDone]}>
               <Pressable
-                disabled={!permission.canUpdate || toggleMutation.isPending}
-                onPress={() => toggleMutation.mutate(todo)}
+                disabled={!permission.canUpdate || todoToggle.isSyncing(todo.id)}
+                onPress={() => todoToggle.toggle(todo.id)}
                 style={[styles.todoCheck, done && styles.todoCheckDone]}
               >
                 {done ? <Check color={theme.colors.card} size={15} /> : null}
@@ -374,7 +398,10 @@ function TodoBoard({
                   <IconButton
                     accessibilityLabel="Usuń zadanie"
                     disabled={deleteMutation.isPending}
-                    onPress={() => deleteMutation.mutate(todo.id)}
+                    onPress={() => {
+                      todoToggle.cancel(todo.id);
+                      deleteMutation.mutate(todo.id);
+                    }}
                   >
                     <Trash2 color={theme.colors.danger} size={17} />
                   </IconButton>

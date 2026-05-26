@@ -50,6 +50,7 @@ import {
 import { useSession } from "../../src/session/session-context";
 import { radii, spacing } from "../../src/theme/tokens";
 import { useAppTheme, type AppPalette } from "../../src/theme/use-app-theme";
+import { useDebouncedOptimisticToggle } from "../../src/utils/use-debounced-optimistic-toggle";
 import {
   ActionButton,
   AppScreen,
@@ -346,6 +347,11 @@ function ShoppingBoard({
   const [clearFinalConfirmVisible, setClearFinalConfirmVisible] =
     useState(false);
   const [modalVisible, setModalVisible] = useState(false);
+  const [toggleError, setToggleError] = useState("");
+  const shoppingItemsQueryKey = useMemo(
+    () => [...queryKeys.shopping, activeType, "items"] as const,
+    [activeType],
+  );
 
   useEffect(() => {
     if (action === "addShopping") {
@@ -369,7 +375,7 @@ function ShoppingBoard({
   const itemsQuery = useQuery({
     enabled: permission.canRead && Boolean(accessToken),
     queryFn: () => listShoppingItems(activeType, { accessToken }),
-    queryKey: [...queryKeys.shopping, activeType, "items"],
+    queryKey: shoppingItemsQueryKey,
   });
   const createMutation = useMutation({
     mutationFn: () =>
@@ -389,13 +395,36 @@ function ShoppingBoard({
       await queryClient.invalidateQueries({ queryKey: queryKeys.start });
     },
   });
-  const toggleMutation = useMutation({
-    mutationFn: (id: string) => toggleShoppingItem(id, { accessToken }),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: queryKeys.shopping }),
+  const shoppingToggle = useDebouncedOptimisticToggle<ShoppingItem>({
+    getId: (item) => item.id,
+    getValue: (item) => item.isChecked,
+    onError: () => {
+      setToggleError("Nie udało się zapisać zmiany. Cofnąłem stan produktu.");
+      setTimeout(() => setToggleError(""), 2600);
+    },
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.shopping });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.start });
+    },
+    queryClient,
+    queryKey: shoppingItemsQueryKey,
+    setValue: (item, isChecked) => {
+      const now = new Date().toISOString();
+
+      return {
+        ...item,
+        checkedAt: isChecked ? now : null,
+        isChecked,
+        updatedAt: now,
+      };
+    },
+    sync: (id) => toggleShoppingItem(id, { accessToken }),
   });
   const clearMutation = useMutation({
-    mutationFn: () => clearShoppingList(activeType, { accessToken }),
+    mutationFn: () => {
+      shoppingToggle.cancelAll();
+      return clearShoppingList(activeType, { accessToken });
+    },
     onSuccess: async () => {
       setClearConfirmVisible(false);
       setClearFinalConfirmVisible(false);
@@ -420,7 +449,10 @@ function ShoppingBoard({
       queryClient.invalidateQueries({ queryKey: queryKeys.shopping }),
   });
   const moveUncheckedMutation = useMutation({
-    mutationFn: () => moveUncheckedShoppingToTomorrow({ accessToken }),
+    mutationFn: async () => {
+      await shoppingToggle.flushAll();
+      return moveUncheckedShoppingToTomorrow({ accessToken });
+    },
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: queryKeys.shopping }),
   });
@@ -511,6 +543,7 @@ function ShoppingBoard({
         ) : null}
       </View>
       {aiNotice ? <InlineAlert text={aiNotice} /> : null}
+      {toggleError ? <InlineAlert text={toggleError} tone="error" /> : null}
 
       {!itemsQuery.isLoading &&
       uncheckedItems.length === 0 &&
@@ -528,12 +561,16 @@ function ShoppingBoard({
             key={group.title}
             listType={activeType}
             moving={moveMutation.isPending}
-            onCheck={(item) => toggleMutation.mutate(item.id)}
-            onDelete={(item) => deleteMutation.mutate(item.id)}
-            onMove={(item, targetType) =>
-              moveMutation.mutate({ id: item.id, targetType })
-            }
-            updating={toggleMutation.isPending}
+            onCheck={(item) => shoppingToggle.toggle(item.id)}
+            onDelete={(item) => {
+              shoppingToggle.cancel(item.id);
+              deleteMutation.mutate(item.id);
+            }}
+            onMove={(item, targetType) => {
+              shoppingToggle.cancel(item.id);
+              moveMutation.mutate({ id: item.id, targetType });
+            }}
+            isUpdating={shoppingToggle.isSyncing}
           />
         ))}
         {checkedItems.length > 0 ? (
@@ -548,12 +585,16 @@ function ShoppingBoard({
             }}
             listType={activeType}
             moving={moveMutation.isPending}
-            onCheck={(item) => toggleMutation.mutate(item.id)}
-            onDelete={(item) => deleteMutation.mutate(item.id)}
-            onMove={(item, targetType) =>
-              moveMutation.mutate({ id: item.id, targetType })
-            }
-            updating={toggleMutation.isPending}
+            onCheck={(item) => shoppingToggle.toggle(item.id)}
+            onDelete={(item) => {
+              shoppingToggle.cancel(item.id);
+              deleteMutation.mutate(item.id);
+            }}
+            onMove={(item, targetType) => {
+              shoppingToggle.cancel(item.id);
+              moveMutation.mutate({ id: item.id, targetType });
+            }}
+            isUpdating={shoppingToggle.isSyncing}
           />
         ) : null}
       </View>
@@ -1641,23 +1682,23 @@ function ShoppingGroupCard({
   canUpdate,
   deleting,
   group,
+  isUpdating,
   listType,
   moving,
   onCheck,
   onDelete,
   onMove,
-  updating,
 }: {
   canDelete: boolean;
   canUpdate: boolean;
   deleting: boolean;
   group: ShoppingGroup;
+  isUpdating: (id: string) => boolean;
   listType: ShoppingListType;
   moving: boolean;
   onCheck: (item: ShoppingItem) => void;
   onDelete: (item: ShoppingItem) => void;
   onMove: (item: ShoppingItem, targetType: ShoppingListType) => void;
-  updating: boolean;
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
@@ -1672,7 +1713,7 @@ function ShoppingGroupCard({
           {group.items.map((item) => (
             <View key={item.id} style={styles.itemRow}>
               <Pressable
-                disabled={!canUpdate || updating}
+                disabled={!canUpdate || isUpdating(item.id)}
                 onPress={() => onCheck(item)}
                 style={[styles.checkBox, item.isChecked && styles.checkBoxDone]}
               >
@@ -1681,7 +1722,7 @@ function ShoppingGroupCard({
                 ) : null}
               </Pressable>
               <Pressable
-                disabled={!canUpdate || updating}
+                disabled={!canUpdate || isUpdating(item.id)}
                 onPress={() => onCheck(item)}
                 style={styles.itemText}
               >
