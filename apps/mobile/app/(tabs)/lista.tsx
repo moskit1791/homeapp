@@ -1,7 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  Linking,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { Calendar, LocaleConfig, type DateData } from "react-native-calendars";
 import {
   chatMealPlanWithAi,
@@ -31,8 +38,15 @@ import {
   toggleShoppingItem,
   upsertMealSlot,
 } from "../../src/api";
-import { hasModuleRead, useModulePermission, usePermissions } from "../../src/permissions/use-permissions";
-import { loadStoredJson, saveStoredJson } from "../../src/session/secure-session-store";
+import {
+  hasModuleRead,
+  useModulePermission,
+  usePermissions,
+} from "../../src/permissions/use-permissions";
+import {
+  loadStoredJson,
+  saveStoredJson,
+} from "../../src/session/secure-session-store";
 import { useSession } from "../../src/session/session-context";
 import { radii, spacing } from "../../src/theme/tokens";
 import { useAppTheme, type AppPalette } from "../../src/theme/use-app-theme";
@@ -71,7 +85,15 @@ const listTypes: Array<{ label: string; value: ShoppingListType }> = [
 ];
 
 LocaleConfig.locales.pl = {
-  dayNames: ["Niedziela", "Poniedziałek", "Wtorek", "Środa", "Czwartek", "Piątek", "Sobota"],
+  dayNames: [
+    "Niedziela",
+    "Poniedziałek",
+    "Wtorek",
+    "Środa",
+    "Czwartek",
+    "Piątek",
+    "Sobota",
+  ],
   dayNamesShort: ["Nd", "Pn", "Wt", "Śr", "Cz", "Pt", "So"],
   monthNames: [
     "Styczeń",
@@ -87,13 +109,29 @@ LocaleConfig.locales.pl = {
     "Listopad",
     "Grudzień",
   ],
-  monthNamesShort: ["Sty", "Lut", "Mar", "Kwi", "Maj", "Cze", "Lip", "Sie", "Wrz", "Paź", "Lis", "Gru"],
+  monthNamesShort: [
+    "Sty",
+    "Lut",
+    "Mar",
+    "Kwi",
+    "Maj",
+    "Cze",
+    "Lip",
+    "Sie",
+    "Wrz",
+    "Paź",
+    "Lis",
+    "Gru",
+  ],
   today: "Dzisiaj",
 };
 LocaleConfig.defaultLocale = "pl";
 
 export default function ListaScreen() {
-  const params = useLocalSearchParams<{ action?: string; segment?: MainSegment }>();
+  const params = useLocalSearchParams<{
+    action?: string;
+    segment?: MainSegment;
+  }>();
   const router = useRouter();
   const permissionsQuery = usePermissions();
   const shoppingPermission = useModulePermission("shopping");
@@ -115,19 +153,27 @@ export default function ListaScreen() {
         shoppingPermission.canRead
           ? { label: "Zakupy", value: "shopping" as const }
           : null,
-        mealPermission.canRead ? { label: "Posiłki", value: "meals" as const } : null,
+        mealPermission.canRead
+          ? { label: "Posiłki", value: "meals" as const }
+          : null,
       ].filter(Boolean) as Array<{ label: string; value: MainSegment }>,
     [mealPermission.canRead, shoppingPermission.canRead],
   );
 
   useEffect(() => {
-    if (availableSegments.length > 0 && !availableSegments.some((segment) => segment.value === activeSegment)) {
+    if (
+      availableSegments.length > 0 &&
+      !availableSegments.some((segment) => segment.value === activeSegment)
+    ) {
       selectMainSegment(availableSegments[0]!.value);
     }
   }, [activeSegment, availableSegments]);
 
   useEffect(() => {
-    if (params.segment && availableSegments.some((segment) => segment.value === params.segment)) {
+    if (
+      params.segment &&
+      availableSegments.some((segment) => segment.value === params.segment)
+    ) {
       selectMainSegment(params.segment);
     }
   }, [availableSegments, params.segment]);
@@ -149,7 +195,10 @@ export default function ListaScreen() {
           return;
         }
 
-        if (storedLayout?.layout === "list" || storedLayout?.layout === "cards") {
+        if (
+          storedLayout?.layout === "list" ||
+          storedLayout?.layout === "cards"
+        ) {
           setMealLayout(storedLayout.layout);
         }
 
@@ -291,8 +340,11 @@ function ShoppingBoard({
   const [aiMessage, setAiMessage] = useState("");
   const [aiNotice, setAiNotice] = useState("");
   const [aiModalVisible, setAiModalVisible] = useState(false);
-  const [handledAiOpenRequest, setHandledAiOpenRequest] = useState(aiOpenRequest);
+  const [handledAiOpenRequest, setHandledAiOpenRequest] =
+    useState(aiOpenRequest);
   const [clearConfirmVisible, setClearConfirmVisible] = useState(false);
+  const [clearFinalConfirmVisible, setClearFinalConfirmVisible] =
+    useState(false);
   const [modalVisible, setModalVisible] = useState(false);
 
   useEffect(() => {
@@ -339,31 +391,46 @@ function ShoppingBoard({
   });
   const toggleMutation = useMutation({
     mutationFn: (id: string) => toggleShoppingItem(id, { accessToken }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.shopping }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.shopping }),
   });
   const clearMutation = useMutation({
     mutationFn: () => clearShoppingList(activeType, { accessToken }),
     onSuccess: async () => {
       setClearConfirmVisible(false);
+      setClearFinalConfirmVisible(false);
       await queryClient.invalidateQueries({ queryKey: queryKeys.shopping });
       await queryClient.invalidateQueries({ queryKey: queryKeys.start });
     },
   });
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteShoppingItem(id, { accessToken }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.shopping }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.shopping }),
   });
   const moveMutation = useMutation({
-    mutationFn: ({ id, targetType }: { id: string; targetType: ShoppingListType }) =>
-      moveShoppingItem(id, { targetType }, { accessToken }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.shopping }),
+    mutationFn: ({
+      id,
+      targetType,
+    }: {
+      id: string;
+      targetType: ShoppingListType;
+    }) => moveShoppingItem(id, { targetType }, { accessToken }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.shopping }),
   });
   const moveUncheckedMutation = useMutation({
     mutationFn: () => moveUncheckedShoppingToTomorrow({ accessToken }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.shopping }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.shopping }),
   });
   const aiImportMutation = useMutation({
-    mutationFn: () => importShoppingItemsWithAi(activeType, { message: aiMessage.trim() }, { accessToken }),
+    mutationFn: () =>
+      importShoppingItemsWithAi(
+        activeType,
+        { message: aiMessage.trim() },
+        { accessToken },
+      ),
     onSuccess: async (result) => {
       setAiMessage("");
       setAiModalVisible(false);
@@ -380,14 +447,25 @@ function ShoppingBoard({
   const groups = groupShoppingItems(uncheckedItems);
   const currentList =
     listsQuery.data?.find((list) => list.type === activeType)?.name ??
-    (activeType === "daily" ? "Zakupy na dziś" : activeType === "tomorrow" ? "Zakupy na jutro" : "Lista na później");
-  const canAdd = permission.canCreate && Boolean(name.trim()) && !createMutation.isPending;
+    (activeType === "daily"
+      ? "Zakupy na dziś"
+      : activeType === "tomorrow"
+        ? "Zakupy na jutro"
+        : "Lista na później");
+  const canAdd =
+    permission.canCreate && Boolean(name.trim()) && !createMutation.isPending;
   const canImportWithAi =
-    permission.canCreate && aiMessage.trim().length >= 3 && !aiImportMutation.isPending;
+    permission.canCreate &&
+    aiMessage.trim().length >= 3 &&
+    !aiImportMutation.isPending;
 
   return (
     <>
-      <SegmentedControl onChange={setActiveType} options={listTypes} value={activeType} />
+      <SegmentedControl
+        onChange={setActiveType}
+        options={listTypes}
+        value={activeType}
+      />
 
       <QueryState error={itemsQuery.error} isLoading={itemsQuery.isLoading} />
 
@@ -399,14 +477,19 @@ function ShoppingBoard({
           </Text>
         </View>
         {permission.canCreate ? (
-          <Pressable onPress={() => setModalVisible(true)} style={styles.fabInline}>
+          <Pressable
+            onPress={() => setModalVisible(true)}
+            style={styles.fabInline}
+          >
             <Plus color={theme.colors.card} size={22} />
           </Pressable>
         ) : null}
       </View>
 
       <View style={styles.quickActions}>
-        {activeType === "daily" && uncheckedItems.length > 0 && permission.canUpdate ? (
+        {activeType === "daily" &&
+        uncheckedItems.length > 0 &&
+        permission.canUpdate ? (
           <ActionButton
             disabled={moveUncheckedMutation.isPending}
             loading={moveUncheckedMutation.isPending}
@@ -429,7 +512,9 @@ function ShoppingBoard({
       </View>
       {aiNotice ? <InlineAlert text={aiNotice} /> : null}
 
-      {!itemsQuery.isLoading && uncheckedItems.length === 0 && checkedItems.length === 0 ? (
+      {!itemsQuery.isLoading &&
+      uncheckedItems.length === 0 &&
+      checkedItems.length === 0 ? (
         <InlineAlert text="Lista jest pusta. Dodaj produkt, żeby zacząć planowanie." />
       ) : null}
 
@@ -445,7 +530,9 @@ function ShoppingBoard({
             moving={moveMutation.isPending}
             onCheck={(item) => toggleMutation.mutate(item.id)}
             onDelete={(item) => deleteMutation.mutate(item.id)}
-            onMove={(item, targetType) => moveMutation.mutate({ id: item.id, targetType })}
+            onMove={(item, targetType) =>
+              moveMutation.mutate({ id: item.id, targetType })
+            }
             updating={toggleMutation.isPending}
           />
         ))}
@@ -463,7 +550,9 @@ function ShoppingBoard({
             moving={moveMutation.isPending}
             onCheck={(item) => toggleMutation.mutate(item.id)}
             onDelete={(item) => deleteMutation.mutate(item.id)}
-            onMove={(item, targetType) => moveMutation.mutate({ id: item.id, targetType })}
+            onMove={(item, targetType) =>
+              moveMutation.mutate({ id: item.id, targetType })
+            }
             updating={toggleMutation.isPending}
           />
         ) : null}
@@ -535,10 +624,12 @@ function ShoppingBoard({
             />
             <ActionButton
               labelStyle={styles.dangerActionLabel}
-              loading={clearMutation.isPending}
-              onPress={() => clearMutation.mutate()}
+              onPress={() => {
+                setClearConfirmVisible(false);
+                setClearFinalConfirmVisible(true);
+              }}
               style={styles.modalFooterButton}
-              title="Wyczyść"
+              title="Dalej"
               variant="secondary"
             />
           </View>
@@ -553,7 +644,42 @@ function ShoppingBoard({
         visible={clearConfirmVisible}
       >
         <Text style={styles.confirmText}>
-          Ta akcja usunie wszystkie produkty z tej listy zakupów. Nie da się jej cofnąć.
+          Ta akcja usunie wszystkie produkty z tej listy zakupów. Nie da się jej
+          cofnąć.
+        </Text>
+      </FormModal>
+      <FormModal
+        footer={
+          <View style={styles.modalFooter}>
+            <ActionButton
+              disabled={clearMutation.isPending}
+              onPress={() => setClearFinalConfirmVisible(false)}
+              style={styles.modalFooterButton}
+              title="Anuluj"
+              variant="secondary"
+            />
+            <ActionButton
+              labelStyle={styles.dangerActionLabel}
+              loading={clearMutation.isPending}
+              onPress={() => clearMutation.mutate()}
+              style={styles.modalFooterButton}
+              title="Tak, usuń"
+              variant="secondary"
+            />
+          </View>
+        }
+        onClose={() => {
+          if (!clearMutation.isPending) {
+            setClearFinalConfirmVisible(false);
+          }
+        }}
+        subtitle="To jest ostatnie potwierdzenie."
+        title="Na pewno usunąć produkty?"
+        visible={clearFinalConfirmVisible}
+      >
+        <Text style={styles.confirmText}>
+          Usuniesz wszystkie produkty z listy „{currentList}”. Tej operacji nie
+          można cofnąć.
         </Text>
         {clearMutation.error ? (
           <InlineAlert tone="error" text="Nie udało się wyczyścić listy." />
@@ -586,7 +712,9 @@ function ShoppingBoard({
           <View style={styles.aiIcon}>
             <Sparkles color={theme.colors.primary} size={20} />
           </View>
-          <Text style={styles.sectionMeta}>Produkty trafią do aktualnie wybranej listy.</Text>
+          <Text style={styles.sectionMeta}>
+            Produkty trafią do aktualnie wybranej listy.
+          </Text>
         </View>
         <TextInput
           multiline
@@ -597,7 +725,10 @@ function ShoppingBoard({
           value={aiMessage}
         />
         {aiImportMutation.error ? (
-          <InlineAlert tone="error" text="AI nie dodało produktów. Sprawdź konfigurację albo treść listy." />
+          <InlineAlert
+            tone="error"
+            text="AI nie dodało produktów. Sprawdź konfigurację albo treść listy."
+          />
         ) : null}
       </FormModal>
     </>
@@ -623,7 +754,8 @@ function MealsBoard({
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
   const accessToken = session?.accessToken;
-  const [selectedWeekStartDate, setSelectedWeekStartDate] = useState(currentWeekStart());
+  const [selectedWeekStartDate, setSelectedWeekStartDate] =
+    useState(currentWeekStart());
   const [didInitCurrentWeek, setDidInitCurrentWeek] = useState(false);
   const [weekday, setWeekday] = useState(weekdayFromIsoDate(todayIso()));
   const [slotIndex, setSlotIndex] = useState(0);
@@ -638,9 +770,12 @@ function MealsBoard({
   const [aiMessages, setAiMessages] = useState<MealPlanAiMessage[]>([]);
   const [aiDraft, setAiDraft] = useState<MealPlanAiDraftEntry[]>([]);
   const [aiTargetWeekConfirmed, setAiTargetWeekConfirmed] = useState(false);
-  const [aiTargetWeekStartDate, setAiTargetWeekStartDate] = useState(selectedWeekStartDate);
+  const [aiTargetWeekStartDate, setAiTargetWeekStartDate] = useState(
+    selectedWeekStartDate,
+  );
   const [aiNotice, setAiNotice] = useState("");
-  const [handledAiOpenRequest, setHandledAiOpenRequest] = useState(aiOpenRequest);
+  const [handledAiOpenRequest, setHandledAiOpenRequest] =
+    useState(aiOpenRequest);
   const [isCalendarExpanded, setCalendarExpanded] = useState(false);
   const householdQuery = useQuery({
     enabled: Boolean(accessToken),
@@ -657,8 +792,13 @@ function MealsBoard({
     queryFn: () => listMealPlanHistory({ accessToken }),
     queryKey: [...queryKeys.meal, "history"],
   });
-  const historyWeeks = mergeMealHistory(currentQuery.data?.week, historyQuery.data ?? []);
-  const selectedWeek = historyWeeks.find((week) => week.weekStartDate === selectedWeekStartDate);
+  const historyWeeks = mergeMealHistory(
+    currentQuery.data?.week,
+    historyQuery.data ?? [],
+  );
+  const selectedWeek = historyWeeks.find(
+    (week) => week.weekStartDate === selectedWeekStartDate,
+  );
   const selectedWeekId = selectedWeek?.id ?? null;
   const selectedPlanQuery = useQuery({
     enabled:
@@ -691,7 +831,8 @@ function MealsBoard({
   useEffect(() => {
     if (action === "addMeal") {
       const nextDate = todayIso();
-      const nextWeekStart = weekStartFromIsoDate(nextDate) ?? currentWeekStart();
+      const nextWeekStart =
+        weekStartFromIsoDate(nextDate) ?? currentWeekStart();
 
       setSelectedWeekStartDate(nextWeekStart);
       setMealDate(nextDate);
@@ -718,7 +859,11 @@ function MealsBoard({
       : selectedWeekId
         ? selectedPlanQuery.data
         : null;
-  const selectedDraftKey = mealDraftKey(selectedWeekStartDate, weekday, slotIndex);
+  const selectedDraftKey = mealDraftKey(
+    selectedWeekStartDate,
+    weekday,
+    slotIndex,
+  );
 
   const upsertMutation = useMutation({
     mutationFn: async () => {
@@ -790,7 +935,10 @@ function MealsBoard({
         { content, role: "user" },
       ];
 
-      if (!aiTargetWeekConfirmed || !isValidWeekStartDate(aiTargetWeekStartDate)) {
+      if (
+        !aiTargetWeekConfirmed ||
+        !isValidWeekStartDate(aiTargetWeekStartDate)
+      ) {
         throw new Error("Missing AI target week");
       }
 
@@ -815,14 +963,19 @@ function MealsBoard({
       }
       setAiInput("");
       if (response.limitExhausted) {
-        setAiNotice("Limit AI jest wyczerpany. Aplikacja uzyla lokalnego algorytmu.");
+        setAiNotice(
+          "Limit AI jest wyczerpany. Aplikacja uzyla lokalnego algorytmu.",
+        );
         setTimeout(() => setAiNotice(""), 3500);
       }
     },
   });
   const aiSaveMutation = useMutation({
     mutationFn: async () => {
-      if (!aiTargetWeekConfirmed || !isValidWeekStartDate(aiTargetWeekStartDate)) {
+      if (
+        !aiTargetWeekConfirmed ||
+        !isValidWeekStartDate(aiTargetWeekStartDate)
+      ) {
         throw new Error("Missing AI target week");
       }
 
@@ -841,7 +994,8 @@ function MealsBoard({
 
       if (finalizeResponse.entries.length === 0) {
         throw new Error(
-          finalizeResponse.assistantMessage || "AI nie przygotowalo planu do zapisu.",
+          finalizeResponse.assistantMessage ||
+            "AI nie przygotowalo planu do zapisu.",
         );
       }
 
@@ -893,11 +1047,16 @@ function MealsBoard({
     },
   });
   const entries = [...(activePlan?.entries ?? [])].sort(
-    (left, right) => left.weekday - right.weekday || left.slotIndex - right.slotIndex,
+    (left, right) =>
+      left.weekday - right.weekday || left.slotIndex - right.slotIndex,
   );
   const groupedEntries = groupMeals(entries);
   const mealSlots = buildMealSlotIndexes(householdQuery.data?.mealSlotsPerDay);
-  const mealWeekCards = buildMealWeekCards(entries, selectedWeekStartDate, mealSlots);
+  const mealWeekCards = buildMealWeekCards(
+    entries,
+    selectedWeekStartDate,
+    mealSlots,
+  );
   const canSave =
     permission.canUpdate &&
     Boolean(mealName.trim()) &&
@@ -909,7 +1068,8 @@ function MealsBoard({
     aiInput.trim().length >= 3 &&
     !aiChatMutation.isPending;
   const hasAiConversation =
-    aiDraft.length > 0 || aiMessages.some((message) => message.role === "assistant");
+    aiDraft.length > 0 ||
+    aiMessages.some((message) => message.role === "assistant");
   const canSaveAi =
     permission.canCreate &&
     permission.canUpdate &&
@@ -927,7 +1087,12 @@ function MealsBoard({
 
     const draft =
       mealDrafts[selectedDraftKey] ??
-      findMealDraftForSelection(activePlan, selectedWeekStartDate, weekday, slotIndex);
+      findMealDraftForSelection(
+        activePlan,
+        selectedWeekStartDate,
+        weekday,
+        slotIndex,
+      );
 
     setMealDate(dateForWeekday(selectedWeekStartDate, weekday));
     setMealName(draft.mealName);
@@ -999,8 +1164,14 @@ function MealsBoard({
   }
 
   function updateMealDraft(field: keyof MealDraft, value: string) {
-    const base = mealDrafts[selectedDraftKey] ??
-      findMealDraftForSelection(activePlan, selectedWeekStartDate, weekday, slotIndex);
+    const base =
+      mealDrafts[selectedDraftKey] ??
+      findMealDraftForSelection(
+        activePlan,
+        selectedWeekStartDate,
+        weekday,
+        slotIndex,
+      );
 
     setMealDrafts((current) => ({
       ...current,
@@ -1019,7 +1190,9 @@ function MealsBoard({
         </View>
         <View style={styles.mealHeroText}>
           <Text style={styles.sectionTitle}>Plan posiłków</Text>
-          <Text style={styles.sectionMeta}>{formatWeekRange(selectedWeekStartDate)}</Text>
+          <Text style={styles.sectionMeta}>
+            {formatWeekRange(selectedWeekStartDate)}
+          </Text>
         </View>
         {permission.canUpdate ? (
           <Pressable onPress={openCreateMealModal} style={styles.fabInline}>
@@ -1030,19 +1203,32 @@ function MealsBoard({
       {aiNotice ? <InlineAlert text={aiNotice} /> : null}
 
       <Pressable
-        accessibilityLabel={isCalendarExpanded ? "Zwin wybor tygodnia" : "Zmien tydzien posilkow"}
+        accessibilityLabel={
+          isCalendarExpanded ? "Zwin wybor tygodnia" : "Zmien tydzien posilkow"
+        }
         accessibilityRole="button"
         onPress={() => setCalendarExpanded((value) => !value)}
-        style={({ pressed }) => [styles.calendarToggle, pressed && styles.pressed]}
+        style={({ pressed }) => [
+          styles.calendarToggle,
+          pressed && styles.pressed,
+        ]}
       >
         <View style={styles.calendarToggleIcon}>
           <CalendarDays color={theme.colors.food} size={19} />
         </View>
         <View style={styles.calendarToggleText}>
-          <Text style={styles.calendarToggleTitle}>{isCalendarExpanded ? "Zwin kalendarz" : "Zmien tydzien"}</Text>
-          <Text style={styles.calendarToggleMeta}>{formatWeekRange(selectedWeekStartDate)}</Text>
+          <Text style={styles.calendarToggleTitle}>
+            {isCalendarExpanded ? "Zwin kalendarz" : "Zmien tydzien"}
+          </Text>
+          <Text style={styles.calendarToggleMeta}>
+            {formatWeekRange(selectedWeekStartDate)}
+          </Text>
         </View>
-        <View style={isCalendarExpanded ? styles.calendarToggleChevronOpen : undefined}>
+        <View
+          style={
+            isCalendarExpanded ? styles.calendarToggleChevronOpen : undefined
+          }
+        >
           <ChevronRight color={theme.colors.textMuted} size={18} />
         </View>
       </Pressable>
@@ -1058,7 +1244,11 @@ function MealsBoard({
       <QueryState
         emptyText="Brak posiłków w planie."
         error={currentQuery.error ?? selectedPlanQuery.error}
-        isEmpty={!currentQuery.isLoading && !selectedPlanQuery.isLoading && entries.length === 0}
+        isEmpty={
+          !currentQuery.isLoading &&
+          !selectedPlanQuery.isLoading &&
+          entries.length === 0
+        }
         isLoading={currentQuery.isLoading || selectedPlanQuery.isLoading}
       />
 
@@ -1067,15 +1257,24 @@ function MealsBoard({
           {mealWeekCards.map((day) => (
             <View
               key={day.day}
-              style={[styles.mealTile, day.day === weekday ? styles.mealTileActive : null]}
+              style={[
+                styles.mealTile,
+                day.day === weekday ? styles.mealTileActive : null,
+              ]}
             >
               <View style={styles.mealTileHeader}>
                 <View style={styles.itemText}>
-                  <Text style={styles.mealTileDay}>{weekdayShort(day.day)}</Text>
-                  <Text style={styles.mealTileDate}>{formatIsoDateShort(day.date)}</Text>
+                  <Text style={styles.mealTileDay}>
+                    {weekdayShort(day.day)}
+                  </Text>
+                  <Text style={styles.mealTileDate}>
+                    {formatIsoDateShort(day.date)}
+                  </Text>
                 </View>
                 <View style={styles.mealTileCountPill}>
-                  <Text style={styles.mealTileCount}>{day.entries.length}/{mealSlots.length}</Text>
+                  <Text style={styles.mealTileCount}>
+                    {day.entries.length}/{mealSlots.length}
+                  </Text>
                 </View>
               </View>
               <View style={styles.mealTileList}>
@@ -1084,14 +1283,22 @@ function MealsBoard({
                     disabled={!permission.canUpdate}
                     key={entry.id}
                     onPress={() => openEditMealModal(entry)}
-                    style={({ pressed }) => [styles.mealTileRow, pressed && styles.pressed]}
+                    style={({ pressed }) => [
+                      styles.mealTileRow,
+                      pressed && styles.pressed,
+                    ]}
                   >
-                    <Text style={styles.mealTileSlot}>{entry.slotIndex + 1}</Text>
+                    <Text style={styles.mealTileSlot}>
+                      {entry.slotIndex + 1}
+                    </Text>
                     <Text numberOfLines={1} style={styles.mealTileName}>
                       {entry.mealName}
                     </Text>
                     {entry.linkUrl ? (
-                      <IconButton accessibilityLabel="Otworz link" onPress={() => Linking.openURL(entry.linkUrl!)}>
+                      <IconButton
+                        accessibilityLabel="Otworz link"
+                        onPress={() => Linking.openURL(entry.linkUrl!)}
+                      >
                         <ExternalLink color={theme.colors.food} size={15} />
                       </IconButton>
                     ) : null}
@@ -1101,13 +1308,20 @@ function MealsBoard({
                   <Text style={styles.mealTileEmpty}>Brak posilkow</Text>
                 ) : null}
                 {day.entries.length > 4 ? (
-                  <Text style={styles.mealTileOverflow}>+{day.entries.length - 4} dalej</Text>
+                  <Text style={styles.mealTileOverflow}>
+                    +{day.entries.length - 4} dalej
+                  </Text>
                 ) : null}
               </View>
               {permission.canUpdate ? (
                 <Pressable
-                  onPress={() => openCreateMealModalForDay(day.day, day.nextSlotIndex)}
-                  style={({ pressed }) => [styles.mealTileAdd, pressed && styles.pressed]}
+                  onPress={() =>
+                    openCreateMealModalForDay(day.day, day.nextSlotIndex)
+                  }
+                  style={({ pressed }) => [
+                    styles.mealTileAdd,
+                    pressed && styles.pressed,
+                  ]}
                 >
                   <Plus color={theme.colors.food} size={16} />
                   <Text style={styles.mealTileAddText}>Dodaj</Text>
@@ -1121,45 +1335,53 @@ function MealsBoard({
       {layout === "list" ? (
         <View style={styles.groupList}>
           {groupedEntries.map((group) => (
-          <View key={group.day} style={styles.mealDayCard}>
-            <Text style={styles.groupTitle}>{weekdayLabel(group.day)}</Text>
-            {group.entries.map((entry) => (
-              <View key={entry.id} style={styles.mealRow}>
-                <View style={styles.mealSlot}>
-                  <Text style={styles.mealSlotText}>{entry.slotIndex + 1}</Text>
-                </View>
-                <View style={styles.itemText}>
-                  <Text style={styles.itemName}>{entry.mealName}</Text>
-                  {entry.note ? (
-                    <Text numberOfLines={2} style={styles.itemMeta}>
-                      {entry.note}
+            <View key={group.day} style={styles.mealDayCard}>
+              <Text style={styles.groupTitle}>{weekdayLabel(group.day)}</Text>
+              {group.entries.map((entry) => (
+                <View key={entry.id} style={styles.mealRow}>
+                  <View style={styles.mealSlot}>
+                    <Text style={styles.mealSlotText}>
+                      {entry.slotIndex + 1}
                     </Text>
-                  ) : null}
-                </View>
-                {entry.linkUrl ? (
-                  <IconButton accessibilityLabel="Otworz link" onPress={() => Linking.openURL(entry.linkUrl!)}>
-                    <ExternalLink color={theme.colors.food} size={17} />
-                  </IconButton>
-                ) : null}
-                <View style={styles.mealRowActions}>
-                  {permission.canUpdate ? (
-                    <IconButton accessibilityLabel="Edytuj posiłek" onPress={() => openEditMealModal(entry)}>
-                      <Pencil color={theme.colors.primary} size={16} />
-                    </IconButton>
-                  ) : null}
-                  {permission.canDelete ? (
+                  </View>
+                  <View style={styles.itemText}>
+                    <Text style={styles.itemName}>{entry.mealName}</Text>
+                    {entry.note ? (
+                      <Text numberOfLines={2} style={styles.itemMeta}>
+                        {entry.note}
+                      </Text>
+                    ) : null}
+                  </View>
+                  {entry.linkUrl ? (
                     <IconButton
-                      accessibilityLabel="Usuń posiłek"
-                      disabled={deleteMealMutation.isPending}
-                      onPress={() => deleteMealMutation.mutate(entry)}
+                      accessibilityLabel="Otworz link"
+                      onPress={() => Linking.openURL(entry.linkUrl!)}
                     >
-                      <Trash2 color={theme.colors.danger} size={16} />
+                      <ExternalLink color={theme.colors.food} size={17} />
                     </IconButton>
                   ) : null}
+                  <View style={styles.mealRowActions}>
+                    {permission.canUpdate ? (
+                      <IconButton
+                        accessibilityLabel="Edytuj posiłek"
+                        onPress={() => openEditMealModal(entry)}
+                      >
+                        <Pencil color={theme.colors.primary} size={16} />
+                      </IconButton>
+                    ) : null}
+                    {permission.canDelete ? (
+                      <IconButton
+                        accessibilityLabel="Usuń posiłek"
+                        disabled={deleteMealMutation.isPending}
+                        onPress={() => deleteMealMutation.mutate(entry)}
+                      >
+                        <Trash2 color={theme.colors.danger} size={16} />
+                      </IconButton>
+                    ) : null}
+                  </View>
                 </View>
-              </View>
-            ))}
-          </View>
+              ))}
+            </View>
           ))}
         </View>
       ) : null}
@@ -1207,7 +1429,12 @@ function MealsBoard({
         <Text style={styles.inputLabel}>Numer posiłku</Text>
         <View style={styles.chips}>
           {mealSlots.map((slot) => (
-            <Chip active={slotIndex === slot} key={slot} onPress={() => setSlotIndex(slot)} title={`Posiłek ${slot + 1}`} />
+            <Chip
+              active={slotIndex === slot}
+              key={slot}
+              onPress={() => setSlotIndex(slot)}
+              title={`Posiłek ${slot + 1}`}
+            />
           ))}
         </View>
         <TextInput
@@ -1339,22 +1566,34 @@ function MealsBoard({
               <View key={group.day} style={styles.aiDraftDay}>
                 <Text style={styles.groupTitle}>{weekdayLabel(group.day)}</Text>
                 {group.entries.map((entry) => (
-                  <View key={`${entry.weekday}-${entry.slotIndex}`} style={styles.aiDraftMeal}>
+                  <View
+                    key={`${entry.weekday}-${entry.slotIndex}`}
+                    style={styles.aiDraftMeal}
+                  >
                     <View style={styles.mealSlot}>
-                      <Text style={styles.mealSlotText}>{entry.slotIndex + 1}</Text>
+                      <Text style={styles.mealSlotText}>
+                        {entry.slotIndex + 1}
+                      </Text>
                     </View>
                     <View style={styles.itemText}>
                       <Text style={styles.itemName}>{entry.mealName}</Text>
                       {entry.sourceHint || entry.note || entry.linkUrl ? (
                         <Text numberOfLines={2} style={styles.itemMeta}>
-                          {[entry.sourceHint, entry.linkUrl ? "link" : null, entry.note]
+                          {[
+                            entry.sourceHint,
+                            entry.linkUrl ? "link" : null,
+                            entry.note,
+                          ]
                             .filter(Boolean)
                             .join(" / ")}
                         </Text>
                       ) : null}
                     </View>
                     {entry.linkUrl ? (
-                      <IconButton accessibilityLabel="Otworz link z AI" onPress={() => Linking.openURL(entry.linkUrl!)}>
+                      <IconButton
+                        accessibilityLabel="Otworz link z AI"
+                        onPress={() => Linking.openURL(entry.linkUrl!)}
+                      >
                         <ExternalLink color={theme.colors.food} size={16} />
                       </IconButton>
                     ) : null}
@@ -1386,7 +1625,10 @@ function MealsBoard({
         {aiSaveMutation.error ? (
           <InlineAlert
             tone="error"
-            text={getMealAiErrorText(aiSaveMutation.error, "Nie udalo sie zapisac planu z AI.")}
+            text={getMealAiErrorText(
+              aiSaveMutation.error,
+              "Nie udalo sie zapisac planu z AI.",
+            )}
           />
         ) : null}
       </FormModal>
@@ -1434,14 +1676,20 @@ function ShoppingGroupCard({
                 onPress={() => onCheck(item)}
                 style={[styles.checkBox, item.isChecked && styles.checkBoxDone]}
               >
-                {item.isChecked ? <Check color={theme.colors.card} size={14} /> : null}
+                {item.isChecked ? (
+                  <Check color={theme.colors.card} size={14} />
+                ) : null}
               </Pressable>
               <Pressable
                 disabled={!canUpdate || updating}
                 onPress={() => onCheck(item)}
                 style={styles.itemText}
               >
-                <Text style={[styles.itemName, item.isChecked && styles.itemDone]}>{item.name}</Text>
+                <Text
+                  style={[styles.itemName, item.isChecked && styles.itemDone]}
+                >
+                  {item.name}
+                </Text>
                 {item.quantity ? (
                   <Text numberOfLines={1} style={styles.itemMeta}>
                     {item.quantity}
@@ -1495,8 +1743,13 @@ function Chip({
   const styles = createStyles(theme.colors);
 
   return (
-    <Pressable onPress={onPress} style={[styles.chip, active && styles.chipActive]}>
-      <Text style={[styles.chipText, active && styles.chipTextActive]}>{title}</Text>
+    <Pressable
+      onPress={onPress}
+      style={[styles.chip, active && styles.chipActive]}
+    >
+      <Text style={[styles.chipText, active && styles.chipTextActive]}>
+        {title}
+      </Text>
     </Pressable>
   );
 }
@@ -1506,14 +1759,19 @@ function CalendarWeekPicker({
   onSelect,
   selectedWeekStartDate,
 }: {
-  mealWeeks: Array<{ entriesCount?: number; id: string; weekStartDate: string }>;
+  mealWeeks: Array<{
+    entriesCount?: number;
+    id: string;
+    weekStartDate: string;
+  }>;
   onSelect: (weekStartDate: string) => void;
   selectedWeekStartDate: string;
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
   const markedDates = useMemo(
-    () => buildMarkedMealWeekDates(selectedWeekStartDate, mealWeeks, theme.colors),
+    () =>
+      buildMarkedMealWeekDates(selectedWeekStartDate, mealWeeks, theme.colors),
     [mealWeeks, selectedWeekStartDate, theme.colors],
   );
 
@@ -1544,7 +1802,9 @@ function CalendarWeekPicker({
           todayTextColor: theme.colors.primary,
         }}
       />
-      <Text style={styles.calendarPickerMeta}>Wybrany tydzien: {formatWeekRange(selectedWeekStartDate)}</Text>
+      <Text style={styles.calendarPickerMeta}>
+        Wybrany tydzien: {formatWeekRange(selectedWeekStartDate)}
+      </Text>
     </View>
   );
 }
@@ -1570,32 +1830,38 @@ type ShoppingCategoryRule = {
 const shoppingCategoryRules: ShoppingCategoryRule[] = [
   {
     emoji: "🥦",
-    keywords: /pomidor|ogorek|ogor|salat|papryk|marchew|ziemni|cebula|czosn|warzyw|brokul|kalaf|kapust|cukini|awokado|pieczark|boczniak|rukol|szpinak/,
+    keywords:
+      /pomidor|ogorek|ogor|salat|papryk|marchew|ziemni|cebula|czosn|warzyw|brokul|kalaf|kapust|cukini|awokado|pieczark|boczniak|rukol|szpinak/,
     title: "Warzywa",
   },
   {
     emoji: "🍎",
-    keywords: /banan|jabl|granat|grusz|cytryn|limonk|owoc|truskawk|malin|borow|winogron|pomarancz|mandaryn|kiwi/,
+    keywords:
+      /banan|jabl|granat|grusz|cytryn|limonk|owoc|truskawk|malin|borow|winogron|pomarancz|mandaryn|kiwi/,
     title: "Owoce",
   },
   {
     emoji: "🧀",
-    keywords: /mleko|jogurt|kefir|maslank|ser|twarog|serek|maslo|smietan|mozzarell|feta|burrat|buratt|skyr|jajk/,
+    keywords:
+      /mleko|jogurt|kefir|maslank|ser|twarog|serek|maslo|smietan|mozzarell|feta|burrat|buratt|skyr|jajk/,
     title: "Nabiał i jajka",
   },
   {
     emoji: "🥖",
-    keywords: /chleb|bulka|bulki|bagiet|kajzer|tost|pieczyw|tortill|croissant|drozdz/,
+    keywords:
+      /chleb|bulka|bulki|bagiet|kajzer|tost|pieczyw|tortill|croissant|drozdz/,
     title: "Pieczywo",
   },
   {
     emoji: "🍗",
-    keywords: /kurczak|indyk|wolow|wieprz|mieso|wedlin|szynk|kielbas|parowk|boczek|ryb|losos|tunczyk|dorsz|sledz/,
+    keywords:
+      /kurczak|indyk|wolow|wieprz|mieso|wedlin|szynk|kielbas|parowk|boczek|ryb|losos|tunczyk|dorsz|sledz/,
     title: "Mięso i ryby",
   },
   {
     emoji: "🫙",
-    keywords: /makaron|ryz|kasz|oliw|olej|maka|cukier|sol|pieprz|platk|musli|konserw|puszk|sos|passat|przypraw|ketchup|majonez|musztard|ocet|dzem|miod/,
+    keywords:
+      /makaron|ryz|kasz|oliw|olej|maka|cukier|sol|pieprz|platk|musli|konserw|puszk|sos|passat|przypraw|ketchup|majonez|musztard|ocet|dzem|miod/,
     title: "Spiżarnia",
   },
   {
@@ -1610,17 +1876,20 @@ const shoppingCategoryRules: ShoppingCategoryRule[] = [
   },
   {
     emoji: "🍫",
-    keywords: /czekolad|ciastk|baton|chips|chrupk|orzech|palusz|cukierk|zelk|przekask|deser/,
+    keywords:
+      /czekolad|ciastk|baton|chips|chrupk|orzech|palusz|cukierk|zelk|przekask|deser/,
     title: "Słodycze i przekąski",
   },
   {
     emoji: "🧼",
-    keywords: /plyn|proszek|kapsulk|zmywark|prani|papier|recznik|worki|gabka|scierk|mop|chemia|sprzat|odkamieniacz/,
+    keywords:
+      /plyn|proszek|kapsulk|zmywark|prani|papier|recznik|worki|gabka|scierk|mop|chemia|sprzat|odkamieniacz/,
     title: "Chemia i sprzątanie",
   },
   {
     emoji: "🧴",
-    keywords: /szampon|mydlo|zel|pasta|szczotecz|dezodorant|krem|balsam|kosmet|higien|chustecz|wacik/,
+    keywords:
+      /szampon|mydlo|zel|pasta|szczotecz|dezodorant|krem|balsam|kosmet|higien|chustecz|wacik/,
     title: "Higiena",
   },
 ];
@@ -1652,8 +1921,13 @@ function normalizeShoppingName(value: string): string {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
-function resolveShoppingGroupTitle(item: ShoppingItem, normalizedName: string): string {
-  const keywordRule = shoppingCategoryRules.find((rule) => rule.keywords.test(normalizedName));
+function resolveShoppingGroupTitle(
+  item: ShoppingItem,
+  normalizedName: string,
+): string {
+  const keywordRule = shoppingCategoryRules.find((rule) =>
+    rule.keywords.test(normalizedName),
+  );
 
   if (keywordRule) {
     return keywordRule.title;
@@ -1683,7 +1957,11 @@ function resolveShoppingGroupTitle(item: ShoppingItem, normalizedName: string): 
   }
 }
 
-function mealDraftKey(weekStartDate: string, weekday: number, slotIndex: number): string {
+function mealDraftKey(
+  weekStartDate: string,
+  weekday: number,
+  slotIndex: number,
+): string {
   return `${weekStartDate}:${weekday}:${slotIndex}`;
 }
 
@@ -1706,7 +1984,9 @@ function findMealDraftForSelection(
   }
 
   return mealDraftFromEntry(
-    plan.entries.find((entry) => entry.weekday === weekday && entry.slotIndex === slotIndex),
+    plan.entries.find(
+      (entry) => entry.weekday === weekday && entry.slotIndex === slotIndex,
+    ),
   );
 }
 
@@ -1714,7 +1994,11 @@ function buildAiMealNote(entry: MealPlanAiDraftEntry): string | null {
   const note = entry.note?.trim();
   const sourceHint = entry.sourceHint?.trim();
 
-  if (note && sourceHint && !note.toLowerCase().includes(sourceHint.toLowerCase())) {
+  if (
+    note &&
+    sourceHint &&
+    !note.toLowerCase().includes(sourceHint.toLowerCase())
+  ) {
     return `${note}\nZrodlo: ${sourceHint}`;
   }
 
@@ -1745,12 +2029,18 @@ function normalizeOptionalMealUrl(value: string): string | null {
     return null;
   }
 
-  return /^[a-z][a-z\d+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  return /^[a-z][a-z\d+.-]*:\/\//i.test(trimmed)
+    ? trimmed
+    : `https://${trimmed}`;
 }
 
 function buildMarkedMealWeekDates(
   selectedWeekStartDate: string,
-  mealWeeks: Array<{ entriesCount?: number; id: string; weekStartDate: string }>,
+  mealWeeks: Array<{
+    entriesCount?: number;
+    id: string;
+    weekStartDate: string;
+  }>,
   colors: AppPalette,
 ) {
   const marked: Record<
@@ -1791,7 +2081,10 @@ function mergeMealHistory(
   currentWeek: MealPlanDetail["week"] | undefined,
   history: MealPlanSummary[],
 ): Array<{ entriesCount?: number; id: string; weekStartDate: string }> {
-  const weeks = new Map<string, { entriesCount?: number; id: string; weekStartDate: string }>();
+  const weeks = new Map<
+    string,
+    { entriesCount?: number; id: string; weekStartDate: string }
+  >();
 
   if (currentWeek) {
     weeks.set(currentWeek.id, currentWeek);
@@ -1799,7 +2092,9 @@ function mergeMealHistory(
 
   history.forEach((week) => weeks.set(week.id, week));
 
-  return [...weeks.values()].sort((left, right) => right.weekStartDate.localeCompare(left.weekStartDate));
+  return [...weeks.values()].sort((left, right) =>
+    right.weekStartDate.localeCompare(left.weekStartDate),
+  );
 }
 
 async function getOrCreateMealPlanForDate({
@@ -1823,13 +2118,18 @@ async function getOrCreateMealPlanForDate({
     return currentPlan;
   }
 
-  const historicalWeek = history.find((week) => week.weekStartDate === targetWeekStartDate);
+  const historicalWeek = history.find(
+    (week) => week.weekStartDate === targetWeekStartDate,
+  );
 
   if (historicalWeek) {
     return getMealPlanWeek(historicalWeek.id, { accessToken });
   }
 
-  return createMealPlan({ weekStartDate: targetWeekStartDate }, { accessToken });
+  return createMealPlan(
+    { weekStartDate: targetWeekStartDate },
+    { accessToken },
+  );
 }
 
 function groupMeals(entries: MealPlanEntry[]) {
@@ -1845,7 +2145,11 @@ function groupMeals(entries: MealPlanEntry[]) {
   }));
 }
 
-function buildMealWeekCards(entries: MealPlanEntry[], weekStartDate: string, mealSlots: number[]) {
+function buildMealWeekCards(
+  entries: MealPlanEntry[],
+  weekStartDate: string,
+  mealSlots: number[],
+) {
   const groups = new Map<number, MealPlanEntry[]>();
 
   entries.forEach((entry) => {
@@ -1855,7 +2159,8 @@ function buildMealWeekCards(entries: MealPlanEntry[], weekStartDate: string, mea
   return [1, 2, 3, 4, 5, 6, 7].map((day) => {
     const dayEntries = groups.get(day) ?? [];
     const usedSlots = new Set(dayEntries.map((entry) => entry.slotIndex));
-    const nextSlotIndex = mealSlots.find((slot) => !usedSlots.has(slot)) ?? mealSlots[0] ?? 0;
+    const nextSlotIndex =
+      mealSlots.find((slot) => !usedSlots.has(slot)) ?? mealSlots[0] ?? 0;
 
     return {
       date: dateForWeekday(weekStartDate, day),
@@ -1867,7 +2172,9 @@ function buildMealWeekCards(entries: MealPlanEntry[], weekStartDate: string, mea
 }
 
 function buildMealSlotIndexes(value: number | null | undefined): number[] {
-  const count = Number.isFinite(value) ? Math.max(1, Math.min(8, Number(value))) : 4;
+  const count = Number.isFinite(value)
+    ? Math.max(1, Math.min(8, Number(value)))
+    : 4;
 
   return Array.from({ length: count }, (_, index) => index);
 }

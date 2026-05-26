@@ -1,32 +1,37 @@
-import { BadGatewayException, BadRequestException, Injectable, Logger } from '@nestjs/common';
-import { REALTIME_EVENTS, RealtimeEventType } from '@homeapp/shared-types';
-import { HouseholdContext, UserContext } from '../../shared/request-context';
-import { DatabaseService } from '../database/database.service';
+import {
+  BadGatewayException,
+  BadRequestException,
+  Injectable,
+  Logger,
+} from "@nestjs/common";
+import { REALTIME_EVENTS, RealtimeEventType } from "@homeapp/shared-types";
+import { HouseholdContext, UserContext } from "../../shared/request-context";
+import { DatabaseService } from "../database/database.service";
 import {
   PushPlatform,
   RegisterPushTokenDto,
   SendTestPushDto,
-  UpdateNotificationPreferencesDto
-} from './dto/notifications.dto';
+  UpdateNotificationPreferencesDto,
+} from "./dto/notifications.dto";
 
-const HOUSEHOLD_NOTIFICATION_EVENTS: RealtimeEventType[] = REALTIME_EVENTS.filter(
-  (eventType) => eventType !== 'note.changed'
-);
+const HOUSEHOLD_NOTIFICATION_EVENTS: RealtimeEventType[] =
+  REALTIME_EVENTS.filter((eventType) => eventType !== "note.changed");
+const HOUSEHOLD_NOTIFICATION_THROTTLE_MINUTES = 15;
 
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
-  private readonly expoPushUrl = 'https://exp.host/--/api/v2/push/send';
+  private readonly expoPushUrl = "https://exp.host/--/api/v2/push/send";
 
   constructor(private readonly database: DatabaseService) {}
 
   async registerExpoPushToken(
     household: HouseholdContext,
     user: UserContext,
-    dto: RegisterPushTokenDto
+    dto: RegisterPushTokenDto,
   ): Promise<PushTokenRecord> {
     const expoPushToken = this.normalizeExpoPushToken(dto.expoPushToken);
-    const deviceName = dto.deviceName?.trim() ?? '';
+    const deviceName = dto.deviceName?.trim() ?? "";
     const result = await this.database.query<PushTokenRow>(
       `
         insert into push_tokens (
@@ -66,14 +71,14 @@ export class NotificationsService {
         user.userId,
         expoPushToken,
         dto.platform,
-        deviceName
-      ]
+        deviceName,
+      ],
     );
 
     const token = result.rows[0];
 
     if (!token) {
-      throw new Error('Expected push token record');
+      throw new Error("Expected push token record");
     }
 
     return this.mapPushToken(token);
@@ -81,11 +86,11 @@ export class NotificationsService {
 
   async sendTestPush(
     household: HouseholdContext,
-    dto: SendTestPushDto
+    dto: SendTestPushDto,
   ): Promise<PushSendResult> {
     const tokens = await this.listEnabledTokensForMember(
       household.householdId,
-      household.memberId
+      household.memberId,
     );
 
     if (tokens.length === 0) {
@@ -93,31 +98,34 @@ export class NotificationsService {
     }
 
     const messages = tokens.map((token) => ({
-      body: dto.body?.trim() || 'Powiadomienia push w HomeApp działają.',
+      body: dto.body?.trim() || "Powiadomienia push w HomeApp działają.",
       data: {
-        kind: 'test'
+        kind: "test",
       },
-      sound: 'default' as const,
-      title: dto.title?.trim() || 'HomeApp',
-      to: token.expoPushToken
+      sound: "default" as const,
+      title: dto.title?.trim() || "HomeApp",
+      to: token.expoPushToken,
     }));
     const tickets = await this.sendExpoMessages(messages);
 
     await Promise.all(
       tickets.map((ticket, index) =>
-        ticket.status === 'error' && ticket.details?.error === 'DeviceNotRegistered'
+        ticket.status === "error" &&
+        ticket.details?.error === "DeviceNotRegistered"
           ? this.disableToken(tokens[index]!.expoPushToken)
-          : undefined
-      )
+          : undefined,
+      ),
     );
 
     return {
       sent: messages.length,
-      tickets
+      tickets,
     };
   }
 
-  async listPreferences(household: HouseholdContext): Promise<NotificationPreferenceRecord[]> {
+  async listPreferences(
+    household: HouseholdContext,
+  ): Promise<NotificationPreferenceRecord[]> {
     const result = await this.database.query<NotificationPreferenceRow>(
       `
         select event_type, enabled
@@ -125,19 +133,21 @@ export class NotificationsService {
         where household_id = $1
           and household_member_id = $2
       `,
-      [household.householdId, household.memberId]
+      [household.householdId, household.memberId],
     );
-    const rowsByType = new Map(result.rows.map((row) => [row.event_type, row.enabled]));
+    const rowsByType = new Map(
+      result.rows.map((row) => [row.event_type, row.enabled]),
+    );
 
     return HOUSEHOLD_NOTIFICATION_EVENTS.map((eventType) => ({
       enabled: rowsByType.get(eventType) ?? true,
-      eventType
+      eventType,
     }));
   }
 
   async updatePreferences(
     household: HouseholdContext,
-    dto: UpdateNotificationPreferencesDto
+    dto: UpdateNotificationPreferencesDto,
   ): Promise<NotificationPreferenceRecord[]> {
     await Promise.all(
       dto.preferences.map((preference) =>
@@ -159,10 +169,10 @@ export class NotificationsService {
             household.householdId,
             household.memberId,
             preference.eventType,
-            preference.enabled
-          ]
-        )
-      )
+            preference.enabled,
+          ],
+        ),
+      ),
     );
 
     return this.listPreferences(household);
@@ -178,17 +188,26 @@ export class NotificationsService {
       return { sent: 0, tickets: [] };
     }
 
-    if (input.eventType === 'note.changed') {
+    if (input.eventType === "note.changed") {
       return { sent: 0, tickets: [] };
     }
 
     const recipients = await this.listEnabledTokensForHouseholdEvent(
       input.householdId,
       input.eventType,
-      input.actorMemberId
+      input.actorMemberId,
     );
 
     if (recipients.length === 0) {
+      return { sent: 0, tickets: [] };
+    }
+
+    const shouldSend = await this.claimHouseholdNotificationWindow(
+      input.householdId,
+      input.eventType,
+    );
+
+    if (!shouldSend) {
       return { sent: 0, tickets: [] };
     }
 
@@ -198,12 +217,12 @@ export class NotificationsService {
       body: copy.body,
       data: {
         eventType: input.eventType,
-        kind: 'household-change',
-        resourceId: input.resourceId
+        kind: "household-change",
+        resourceId: input.resourceId,
       },
-      sound: 'default' as const,
+      sound: "default" as const,
       title: copy.title,
-      to: token.expoPushToken
+      to: token.expoPushToken,
     }));
 
     try {
@@ -211,18 +230,22 @@ export class NotificationsService {
 
       await Promise.all(
         tickets.map((ticket, index) =>
-          ticket.status === 'error' && ticket.details?.error === 'DeviceNotRegistered'
+          ticket.status === "error" &&
+          ticket.details?.error === "DeviceNotRegistered"
             ? this.disableToken(recipients[index]!.expoPushToken)
-            : undefined
-        )
+            : undefined,
+        ),
       );
 
       return {
         sent: messages.length,
-        tickets
+        tickets,
       };
     } catch (error) {
-      this.logger.warn('Failed to send household change push notification', error);
+      this.logger.warn(
+        "Failed to send household change push notification",
+        error,
+      );
       return { sent: 0, tickets: [] };
     }
   }
@@ -235,23 +258,26 @@ export class NotificationsService {
   }): Promise<PushSendResult> {
     const recipients = await this.listEnabledTokensForHouseholdEvent(
       input.householdId,
-      'calendar.changed'
+      "calendar.changed",
     );
 
     if (recipients.length === 0) {
       return { sent: 0, tickets: [] };
     }
 
-    const startsAt = formatCalendarReminderStart(input.eventDate, input.eventTime);
+    const startsAt = formatCalendarReminderStart(
+      input.eventDate,
+      input.eventTime,
+    );
     const messages = recipients.map((token) => ({
       body: input.title,
       data: {
-        eventType: 'calendar.changed',
-        kind: 'calendar-reminder'
+        eventType: "calendar.changed",
+        kind: "calendar-reminder",
       },
-      sound: 'default' as const,
+      sound: "default" as const,
       title: `Start: ${startsAt}`,
-      to: token.expoPushToken
+      to: token.expoPushToken,
     }));
 
     try {
@@ -259,25 +285,29 @@ export class NotificationsService {
 
       await Promise.all(
         tickets.map((ticket, index) =>
-          ticket.status === 'error' && ticket.details?.error === 'DeviceNotRegistered'
+          ticket.status === "error" &&
+          ticket.details?.error === "DeviceNotRegistered"
             ? this.disableToken(recipients[index]!.expoPushToken)
-            : undefined
-        )
+            : undefined,
+        ),
       );
 
       return {
         sent: messages.length,
-        tickets
+        tickets,
       };
     } catch (error) {
-      this.logger.warn('Failed to send calendar reminder push notification', error);
+      this.logger.warn(
+        "Failed to send calendar reminder push notification",
+        error,
+      );
       return { sent: 0, tickets: [] };
     }
   }
 
   private async listEnabledTokensForMember(
     householdId: string,
-    householdMemberId: string
+    householdMemberId: string,
   ): Promise<PushTokenRecord[]> {
     const result = await this.database.query<PushTokenRow>(
       `
@@ -298,7 +328,7 @@ export class NotificationsService {
           and household_member_id = $2
           and enabled = true
       `,
-      [householdId, householdMemberId]
+      [householdId, householdMemberId],
     );
 
     return result.rows.map((row) => this.mapPushToken(row));
@@ -307,7 +337,7 @@ export class NotificationsService {
   private async listEnabledTokensForHouseholdEvent(
     householdId: string,
     eventType: RealtimeEventType,
-    actorMemberId?: string
+    actorMemberId?: string,
   ): Promise<PushTokenRecord[]> {
     const result = await this.database.query<PushTokenRow>(
       `
@@ -332,10 +362,34 @@ export class NotificationsService {
           and pt.enabled = true
           and coalesce(np.enabled, true) = true
       `,
-      [householdId, eventType, actorMemberId ?? null]
+      [householdId, eventType, actorMemberId ?? null],
     );
 
     return result.rows.map((row) => this.mapPushToken(row));
+  }
+
+  private async claimHouseholdNotificationWindow(
+    householdId: string,
+    eventType: RealtimeEventType,
+  ): Promise<boolean> {
+    const result = await this.database.query<{ allowed: boolean }>(
+      `
+        insert into notification_delivery_rate_limits (
+          household_id,
+          event_type,
+          last_sent_at
+        )
+        values ($1, $2, now())
+        on conflict (household_id, event_type) do update
+        set last_sent_at = excluded.last_sent_at
+        where notification_delivery_rate_limits.last_sent_at <=
+          now() - ($3::integer * interval '1 minute')
+        returning true as allowed
+      `,
+      [householdId, eventType, HOUSEHOLD_NOTIFICATION_THROTTLE_MINUTES],
+    );
+
+    return Boolean(result.rows[0]?.allowed);
   }
 
   private async getMemberDisplayName(memberId: string): Promise<string> {
@@ -346,30 +400,34 @@ export class NotificationsService {
         join users u on u.id = hm.user_id
         where hm.id = $1
       `,
-      [memberId]
+      [memberId],
     );
 
-    return result.rows[0]?.display_name?.trim() || 'Domownik';
+    return result.rows[0]?.display_name?.trim() || "Domownik";
   }
 
-  private async sendExpoMessages(messages: ExpoPushMessage[]): Promise<ExpoPushTicket[]> {
+  private async sendExpoMessages(
+    messages: ExpoPushMessage[],
+  ): Promise<ExpoPushTicket[]> {
     const response = await fetch(this.expoPushUrl, {
       body: JSON.stringify(messages),
       headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json'
+        Accept: "application/json",
+        "Content-Type": "application/json",
       },
-      method: 'POST'
+      method: "POST",
     });
 
     if (!response.ok) {
-      throw new BadGatewayException('Expo push service rejected the request');
+      throw new BadGatewayException("Expo push service rejected the request");
     }
 
     const body = (await response.json()) as ExpoPushResponse;
 
     if (!Array.isArray(body.data)) {
-      throw new BadGatewayException('Expo push service returned an invalid response');
+      throw new BadGatewayException(
+        "Expo push service returned an invalid response",
+      );
     }
 
     return body.data;
@@ -382,7 +440,7 @@ export class NotificationsService {
         set enabled = false
         where expo_push_token = $1
       `,
-      [expoPushToken]
+      [expoPushToken],
     );
   }
 
@@ -390,7 +448,7 @@ export class NotificationsService {
     const normalized = expoPushToken.trim();
 
     if (!/^(ExpoPushToken|ExponentPushToken)\[[^\]]+\]$/.test(normalized)) {
-      throw new BadRequestException('Invalid Expo push token');
+      throw new BadRequestException("Invalid Expo push token");
     }
 
     return normalized;
@@ -408,78 +466,85 @@ export class NotificationsService {
       lastRegisteredAt: row.last_registered_at,
       platform: row.platform,
       updatedAt: row.updated_at,
-      userId: row.user_id
+      userId: row.user_id,
     };
   }
 }
 
 function buildNotificationCopy(
   eventType: RealtimeEventType,
-  actorName: string
+  actorName: string,
 ): { body: string; title: string } {
-  const actor = actorName.trim() || 'Domownik';
+  const actor = actorName.trim() || "Domownik";
 
-  if (eventType.startsWith('finance.')) {
+  if (eventType.startsWith("finance.")) {
     return {
       body: `${actor} zmienił finanse domu.`,
-      title: 'Finanse'
+      title: "Finanse",
     };
   }
 
-  const copies: Partial<Record<RealtimeEventType, { body: string; title: string }>> = {
-    'annual_cost.changed': {
+  const copies: Partial<
+    Record<RealtimeEventType, { body: string; title: string }>
+  > = {
+    "annual_cost.changed": {
       body: `${actor} zmienił koszty roczne.`,
-      title: 'Koszty roczne'
+      title: "Koszty roczne",
     },
-    'attachment.changed': {
+    "attachment.changed": {
       body: `${actor} zmienił pliki w domu.`,
-      title: 'Pliki'
+      title: "Pliki",
     },
-    'calendar.changed': {
+    "calendar.changed": {
       body: `${actor} zmienił kalendarz.`,
-      title: 'Kalendarz'
+      title: "Kalendarz",
     },
-    'cleaning.changed': {
+    "cleaning.changed": {
       body: `${actor} zmienił sprzątanie.`,
-      title: 'Sprzątanie'
+      title: "Sprzątanie",
     },
-    'data.changed': {
+    "data.changed": {
       body: `${actor} zmienił dane domowe.`,
-      title: 'Dane'
+      title: "Dane",
     },
-    'household.changed': {
+    "household.changed": {
       body: `${actor} zmienił ustawienia lub skład domu.`,
-      title: 'Dom'
+      title: "Dom",
     },
-    'meal.changed': {
+    "meal.changed": {
       body: `${actor} zmienił plan posiłków.`,
-      title: 'Plan posiłków'
+      title: "Plan posiłków",
     },
-    'note.changed': {
+    "note.changed": {
       body: `${actor} zmienił notatki.`,
-      title: 'Notatki'
+      title: "Notatki",
     },
-    'permissions.changed': {
+    "permissions.changed": {
       body: `${actor} zmienił uprawnienia domowników.`,
-      title: 'Uprawnienia'
+      title: "Uprawnienia",
     },
-    'shopping.changed': {
+    "shopping.changed": {
       body: `${actor} zmienił listę zakupów.`,
-      title: 'Zakupy'
+      title: "Zakupy",
     },
-    'todo.changed': {
+    "todo.changed": {
       body: `${actor} zmienił listę do zrobienia.`,
-      title: 'Do zrobienia'
-    }
+      title: "Do zrobienia",
+    },
   };
 
-  return copies[eventType] ?? {
-    body: `${actor} zmienił coś w domu.`,
-    title: 'HomeApp'
-  };
+  return (
+    copies[eventType] ?? {
+      body: `${actor} zmienił coś w domu.`,
+      title: "HomeApp",
+    }
+  );
 }
 
-function formatCalendarReminderStart(eventDate: string, eventTime: string | null): string {
+function formatCalendarReminderStart(
+  eventDate: string,
+  eventTime: string | null,
+): string {
   const date = formatCalendarReminderDate(eventDate);
   const time = eventTime?.slice(0, 5).trim();
 
@@ -499,7 +564,7 @@ function formatCalendarReminderDate(eventDate: string): string {
 interface ExpoPushMessage {
   body: string;
   data?: Record<string, unknown>;
-  sound: 'default';
+  sound: "default";
   title: string;
   to: string;
 }
@@ -514,7 +579,7 @@ interface ExpoPushTicket {
   };
   id?: string;
   message?: string;
-  status: 'ok' | 'error';
+  status: "ok" | "error";
 }
 
 interface PushTokenRow {
