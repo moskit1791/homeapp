@@ -1,5 +1,16 @@
 <resources>
   <string name="app_name">HomeApp</string>
-  <string name="widget_quick_actions_name">HomeApp akcje</string>
-  <string name="widget_quick_actions_description">Szybkie dodawanie notatki, wydarzenia, wydatku, zakupów i rzeczy do zrobienia.</string>
+  <string name="widget_add_badge">Dodaj</string>
+  <string name="widget_quick_actions_name">HomeApp skróty</string>
+  <string name="widget_quick_actions_description">Pasek pięciu szybkich akcji HomeApp.</string>
+  <string name="widget_note_name">Dodaj notatkę</string>
+  <string name="widget_note_description">Mały skrót do dodania notatki.</string>
+  <string name="widget_event_name">Dodaj wydarzenie</string>
+  <string name="widget_event_description">Mały skrót do dodania wydarzenia.</string>
+  <string name="widget_expense_name">Dodaj wydatek</string>
+  <string name="widget_expense_description">Mały skrót do dodania wydatku.</string>
+  <string name="widget_shopping_name">Dodaj zakupy</string>
+  <string name="widget_shopping_description">Mały skrót do dodania produktu na listę zakupów.</string>
+  <string name="widget_todo_name">Dodaj zadanie</string>
+  <string name="widget_todo_description">Mały skrót do dodania rzeczy do zrobienia.</string>
 </resources>

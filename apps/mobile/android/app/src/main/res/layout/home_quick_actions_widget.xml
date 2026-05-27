@@ -3,110 +3,136 @@
   android:layout_width="match_parent"
   android:layout_height="match_parent"
   android:background="@drawable/home_widget_background"
-  android:orientation="vertical"
-  android:padding="10dp">
+  android:gravity="center"
+  android:orientation="horizontal"
+  android:padding="6dp">
 
-  <TextView
-    android:id="@+id/widget_title"
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:ellipsize="end"
-    android:fontFamily="sans"
-    android:includeFontPadding="false"
-    android:singleLine="true"
-    android:text="Dodaj szybko"
-    android:textColor="#F8FAFC"
-    android:textSize="14sp"
-    android:textStyle="bold" />
-
-  <LinearLayout
-    android:layout_width="match_parent"
-    android:layout_height="0dp"
-    android:layout_marginTop="8dp"
+  <FrameLayout
+    android:id="@+id/widget_action_note"
+    android:layout_width="0dp"
+    android:layout_height="match_parent"
+    android:layout_marginEnd="5dp"
     android:layout_weight="1"
-    android:orientation="vertical">
+    android:background="@drawable/home_widget_action_note"
+    android:contentDescription="@string/widget_note_name">
 
-    <LinearLayout
-      android:layout_width="match_parent"
-      android:layout_height="0dp"
-      android:layout_weight="1"
-      android:orientation="horizontal">
+    <ImageView
+      android:layout_width="26dp"
+      android:layout_height="26dp"
+      android:layout_gravity="center"
+      android:contentDescription="@string/widget_note_name"
+      android:src="@drawable/ic_widget_note" />
 
-      <TextView
-        android:id="@+id/widget_action_note"
-        android:layout_width="0dp"
-        android:layout_height="match_parent"
-        android:layout_marginEnd="4dp"
-        android:layout_weight="1"
-        android:background="@drawable/home_widget_action_note"
-        android:gravity="center"
-        android:includeFontPadding="false"
-        android:text="+ Notatka"
-        android:textColor="#FFFFFF"
-        android:textSize="11sp"
-        android:textStyle="bold" />
+    <ImageView
+      android:layout_width="17dp"
+      android:layout_height="17dp"
+      android:layout_gravity="top|end"
+      android:background="@drawable/home_widget_plus_badge"
+      android:contentDescription="@string/widget_add_badge"
+      android:padding="3dp"
+      android:src="@drawable/ic_widget_plus" />
+  </FrameLayout>
 
-      <TextView
-        android:id="@+id/widget_action_event"
-        android:layout_width="0dp"
-        android:layout_height="match_parent"
-        android:layout_marginEnd="4dp"
-        android:layout_weight="1"
-        android:background="@drawable/home_widget_action_event"
-        android:gravity="center"
-        android:includeFontPadding="false"
-        android:text="+ Wydarzenie"
-        android:textColor="#FFFFFF"
-        android:textSize="11sp"
-        android:textStyle="bold" />
+  <FrameLayout
+    android:id="@+id/widget_action_event"
+    android:layout_width="0dp"
+    android:layout_height="match_parent"
+    android:layout_marginEnd="5dp"
+    android:layout_weight="1"
+    android:background="@drawable/home_widget_action_event"
+    android:contentDescription="@string/widget_event_name">
 
-      <TextView
-        android:id="@+id/widget_action_expense"
-        android:layout_width="0dp"
-        android:layout_height="match_parent"
-        android:layout_weight="1"
-        android:background="@drawable/home_widget_action_expense"
-        android:gravity="center"
-        android:includeFontPadding="false"
-        android:text="+ Wydatek"
-        android:textColor="#FFFFFF"
-        android:textSize="11sp"
-        android:textStyle="bold" />
-    </LinearLayout>
+    <ImageView
+      android:layout_width="26dp"
+      android:layout_height="26dp"
+      android:layout_gravity="center"
+      android:contentDescription="@string/widget_event_name"
+      android:src="@drawable/ic_widget_calendar" />
 
-    <LinearLayout
-      android:layout_width="match_parent"
-      android:layout_height="0dp"
-      android:layout_marginTop="6dp"
-      android:layout_weight="1"
-      android:orientation="horizontal">
+    <ImageView
+      android:layout_width="17dp"
+      android:layout_height="17dp"
+      android:layout_gravity="top|end"
+      android:background="@drawable/home_widget_plus_badge"
+      android:contentDescription="@string/widget_add_badge"
+      android:padding="3dp"
+      android:src="@drawable/ic_widget_plus" />
+  </FrameLayout>
 
-      <TextView
-        android:id="@+id/widget_action_shopping"
-        android:layout_width="0dp"
-        android:layout_height="match_parent"
-        android:layout_marginEnd="4dp"
-        android:layout_weight="1"
-        android:background="@drawable/home_widget_action_shopping"
-        android:gravity="center"
-        android:includeFontPadding="false"
-        android:text="+ Zakupy"
-        android:textColor="#111827"
-        android:textSize="11sp"
-        android:textStyle="bold" />
+  <FrameLayout
+    android:id="@+id/widget_action_expense"
+    android:layout_width="0dp"
+    android:layout_height="match_parent"
+    android:layout_marginEnd="5dp"
+    android:layout_weight="1"
+    android:background="@drawable/home_widget_action_expense"
+    android:contentDescription="@string/widget_expense_name">
 
-      <TextView
-        android:id="@+id/widget_action_todo"
-        android:layout_width="0dp"
-        android:layout_height="match_parent"
-        android:layout_weight="1"
-        android:background="@drawable/home_widget_action_todo"
-        android:gravity="center"
-        android:includeFontPadding="false"
-        android:text="+ Do zrobienia"
-        android:textColor="#111827"
-        android:textSize="11sp"
-        android:textStyle="bold" />
-    </LinearLayout>
-  </LinearLayout>
+    <ImageView
+      android:layout_width="26dp"
+      android:layout_height="26dp"
+      android:layout_gravity="center"
+      android:contentDescription="@string/widget_expense_name"
+      android:src="@drawable/ic_widget_expense" />
+
+    <ImageView
+      android:layout_width="17dp"
+      android:layout_height="17dp"
+      android:layout_gravity="top|end"
+      android:background="@drawable/home_widget_plus_badge"
+      android:contentDescription="@string/widget_add_badge"
+      android:padding="3dp"
+      android:src="@drawable/ic_widget_plus" />
+  </FrameLayout>
+
+  <FrameLayout
+    android:id="@+id/widget_action_shopping"
+    android:layout_width="0dp"
+    android:layout_height="match_parent"
+    android:layout_marginEnd="5dp"
+    android:layout_weight="1"
+    android:background="@drawable/home_widget_action_shopping"
+    android:contentDescription="@string/widget_shopping_name">
+
+    <ImageView
+      android:layout_width="26dp"
+      android:layout_height="26dp"
+      android:layout_gravity="center"
+      android:contentDescription="@string/widget_shopping_name"
+      android:src="@drawable/ic_widget_shopping" />
+
+    <ImageView
+      android:layout_width="17dp"
+      android:layout_height="17dp"
+      android:layout_gravity="top|end"
+      android:background="@drawable/home_widget_plus_badge"
+      android:contentDescription="@string/widget_add_badge"
+      android:padding="3dp"
+      android:src="@drawable/ic_widget_plus" />
+  </FrameLayout>
+
+  <FrameLayout
+    android:id="@+id/widget_action_todo"
+    android:layout_width="0dp"
+    android:layout_height="match_parent"
+    android:layout_weight="1"
+    android:background="@drawable/home_widget_action_todo"
+    android:contentDescription="@string/widget_todo_name">
+
+    <ImageView
+      android:layout_width="26dp"
+      android:layout_height="26dp"
+      android:layout_gravity="center"
+      android:contentDescription="@string/widget_todo_name"
+      android:src="@drawable/ic_widget_todo" />
+
+    <ImageView
+      android:layout_width="17dp"
+      android:layout_height="17dp"
+      android:layout_gravity="top|end"
+      android:background="@drawable/home_widget_plus_badge"
+      android:contentDescription="@string/widget_add_badge"
+      android:padding="3dp"
+      android:src="@drawable/ic_widget_plus" />
+  </FrameLayout>
 </LinearLayout>

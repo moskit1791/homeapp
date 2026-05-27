@@ -3,7 +3,7 @@
     "name": "HomeApp",
     "slug": "homeapp",
     "scheme": "homeapp",
-    "version": "0.1.76",
+    "version": "0.1.77",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "icon": "./assets/icon.png",
@@ -18,7 +18,7 @@
     },
     "android": {
       "package": "com.homeapp.mobile",
-      "versionCode": 76,
+      "versionCode": 77,
       "permissions": [
         "POST_NOTIFICATIONS",
         "READ_EXTERNAL_STORAGE",

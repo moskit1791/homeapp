@@ -1,0 +1,13 @@
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+  android:description="@string/widget_todo_description"
+  android:initialLayout="@layout/home_widget_todo"
+  android:minHeight="56dp"
+  android:minResizeHeight="56dp"
+  android:minResizeWidth="56dp"
+  android:minWidth="56dp"
+  android:previewLayout="@layout/home_widget_todo"
+  android:resizeMode="none"
+  android:targetCellHeight="1"
+  android:targetCellWidth="1"
+  android:updatePeriodMillis="0"
+  android:widgetCategory="home_screen" />

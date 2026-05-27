@@ -31,6 +31,36 @@
         <data android:scheme="com.homeapp.mobile"/>
       </intent-filter>
     </activity>
+    <receiver android:name=".HomeNoteWidgetProvider" android:exported="true" android:label="@string/widget_note_name">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+      </intent-filter>
+      <meta-data android:name="android.appwidget.provider" android:resource="@xml/home_widget_note_info"/>
+    </receiver>
+    <receiver android:name=".HomeEventWidgetProvider" android:exported="true" android:label="@string/widget_event_name">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+      </intent-filter>
+      <meta-data android:name="android.appwidget.provider" android:resource="@xml/home_widget_event_info"/>
+    </receiver>
+    <receiver android:name=".HomeExpenseWidgetProvider" android:exported="true" android:label="@string/widget_expense_name">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+      </intent-filter>
+      <meta-data android:name="android.appwidget.provider" android:resource="@xml/home_widget_expense_info"/>
+    </receiver>
+    <receiver android:name=".HomeShoppingWidgetProvider" android:exported="true" android:label="@string/widget_shopping_name">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+      </intent-filter>
+      <meta-data android:name="android.appwidget.provider" android:resource="@xml/home_widget_shopping_info"/>
+    </receiver>
+    <receiver android:name=".HomeTodoWidgetProvider" android:exported="true" android:label="@string/widget_todo_name">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+      </intent-filter>
+      <meta-data android:name="android.appwidget.provider" android:resource="@xml/home_widget_todo_info"/>
+    </receiver>
     <receiver android:name=".HomeQuickActionsWidgetProvider" android:exported="true" android:label="@string/widget_quick_actions_name">
       <intent-filter>
         <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
