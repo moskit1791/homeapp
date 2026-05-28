@@ -62,4 +62,12 @@ describe('loadEnv', () => {
       GOOGLE_OAUTH_CLIENT_IDS: ['android-client', 'web-client']
     });
   });
+
+  it('uses a larger thinking model for meal suggestions by default', () => {
+    expect(loadEnv()).toMatchObject({
+      GEMINI_MEAL_SUGGESTION_MODEL: 'gemini-2.5-pro',
+      GEMINI_MEAL_SUGGESTION_THINKING_BUDGET: 4096,
+      GEMINI_MEAL_SUGGESTION_TIMEOUT_MS: 60000
+    });
+  });
 });

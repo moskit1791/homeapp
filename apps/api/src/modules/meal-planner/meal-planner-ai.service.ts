@@ -297,6 +297,7 @@ export class MealPlannerAiService {
     ]);
 
     try {
+      const env = loadEnv();
       const responseText = await this.callGemini(
         this.buildHistorySuggestionPrompt({
           history,
@@ -304,7 +305,12 @@ export class MealPlannerAiService {
           mealSlotsPerDay,
           targetWeekStartDate
         }),
-        { useGoogleSearch: true }
+        {
+          model: env.GEMINI_MEAL_SUGGESTION_MODEL,
+          thinkingBudget: env.GEMINI_MEAL_SUGGESTION_THINKING_BUDGET,
+          timeoutMs: env.GEMINI_MEAL_SUGGESTION_TIMEOUT_MS,
+          useGoogleSearch: true
+        }
       );
       const response = this.normalizeSuggestionResponse(
         this.parseSuggestionResponse(responseText),
@@ -422,7 +428,7 @@ export class MealPlannerAiService {
 
   private async callGeminiContents(
     contents: GeminiContent[],
-    options: { useGoogleSearch?: boolean } = {}
+    options: GeminiRequestOptions = {}
   ): Promise<string> {
     return this.callGeminiRequest(
       {
@@ -437,7 +443,7 @@ export class MealPlannerAiService {
 
   private async callGemini(
     prompt: string,
-    options: { useGoogleSearch?: boolean } = {}
+    options: GeminiRequestOptions = {}
   ): Promise<string> {
     return this.callGeminiRequest(
       {
@@ -463,7 +469,7 @@ export class MealPlannerAiService {
 
   private async callGeminiRequest(
     requestBody: GeminiGenerateContentRequest,
-    options: { useGoogleSearch?: boolean } = {}
+    options: GeminiRequestOptions = {}
   ): Promise<string> {
     const env = loadEnv();
 
@@ -472,16 +478,24 @@ export class MealPlannerAiService {
     }
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), env.GEMINI_TIMEOUT_MS);
-    const model = env.GEMINI_MODEL.startsWith('models/')
-      ? env.GEMINI_MODEL.slice('models/'.length)
-      : env.GEMINI_MODEL;
+    const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? env.GEMINI_TIMEOUT_MS);
+    const requestedModel = options.model ?? env.GEMINI_MODEL;
+    const model = requestedModel.startsWith('models/')
+      ? requestedModel.slice('models/'.length)
+      : requestedModel;
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
       model
     )}:generateContent?key=${encodeURIComponent(env.GEMINI_API_KEY)}`;
 
     if (options.useGoogleSearch) {
       requestBody.tools = [{ google_search: {} }];
+    }
+
+    if (options.thinkingBudget && supportsThinkingConfig(model)) {
+      requestBody.generationConfig = {
+        ...requestBody.generationConfig,
+        thinkingConfig: { thinkingBudget: options.thinkingBudget }
+      };
     }
 
     try {
@@ -1775,6 +1789,12 @@ function isGeminiRateLimitError(error: unknown): error is GeminiRateLimitError {
   return error instanceof GeminiRateLimitError;
 }
 
+function supportsThinkingConfig(model: string): boolean {
+  const normalized = model.toLowerCase();
+
+  return normalized.includes('gemini-2.5') || normalized.includes('gemini-3');
+}
+
 export interface MealPlanAiMessage {
   content: string;
   role: 'user' | 'assistant';
@@ -1875,10 +1895,20 @@ interface GeminiGenerateContentRequest {
     responseMimeType?: 'application/json';
     responseSchema?: typeof mealPlanAiResponseJsonSchema;
     temperature: number;
+    thinkingConfig?: {
+      thinkingBudget: number;
+    };
   };
   tools?: Array<{
     google_search: Record<string, never>;
   }>;
+}
+
+interface GeminiRequestOptions {
+  model?: string;
+  thinkingBudget?: number;
+  timeoutMs?: number;
+  useGoogleSearch?: boolean;
 }
 
 interface GeminiGenerateContentResponse {

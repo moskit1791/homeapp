@@ -89,6 +89,15 @@ export interface BudgetItemSummary {
   spentAmount: string;
   remainingAmount: string | null;
   displayOrder: number;
+  expenses?: ExpenseSummary[];
+}
+
+export interface ExpenseSummary {
+  amount: string;
+  budgetItemId: string;
+  createdAt: string;
+  id: string;
+  updatedAt: string;
 }
 
 export const SHOPPING_CATEGORIES = [

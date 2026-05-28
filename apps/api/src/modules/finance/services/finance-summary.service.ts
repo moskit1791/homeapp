@@ -14,14 +14,15 @@ export class FinanceSummaryService {
 
   async getMonthDetail(householdId: string, budgetMonthId: string): Promise<BudgetMonthDetail> {
     const month = await this.findMonth(householdId, budgetMonthId);
-    const [categoryRows, incomes, personSummary] = await Promise.all([
+    const [categoryRows, expenses, incomes, personSummary] = await Promise.all([
       this.listCategoryItemRows(householdId, budgetMonthId),
+      this.listExpenses(householdId, budgetMonthId),
       this.listIncomes(householdId, budgetMonthId),
       this.getPersonSummary(householdId, budgetMonthId)
     ]);
 
     return {
-      categories: this.groupCategories(categoryRows),
+      categories: this.groupCategories(categoryRows, expenses),
       incomes,
       month,
       personSummary,
@@ -203,8 +204,51 @@ export class FinanceSummaryService {
     }));
   }
 
-  private groupCategories(rows: CategoryItemRow[]): CategoryWithItemsRecord[] {
+  private async listExpenses(
+    householdId: string,
+    budgetMonthId: string
+  ): Promise<ExpenseSummaryRecord[]> {
+    const result = await this.database.query<ExpenseSummaryRow>(
+      `
+        select
+          e.id,
+          e.budget_item_id,
+          e.amount,
+          e.created_at,
+          e.updated_at
+        from expenses e
+        join budget_items bi on bi.id = e.budget_item_id
+        join budget_months bm on bm.id = bi.budget_month_id
+        where bm.household_id = $1
+          and bm.id = $2
+          and bi.is_deleted = false
+        order by e.created_at desc, e.id desc
+      `,
+      [householdId, budgetMonthId]
+    );
+
+    return result.rows.map((row) => ({
+      amount: row.amount,
+      budgetItemId: row.budget_item_id,
+      createdAt: row.created_at,
+      id: row.id,
+      updatedAt: row.updated_at
+    }));
+  }
+
+  private groupCategories(
+    rows: CategoryItemRow[],
+    expenses: ExpenseSummaryRecord[]
+  ): CategoryWithItemsRecord[] {
     const categories = new Map<string, CategoryWithItemsRecord>();
+    const expensesByItemId = new Map<string, ExpenseSummaryRecord[]>();
+
+    for (const expense of expenses) {
+      const bucket = expensesByItemId.get(expense.budgetItemId) ?? [];
+
+      bucket.push(expense);
+      expensesByItemId.set(expense.budgetItemId, bucket);
+    }
 
     for (const row of rows) {
       let category = categories.get(row.category_id);
@@ -229,6 +273,7 @@ export class FinanceSummaryService {
           categoryId: row.category_id,
           createdAt: this.required(row.budget_item_created_at, 'budget item created at'),
           displayOrder: this.required(row.budget_item_display_order, 'budget item display order'),
+          expenses: expensesByItemId.get(row.budget_item_id) ?? [],
           id: row.budget_item_id,
           name: this.required(row.budget_item_name, 'budget item name'),
           owner: {
@@ -332,6 +377,14 @@ interface CategoryItemRow {
   spent_amount: string | null;
 }
 
+interface ExpenseSummaryRow {
+  amount: string;
+  budget_item_id: string;
+  created_at: string;
+  id: string;
+  updated_at: string;
+}
+
 interface IncomeSummaryRow {
   amount: string;
   display_name: string;
@@ -374,6 +427,7 @@ export interface BudgetItemSummaryRecord {
   categoryId: string;
   createdAt: string;
   displayOrder: number;
+  expenses: ExpenseSummaryRecord[];
   id: string;
   name: string;
   owner: {
@@ -383,6 +437,14 @@ export interface BudgetItemSummaryRecord {
   };
   remainingAmount: string | null;
   spentAmount: string;
+  updatedAt: string;
+}
+
+export interface ExpenseSummaryRecord {
+  amount: string;
+  budgetItemId: string;
+  createdAt: string;
+  id: string;
   updatedAt: string;
 }
 

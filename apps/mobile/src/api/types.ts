@@ -281,6 +281,7 @@ export interface BudgetItemSummary {
   categoryId: string;
   createdAt: string;
   displayOrder: number;
+  expenses: Expense[];
   id: string;
   name: string;
   owner: BudgetItemOwner;

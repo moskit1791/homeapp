@@ -123,6 +123,7 @@ type FinanceModal =
   | "item"
   | "editItem"
   | "expense"
+  | "expenseHistory"
   | "copyAmounts"
   | "debt"
   | "month"
@@ -217,6 +218,8 @@ export default function FinanseScreen() {
   const [selectedExpenseOwnerId, setSelectedExpenseOwnerId] = useState("");
   const [selectedExpenseCategoryId, setSelectedExpenseCategoryId] = useState("");
   const [selectedExpenseItemId, setSelectedExpenseItemId] = useState("");
+  const [expenseQuickItemId, setExpenseQuickItemId] = useState<string | null>(null);
+  const [historyBudgetItemId, setHistoryBudgetItemId] = useState<string | null>(null);
   const [copyCategory, setCopyCategory] = useState(true);
   const [activeFinanceView, setActiveFinanceView] = useState<FinanceView>("budget");
   const [selectedMonthId, setSelectedMonthId] = useState<string | null>(null);
@@ -292,6 +295,10 @@ export default function FinanseScreen() {
       ),
     [categories],
   );
+  const historyBudgetItem = useMemo(
+    () => visibleFlatItems.find((item) => item.id === historyBudgetItemId) ?? null,
+    [historyBudgetItemId, visibleFlatItems],
+  );
   const currentMonth = currentSummary?.month;
   const visibleMonth = summary?.month;
   const selectedPersonSummary = personSummaries.find(
@@ -324,6 +331,7 @@ export default function FinanseScreen() {
   const selectedMonth = monthTabs.find((month) => month.id === selectedMonthId) ?? visibleMonth;
   const showingArchiveMonth = Boolean(selectedMonthId) && selectedMonthId !== currentSummary?.month.id;
   const canEditVisibleMonth = canUpdate && Boolean(visibleMonth?.id);
+  const canCreateVisibleExpense = canCreate && Boolean(visibleMonth?.isCurrent);
   const canDeleteVisibleMonthItems = canDelete && Boolean(visibleMonth?.id);
   const canGoPreviousMonth = selectedMonthIndex > 0;
   const canGoNextMonth = selectedMonthIndex >= 0 && selectedMonthIndex < monthTabs.length - 1;
@@ -378,6 +386,8 @@ export default function FinanseScreen() {
     () => expenseItems.find((item) => item.id === selectedExpenseItemId),
     [expenseItems, selectedExpenseItemId],
   );
+  const isQuickExpense = Boolean(expenseQuickItemId && selectedExpenseItem);
+  const historyExpenses = historyBudgetItem?.expenses ?? [];
   const filteredRows = useMemo(
     () => applyFinanceFilters(visibleFlatItems, financeFilters),
     [financeFilters, visibleFlatItems],
@@ -474,6 +484,7 @@ export default function FinanseScreen() {
     setSelectedExpenseOwnerId("");
     setSelectedExpenseCategoryId("");
     setSelectedExpenseItemId("");
+    setExpenseQuickItemId(null);
     setValue("expenseAmount", "");
     setFinanceModal("expense");
     setHandledRouteAction(routeActionKey);
@@ -739,6 +750,7 @@ export default function FinanseScreen() {
       ),
     onSuccess: async () => {
       setValue("expenseAmount", "");
+      setExpenseQuickItemId(null);
       setFinanceModal(null);
       await invalidateFinance();
       await queryClient.invalidateQueries({ queryKey: queryKeys.start });
@@ -838,14 +850,31 @@ export default function FinanseScreen() {
     setEditingBudgetItem(null);
     setEditingDebt(null);
     setSelectedSavingsAccount(null);
+    setExpenseQuickItemId(null);
+    setHistoryBudgetItemId(null);
   }
 
   function openExpenseModal() {
     setSelectedExpenseOwnerId("");
     setSelectedExpenseCategoryId("");
     setSelectedExpenseItemId("");
+    setExpenseQuickItemId(null);
     setValue("expenseAmount", "");
     setFinanceModal("expense");
+  }
+
+  function openExpenseModalForItem(item: BudgetItemWithCategory) {
+    setSelectedExpenseOwnerId(item.owner.memberId);
+    setSelectedExpenseCategoryId(item.category.id);
+    setSelectedExpenseItemId(item.id);
+    setExpenseQuickItemId(item.id);
+    setValue("expenseAmount", "");
+    setFinanceModal("expense");
+  }
+
+  function openExpenseHistory(item: BudgetItemWithCategory) {
+    setHistoryBudgetItemId(item.id);
+    setFinanceModal("expenseHistory");
   }
 
   function openEditBudgetItem(item: BudgetItemWithCategory) {
@@ -1070,16 +1099,22 @@ export default function FinanseScreen() {
 
           {budgetLayout === "table" ? (
             <FinanceSheet
+              canCreateExpense={canCreateVisibleExpense}
               canUpdate={canEditVisibleMonth}
               currencyCode={currencyCode}
+              onAddExpense={openExpenseModalForItem}
               onEdit={openEditBudgetItem}
+              onHistory={openExpenseHistory}
               rows={filteredRows}
             />
           ) : (
             <FinanceCategoryCards
+              canCreateExpense={canCreateVisibleExpense}
               canUpdate={canEditVisibleMonth}
               currencyCode={currencyCode}
+              onAddExpense={openExpenseModalForItem}
               onEdit={openEditBudgetItem}
+              onHistory={openExpenseHistory}
               rows={filteredRows}
               scrollRef={screenScrollRef}
             />
@@ -1391,7 +1426,7 @@ export default function FinanseScreen() {
             footer={
               <View style={styles.modalFooter}>
                 <ActionButton
-                  onPress={() => setFinanceModal(null)}
+                  onPress={closeFinanceModal}
                   style={styles.modalFooterButton}
                   title="Anuluj"
                   variant="secondary"
@@ -1405,55 +1440,75 @@ export default function FinanseScreen() {
                 />
               </View>
             }
-            onClose={() => setFinanceModal(null)}
-            subtitle="Najpierw wybierz osobę, potem kategorię, pozycję i kwotę."
+            onClose={closeFinanceModal}
+            subtitle={
+              isQuickExpense
+                ? "Pozycja jest już wybrana. Wpisz tylko kwotę wydatku."
+                : "Najpierw wybierz osobę, potem kategorię, pozycję i kwotę."
+            }
             title="Dodaj wydatek"
             visible={financeModal === "expense"}
           >
-            <View style={styles.selectorGroup}>
-              <Text style={styles.selectorLabel}>Osoba</Text>
-              <ChoiceSelector
-                emptyText="Brak osób z pozycjami budżetu."
-                items={expenseOwnerOptions}
-                onSelect={(ownerId) => {
-                  setSelectedExpenseOwnerId(ownerId);
-                  setSelectedExpenseCategoryId("");
-                  setSelectedExpenseItemId("");
-                }}
-                selectedId={selectedExpenseOwnerId}
-              />
-            </View>
-            {selectedExpenseOwnerId ? (
-              <View style={styles.selectorGroup}>
-                <Text style={styles.selectorLabel}>Kategoria</Text>
-                <ChoiceSelector
-                  emptyText="Ta osoba nie ma kategorii z pozycjami budżetu."
-                  items={expenseCategoryOptions.map((option) => ({
-                    id: option.category.id,
-                    label: option.category.name,
-                  }))}
-                  onSelect={(categoryId) => {
-                    setSelectedExpenseCategoryId(categoryId);
-                    setSelectedExpenseItemId("");
-                  }}
-                  selectedId={selectedExpenseCategoryId}
-                />
+            {isQuickExpense && selectedExpenseItem ? (
+              <View style={styles.expenseContextCard}>
+                <Text style={styles.expenseContextLabel}>{formatOwner(selectedExpenseItem.owner)}</Text>
+                <Text style={styles.expenseContextTitle}>{selectedExpenseItem.name}</Text>
+                <Text style={styles.expenseContextMeta}>
+                  {selectedExpenseItem.category.name} / wydano{" "}
+                  {formatMoney(selectedExpenseItem.spentAmount, currencyCode)} z{" "}
+                  {selectedExpenseItem.budgetAmount
+                    ? formatMoney(selectedExpenseItem.budgetAmount, currencyCode)
+                    : "bez limitu"}
+                </Text>
               </View>
-            ) : null}
-            {selectedExpenseCategoryId ? (
-              <View style={styles.selectorGroup}>
-                <Text style={styles.selectorLabel}>Pozycja</Text>
-                <ChoiceSelector
-                  emptyText="Ta kategoria nie ma pozycji dla wybranej osoby."
-                  items={expenseItems.map((item) => ({
-                    id: item.id,
-                    label: item.name,
-                  }))}
-                  onSelect={setSelectedExpenseItemId}
-                  selectedId={selectedExpenseItemId}
-                />
-              </View>
-            ) : null}
+            ) : (
+              <>
+                <View style={styles.selectorGroup}>
+                  <Text style={styles.selectorLabel}>Osoba</Text>
+                  <ChoiceSelector
+                    emptyText="Brak osób z pozycjami budżetu."
+                    items={expenseOwnerOptions}
+                    onSelect={(ownerId) => {
+                      setSelectedExpenseOwnerId(ownerId);
+                      setSelectedExpenseCategoryId("");
+                      setSelectedExpenseItemId("");
+                    }}
+                    selectedId={selectedExpenseOwnerId}
+                  />
+                </View>
+                {selectedExpenseOwnerId ? (
+                  <View style={styles.selectorGroup}>
+                    <Text style={styles.selectorLabel}>Kategoria</Text>
+                    <ChoiceSelector
+                      emptyText="Ta osoba nie ma kategorii z pozycjami budżetu."
+                      items={expenseCategoryOptions.map((option) => ({
+                        id: option.category.id,
+                        label: option.category.name,
+                      }))}
+                      onSelect={(categoryId) => {
+                        setSelectedExpenseCategoryId(categoryId);
+                        setSelectedExpenseItemId("");
+                      }}
+                      selectedId={selectedExpenseCategoryId}
+                    />
+                  </View>
+                ) : null}
+                {selectedExpenseCategoryId ? (
+                  <View style={styles.selectorGroup}>
+                    <Text style={styles.selectorLabel}>Pozycja</Text>
+                    <ChoiceSelector
+                      emptyText="Ta kategoria nie ma pozycji dla wybranej osoby."
+                      items={expenseItems.map((item) => ({
+                        id: item.id,
+                        label: item.name,
+                      }))}
+                      onSelect={setSelectedExpenseItemId}
+                      selectedId={selectedExpenseItemId}
+                    />
+                  </View>
+                ) : null}
+              </>
+            )}
             {selectedExpenseItem ? (
               <TextField
                 control={control}
@@ -1466,6 +1521,77 @@ export default function FinanseScreen() {
             {expenseMutation.error ? (
               <InlineAlert tone="error" text="Nie udało się dodać wydatku." />
             ) : null}
+          </FormModal>
+
+          <FormModal
+            footer={
+              <View style={styles.modalFooter}>
+                <ActionButton
+                  onPress={closeFinanceModal}
+                  style={styles.modalFooterButton}
+                  title="Zamknij"
+                  variant="secondary"
+                />
+              </View>
+            }
+            onClose={closeFinanceModal}
+            subtitle={historyBudgetItem ? `${historyBudgetItem.category.name} / ${historyBudgetItem.name}` : undefined}
+            title="Historia wpłat"
+            visible={financeModal === "expenseHistory"}
+          >
+            {historyBudgetItem ? (
+              <View style={styles.selectorGroup}>
+                <View style={styles.expenseHistorySummary}>
+                  <View>
+                    <Text style={styles.expenseContextLabel}>Wydano</Text>
+                    <Text style={styles.expenseHistorySummaryValue}>
+                      {formatMoney(historyBudgetItem.spentAmount, currencyCode)}
+                    </Text>
+                  </View>
+                  <View style={styles.expenseHistorySummarySide}>
+                    <Text style={styles.expenseContextMeta}>
+                      Budżet{" "}
+                      {historyBudgetItem.budgetAmount
+                        ? formatMoney(historyBudgetItem.budgetAmount, currencyCode)
+                        : "bez limitu"}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.expenseContextMeta,
+                        Number(historyBudgetItem.remainingAmount ?? 0) < 0 && styles.dangerText,
+                        Number(historyBudgetItem.remainingAmount ?? 0) >= 0 && styles.positiveText,
+                      ]}
+                    >
+                      Zostaje{" "}
+                      {historyBudgetItem.budgetAmount
+                        ? formatMoney(historyBudgetItem.remainingAmount ?? 0, currencyCode)
+                        : "bez limitu"}
+                    </Text>
+                  </View>
+                </View>
+                {historyExpenses.length > 0 ? (
+                  <View style={styles.expenseHistoryList}>
+                    {historyExpenses.map((expense) => (
+                      <View key={expense.id} style={styles.expenseHistoryRow}>
+                        <View style={styles.expenseHistoryText}>
+                          <Text style={styles.expenseHistoryTitle}>Wpis</Text>
+                          <Text style={styles.expenseHistoryMeta}>
+                            {formatDateTimeFull(expense.createdAt)}
+                          </Text>
+                        </View>
+                        <Text style={styles.expenseHistoryAmount}>
+                          {formatMoney(expense.amount, currencyCode)}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <InlineAlert text="Brak wpłat dla tej pozycji." />
+                )}
+              </View>
+            ) : (
+              <InlineAlert text="Nie znaleziono wybranej pozycji budżetu." />
+            )}
           </FormModal>
 
           <FormModal
@@ -2194,14 +2320,20 @@ function FilterChip({
 }
 
 function FinanceSheet({
+  canCreateExpense,
   canUpdate,
   currencyCode,
+  onAddExpense,
   onEdit,
+  onHistory,
   rows,
 }: {
+  canCreateExpense: boolean;
   canUpdate: boolean;
   currencyCode: SupportedCurrencyCode;
+  onAddExpense: (item: BudgetItemWithCategory) => void;
   onEdit: (item: BudgetItemWithCategory) => void;
+  onHistory: (item: BudgetItemWithCategory) => void;
   rows: BudgetItemWithCategory[];
 }) {
   const theme = useAppTheme();
@@ -2273,26 +2405,46 @@ function FinanceSheet({
             </View>
             {collapsed ? null : group.items.map((item) => (
               <View key={item.id} style={styles.sheetRow}>
-                <Text numberOfLines={1} style={[styles.bodyCell, styles.personCell]}>
-                  {formatOwner(item.owner)}
-                </Text>
-                <Text numberOfLines={1} style={[styles.bodyCell, styles.categoryCell]}>
-                  {item.name}
-                </Text>
-                <Text style={styles.amountCell}>{formatMoney(item.budgetAmount, currencyCode)}</Text>
-                <Text style={styles.amountCell}>{formatMoney(item.spentAmount, currencyCode)}</Text>
-                <Text
-                  style={[
-                    styles.amountCell,
-                    Number(item.remainingAmount ?? 0) < 0 && styles.dangerText,
-                    Number(item.remainingAmount ?? 0) >= 0 && styles.positiveText,
-                  ]}
+                <Pressable
+                  accessibilityLabel={`Pokaż historię pozycji ${item.name}`}
+                  accessibilityRole="button"
+                  onPress={() => onHistory(item)}
+                  style={({ pressed }) => [styles.sheetRowContent, pressed && styles.pressedRow]}
                 >
-                  {item.budgetAmount ? formatMoney(item.remainingAmount ?? 0, currencyCode) : "bez limitu"}
-                </Text>
+                  <Text numberOfLines={1} style={[styles.bodyCell, styles.personCell]}>
+                    {formatOwner(item.owner)}
+                  </Text>
+                  <Text numberOfLines={1} style={[styles.bodyCell, styles.categoryCell]}>
+                    {item.name}
+                  </Text>
+                  <Text style={styles.amountCell}>{formatMoney(item.budgetAmount, currencyCode)}</Text>
+                  <Text style={styles.amountCell}>{formatMoney(item.spentAmount, currencyCode)}</Text>
+                  <Text
+                    style={[
+                      styles.amountCell,
+                      Number(item.remainingAmount ?? 0) < 0 && styles.dangerText,
+                      Number(item.remainingAmount ?? 0) >= 0 && styles.positiveText,
+                    ]}
+                  >
+                    {item.budgetAmount ? formatMoney(item.remainingAmount ?? 0, currencyCode) : "bez limitu"}
+                  </Text>
+                </Pressable>
                 <View style={styles.actionCell}>
+                  {canCreateExpense ? (
+                    <IconButton
+                      accessibilityLabel="Dodaj wydatek"
+                      onPress={() => onAddExpense(item)}
+                      style={styles.sheetActionButton}
+                    >
+                      <Plus color={theme.colors.primaryDark} size={15} />
+                    </IconButton>
+                  ) : null}
                   {canUpdate ? (
-                    <IconButton accessibilityLabel="Edytuj pozycję" onPress={() => onEdit(item)}>
+                    <IconButton
+                      accessibilityLabel="Edytuj pozycję"
+                      onPress={() => onEdit(item)}
+                      style={styles.sheetActionButton}
+                    >
                       <Pencil color={theme.colors.textMuted} size={15} />
                     </IconButton>
                   ) : null}
@@ -2308,15 +2460,21 @@ function FinanceSheet({
 }
 
 function FinanceCategoryCards({
+  canCreateExpense,
   canUpdate,
   currencyCode,
+  onAddExpense,
   onEdit,
+  onHistory,
   rows,
   scrollRef,
 }: {
+  canCreateExpense: boolean;
   canUpdate: boolean;
   currencyCode: SupportedCurrencyCode;
+  onAddExpense: (item: BudgetItemWithCategory) => void;
   onEdit: (item: BudgetItemWithCategory) => void;
+  onHistory: (item: BudgetItemWithCategory) => void;
   rows: BudgetItemWithCategory[];
   scrollRef: RefObject<ScrollView>;
 }) {
@@ -2361,12 +2519,12 @@ function FinanceCategoryCards({
         {groups.map((group, index) => {
           const accent = getCategoryAccent(index);
           const active = selectedCategoryId === group.category.id;
-          const remainingProgress = getBudgetRemainingProgress(group);
+          const spentProgress = getBudgetSpentProgress(group);
           const remainingLabel =
             group.remaining >= 0
               ? formatMoney(group.remaining, currencyCode)
               : `-${formatMoney(Math.abs(group.remaining), currencyCode)}`;
-          const progressText = group.planned > 0 ? `${Math.round(remainingProgress * 100)}%` : "bez limitu";
+          const progressText = group.planned > 0 ? `${Math.round(spentProgress * 100)}%` : "bez limitu";
 
           return (
             <Pressable
@@ -2399,7 +2557,7 @@ function FinanceCategoryCards({
                       styles.categoryProgressFill,
                       {
                         backgroundColor: accent.color,
-                        width: `${remainingProgress * 100}%`,
+                        width: `${Math.min(spentProgress, 1) * 100}%`,
                       },
                     ]}
                   />
@@ -2429,7 +2587,13 @@ function FinanceCategoryCards({
             </Text>
           </View>
           {selectedGroup.items.map((item) => (
-            <View key={item.id} style={styles.categoryDetailsRow}>
+            <Pressable
+              accessibilityLabel={`Pokaż historię pozycji ${item.name}`}
+              accessibilityRole="button"
+              key={item.id}
+              onPress={() => onHistory(item)}
+              style={({ pressed }) => [styles.categoryDetailsRow, pressed && styles.pressedRow]}
+            >
               <View style={styles.categoryDetailsText}>
                 <Text numberOfLines={1} style={styles.categoryDetailsItemTitle}>
                   {item.name}
@@ -2451,12 +2615,19 @@ function FinanceCategoryCards({
                   {item.budgetAmount ? formatMoney(item.remainingAmount ?? 0, currencyCode) : "bez limitu"}
                 </Text>
               </View>
-              {canUpdate ? (
-                <IconButton accessibilityLabel="Edytuj pozycję" onPress={() => onEdit(item)}>
-                  <Pencil color={theme.colors.textMuted} size={15} />
-                </IconButton>
-              ) : null}
-            </View>
+              <View style={styles.categoryDetailsActions}>
+                {canCreateExpense ? (
+                  <IconButton accessibilityLabel="Dodaj wydatek" onPress={() => onAddExpense(item)}>
+                    <Plus color={theme.colors.primaryDark} size={15} />
+                  </IconButton>
+                ) : null}
+                {canUpdate ? (
+                  <IconButton accessibilityLabel="Edytuj pozycję" onPress={() => onEdit(item)}>
+                    <Pencil color={theme.colors.textMuted} size={15} />
+                  </IconButton>
+                ) : null}
+              </View>
+            </Pressable>
           ))}
         </View>
       ) : null}
@@ -2660,12 +2831,12 @@ function getCategoryAccent(index: number): { border: string; color: string; onCo
   };
 }
 
-function getBudgetRemainingProgress(group: BudgetCategoryGroup): number {
+function getBudgetSpentProgress(group: BudgetCategoryGroup): number {
   if (group.planned <= 0) {
     return 0;
   }
 
-  return Math.max(0, Math.min(group.remaining / group.planned, 1));
+  return Math.max(0, group.spent / group.planned);
 }
 
 function getBudgetCategoryIcon(categoryName: string, color: string): ReactNode {
@@ -2825,6 +2996,22 @@ function formatDateFull(value: string): string {
   return `${value.slice(8, 10)}.${value.slice(5, 7)}.${value.slice(0, 4)} r.`;
 }
 
+function formatDateTimeFull(value: string): string {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("pl-PL", {
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+}
+
 function todayIso(): string {
   const date = new Date();
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
@@ -2856,6 +3043,10 @@ function createStyles(colors: AppPalette) {
       justifyContent: "center",
       minHeight: 38,
       width: 78,
+    },
+    sheetActionButton: {
+      height: 32,
+      width: 32,
     },
     actionHeaderCell: {
       backgroundColor: colors.cardMuted,
@@ -3025,6 +3216,11 @@ function createStyles(colors: AppPalette) {
       gap: spacing.sm,
       padding: spacing.md,
     },
+    categoryDetailsActions: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.xs,
+    },
     categoryDetailsAmount: {
       color: colors.text,
       fontSize: 12,
@@ -3090,6 +3286,9 @@ function createStyles(colors: AppPalette) {
       fontSize: 15,
       fontWeight: "900",
       letterSpacing: 0,
+    },
+    pressedRow: {
+      opacity: 0.82,
     },
     categoryProgressFill: {
       borderRadius: 999,
@@ -3277,6 +3476,93 @@ function createStyles(colors: AppPalette) {
     debtTitle: {
       color: colors.text,
       fontSize: 14,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    expenseContextCard: {
+      backgroundColor: colors.cardMuted,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      gap: spacing.xs,
+      padding: spacing.md,
+    },
+    expenseContextLabel: {
+      color: colors.textMuted,
+      fontSize: 11,
+      fontWeight: "900",
+      letterSpacing: 0,
+      textTransform: "uppercase",
+    },
+    expenseContextMeta: {
+      color: colors.textMuted,
+      fontSize: 12,
+      fontWeight: "800",
+      letterSpacing: 0,
+      lineHeight: 17,
+    },
+    expenseContextTitle: {
+      color: colors.text,
+      fontSize: 16,
+      fontWeight: "900",
+      letterSpacing: 0,
+      lineHeight: 21,
+    },
+    expenseHistoryAmount: {
+      color: colors.primaryDark,
+      fontSize: 14,
+      fontWeight: "900",
+      letterSpacing: 0,
+      textAlign: "right",
+    },
+    expenseHistoryList: {
+      gap: spacing.xs,
+    },
+    expenseHistoryMeta: {
+      color: colors.textMuted,
+      fontSize: 12,
+      letterSpacing: 0,
+    },
+    expenseHistoryRow: {
+      alignItems: "center",
+      backgroundColor: colors.cardMuted,
+      borderColor: colors.line,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      justifyContent: "space-between",
+      padding: spacing.sm,
+    },
+    expenseHistorySummary: {
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: spacing.md,
+      justifyContent: "space-between",
+      padding: spacing.md,
+    },
+    expenseHistorySummarySide: {
+      alignItems: "flex-end",
+      gap: 2,
+    },
+    expenseHistorySummaryValue: {
+      color: colors.text,
+      fontSize: 20,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    expenseHistoryText: {
+      flex: 1,
+      gap: 2,
+      minWidth: 0,
+    },
+    expenseHistoryTitle: {
+      color: colors.text,
+      fontSize: 13,
       fontWeight: "900",
       letterSpacing: 0,
     },
@@ -3824,6 +4110,9 @@ function createStyles(colors: AppPalette) {
       backgroundColor: colors.card,
       borderColor: colors.line,
       borderTopWidth: 1,
+      flexDirection: "row",
+    },
+    sheetRowContent: {
       flexDirection: "row",
     },
     sheetScroller: {

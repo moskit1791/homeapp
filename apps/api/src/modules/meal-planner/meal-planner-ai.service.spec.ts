@@ -176,7 +176,9 @@ describe('MealPlannerAiService', () => {
 
     const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
 
+    expect(fetchMock.mock.calls[0]?.[0]).toContain('gemini-2.5-pro');
     expect(body.tools).toEqual([{ google_search: {} }]);
+    expect(body.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 4096 });
     expect(body.contents[0]?.parts[0]?.text).toContain('Ostatnie 30 dni - zakazane');
   });
 });
