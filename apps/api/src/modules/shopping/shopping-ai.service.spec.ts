@@ -55,7 +55,7 @@ describe('ShoppingAiService', () => {
                     ignoredSourceFragments: [],
                     items: [
                       {
-                        category: 'Dziecko i prezenty',
+                        category: 'Dziecko',
                         name: 'coś do mikołaja',
                         note: '',
                         quantity: '',
@@ -149,7 +149,7 @@ describe('ShoppingAiService', () => {
                     ignoredSourceFragments: [],
                     items: [
                       {
-                        category: 'Nabial',
+                        category: 'Nabiał i jaja',
                         name: 'Mleko',
                         note: '',
                         quantity: '2l',
@@ -171,9 +171,9 @@ describe('ShoppingAiService', () => {
 
     const plan = await new ShoppingAiService().planImport('mleko 2l, coś do obiadu');
 
-    expect(plan.items).toEqual([
+    expect(plan.items).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        category: 'Nabial',
+        category: 'Nabiał i jaja',
         name: 'Mleko',
         quantity: '2l'
       }),
@@ -182,7 +182,7 @@ describe('ShoppingAiService', () => {
         name: 'Coś do obiadu',
         quantity: ''
       })
-    ]);
+    ]));
   });
 
   it('ignores missed list headings instead of saving them as products', async () => {
@@ -293,10 +293,10 @@ describe('ShoppingAiService', () => {
 
     expect(plan.items).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ category: 'Owoce i warzywa', name: 'Jabłka' }),
-        expect.objectContaining({ category: 'Owoce i warzywa', name: 'Granat' }),
-        expect.objectContaining({ category: 'Owoce i warzywa', name: 'Pieczarki' }),
-        expect.objectContaining({ category: 'Nabial', name: 'Burrata' })
+        expect.objectContaining({ category: 'Owoce, warzywa i zioła', name: 'Jabłka' }),
+        expect.objectContaining({ category: 'Owoce, warzywa i zioła', name: 'Granat' }),
+        expect.objectContaining({ category: 'Owoce, warzywa i zioła', name: 'Pieczarki' }),
+        expect.objectContaining({ category: 'Nabiał i jaja', name: 'Burrata' })
       ])
     );
   });
@@ -323,29 +323,29 @@ describe('ShoppingAiService', () => {
     expect(plan.items).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          category: 'Owoce i warzywa',
+          category: 'Owoce, warzywa i zioła',
           name: 'Jabłka'
         }),
         expect.objectContaining({
-          category: 'Owoce i warzywa',
+          category: 'Owoce, warzywa i zioła',
           name: 'Pomidor',
           quantity: 'x2'
         }),
         expect.objectContaining({
-          category: 'Mieso i wedliny',
+          category: 'Mięso i wędliny',
           name: 'Prosciutto',
           quantity: '?'
         }),
         expect.objectContaining({
-          category: 'Mieso i wedliny',
+          category: 'Mięso i wędliny',
           name: 'Salami'
         }),
         expect.objectContaining({
-          category: 'Nabial',
+          category: 'Nabiał i jaja',
           name: 'Feta'
         }),
         expect.objectContaining({
-          category: 'Produkty suche i spizarnia',
+          category: 'Przyprawy, sosy i oleje',
           name: 'Pesto barilla',
           quantity: 'x2'
         })

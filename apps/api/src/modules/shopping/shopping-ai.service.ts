@@ -4,27 +4,17 @@ import {
   Logger,
   ServiceUnavailableException
 } from '@nestjs/common';
+import {
+  SHOPPING_CATEGORIES,
+  categorizeShoppingProduct as categorizeSharedShoppingProduct,
+  type ShoppingCategory
+} from '@homeapp/shared-types';
 import { z } from 'zod';
 import { loadEnv } from '../../shared/env';
 
-export const SHOPPING_AI_CATEGORIES = [
-  'Owoce i warzywa',
-  'Pieczywo',
-  'Nabial',
-  'Mieso i wedliny',
-  'Ryby i owoce morza',
-  'Mrozonki',
-  'Produkty suche i spizarnia',
-  'Sosy i dodatki',
-  'Przekaski i slodycze',
-  'Napoje',
-  'Chemia i dom',
-  'Grill i ogrod',
-  'Dziecko i prezenty',
-  'Inne'
-] as const;
+export const SHOPPING_AI_CATEGORIES = SHOPPING_CATEGORIES;
 
-export type ShoppingAiCategory = (typeof SHOPPING_AI_CATEGORIES)[number];
+export type ShoppingAiCategory = ShoppingCategory;
 
 const shoppingAiResponseSchema = z.object({
   clarificationMessage: z.string(),
@@ -746,70 +736,11 @@ function formatFallbackName(value: string): string {
 }
 
 export function categorizeShoppingProduct(value: string): ShoppingAiCategory {
-  const normalized = normalizeFallbackText(value);
-
   if (isUnclearShoppingWish(value)) {
     return 'Inne';
   }
 
-  if (/(jabl|granat|pomidor|pomidork|pieczark|papryk|owoc|warzyw|ogork|cebula|marchew|banan|cytryn|ziemniak|salat|boczniak|rukol|szpinak|por\b|porr|czosnek|cukini|brokul|kalafior|kapust|awokado|truskawk|malin|borowk|winogron|pomarancz|mandarynk|kiwi)/.test(normalized)) {
-    return 'Owoce i warzywa';
-  }
-
-  if (/(chleb|pieczyw|bulka|bulki|grzank|bagiet)/.test(normalized)) {
-    return 'Pieczywo';
-  }
-
-  if (/(mleko|maslo|feta|burrat|buratt|ser|jogurt|smietan|parmezan|mozzarell|jajka|jajko|twarog|serek|kefir|skyr|maslank)/.test(normalized)) {
-    return 'Nabial';
-  }
-
-  if (/(prosciutto|salami|kielbas|szynk|kurczak|mieso|wedlin|boczek)/.test(normalized)) {
-    return 'Mieso i wedliny';
-  }
-
-  if (/(ryba|losos|tunczyk|krewet)/.test(normalized)) {
-    return 'Ryby i owoce morza';
-  }
-
-  if (/(mrozon|lody)/.test(normalized)) {
-    return 'Mrozonki';
-  }
-
-  if (/(makaron|tortill|ryz|kasz|maka|cukier|platki|barilla)/.test(normalized)) {
-    return 'Produkty suche i spizarnia';
-  }
-
-  if (/(pesto|sos|ketchup|majonez|musztard)/.test(normalized)) {
-    return 'Sosy i dodatki';
-  }
-
-  if (/(slodk|czekolad|ciast|chips|przekask)/.test(normalized)) {
-    return 'Przekaski i slodycze';
-  }
-
-  if (/(napoj|woda|sok|cola|piwo)/.test(normalized)) {
-    return 'Napoje';
-  }
-
-  if (/(papier|folia|worki|chemia|plyn|proszek)/.test(normalized)) {
-    return 'Chemia i dom';
-  }
-
-  if (/(grill|wegiel|brykiet|podpalk|wyposazenie grilla)/.test(normalized)) {
-    return 'Grill i ogrod';
-  }
-
-  return 'Inne';
-}
-
-function normalizeFallbackText(value: string): string {
-  return value
-    .replace(/ł/g, 'l')
-    .replace(/Ł/g, 'L')
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .toLowerCase();
+  return categorizeSharedShoppingProduct(value);
 }
 
 function isUnclearShoppingWish(value: string): boolean {

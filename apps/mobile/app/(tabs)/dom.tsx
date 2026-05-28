@@ -226,7 +226,7 @@ const visibleNotificationEventTypes = REALTIME_EVENTS.filter(
 );
 
 export default function DomScreen() {
-  const params = useLocalSearchParams<{ settings?: string }>();
+  const params = useLocalSearchParams<{ segment?: HomeSegment; settings?: string }>();
   const permissionsQuery = usePermissions();
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
@@ -241,13 +241,21 @@ export default function DomScreen() {
 
   useEffect(() => {
     if (
+      params.segment &&
+      availableTiles.some((tile) => tile.value === params.segment)
+    ) {
+      setActiveSegment(params.segment);
+      return;
+    }
+
+    if (
       permissionsQuery.isSuccess &&
       availableTiles.length > 0 &&
       !availableTiles.some((tile) => tile.value === activeSegment)
     ) {
       setActiveSegment(availableTiles[0]!.value);
     }
-  }, [activeSegment, availableTiles, permissionsQuery.isSuccess]);
+  }, [activeSegment, availableTiles, params.segment, permissionsQuery.isSuccess]);
 
   if (permissionsQuery.isLoading) {
     return (

@@ -8,6 +8,7 @@ const maxDeletedNotificationIds = 120;
 
 export type StoredNotification = {
   body: string;
+  data?: Record<string, string>;
   id: string;
   receivedAt: string;
   status?: "read" | "unread";
@@ -84,6 +85,7 @@ export async function storeNotificationFromExpo(
 
   await addStoredNotification({
     body,
+    data: sanitizeNotificationData(content.data),
     id: notification.request.identifier,
     receivedAt: new Date().toISOString(),
     status: "unread",
@@ -118,6 +120,28 @@ async function addStoredNotification(notification: StoredNotification) {
   ].slice(0, maxStoredNotifications);
 
   await SecureStore.setItemAsync(notificationHistoryKey, JSON.stringify(next));
+}
+
+function sanitizeNotificationData(
+  data: Notifications.NotificationContent["data"],
+): Record<string, string> | undefined {
+  if (!data) {
+    return undefined;
+  }
+
+  const entries = Object.entries(data)
+    .filter((entry): entry is [string, string | number | boolean] => {
+      const value = entry[1];
+
+      return (
+        typeof value === "string" ||
+        typeof value === "number" ||
+        typeof value === "boolean"
+      );
+    })
+    .map(([key, value]) => [key, String(value)] as const);
+
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 }
 
 async function listDeletedNotificationIds(): Promise<string[]> {

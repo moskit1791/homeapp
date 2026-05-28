@@ -49,13 +49,32 @@ export class MealPlannerService {
           mpw.id,
           mpw.household_id,
           mpw.week_start_date,
-          count(mpe.id)::integer as entries_count,
+          coalesce(total_counts.entries_count, 0)::integer as entries_count,
+          coalesce(
+            jsonb_object_agg(day_counts.weekday, day_counts.entries_count)
+              filter (where day_counts.weekday is not null),
+            '{}'::jsonb
+          ) as entries_by_weekday,
           mpw.created_at,
           mpw.updated_at
         from meal_plan_weeks mpw
-        left join meal_plan_entries mpe on mpe.meal_plan_week_id = mpw.id
+        left join (
+          select
+            meal_plan_week_id,
+            count(*)::integer as entries_count
+          from meal_plan_entries
+          group by meal_plan_week_id
+        ) total_counts on total_counts.meal_plan_week_id = mpw.id
+        left join (
+          select
+            meal_plan_week_id,
+            weekday,
+            count(*)::integer as entries_count
+          from meal_plan_entries
+          group by meal_plan_week_id, weekday
+        ) day_counts on day_counts.meal_plan_week_id = mpw.id
         where mpw.household_id = $1
-        group by mpw.id
+        group by mpw.id, total_counts.entries_count
         order by mpw.week_start_date desc
       `,
       [householdId]
@@ -63,6 +82,7 @@ export class MealPlannerService {
 
     return result.rows.map((row) => ({
       createdAt: row.created_at,
+      entriesByWeekday: this.normalizeEntriesByWeekday(row.entries_by_weekday),
       entriesCount: row.entries_count,
       householdId: row.household_id,
       id: row.id,
@@ -712,6 +732,18 @@ export class MealPlannerService {
 
     return `${year}-${month}-${day}`;
   }
+
+  private normalizeEntriesByWeekday(value: unknown): Record<number, number> {
+    if (!value || typeof value !== 'object') {
+      return {};
+    }
+
+    return Object.fromEntries(
+      Object.entries(value)
+        .map(([weekday, count]) => [Number(weekday), Number(count)] as const)
+        .filter(([weekday, count]) => weekday >= 1 && weekday <= 7 && count > 0)
+    );
+  }
 }
 
 interface MealPlanWeekRow {
@@ -723,6 +755,7 @@ interface MealPlanWeekRow {
 }
 
 interface MealPlanSummaryRow extends MealPlanWeekRow {
+  entries_by_weekday: Record<string, number> | null;
   entries_count: number;
 }
 
@@ -766,6 +799,7 @@ export interface MealPlanWeekRecord {
 }
 
 export interface MealPlanSummary extends MealPlanWeekRecord {
+  entriesByWeekday: Record<number, number>;
   entriesCount: number;
 }
 

@@ -493,6 +493,7 @@ export interface MealPlanDetail {
 }
 
 export interface MealPlanSummary extends MealPlanWeek {
+  entriesByWeekday: Record<number, number>;
   entriesCount: number;
 }
 

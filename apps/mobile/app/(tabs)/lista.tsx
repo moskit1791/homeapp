@@ -1,13 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  SHOPPING_CATEGORIES,
+  categorizeShoppingProduct,
+  getShoppingCategoryMeta,
+  getShoppingProductSuggestions,
+  isShoppingCategory,
+  type ShoppingCategory,
+} from "@homeapp/shared-types";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Image,
   Linking,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
+  type ImageSourcePropType,
 } from "react-native";
 import { Calendar, LocaleConfig, type DateData } from "react-native-calendars";
 import {
@@ -73,6 +83,17 @@ import {
   Utensils,
   ViewGrid,
 } from "../../src/ui/icon";
+import shoppingCategoryDairyImage from "../../assets/shopping-category-dairy.png";
+import shoppingCategoryBakeryImage from "../../assets/shopping-category-bakery.png";
+import shoppingCategoryCareImage from "../../assets/shopping-category-care.png";
+import shoppingCategoryCleaningImage from "../../assets/shopping-category-cleaning.png";
+import shoppingCategoryDefaultImage from "../../assets/shopping-category-default.png";
+import shoppingCategoryDrinksImage from "../../assets/shopping-category-drinks.png";
+import shoppingCategoryFamilyImage from "../../assets/shopping-category-family.png";
+import shoppingCategoryMeatImage from "../../assets/shopping-category-meat.png";
+import shoppingCategoryPantryImage from "../../assets/shopping-category-pantry.png";
+import shoppingCategoryProduceImage from "../../assets/shopping-category-produce.png";
+import shoppingCategorySnacksImage from "../../assets/shopping-category-snacks.png";
 
 type MainSegment = "shopping" | "meals";
 type MealLayout = "list" | "cards";
@@ -352,6 +373,14 @@ function ShoppingBoard({
     () => [...queryKeys.shopping, activeType, "items"] as const,
     [activeType],
   );
+  const productSuggestions = useMemo(
+    () => getShoppingProductSuggestions(name, 8),
+    [name],
+  );
+  const suggestedCategory = useMemo(
+    () => (name.trim() ? categorizeShoppingProduct(name) : null),
+    [name],
+  );
 
   useEffect(() => {
     if (action === "addShopping") {
@@ -382,6 +411,7 @@ function ShoppingBoard({
       createShoppingItem(
         activeType,
         {
+          category: categorizeShoppingProduct(name),
           name: name.trim(),
           quantity: quantity.trim() || undefined,
         },
@@ -579,6 +609,7 @@ function ShoppingBoard({
             canUpdate={permission.canUpdate}
             deleting={deleteMutation.isPending}
             group={{
+              category: "Inne",
               emoji: "✓",
               items: checkedItems,
               title: "Kupione",
@@ -642,6 +673,44 @@ function ShoppingBoard({
           style={styles.input}
           value={name}
         />
+        {productSuggestions.length > 0 ? (
+          <View style={styles.productSuggestions}>
+            {productSuggestions.map((suggestion) => {
+              const categoryMeta = getShoppingCategoryMeta(suggestion.category);
+
+              return (
+                <Pressable
+                  key={suggestion.name}
+                  onPress={() => setName(suggestion.name)}
+                  style={styles.productSuggestionChip}
+                >
+                  <Text style={styles.productSuggestionEmoji}>
+                    {categoryMeta.emoji}
+                  </Text>
+                  <View style={styles.productSuggestionText}>
+                    <Text
+                      numberOfLines={1}
+                      style={styles.productSuggestionName}
+                    >
+                      {suggestion.name}
+                    </Text>
+                    <Text
+                      numberOfLines={1}
+                      style={styles.productSuggestionCategory}
+                    >
+                      {suggestion.category}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : suggestedCategory ? (
+          <Text style={styles.productCategoryHint}>
+            Kategoria: {getShoppingCategoryMeta(suggestedCategory).emoji}{" "}
+            {suggestedCategory}
+          </Text>
+        ) : null}
         <TextInput
           onChangeText={setQuantity}
           placeholder="Ilość, opakowanie lub notatka"
@@ -1702,16 +1771,20 @@ function ShoppingGroupCard({
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
+  const illustration = getShoppingGroupIllustration(group.category);
 
   return (
     <View style={styles.shoppingGroup}>
       <View style={styles.groupHeader}>
-        <Text style={styles.groupTitle}>{group.title}</Text>
+        <Text style={styles.shoppingGroupTitle}>{group.title}</Text>
+        <View style={styles.groupCountPill}>
+          <Text style={styles.groupCountText}>{group.items.length}</Text>
+        </View>
       </View>
       <View style={styles.groupBody}>
         <View style={styles.groupItems}>
           {group.items.map((item) => (
-            <View key={item.id} style={styles.itemRow}>
+            <View key={item.id} style={[styles.itemRow, styles.shoppingItemRow]}>
               <Pressable
                 disabled={!canUpdate || isUpdating(item.id)}
                 onPress={() => onCheck(item)}
@@ -1727,12 +1800,12 @@ function ShoppingGroupCard({
                 style={styles.itemText}
               >
                 <Text
-                  style={[styles.itemName, item.isChecked && styles.itemDone]}
+                  style={[styles.itemName, styles.shoppingItemName, item.isChecked && styles.shoppingItemDone]}
                 >
                   {item.name}
                 </Text>
                 {item.quantity ? (
-                  <Text numberOfLines={1} style={styles.itemMeta}>
+                  <Text numberOfLines={1} style={[styles.itemMeta, styles.shoppingItemMeta]}>
                     {item.quantity}
                   </Text>
                 ) : null}
@@ -1763,9 +1836,11 @@ function ShoppingGroupCard({
             </View>
           ))}
         </View>
-        <View style={styles.groupEmoji}>
-          <Text style={styles.groupEmojiText}>{group.emoji}</Text>
-        </View>
+        <Image
+          resizeMode="contain"
+          source={illustration}
+          style={styles.groupIllustration}
+        />
       </View>
     </View>
   );
@@ -1801,6 +1876,7 @@ function CalendarWeekPicker({
   selectedWeekStartDate,
 }: {
   mealWeeks: Array<{
+    entriesByWeekday?: Record<number, number>;
     entriesCount?: number;
     id: string;
     weekStartDate: string;
@@ -1857,145 +1933,110 @@ type MealDraft = {
 };
 
 type ShoppingGroup = {
+  category: ShoppingCategory;
   emoji: string;
   items: ShoppingItem[];
   title: string;
 };
 
-type ShoppingCategoryRule = {
-  emoji: string;
-  keywords: RegExp;
-  title: string;
+const legacyShoppingCategoryMap: Record<string, ShoppingCategory> = {
+  "Chemia i dom": "Środki czystości",
+  "Chemia i sprzątanie": "Środki czystości",
+  "Dziecko i prezenty": "Dziecko",
+  "Grill i ogrod": "Dom i ogród",
+  "Mięso i ryby": "Mięso i wędliny",
+  "Mieso i wedliny": "Mięso i wędliny",
+  "Nabial": "Nabiał i jaja",
+  "Nabiał i jajka": "Nabiał i jaja",
+  "Napoje": "Woda i napoje",
+  "Owoce": "Owoce, warzywa i zioła",
+  "Owoce i warzywa": "Owoce, warzywa i zioła",
+  "Pozostałe": "Inne",
+  "Produkty suche i spizarnia": "Sypkie",
+  "Przekaski i slodycze": "Słodycze i przekąski",
+  "Sosy i dodatki": "Przyprawy, sosy i oleje",
+  "Spiżarnia": "Sypkie",
+  "Warzywa": "Owoce, warzywa i zioła",
 };
 
-const shoppingCategoryRules: ShoppingCategoryRule[] = [
-  {
-    emoji: "🥦",
-    keywords:
-      /pomidor|ogorek|ogor|salat|papryk|marchew|ziemni|cebula|czosn|warzyw|brokul|kalaf|kapust|cukini|awokado|pieczark|boczniak|rukol|szpinak/,
-    title: "Warzywa",
-  },
-  {
-    emoji: "🍎",
-    keywords:
-      /banan|jabl|granat|grusz|cytryn|limonk|owoc|truskawk|malin|borow|winogron|pomarancz|mandaryn|kiwi/,
-    title: "Owoce",
-  },
-  {
-    emoji: "🧀",
-    keywords:
-      /mleko|jogurt|kefir|maslank|ser|twarog|serek|maslo|smietan|mozzarell|feta|burrat|buratt|skyr|jajk/,
-    title: "Nabiał i jajka",
-  },
-  {
-    emoji: "🥖",
-    keywords:
-      /chleb|bulka|bulki|bagiet|kajzer|tost|pieczyw|tortill|croissant|drozdz/,
-    title: "Pieczywo",
-  },
-  {
-    emoji: "🍗",
-    keywords:
-      /kurczak|indyk|wolow|wieprz|mieso|wedlin|szynk|kielbas|parowk|boczek|ryb|losos|tunczyk|dorsz|sledz/,
-    title: "Mięso i ryby",
-  },
-  {
-    emoji: "🫙",
-    keywords:
-      /makaron|ryz|kasz|oliw|olej|maka|cukier|sol|pieprz|platk|musli|konserw|puszk|sos|passat|przypraw|ketchup|majonez|musztard|ocet|dzem|miod/,
-    title: "Spiżarnia",
-  },
-  {
-    emoji: "🧊",
-    keywords: /mrozon|lody|frytki|pizza|pierog/,
-    title: "Mrożonki",
-  },
-  {
-    emoji: "🧃",
-    keywords: /woda|sok|napoj|cola|pepsi|kawa|herbat|piwo|wino|smoothie/,
-    title: "Napoje",
-  },
-  {
-    emoji: "🍫",
-    keywords:
-      /czekolad|ciastk|baton|chips|chrupk|orzech|palusz|cukierk|zelk|przekask|deser/,
-    title: "Słodycze i przekąski",
-  },
-  {
-    emoji: "🧼",
-    keywords:
-      /plyn|proszek|kapsulk|zmywark|prani|papier|recznik|worki|gabka|scierk|mop|chemia|sprzat|odkamieniacz/,
-    title: "Chemia i sprzątanie",
-  },
-  {
-    emoji: "🧴",
-    keywords:
-      /szampon|mydlo|zel|pasta|szczotecz|dezodorant|krem|balsam|kosmet|higien|chustecz|wacik/,
-    title: "Higiena",
-  },
-];
-
 function groupShoppingItems(items: ShoppingItem[]): ShoppingGroup[] {
-  const groups = new Map<string, ShoppingGroup>();
+  const groups = new Map<ShoppingCategory, ShoppingGroup>();
 
-  shoppingCategoryRules.forEach((rule) => {
-    groups.set(rule.title, { emoji: rule.emoji, items: [], title: rule.title });
+  SHOPPING_CATEGORIES.forEach((category) => {
+    const meta = getShoppingCategoryMeta(category);
+    groups.set(category, {
+      category,
+      emoji: meta.emoji,
+      items: [],
+      title: meta.title,
+    });
   });
-  groups.set("Pozostałe", { emoji: "🛒", items: [], title: "Pozostałe" });
 
   items.forEach((item) => {
-    const name = normalizeShoppingName(item.name);
-    const target = groups.get(resolveShoppingGroupTitle(item, name));
+    const target = groups.get(resolveShoppingCategory(item));
 
-    (target ?? groups.get("Pozostałe"))?.items.push(item);
+    (target ?? groups.get("Inne"))?.items.push(item);
   });
 
   return [...groups.values()].filter((group) => group.items.length > 0);
 }
 
-function normalizeShoppingName(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/ł/g, "l")
-    .replace(/Ł/g, "L")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+function getShoppingGroupIllustration(category: ShoppingCategory): ImageSourcePropType {
+  switch (category) {
+    case "Alkohole":
+    case "Kawa i herbata":
+    case "Woda i napoje":
+      return shoppingCategoryDrinksImage;
+    case "Apteczka":
+    case "Higiena":
+      return shoppingCategoryCareImage;
+    case "Dania gotowe":
+    case "Konserwy i przetwory":
+    case "Pieczenie i dodatki":
+    case "Przyprawy, sosy i oleje":
+    case "Sypkie":
+    case "Wege":
+      return shoppingCategoryPantryImage;
+    case "Dla zwierząt":
+    case "Dziecko":
+    case "Elektronika":
+    case "Papiernicze":
+    case "Ubrania":
+      return shoppingCategoryFamilyImage;
+    case "Dom i ogród":
+    case "Środki czystości":
+      return shoppingCategoryCleaningImage;
+    case "Mięso i wędliny":
+      return shoppingCategoryMeatImage;
+    case "Mrożonki":
+    case "Ryby i owoce morza":
+      return shoppingCategoryMeatImage;
+    case "Nabiał i jaja":
+      return shoppingCategoryDairyImage;
+    case "Owoce, warzywa i zioła":
+      return shoppingCategoryProduceImage;
+    case "Pieczywo":
+      return shoppingCategoryBakeryImage;
+    case "Słodycze i przekąski":
+      return shoppingCategorySnacksImage;
+    case "Inne":
+    default:
+      return shoppingCategoryDefaultImage;
+  }
 }
 
-function resolveShoppingGroupTitle(
-  item: ShoppingItem,
-  normalizedName: string,
-): string {
-  const keywordRule = shoppingCategoryRules.find((rule) =>
-    rule.keywords.test(normalizedName),
-  );
+function resolveShoppingCategory(item: ShoppingItem): ShoppingCategory {
+  const categoryByName = categorizeShoppingProduct(item.name);
 
-  if (keywordRule) {
-    return keywordRule.title;
+  if (categoryByName !== "Inne") {
+    return categoryByName;
   }
 
-  switch (item.category) {
-    case "Nabial":
-      return "Nabiał i jajka";
-    case "Mieso i wedliny":
-    case "Ryby i owoce morza":
-      return "Mięso i ryby";
-    case "Pieczywo":
-      return "Pieczywo";
-    case "Mrozonki":
-      return "Mrożonki";
-    case "Produkty suche i spizarnia":
-    case "Sosy i dodatki":
-      return "Spiżarnia";
-    case "Przekaski i slodycze":
-      return "Słodycze i przekąski";
-    case "Napoje":
-      return "Napoje";
-    case "Chemia i dom":
-      return "Chemia i sprzątanie";
-    default:
-      return "Pozostałe";
+  if (isShoppingCategory(item.category)) {
+    return item.category;
   }
+
+  return item.category ? (legacyShoppingCategoryMap[item.category] ?? "Inne") : "Inne";
 }
 
 function mealDraftKey(
@@ -2078,6 +2119,7 @@ function normalizeOptionalMealUrl(value: string): string | null {
 function buildMarkedMealWeekDates(
   selectedWeekStartDate: string,
   mealWeeks: Array<{
+    entriesByWeekday?: Record<number, number>;
     entriesCount?: number;
     id: string;
     weekStartDate: string;
@@ -2097,10 +2139,29 @@ function buildMarkedMealWeekDates(
   > = {};
 
   mealWeeks.forEach((week) => {
-    marked[week.weekStartDate] = {
-      dotColor: colors.food,
-      marked: Boolean(week.entriesCount),
-    };
+    const plannedWeekdays = Object.entries(week.entriesByWeekday ?? {})
+      .map(([weekday, count]) => ({
+        count: Number(count),
+        weekday: Number(weekday),
+      }))
+      .filter(({ count, weekday }) => count > 0 && weekday >= 1 && weekday <= 7);
+
+    if (plannedWeekdays.length === 0 && week.entriesCount) {
+      marked[week.weekStartDate] = {
+        dotColor: colors.food,
+        marked: true,
+      };
+      return;
+    }
+
+    plannedWeekdays.forEach(({ weekday }) => {
+      const date = dateForWeekday(week.weekStartDate, weekday);
+
+      marked[date] = {
+        dotColor: colors.food,
+        marked: true,
+      };
+    });
   });
 
   for (let day = 1; day <= 7; day += 1) {
@@ -2121,10 +2182,20 @@ function buildMarkedMealWeekDates(
 function mergeMealHistory(
   currentWeek: MealPlanDetail["week"] | undefined,
   history: MealPlanSummary[],
-): Array<{ entriesCount?: number; id: string; weekStartDate: string }> {
+): Array<{
+  entriesByWeekday?: Record<number, number>;
+  entriesCount?: number;
+  id: string;
+  weekStartDate: string;
+}> {
   const weeks = new Map<
     string,
-    { entriesCount?: number; id: string; weekStartDate: string }
+    {
+      entriesByWeekday?: Record<number, number>;
+      entriesCount?: number;
+      id: string;
+      weekStartDate: string;
+    }
   >();
 
   if (currentWeek) {
@@ -2317,8 +2388,8 @@ function createStyles(colors: AppPalette) {
   return StyleSheet.create({
     checkBox: {
       alignItems: "center",
-      backgroundColor: colors.card,
-      borderColor: colors.border,
+      backgroundColor: "#FFFCF5",
+      borderColor: "#CFC5B3",
       borderRadius: 999,
       borderWidth: 1,
       height: 22,
@@ -2462,8 +2533,8 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
     },
     checkBoxDone: {
-      backgroundColor: colors.primary,
-      borderColor: colors.primary,
+      backgroundColor: "#4F7D52",
+      borderColor: "#4F7D52",
     },
     confirmText: {
       color: colors.textMuted,
@@ -2516,6 +2587,23 @@ function createStyles(colors: AppPalette) {
       alignItems: "center",
       flexDirection: "row",
       gap: spacing.sm,
+      minHeight: 52,
+      position: "relative",
+    },
+    groupCountPill: {
+      alignItems: "center",
+      backgroundColor: "#E7E0C8",
+      borderRadius: 999,
+      justifyContent: "center",
+      minHeight: 22,
+      minWidth: 28,
+      paddingHorizontal: 9,
+    },
+    groupCountText: {
+      color: "#4E5435",
+      fontSize: 11,
+      fontWeight: "900",
+      letterSpacing: 0,
     },
     groupEmoji: {
       alignItems: "center",
@@ -2533,6 +2621,14 @@ function createStyles(colors: AppPalette) {
     groupItems: {
       flex: 1,
       gap: spacing.xs,
+      paddingRight: 70,
+    },
+    groupIllustration: {
+      bottom: -8,
+      height: 78,
+      position: "absolute",
+      right: -8,
+      width: 92,
     },
     groupList: {
       gap: spacing.sm,
@@ -2791,6 +2887,57 @@ function createStyles(colors: AppPalette) {
     pressed: {
       opacity: 0.78,
     },
+    productCategoryHint: {
+      color: colors.textMuted,
+      fontSize: 12,
+      fontWeight: "800",
+      letterSpacing: 0,
+      marginTop: -spacing.xs,
+    },
+    productSuggestionCategory: {
+      color: colors.textMuted,
+      fontSize: 10,
+      fontWeight: "700",
+      letterSpacing: 0,
+      lineHeight: 13,
+    },
+    productSuggestionChip: {
+      alignItems: "center",
+      backgroundColor: colors.cardMuted,
+      borderColor: colors.border,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      flexBasis: "47%",
+      flexDirection: "row",
+      flexGrow: 1,
+      gap: spacing.xs,
+      minHeight: 42,
+      minWidth: 130,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
+    },
+    productSuggestionEmoji: {
+      fontSize: 18,
+      letterSpacing: 0,
+    },
+    productSuggestionName: {
+      color: colors.text,
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 0,
+      lineHeight: 15,
+      textTransform: "capitalize",
+    },
+    productSuggestions: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: spacing.xs,
+      marginTop: -spacing.xs,
+    },
+    productSuggestionText: {
+      flex: 1,
+      minWidth: 0,
+    },
     quickActions: {
       flexDirection: "row",
       flexWrap: "wrap",
@@ -2809,12 +2956,41 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
     },
     shoppingGroup: {
-      backgroundColor: colors.card,
-      borderColor: colors.border,
-      borderRadius: radii.card,
+      backgroundColor: "#FFF9EF",
+      borderColor: "#E8DDCE",
+      borderRadius: 12,
       borderWidth: 1,
+      elevation: 2,
       gap: spacing.sm,
-      padding: spacing.md,
+      overflow: "hidden",
+      padding: spacing.sm,
+      shadowColor: "#000000",
+      shadowOffset: { height: 8, width: 0 },
+      shadowOpacity: 0.07,
+      shadowRadius: 18,
+    },
+    shoppingGroupTitle: {
+      color: "#28251D",
+      fontSize: 13,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    shoppingItemDone: {
+      color: "#8B8478",
+      textDecorationLine: "line-through",
+    },
+    shoppingItemMeta: {
+      color: "#7E7667",
+    },
+    shoppingItemName: {
+      color: "#2B2821",
+      fontWeight: "800",
+    },
+    shoppingItemRow: {
+      borderBottomColor: "#EFE5D4",
+      borderBottomWidth: 1,
+      minHeight: 33,
+      paddingRight: spacing.xs,
     },
     textArea: {
       minHeight: 84,

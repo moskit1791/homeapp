@@ -7,16 +7,26 @@ import { findNodeHandle, Pressable, ScrollView, StyleSheet, Switch, Text, TextIn
 import {
   Archive,
   Banknote,
+  Car,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Gamepad2,
+  Gift,
+  Hammer,
+  Heart,
+  Home,
   Minus,
   Pencil,
   PiggyBank,
   Plus,
   ReceiptText,
+  ShoppingCart,
+  Smartphone,
   TableLarge,
   Trash2,
+  Users,
+  Utensils,
   ViewGrid,
   WalletCards,
 } from "../../src/ui/icon";
@@ -1038,33 +1048,14 @@ export default function FinanseScreen() {
             ) : null}
           </View>
 
-          <View style={styles.metricRow}>
-            <FinanceMetric
-              color={theme.colors.finance}
-              icon={<Banknote color={theme.colors.finance} size={17} />}
-              label="Dochody"
-              onPress={() => setFinanceModal("incomeBreakdown")}
-              value={formatMoney(scopedTotals.incomeAmount, currencyCode)}
-            />
-            <FinanceMetric
-              color={theme.colors.text}
-              icon={<WalletCards color={theme.colors.textMuted} size={17} />}
-              label="Budżet"
-              value={formatMoney(scopedTotals.totalBudgetAmount, currencyCode)}
-            />
-            <FinanceMetric
-              color={theme.colors.warning}
-              icon={<ReceiptText color={theme.colors.warning} size={17} />}
-              label="Wydane"
-              value={formatMoney(scopedTotals.totalSpentAmount, currencyCode)}
-            />
-            <FinanceMetric
-              color={remainingAmount < 0 ? theme.colors.danger : theme.colors.primaryDark}
-              icon={<Archive color={remainingAmount < 0 ? theme.colors.danger : theme.colors.primaryDark} size={17} />}
-              label="Zostaje"
-              value={formatMoney(scopedTotals.totalRemainingAmount, currencyCode)}
-            />
-          </View>
+          <FinanceSummaryCard
+            budgetAmount={budgetAmount}
+            currencyCode={currencyCode}
+            incomeAmount={Number(scopedTotals.incomeAmount)}
+            onIncomePress={() => setFinanceModal("incomeBreakdown")}
+            remainingAmount={remainingAmount}
+            spentAmount={spentAmount}
+          />
 
           <FinanceFiltersPanel
             categories={categories}
@@ -1730,49 +1721,98 @@ export default function FinanseScreen() {
   );
 }
 
-function FinanceMetric({
-  color,
-  icon,
-  label,
-  onPress,
-  value,
+function FinanceSummaryCard({
+  budgetAmount,
+  currencyCode,
+  incomeAmount,
+  onIncomePress,
+  remainingAmount,
+  spentAmount,
 }: {
-  color: string;
-  icon: ReactNode;
-  label: string;
-  onPress?: () => void;
-  value: string;
+  budgetAmount: number;
+  currencyCode: SupportedCurrencyCode;
+  incomeAmount: number;
+  onIncomePress: () => void;
+  remainingAmount: number;
+  spentAmount: number;
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
-  const content = (
-    <>
-      <View style={styles.metricTop}>
-        {icon}
-        <Text style={styles.metricLabel}>{label}</Text>
-      </View>
-      <Text numberOfLines={1} style={[styles.metricValue, { color }]}>
-        {value}
-      </Text>
-    </>
-  );
-
-  if (onPress) {
-    return (
-      <Pressable
-        accessibilityLabel={label}
-        accessibilityRole="button"
-        onPress={onPress}
-        style={({ pressed }) => [styles.metric, pressed && styles.metricPressed]}
-      >
-        {content}
-      </Pressable>
-    );
-  }
+  const ringBase = Math.max(incomeAmount, budgetAmount, spentAmount, 1);
+  const spentRatio = Math.max(0, Math.min(spentAmount / ringBase, 1));
 
   return (
-    <View style={styles.metric}>
-      {content}
+    <View style={styles.financeSummaryCard}>
+      <Pressable
+        accessibilityLabel="Dochody domowników"
+        accessibilityRole="button"
+        onPress={onIncomePress}
+        style={({ pressed }) => [styles.financeSummarySide, pressed && styles.metricPressed]}
+      >
+        <View style={styles.financeSummaryLabelRow}>
+          <Banknote color="#8CE1BF" size={16} />
+          <Text style={[styles.financeSummaryLabel, { color: "#8CE1BF" }]}>Dochody</Text>
+        </View>
+        <Text numberOfLines={1} style={styles.financeSummaryValue}>
+          {formatMoney(incomeAmount, currencyCode)}
+        </Text>
+      </Pressable>
+
+      <View style={styles.financeSummaryCenter}>
+        <FinanceSummaryRing spentRatio={spentRatio} />
+        <View pointerEvents="none" style={styles.financeSummaryCenterText}>
+          <Text numberOfLines={1} style={[styles.financeSummaryRingValue, remainingAmount < 0 && styles.dangerText]}>
+            {formatMoney(remainingAmount, currencyCode)}
+          </Text>
+          <Text style={styles.financeSummaryRingLabel}>zostało</Text>
+        </View>
+      </View>
+
+      <View style={styles.financeSummarySide}>
+        <View style={styles.financeSummaryLabelRow}>
+          <ReceiptText color="#FFAD6F" size={16} />
+          <Text style={[styles.financeSummaryLabel, { color: "#FFAD6F" }]}>Wydatki</Text>
+        </View>
+        <Text numberOfLines={1} style={styles.financeSummaryValue}>
+          {formatMoney(spentAmount, currencyCode)}
+        </Text>
+      </View>
+
+      <View style={styles.financeSummaryBudgetPill}>
+        <WalletCards color={theme.colors.textMuted} size={14} />
+        <Text numberOfLines={1} style={styles.financeSummaryBudgetText}>
+          Budżet {formatMoney(budgetAmount, currencyCode)}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function FinanceSummaryRing({ spentRatio }: { spentRatio: number }) {
+  const styles = createStyles(useAppTheme().colors);
+  const segmentCount = 28;
+  const spentSegments = Math.round(spentRatio * segmentCount);
+
+  return (
+    <View style={styles.financeSummaryRing}>
+      {Array.from({ length: segmentCount }).map((_, index) => {
+        const angle = (360 / segmentCount) * index;
+        const isSpent = index < spentSegments;
+
+        return (
+          <View
+            key={index}
+            style={[
+              styles.financeSummaryRingSegment,
+              {
+                backgroundColor: isSpent ? "#FFA45D" : "#79CDB0",
+                transform: [{ rotate: `${angle}deg` }, { translateY: -35 }],
+              },
+            ]}
+          />
+        );
+      })}
+      <View style={styles.financeSummaryRingInner} />
     </View>
   );
 }
@@ -2322,12 +2362,11 @@ function FinanceCategoryCards({
           const accent = getCategoryAccent(index);
           const active = selectedCategoryId === group.category.id;
           const remainingProgress = getBudgetRemainingProgress(group);
-          const amountText =
+          const remainingLabel =
             group.remaining >= 0
-              ? `zostaje ${formatMoney(group.remaining, currencyCode)} / ${
-                  group.planned > 0 ? formatMoney(group.planned, currencyCode) : "bez limitu"
-                }`
-              : `po limicie ${formatMoney(Math.abs(group.remaining), currencyCode)}`;
+              ? formatMoney(group.remaining, currencyCode)
+              : `-${formatMoney(Math.abs(group.remaining), currencyCode)}`;
+          const progressText = group.planned > 0 ? `${Math.round(remainingProgress * 100)}%` : "bez limitu";
 
           return (
             <Pressable
@@ -2339,31 +2378,42 @@ function FinanceCategoryCards({
               style={[
                 styles.categoryCard,
                 active && styles.categoryCardActive,
-                active && { borderColor: accent.color },
+                active && { borderColor: accent.color, shadowColor: accent.color },
               ]}
             >
-              <View style={[styles.categoryCardIcon, { backgroundColor: accent.color }]}>
-                <ReceiptText color={accent.onColor} size={20} />
+              <View style={[styles.categoryCardIcon, { borderColor: accent.color }]}>
+                {getBudgetCategoryIcon(group.category.name, accent.color)}
               </View>
-              <Text numberOfLines={2} style={styles.categoryCardTitle}>
-                {group.category.name}
-              </Text>
-              <Text
-                numberOfLines={2}
-                style={[styles.categoryCardAmount, group.remaining < 0 && styles.dangerText]}
-              >
-                {amountText}
-              </Text>
-              <View style={styles.categoryProgressTrack}>
-                <View
-                  style={[
-                    styles.categoryProgressFill,
-                    {
-                      backgroundColor: accent.color,
-                      width: `${remainingProgress * 100}%`,
-                    },
-                  ]}
-                />
+              <View style={styles.categoryCardContent}>
+                <View style={styles.categoryCardTopLine}>
+                  <Text numberOfLines={1} style={styles.categoryCardTitle}>
+                    {group.category.name}
+                  </Text>
+                  <Text numberOfLines={1} style={styles.categoryCardBudget}>
+                    {formatMoney(group.planned, currencyCode)}
+                  </Text>
+                </View>
+                <View style={styles.categoryProgressTrack}>
+                  <View
+                    style={[
+                      styles.categoryProgressFill,
+                      {
+                        backgroundColor: accent.color,
+                        width: `${remainingProgress * 100}%`,
+                      },
+                    ]}
+                  />
+                  <Text style={styles.categoryProgressValue}>{progressText}</Text>
+                </View>
+              </View>
+              <View style={styles.categoryCardRemainingBlock}>
+                <Text
+                  numberOfLines={1}
+                  style={[styles.categoryCardAmount, group.remaining < 0 && styles.dangerText]}
+                >
+                  {remainingLabel}
+                </Text>
+                <Text style={styles.categoryCardMeta}>zostaje</Text>
               </View>
             </Pressable>
           );
@@ -2589,14 +2639,16 @@ function groupRowsByCategory(rows: BudgetItemWithCategory[]): BudgetCategoryGrou
 
 function getCategoryAccent(index: number): { border: string; color: string; onColor: string; text: string } {
   const colors = [
-    "#FF7A59",
-    "#2F80ED",
-    "#27AE60",
-    "#9B51E0",
-    "#F2C94C",
-    "#EB5757",
-    "#00A3A3",
-    "#F2994A",
+    "#FF9F43",
+    "#65D6A4",
+    "#4DA3FF",
+    "#FF7A8A",
+    "#8B7CFF",
+    "#B5E875",
+    "#F6C35B",
+    "#7CD8E8",
+    "#D78BFF",
+    "#FF8A5C",
   ];
   const color = colors[index % colors.length] ?? "#FF7A59";
 
@@ -2614,6 +2666,70 @@ function getBudgetRemainingProgress(group: BudgetCategoryGroup): number {
   }
 
   return Math.max(0, Math.min(group.remaining / group.planned, 1));
+}
+
+function getBudgetCategoryIcon(categoryName: string, color: string): ReactNode {
+  const normalized = normalizeCategoryName(categoryName);
+  const iconSize = 19;
+
+  if (normalized.includes("jedzenie")) {
+    return <Utensils color={color} size={iconSize} />;
+  }
+
+  if (normalized.includes("dom") || normalized.includes("media") || normalized.includes("rachunki")) {
+    return <Home color={color} size={iconSize} />;
+  }
+
+  if (normalized.includes("transport") || normalized.includes("auto")) {
+    return <Car color={color} size={iconSize} />;
+  }
+
+  if (normalized.includes("zdrowie") || normalized.includes("uroda")) {
+    return <Heart color={color} size={iconSize} />;
+  }
+
+  if (normalized.includes("rozrywka")) {
+    return <Gamepad2 color={color} size={iconSize} />;
+  }
+
+  if (normalized.includes("dzieci")) {
+    return <Users color={color} size={iconSize} />;
+  }
+
+  if (normalized.includes("oszczednosci")) {
+    return <PiggyBank color={color} size={iconSize} />;
+  }
+
+  if (normalized.includes("subskrypcje") || normalized.includes("cyfrowe")) {
+    return <Smartphone color={color} size={iconSize} />;
+  }
+
+  if (normalized.includes("prezenty") || normalized.includes("okazje")) {
+    return <Gift color={color} size={iconSize} />;
+  }
+
+  if (normalized.includes("remont")) {
+    return <Hammer color={color} size={iconSize} />;
+  }
+
+  if (normalized.includes("zobowiazania")) {
+    return <Archive color={color} size={iconSize} />;
+  }
+
+  if (normalized.includes("kieszonkowe")) {
+    return <WalletCards color={color} size={iconSize} />;
+  }
+
+  return <ShoppingCart color={color} size={iconSize} />;
+}
+
+function normalizeCategoryName(value: string): string {
+  return value
+    .toLocaleLowerCase("pl-PL")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ł/g, "l")
+    .trim();
 }
 
 function getReadableTextColor(color: string): string {
@@ -2808,53 +2924,93 @@ function createStyles(colors: AppPalette) {
       width: 92,
     },
     categoryCard: {
-      backgroundColor: colors.card,
+      alignItems: "center",
+      backgroundColor: colors.overlay,
       borderColor: colors.border,
-      borderRadius: radii.card,
+      borderRadius: 10,
       borderWidth: 1,
       elevation: 2,
-      gap: 7,
-      minHeight: 120,
+      flexDirection: "row",
+      gap: spacing.sm,
+      minHeight: 58,
       paddingHorizontal: spacing.sm,
-      paddingVertical: 10,
+      paddingVertical: spacing.sm,
       shadowColor: "#000000",
       shadowOffset: { height: 6, width: 0 },
-      shadowOpacity: 0.05,
-      shadowRadius: 12,
-      width: "48.5%",
+      shadowOpacity: 0.08,
+      shadowRadius: 14,
+      width: "100%",
     },
     categoryCardActive: {
       borderWidth: 2,
+      shadowOpacity: 0.18,
     },
     categoryCardAmount: {
-      color: colors.textMuted,
-      fontSize: 11,
+      color: colors.text,
+      fontSize: 12,
+      fontWeight: "900",
       letterSpacing: 0,
       lineHeight: 15,
+      textAlign: "right",
+    },
+    categoryCardBudget: {
+      color: colors.text,
+      fontSize: 11,
+      fontWeight: "900",
+      letterSpacing: 0,
+      maxWidth: 82,
+      textAlign: "right",
+    },
+    categoryCardContent: {
+      flex: 1,
+      gap: 7,
+      minWidth: 0,
     },
     categoryCardGrid: {
-      flexDirection: "row",
-      flexWrap: "wrap",
       gap: spacing.sm,
-      justifyContent: "space-between",
     },
     categoryCardIcon: {
       alignItems: "center",
-      borderRadius: 999,
-      height: 36,
+      backgroundColor: "#151A27",
+      borderRadius: 8,
+      borderWidth: 1,
+      height: 34,
       justifyContent: "center",
-      width: 36,
+      shadowColor: "#000000",
+      shadowOffset: { height: 4, width: 0 },
+      shadowOpacity: 0.16,
+      shadowRadius: 10,
+      width: 34,
+    },
+    categoryCardMeta: {
+      color: colors.textMuted,
+      fontSize: 9,
+      fontWeight: "800",
+      letterSpacing: 0,
+      textAlign: "right",
+      textTransform: "uppercase",
+    },
+    categoryCardRemainingBlock: {
+      alignItems: "flex-end",
+      gap: 1,
+      minWidth: 70,
     },
     categoryCardsSection: {
       gap: spacing.sm,
     },
     categoryCardTitle: {
       color: colors.text,
-      fontSize: 13,
+      flex: 1,
+      fontSize: 12,
       fontWeight: "900",
       letterSpacing: 0,
-      lineHeight: 17,
-      minHeight: 34,
+      lineHeight: 15,
+      minWidth: 0,
+    },
+    categoryCardTopLine: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.sm,
     },
     categoryColorBar: {
       borderRadius: 999,
@@ -2942,9 +3098,20 @@ function createStyles(colors: AppPalette) {
     categoryProgressTrack: {
       backgroundColor: colors.cardMuted,
       borderRadius: 999,
-      height: 7,
+      height: 12,
       overflow: "hidden",
+      position: "relative",
       width: "100%",
+    },
+    categoryProgressValue: {
+      color: colors.text,
+      fontSize: 8,
+      fontWeight: "900",
+      letterSpacing: 0,
+      lineHeight: 12,
+      position: "absolute",
+      right: 5,
+      top: 0,
     },
     categoryRow: {
       backgroundColor: colors.cardMuted,
@@ -3402,6 +3569,120 @@ function createStyles(colors: AppPalette) {
       fontWeight: "900",
       letterSpacing: 0,
       textAlign: "right",
+    },
+    financeSummaryBudgetPill: {
+      alignItems: "center",
+      alignSelf: "center",
+      backgroundColor: colors.cardMuted,
+      borderColor: colors.border,
+      borderRadius: 999,
+      borderWidth: 1,
+      bottom: 9,
+      flexDirection: "row",
+      gap: 5,
+      minHeight: 24,
+      paddingHorizontal: spacing.sm,
+      position: "absolute",
+    },
+    financeSummaryBudgetText: {
+      color: colors.textMuted,
+      fontSize: 10,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    financeSummaryCard: {
+      alignItems: "center",
+      backgroundColor: colors.overlay,
+      borderColor: colors.border,
+      borderRadius: 14,
+      borderWidth: 1,
+      elevation: 3,
+      flexDirection: "row",
+      gap: spacing.sm,
+      justifyContent: "space-between",
+      minHeight: 118,
+      overflow: "hidden",
+      paddingBottom: 30,
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.md,
+      shadowColor: "#000000",
+      shadowOffset: { height: 10, width: 0 },
+      shadowOpacity: 0.1,
+      shadowRadius: 22,
+    },
+    financeSummaryCenter: {
+      alignItems: "center",
+      height: 84,
+      justifyContent: "center",
+      width: 88,
+    },
+    financeSummaryCenterText: {
+      alignItems: "center",
+      gap: 1,
+      position: "absolute",
+    },
+    financeSummaryLabel: {
+      fontSize: 10,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    financeSummaryLabelRow: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: 4,
+      justifyContent: "center",
+    },
+    financeSummaryRing: {
+      alignItems: "center",
+      borderRadius: 999,
+      height: 82,
+      justifyContent: "center",
+      position: "relative",
+      width: 82,
+    },
+    financeSummaryRingInner: {
+      backgroundColor: colors.overlay,
+      borderColor: colors.cardMuted,
+      borderRadius: 999,
+      borderWidth: 1,
+      height: 58,
+      position: "absolute",
+      width: 58,
+    },
+    financeSummaryRingLabel: {
+      color: colors.textMuted,
+      fontSize: 9,
+      fontWeight: "800",
+      letterSpacing: 0,
+    },
+    financeSummaryRingSegment: {
+      borderRadius: 999,
+      height: 10,
+      left: 39,
+      position: "absolute",
+      top: 36,
+      width: 4,
+    },
+    financeSummaryRingValue: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: "900",
+      letterSpacing: 0,
+      maxWidth: 58,
+      textAlign: "center",
+    },
+    financeSummarySide: {
+      alignItems: "center",
+      flex: 1,
+      gap: spacing.xs,
+      minWidth: 0,
+    },
+    financeSummaryValue: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: "900",
+      letterSpacing: 0,
+      textAlign: "center",
     },
     metric: {
       backgroundColor: colors.card,

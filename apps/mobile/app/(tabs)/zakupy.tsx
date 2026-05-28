@@ -1,4 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  categorizeShoppingProduct,
+  getShoppingCategoryMeta,
+  getShoppingProductSuggestions,
+} from "@homeapp/shared-types";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -69,6 +74,14 @@ export default function ZakupyScreen() {
     () => [...queryKeys.shopping, activeType, "items"] as const,
     [activeType],
   );
+  const productSuggestions = useMemo(
+    () => getShoppingProductSuggestions(name, 8),
+    [name],
+  );
+  const suggestedCategory = useMemo(
+    () => (name.trim() ? categorizeShoppingProduct(name) : null),
+    [name],
+  );
 
   const listsQuery = useQuery({
     enabled: canRead && Boolean(accessToken),
@@ -87,6 +100,7 @@ export default function ZakupyScreen() {
       createShoppingItem(
         activeType,
         {
+          category: categorizeShoppingProduct(name),
           name: name.trim(),
           quantity: quantity.trim() || undefined,
         },
@@ -432,6 +446,44 @@ export default function ZakupyScreen() {
           style={styles.nameInput}
           value={name}
         />
+        {productSuggestions.length > 0 ? (
+          <View style={styles.productSuggestions}>
+            {productSuggestions.map((suggestion) => {
+              const categoryMeta = getShoppingCategoryMeta(suggestion.category);
+
+              return (
+                <Pressable
+                  key={suggestion.name}
+                  onPress={() => setName(suggestion.name)}
+                  style={styles.productSuggestionChip}
+                >
+                  <Text style={styles.productSuggestionEmoji}>
+                    {categoryMeta.emoji}
+                  </Text>
+                  <View style={styles.productSuggestionText}>
+                    <Text
+                      numberOfLines={1}
+                      style={styles.productSuggestionName}
+                    >
+                      {suggestion.name}
+                    </Text>
+                    <Text
+                      numberOfLines={1}
+                      style={styles.productSuggestionCategory}
+                    >
+                      {suggestion.category}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : suggestedCategory ? (
+          <Text style={styles.productCategoryHint}>
+            Kategoria: {getShoppingCategoryMeta(suggestedCategory).emoji}{" "}
+            {suggestedCategory}
+          </Text>
+        ) : null}
         <TextInput
           onChangeText={setQuantity}
           placeholder="Ilość, opakowanie lub notatka"
@@ -703,6 +755,57 @@ function createStyles(colors: AppPalette) {
     },
     pressed: {
       opacity: 0.82,
+    },
+    productCategoryHint: {
+      color: colors.textMuted,
+      fontSize: 12,
+      fontWeight: "800",
+      letterSpacing: 0,
+      marginTop: -spacing.xs,
+    },
+    productSuggestionCategory: {
+      color: colors.textMuted,
+      fontSize: 10,
+      fontWeight: "700",
+      letterSpacing: 0,
+      lineHeight: 13,
+    },
+    productSuggestionChip: {
+      alignItems: "center",
+      backgroundColor: colors.cardMuted,
+      borderColor: colors.border,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      flexBasis: "47%",
+      flexDirection: "row",
+      flexGrow: 1,
+      gap: spacing.xs,
+      minHeight: 42,
+      minWidth: 130,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
+    },
+    productSuggestionEmoji: {
+      fontSize: 18,
+      letterSpacing: 0,
+    },
+    productSuggestionName: {
+      color: colors.text,
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 0,
+      lineHeight: 15,
+      textTransform: "capitalize",
+    },
+    productSuggestions: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: spacing.xs,
+      marginTop: -spacing.xs,
+    },
+    productSuggestionText: {
+      flex: 1,
+      minWidth: 0,
     },
     quantityInput: {
       backgroundColor: colors.field,

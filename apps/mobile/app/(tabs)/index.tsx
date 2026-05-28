@@ -47,10 +47,10 @@ import {
   NotePlus,
   ReceiptText,
   ShoppingCart,
-  Utensils,
 } from "../../src/ui/icon";
-import mealCardImage from "../../assets/today-meal.png";
-import shoppingCardImage from "../../assets/today-shopping.png";
+import calendarCardImage from "../../assets/today-calendar-card.png";
+import mealCardImage from "../../assets/today-meal-card.png";
+import shoppingCardImage from "../../assets/today-shopping-card.png";
 
 export default function DzisiajScreen() {
   const { session } = useSession();
@@ -128,6 +128,19 @@ export default function DzisiajScreen() {
       params: { settings: "1" },
     } as never);
   }, [router]);
+  const openStoredNotification = useCallback(
+    (notification: StoredNotification) => {
+      const target = resolveStoredNotificationTarget(notification);
+
+      if (!target) {
+        return;
+      }
+
+      setNotificationsVisible(false);
+      router.push(target as never);
+    },
+    [router],
+  );
   const refreshNotificationCenter = useCallback(async (markRead: boolean) => {
     const stored = await listStoredNotifications();
 
@@ -252,6 +265,7 @@ export default function DzisiajScreen() {
           }}
           onClose={() => setNotificationsVisible(false)}
           onOpenSettings={openNotificationSettings}
+          onOpenStoredNotification={openStoredNotification}
           pushNotifications={pushNotifications}
         />
       ) : null}
@@ -351,17 +365,113 @@ interface NotificationItem {
   title: string;
 }
 
+type StoredNotificationTarget =
+  | "/(tabs)/finanse"
+  | "/(tabs)/kalendarz"
+  | "/(tabs)/lista"
+  | "/(tabs)/dom"
+  | "/(tabs)/zadania"
+  | {
+      params: Record<string, string>;
+      pathname:
+        | "/(tabs)/kalendarz"
+        | "/(tabs)/lista"
+        | "/(tabs)/dom"
+        | "/(tabs)/zadania";
+    };
+
+function resolveStoredNotificationTarget(
+  notification: StoredNotification,
+): StoredNotificationTarget | null {
+  const eventType =
+    notification.data?.eventType ?? eventTypeFromNotificationTitle(notification.title);
+
+  if (!eventType) {
+    return null;
+  }
+
+  if (eventType.startsWith("finance.")) {
+    return "/(tabs)/finanse";
+  }
+
+  switch (eventType) {
+    case "calendar.changed":
+      return calendarNotificationTarget(notification);
+    case "meal.changed":
+      return { pathname: "/(tabs)/lista", params: { segment: "meals" } };
+    case "shopping.changed":
+      return { pathname: "/(tabs)/lista", params: { segment: "shopping" } };
+    case "note.changed":
+      return { pathname: "/(tabs)/zadania", params: { segment: "notes" } };
+    case "todo.changed":
+      return { pathname: "/(tabs)/zadania", params: { segment: "todo" } };
+    case "annual_cost.changed":
+      return { pathname: "/(tabs)/dom", params: { segment: "annual_costs" } };
+    case "attachment.changed":
+      return { pathname: "/(tabs)/dom", params: { segment: "attachments" } };
+    case "cleaning.changed":
+      return { pathname: "/(tabs)/dom", params: { segment: "cleaning" } };
+    case "data.changed":
+      return { pathname: "/(tabs)/dom", params: { segment: "data_entries" } };
+    case "household.changed":
+    case "permissions.changed":
+      return { pathname: "/(tabs)/dom", params: { settings: "1" } };
+    default:
+      return null;
+  }
+}
+
+function calendarNotificationTarget(
+  notification: StoredNotification,
+): StoredNotificationTarget {
+  const eventDate = notification.data?.eventDate;
+
+  if (eventDate && /^\d{4}-\d{2}-\d{2}$/.test(eventDate)) {
+    return {
+      pathname: "/(tabs)/kalendarz",
+      params: { date: eventDate, intent: String(Date.now()) },
+    };
+  }
+
+  return "/(tabs)/kalendarz";
+}
+
+function eventTypeFromNotificationTitle(title: string): string | null {
+  const normalized = title.trim().toLocaleLowerCase("pl-PL");
+
+  if (normalized.includes("finanse")) {
+    return "finance.changed";
+  }
+
+  const titleMap: Record<string, string> = {
+    "dane": "data.changed",
+    "do zrobienia": "todo.changed",
+    "dom": "household.changed",
+    "kalendarz": "calendar.changed",
+    "koszty roczne": "annual_cost.changed",
+    "plan posiłków": "meal.changed",
+    "pliki": "attachment.changed",
+    "sprzątanie": "cleaning.changed",
+    "uprawnienia": "permissions.changed",
+    "zakupy": "shopping.changed",
+  };
+
+  return titleMap[normalized] ?? null;
+}
+
 function NotificationCenterPanel({
   notificationItems,
   onClear,
   onClose,
   onOpenSettings,
+  onOpenStoredNotification,
   pushNotifications,
 }: {
   notificationItems: NotificationItem[];
   onClear: () => void;
   onClose: () => void;
   onOpenSettings: () => void;
+  onOpenStoredNotification: (notification: StoredNotification) => void;
   pushNotifications: StoredNotification[];
 }) {
   const theme = useAppTheme();
@@ -393,7 +503,11 @@ function NotificationCenterPanel({
         {pushNotifications.length > 0 ? (
           <>
             {pushNotifications.map((item) => (
-              <StoredNotificationRow item={item} key={item.id} />
+              <StoredNotificationRow
+                item={item}
+                key={item.id}
+                onPress={() => onOpenStoredNotification(item)}
+              />
             ))}
             <ActionButton
               onPress={onClear}
@@ -449,12 +563,28 @@ function NotificationRow({ item }: { item: NotificationItem }) {
   );
 }
 
-function StoredNotificationRow({ item }: { item: StoredNotification }) {
+function StoredNotificationRow({
+  item,
+  onPress,
+}: {
+  item: StoredNotification;
+  onPress: () => void;
+}) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
+  const isNavigable = Boolean(resolveStoredNotificationTarget(item));
 
   return (
-    <View style={styles.notificationRow}>
+    <Pressable
+      accessibilityLabel={`${item.title}. ${item.body}`}
+      accessibilityRole={isNavigable ? "button" : undefined}
+      disabled={!isNavigable}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.notificationRow,
+        pressed && styles.pressed,
+      ]}
+    >
       <View style={styles.notificationIcon}>
         <Bell color={theme.colors.primary} size={20} />
       </View>
@@ -467,7 +597,8 @@ function StoredNotificationRow({ item }: { item: StoredNotification }) {
           {formatDateTime(item.receivedAt)}
         </Text>
       </View>
-    </View>
+      {isNavigable ? <ChevronRight color={theme.colors.textMuted} size={20} /> : null}
+    </Pressable>
   );
 }
 
@@ -490,12 +621,14 @@ function NextEventCard({
       onPress={onPress}
       style={({ pressed }) => [styles.nextEventCard, pressed && styles.pressed]}
     >
+      <Image
+        resizeMode="contain"
+        source={calendarCardImage}
+        style={styles.nextEventImage}
+      />
       <Text style={styles.nextEventEyebrow}>PLAN DNIA</Text>
       <Text style={styles.nextEventTitle}>Najbliższe wydarzenie</Text>
       <View style={styles.nextEventBody}>
-        <View style={styles.nextEventIcon}>
-          <CalendarDays color={theme.colors.calendar} size={24} />
-        </View>
         <View style={styles.nextEventText}>
           <Text numberOfLines={1} style={styles.nextEventTime}>
             {eventDateTime}
@@ -576,21 +709,17 @@ function TodayOverviewGrid({
       <View style={styles.todayMiniColumn}>
         <MiniTodayCard
           accent={theme.colors.shopping}
+          caption={`${shoppingCount} ${productLabel(shoppingCount)}`}
           illustration={shoppingCardImage}
-          icon={<ShoppingCart color={theme.colors.shopping} size={20} />}
-          label={productLabel(shoppingCount)}
-          meta="na liście zakupów"
           onPress={onOpenShopping}
-          value={String(shoppingCount)}
+          title="Zakupy"
         />
         <MiniTodayCard
           accent={theme.colors.food}
+          caption={`${mealCount} ${mealLabel(mealCount)} na dziś`}
           illustration={mealCardImage}
-          icon={<Utensils color={theme.colors.food} size={20} />}
-          label={mealLabel(mealCount)}
-          meta="na dziś"
           onPress={onOpenMeals}
-          value={String(mealCount)}
+          title="Plan posiłków"
         />
       </View>
     </View>
@@ -599,26 +728,22 @@ function TodayOverviewGrid({
 
 function MiniTodayCard({
   accent,
+  caption,
   illustration,
-  icon,
-  label,
-  meta,
   onPress,
-  value,
+  title,
 }: {
   accent: string;
+  caption: string;
   illustration: ImageSourcePropType;
-  icon: ReactNode;
-  label: string;
-  meta: string;
   onPress: () => void;
-  value: string;
+  title: string;
 }) {
   const styles = createStyles(useAppTheme().colors);
 
   return (
     <Pressable
-      accessibilityLabel={`${value} ${label} ${meta}`}
+      accessibilityLabel={`${title}. ${caption}`}
       accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [
@@ -627,29 +752,16 @@ function MiniTodayCard({
         pressed && styles.pressed,
       ]}
     >
-      <View
-        pointerEvents="none"
-        style={[styles.miniTodayGlow, { backgroundColor: `${accent}1F` }]}
-      />
       <Image
         resizeMode="contain"
         source={illustration}
         style={styles.miniTodayImage}
       />
-      <View
-        style={[
-          styles.miniTodayIcon,
-          { backgroundColor: `${accent}26`, borderColor: `${accent}99` },
-        ]}
-      >
-        {icon}
-      </View>
-      <Text style={styles.miniTodayValue}>{value}</Text>
-      <Text numberOfLines={2} style={styles.miniTodayLabel}>
-        {label}
+      <Text numberOfLines={2} style={styles.miniTodayTitle}>
+        {title}
       </Text>
-      <Text numberOfLines={2} style={styles.miniTodayMeta}>
-        {meta}
+      <Text numberOfLines={2} style={[styles.miniTodayCaption, { color: accent }]}>
+        {caption}
       </Text>
     </Pressable>
   );
@@ -842,16 +954,17 @@ function createStyles(colors: AppPalette) {
       alignItems: "center",
       flexDirection: "row",
       gap: spacing.md,
-      marginTop: spacing.md,
+      marginTop: spacing.sm,
+      paddingRight: 116,
     },
     nextEventCard: {
-      backgroundColor: colors.overlay,
-      borderColor: colors.border,
-      borderRadius: radii.card,
+      backgroundColor: "#FFF9EF",
+      borderColor: "#E8DDCE",
+      borderRadius: 14,
       borderWidth: 1,
       elevation: 2,
       marginTop: spacing.sm,
-      minHeight: 138,
+      minHeight: 132,
       overflow: "hidden",
       padding: spacing.lg,
       shadowColor: "#000000",
@@ -860,18 +973,25 @@ function createStyles(colors: AppPalette) {
       shadowRadius: 28,
     },
     nextEventDetails: {
-      color: colors.textMuted,
+      color: "#5F5B52",
       fontSize: 13,
       fontWeight: "700",
       letterSpacing: 0,
       lineHeight: 18,
     },
     nextEventEyebrow: {
-      color: colors.primaryDark,
+      color: "#2C4E90",
       fontSize: 12,
       fontWeight: "900",
       letterSpacing: 0,
       textTransform: "uppercase",
+    },
+    nextEventImage: {
+      bottom: -12,
+      height: 132,
+      position: "absolute",
+      right: -10,
+      width: 142,
     },
     nextEventIcon: {
       alignItems: "center",
@@ -889,14 +1009,14 @@ function createStyles(colors: AppPalette) {
       minWidth: 0,
     },
     nextEventTime: {
-      color: colors.text,
+      color: "#1E1B16",
       fontSize: 18,
       fontWeight: "900",
       letterSpacing: 0,
       lineHeight: 23,
     },
     nextEventTitle: {
-      color: colors.text,
+      color: "#1E1B16",
       fontSize: 18,
       fontWeight: "900",
       letterSpacing: 0,
@@ -904,36 +1024,31 @@ function createStyles(colors: AppPalette) {
       marginTop: 4,
     },
     miniTodayCard: {
-      backgroundColor: "#101426",
-      borderRadius: 14,
+      backgroundColor: "#FFF9EF",
+      borderColor: "#E8DDCE",
+      borderRadius: 12,
       borderWidth: 1,
-      elevation: 5,
+      elevation: 3,
       flexBasis: 0,
       flex: 1,
-      justifyContent: "flex-start",
+      justifyContent: "space-between",
       minHeight: 98,
       minWidth: 0,
       overflow: "hidden",
-      padding: 10,
+      paddingHorizontal: 10,
+      paddingVertical: 10,
       position: "relative",
+      shadowColor: "#000000",
       shadowOffset: { height: 8, width: 0 },
-      shadowOpacity: 0.28,
-      shadowRadius: 18,
-    },
-    miniTodayGlow: {
-      borderRadius: 999,
-      bottom: -44,
-      height: 118,
-      position: "absolute",
-      right: -44,
-      width: 118,
+      shadowOpacity: 0.09,
+      shadowRadius: 16,
     },
     miniTodayImage: {
-      bottom: -18,
-      height: 104,
+      bottom: -8,
+      height: 82,
       position: "absolute",
-      right: -24,
-      width: 104,
+      right: -12,
+      width: 92,
     },
     miniTodayIcon: {
       alignItems: "center",
@@ -954,6 +1069,14 @@ function createStyles(colors: AppPalette) {
       maxWidth: 72,
       zIndex: 1,
     },
+    miniTodayCaption: {
+      fontSize: 10,
+      fontWeight: "800",
+      letterSpacing: 0,
+      lineHeight: 13,
+      maxWidth: 62,
+      zIndex: 1,
+    },
     miniTodayMeta: {
       color: "#C8D2EA",
       fontSize: 10,
@@ -969,6 +1092,15 @@ function createStyles(colors: AppPalette) {
       fontWeight: "900",
       letterSpacing: 0,
       lineHeight: 32,
+      zIndex: 1,
+    },
+    miniTodayTitle: {
+      color: "#171510",
+      fontSize: 11,
+      fontWeight: "900",
+      letterSpacing: 0,
+      lineHeight: 14,
+      maxWidth: 72,
       zIndex: 1,
     },
     todayMiniColumn: {

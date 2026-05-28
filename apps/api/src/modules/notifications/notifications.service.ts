@@ -272,6 +272,8 @@ export class NotificationsService {
     const messages = recipients.map((token) => ({
       body: input.title,
       data: {
+        eventDate: input.eventDate,
+        eventTime: input.eventTime ?? "",
         eventType: "calendar.changed",
         kind: "calendar-reminder",
       },
