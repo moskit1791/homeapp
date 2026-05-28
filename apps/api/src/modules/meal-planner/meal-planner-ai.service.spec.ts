@@ -133,6 +133,52 @@ describe('MealPlannerAiService', () => {
       weekday: 1
     });
   });
+
+  it('suggests meals from history and removes meals eaten in the last 30 days', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      geminiTextResponse(
+        JSON.stringify({
+          assistantMessage: 'Mam propozycje z historii i kilka alternatyw.',
+          entries: [
+            {
+              linkUrl: '',
+              mealName: 'spaghetti',
+              note: 'Niedawno jedzone, model nie powinien tego przepchnac.',
+              slotIndex: 1,
+              sourceHint: 'Historia domu',
+              weekday: 1
+            },
+            {
+              linkUrl: 'https://www.kwestiasmaku.com/przepis/dorsz-z-batatami',
+              mealName: 'dorsz z batatami',
+              note: 'Ryba pojawia sie regularnie w starszej historii.',
+              slotIndex: 1,
+              sourceHint: 'Kwestia Smaku',
+              weekday: 2
+            }
+          ],
+          insights: ['Dom lubi ryby, makarony i proste sniadania.'],
+          status: 'ready'
+        })
+      )
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const service = new MealPlannerAiService(createHistoryDatabase() as never);
+
+    const result = await service.suggestFromHistory('household-id', {
+      targetWeekStartDate: '2026-05-18'
+    });
+
+    expect(result.limitExhausted).toBe(false);
+    expect(result.recentMealNames).toContain('spaghetti');
+    expect(result.entries.map((entry) => entry.mealName)).toEqual(['dorsz z batatami']);
+
+    const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
+
+    expect(body.tools).toEqual([{ google_search: {} }]);
+    expect(body.contents[0]?.parts[0]?.text).toContain('Ostatnie 30 dni - zakazane');
+  });
 });
 
 function createDatabase() {
@@ -140,6 +186,45 @@ function createDatabase() {
     query: vi.fn(async (query: string) => {
       if (query.includes('meal_slots_per_day')) {
         return { rows: [{ meal_slots_per_day: 2 }] };
+      }
+
+      return { rows: [] };
+    })
+  };
+}
+
+function createHistoryDatabase() {
+  return {
+    query: vi.fn(async (query: string) => {
+      if (query.includes('meal_slots_per_day')) {
+        return { rows: [{ meal_slots_per_day: 2 }] };
+      }
+
+      if (query.includes('from meal_plan_entries mpe') && query.includes('served_on')) {
+        return {
+          rows: [
+            {
+              is_recent: true,
+              link_url: null,
+              meal_name: 'spaghetti',
+              note: null,
+              served_on: '2026-05-10',
+              slot_index: 1,
+              week_start_date: '2026-05-04',
+              weekday: 7
+            },
+            {
+              is_recent: false,
+              link_url: 'https://www.kwestiasmaku.com/przepis/dorsz-z-batatami',
+              meal_name: 'dorsz z batatami',
+              note: null,
+              served_on: '2026-03-20',
+              slot_index: 1,
+              week_start_date: '2026-03-16',
+              weekday: 5
+            }
+          ]
+        };
       }
 
       return { rows: [] };

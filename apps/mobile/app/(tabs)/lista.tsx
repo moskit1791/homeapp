@@ -38,6 +38,7 @@ import {
   moveShoppingItem,
   moveUncheckedShoppingToTomorrow,
   queryKeys,
+  suggestMealPlanWithAi,
   type MealPlanAiDraftEntry,
   type MealPlanAiMessage,
   type MealPlanEntry,
@@ -88,6 +89,7 @@ import shoppingCategoryBakeryImage from "../../assets/shopping-category-bakery.p
 import shoppingCategoryCareImage from "../../assets/shopping-category-care.png";
 import shoppingCategoryCleaningImage from "../../assets/shopping-category-cleaning.png";
 import shoppingCategoryDefaultImage from "../../assets/shopping-category-default.png";
+import shoppingCategoryDoneImage from "../../assets/shopping-category-done.png";
 import shoppingCategoryDrinksImage from "../../assets/shopping-category-drinks.png";
 import shoppingCategoryFamilyImage from "../../assets/shopping-category-family.png";
 import shoppingCategoryMeatImage from "../../assets/shopping-category-meat.png";
@@ -879,6 +881,7 @@ function MealsBoard({
   const [aiInput, setAiInput] = useState("");
   const [aiMessages, setAiMessages] = useState<MealPlanAiMessage[]>([]);
   const [aiDraft, setAiDraft] = useState<MealPlanAiDraftEntry[]>([]);
+  const [aiInsights, setAiInsights] = useState<string[]>([]);
   const [aiTargetWeekConfirmed, setAiTargetWeekConfirmed] = useState(false);
   const [aiTargetWeekStartDate, setAiTargetWeekStartDate] = useState(
     selectedWeekStartDate,
@@ -957,6 +960,10 @@ function MealsBoard({
   useEffect(() => {
     if (aiOpenRequest > handledAiOpenRequest) {
       setHandledAiOpenRequest(aiOpenRequest);
+      setAiDraft([]);
+      setAiInput("");
+      setAiInsights([]);
+      setAiMessages([]);
       setAiTargetWeekConfirmed(false);
       setAiTargetWeekStartDate(selectedWeekStartDate);
       setAiModalVisible(true);
@@ -1032,6 +1039,38 @@ function MealsBoard({
       await queryClient.invalidateQueries({ queryKey: queryKeys.start });
     },
   });
+  const aiSuggestMutation = useMutation({
+    mutationFn: async () => {
+      if (
+        !aiTargetWeekConfirmed ||
+        !isValidWeekStartDate(aiTargetWeekStartDate)
+      ) {
+        throw new Error("Missing AI target week");
+      }
+
+      return suggestMealPlanWithAi(
+        { targetWeekStartDate: aiTargetWeekStartDate },
+        { accessToken },
+      );
+    },
+    onSuccess: (response) => {
+      setAiDraft(response.entries);
+      setAiInsights(response.insights);
+      setAiMessages([
+        {
+          content: response.assistantMessage,
+          role: "assistant",
+        },
+      ]);
+      setAiInput("");
+      if (response.limitExhausted) {
+        setAiNotice(
+          "Limit AI jest wyczerpany. Aplikacja uzyla lokalnych propozycji z historii.",
+        );
+        setTimeout(() => setAiNotice(""), 3500);
+      }
+    },
+  });
   const aiChatMutation = useMutation({
     mutationFn: async () => {
       const content = aiInput.trim();
@@ -1090,22 +1129,29 @@ function MealsBoard({
       }
 
       if (!aiMessages.some((message) => message.role === "user")) {
-        throw new Error("Najpierw wyslij wiadomosc do AI.");
+        if (aiDraft.length === 0) {
+          throw new Error("Najpierw wygeneruj albo wpisz plan do AI.");
+        }
       }
 
-      const finalizeResponse = await finalizeMealPlanWithAi(
-        {
-          currentDraft: aiDraft,
-          messages: aiMessages,
-          targetWeekStartDate: aiTargetWeekStartDate,
-        },
-        { accessToken },
-      );
+      const hasUserMessage = aiMessages.some((message) => message.role === "user");
+      const finalizeResponse = hasUserMessage
+        ? await finalizeMealPlanWithAi(
+            {
+              currentDraft: aiDraft,
+              messages: aiMessages,
+              targetWeekStartDate: aiTargetWeekStartDate,
+            },
+            { accessToken },
+          )
+        : {
+            entries: aiDraft,
+            limitExhausted: false,
+          };
 
       if (finalizeResponse.entries.length === 0) {
         throw new Error(
-          finalizeResponse.assistantMessage ||
-            "AI nie przygotowalo planu do zapisu.",
+          "AI nie przygotowalo planu do zapisu.",
         );
       }
 
@@ -1145,6 +1191,7 @@ function MealsBoard({
       setAiInput("");
       setAiMessages([]);
       setAiDraft([]);
+      setAiInsights([]);
       setAiTargetWeekConfirmed(false);
       setAiNotice(
         limitExhausted
@@ -1176,7 +1223,14 @@ function MealsBoard({
     aiTargetWeekConfirmed &&
     isValidWeekStartDate(aiTargetWeekStartDate) &&
     aiInput.trim().length >= 3 &&
-    !aiChatMutation.isPending;
+    !aiChatMutation.isPending &&
+    !aiSuggestMutation.isPending;
+  const canSuggestAi =
+    aiTargetWeekConfirmed &&
+    isValidWeekStartDate(aiTargetWeekStartDate) &&
+    !aiChatMutation.isPending &&
+    !aiSaveMutation.isPending &&
+    !aiSuggestMutation.isPending;
   const hasAiConversation =
     aiDraft.length > 0 ||
     aiMessages.some((message) => message.role === "assistant");
@@ -1187,6 +1241,7 @@ function MealsBoard({
     isValidWeekStartDate(aiTargetWeekStartDate) &&
     hasAiConversation &&
     !aiChatMutation.isPending &&
+    !aiSuggestMutation.isPending &&
     !aiSaveMutation.isPending;
   const aiDraftGroups = groupMealDraftEntries(aiDraft);
 
@@ -1589,6 +1644,13 @@ function MealsBoard({
       <FormModal
         footer={
           <View style={styles.aiFooter}>
+            <ActionButton
+              disabled={!canSuggestAi}
+              loading={aiSuggestMutation.isPending}
+              onPress={() => aiSuggestMutation.mutate()}
+              title="Proponuj z historii"
+              variant="secondary"
+            />
             <View style={styles.modalFooter}>
               <ActionButton
                 onPress={() => setAiModalVisible(false)}
@@ -1641,6 +1703,17 @@ function MealsBoard({
         />
         {!aiTargetWeekConfirmed ? (
           <InlineAlert text="Wybierz tydzien, do ktorego AI ma przygotowac i zapisac plan posilkow." />
+        ) : null}
+
+        {aiInsights.length > 0 ? (
+          <View style={styles.aiInsightCard}>
+            <Text style={styles.groupTitle}>Co AI znalazlo w historii</Text>
+            {aiInsights.map((insight, index) => (
+              <Text key={`${insight}-${index}`} style={styles.itemMeta}>
+                {insight}
+              </Text>
+            ))}
+          </View>
         ) : null}
 
         {aiMessages.length > 0 ? (
@@ -1732,6 +1805,15 @@ function MealsBoard({
             )}
           />
         ) : null}
+        {aiSuggestMutation.error ? (
+          <InlineAlert
+            tone="error"
+            text={getMealAiErrorText(
+              aiSuggestMutation.error,
+              "AI nie przygotowalo propozycji z historii.",
+            )}
+          />
+        ) : null}
         {aiSaveMutation.error ? (
           <InlineAlert
             tone="error"
@@ -1771,7 +1853,7 @@ function ShoppingGroupCard({
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
-  const illustration = getShoppingGroupIllustration(group.category);
+  const illustration = getShoppingGroupIllustration(group.category, group.title);
 
   return (
     <View style={styles.shoppingGroup}>
@@ -1836,11 +1918,13 @@ function ShoppingGroupCard({
             </View>
           ))}
         </View>
-        <Image
-          resizeMode="contain"
-          source={illustration}
-          style={styles.groupIllustration}
-        />
+        <View style={styles.groupIllustrationFrame}>
+          <Image
+            resizeMode="contain"
+            source={illustration}
+            style={styles.groupIllustration}
+          />
+        </View>
       </View>
     </View>
   );
@@ -1961,8 +2045,12 @@ const legacyShoppingCategoryMap: Record<string, ShoppingCategory> = {
 
 function groupShoppingItems(items: ShoppingItem[]): ShoppingGroup[] {
   const groups = new Map<ShoppingCategory, ShoppingGroup>();
+  const orderedCategories: ShoppingCategory[] = [
+    ...SHOPPING_CATEGORIES.filter((category) => category !== "Inne"),
+    "Inne",
+  ];
 
-  SHOPPING_CATEGORIES.forEach((category) => {
+  orderedCategories.forEach((category) => {
     const meta = getShoppingCategoryMeta(category);
     groups.set(category, {
       category,
@@ -1981,7 +2069,14 @@ function groupShoppingItems(items: ShoppingItem[]): ShoppingGroup[] {
   return [...groups.values()].filter((group) => group.items.length > 0);
 }
 
-function getShoppingGroupIllustration(category: ShoppingCategory): ImageSourcePropType {
+function getShoppingGroupIllustration(
+  category: ShoppingCategory,
+  title?: string,
+): ImageSourcePropType {
+  if (title === "Kupione") {
+    return shoppingCategoryDoneImage;
+  }
+
   switch (category) {
     case "Alkohole":
     case "Kawa i herbata":
@@ -2385,11 +2480,22 @@ function weekdayShort(day: number): string {
 }
 
 function createStyles(colors: AppPalette) {
+  const isDark = colors.background === "#0C1220";
+  const shoppingCardBackground = isDark ? colors.card : "#FFFFFF";
+  const shoppingCardBorder = isDark ? colors.border : "#E8DDCE";
+  const shoppingHeaderBackground = isDark ? colors.cardMuted : "#F5F0E6";
+  const shoppingRowBorder = isDark ? colors.line : "#EFE5D4";
+  const shoppingText = isDark ? colors.text : "#2B2821";
+  const shoppingMetaText = isDark ? colors.textMuted : "#7E7667";
+  const shoppingMutedText = isDark ? colors.textSubtle : "#8B8478";
+  const shoppingCountBackground = isDark ? colors.field : "#E7E0C8";
+  const shoppingCountText = isDark ? colors.text : "#4E5435";
+
   return StyleSheet.create({
     checkBox: {
       alignItems: "center",
-      backgroundColor: "#FFFCF5",
-      borderColor: "#CFC5B3",
+      backgroundColor: isDark ? colors.field : "#FFFCF5",
+      borderColor: isDark ? colors.border : "#CFC5B3",
       borderRadius: 999,
       borderWidth: 1,
       height: 22,
@@ -2422,6 +2528,14 @@ function createStyles(colors: AppPalette) {
       height: 38,
       justifyContent: "center",
       width: 38,
+    },
+    aiInsightCard: {
+      backgroundColor: colors.cardMuted,
+      borderColor: colors.border,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      gap: spacing.xs,
+      padding: spacing.md,
     },
     aiChatBubble: {
       alignSelf: "flex-start",
@@ -2584,15 +2698,14 @@ function createStyles(colors: AppPalette) {
       width: 44,
     },
     groupBody: {
-      alignItems: "center",
+      alignItems: "stretch",
       flexDirection: "row",
       gap: spacing.sm,
-      minHeight: 52,
-      position: "relative",
+      minHeight: 66,
     },
     groupCountPill: {
       alignItems: "center",
-      backgroundColor: "#E7E0C8",
+      backgroundColor: shoppingCountBackground,
       borderRadius: 999,
       justifyContent: "center",
       minHeight: 22,
@@ -2600,7 +2713,7 @@ function createStyles(colors: AppPalette) {
       paddingHorizontal: 9,
     },
     groupCountText: {
-      color: "#4E5435",
+      color: shoppingCountText,
       fontSize: 11,
       fontWeight: "900",
       letterSpacing: 0,
@@ -2615,19 +2728,30 @@ function createStyles(colors: AppPalette) {
     },
     groupHeader: {
       alignItems: "center",
+      backgroundColor: shoppingHeaderBackground,
+      borderBottomColor: shoppingRowBorder,
+      borderBottomWidth: 1,
       flexDirection: "row",
       justifyContent: "space-between",
+      marginHorizontal: -spacing.sm,
+      marginTop: -spacing.sm,
+      minHeight: 38,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.sm,
     },
     groupItems: {
       flex: 1,
-      gap: spacing.xs,
-      paddingRight: 70,
+      gap: 0,
+      minWidth: 0,
+    },
+    groupIllustrationFrame: {
+      alignItems: "center",
+      alignSelf: "stretch",
+      justifyContent: "center",
+      width: 92,
     },
     groupIllustration: {
-      bottom: -8,
-      height: 78,
-      position: "absolute",
-      right: -8,
+      height: 84,
       width: 92,
     },
     groupList: {
@@ -2956,8 +3080,8 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
     },
     shoppingGroup: {
-      backgroundColor: "#FFF9EF",
-      borderColor: "#E8DDCE",
+      backgroundColor: shoppingCardBackground,
+      borderColor: shoppingCardBorder,
       borderRadius: 12,
       borderWidth: 1,
       elevation: 2,
@@ -2970,24 +3094,24 @@ function createStyles(colors: AppPalette) {
       shadowRadius: 18,
     },
     shoppingGroupTitle: {
-      color: "#28251D",
+      color: shoppingText,
       fontSize: 13,
       fontWeight: "900",
       letterSpacing: 0,
     },
     shoppingItemDone: {
-      color: "#8B8478",
+      color: shoppingMutedText,
       textDecorationLine: "line-through",
     },
     shoppingItemMeta: {
-      color: "#7E7667",
+      color: shoppingMetaText,
     },
     shoppingItemName: {
-      color: "#2B2821",
+      color: shoppingText,
       fontWeight: "800",
     },
     shoppingItemRow: {
-      borderBottomColor: "#EFE5D4",
+      borderBottomColor: shoppingRowBorder,
       borderBottomWidth: 1,
       minHeight: 33,
       paddingRight: spacing.xs,

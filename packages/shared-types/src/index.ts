@@ -100,7 +100,6 @@ export const SHOPPING_CATEGORIES = [
   'Dziecko',
   'Elektronika',
   'Higiena',
-  'Inne',
   'Kawa i herbata',
   'Konserwy i przetwory',
   'Mięso i wędliny',
@@ -117,7 +116,8 @@ export const SHOPPING_CATEGORIES = [
   'Środki czystości',
   'Ubrania',
   'Wege',
-  'Woda i napoje'
+  'Woda i napoje',
+  'Inne'
 ] as const;
 
 export type ShoppingCategory = (typeof SHOPPING_CATEGORIES)[number];
@@ -197,7 +197,12 @@ export const SHOPPING_PRODUCT_CATALOG = [
   shoppingProduct('chleb', 'Pieczywo'),
   shoppingProduct('papier toaletowy', 'Środki czystości'),
   shoppingProduct('woda', 'Woda i napoje'),
-  shoppingProduct('pomidory', 'Owoce, warzywa i zioła', ['pomidor']),
+  shoppingProduct('pomidory', 'Owoce, warzywa i zioła', [
+    'pomidor',
+    'pomidorek',
+    'pomidorki',
+    'pomidorki koktajlowe'
+  ]),
   shoppingProduct('pieczywo', 'Pieczywo'),
   shoppingProduct('ser żółty', 'Nabiał i jaja'),
   shoppingProduct('piwo', 'Alkohole'),
@@ -290,7 +295,7 @@ export const SHOPPING_PRODUCT_CATALOG = [
   shoppingProduct('bagietka', 'Pieczywo'),
   shoppingProduct('paluszki', 'Słodycze i przekąski'),
   shoppingProduct('chrzan', 'Przyprawy, sosy i oleje'),
-  shoppingProduct('mozzarella', 'Nabiał i jaja'),
+  shoppingProduct('mozzarella', 'Nabiał i jaja', ['mozarella', 'mozarela']),
   shoppingProduct('parmezan', 'Nabiał i jaja'),
   shoppingProduct('tabletki do zmywarki', 'Środki czystości'),
   shoppingProduct('rukola', 'Owoce, warzywa i zioła'),
@@ -541,12 +546,12 @@ const SHOPPING_CATEGORY_KEYWORD_RULES: readonly ShoppingKeywordRule[] = [
   {
     category: 'Nabiał i jaja',
     pattern:
-      /\b(mleko|jaj|jogurt|kefir|maslank|ser|twarog|serek|maslo|smietan|mozzarell|feta|burrat|skyr|actimel|camembert)\b/
+      /\b(mleko|jaj|jogurt|kefir|maslank|ser|twarog|serek|maslo|smietan|mozzarell|mozarell|feta|burrat|skyr|actimel|camembert)\b/
   },
   {
     category: 'Owoce, warzywa i zioła',
     pattern:
-      /\b(pomidor|ogorek|salat|papryk|marchew|ziemni|cebula|czosn|warzyw|brokul|kalaf|kapust|cukini|awokado|pieczark|boczniak|rukol|szpinak|banan|jabl|granat|grusz|cytryn|limonk|owoc|truskawk|malin|borow|winogron|pomarancz|mandaryn|kiwi|pietruszk|szczypior|por|seler|bazyl|koperek|ananas|baklazan|roszpon|bruksel|fasolk)\b/
+      /\b(pomidor[a-z]*|pomidork[a-z]*|ogorek|salat|papryk|marchew|ziemni|cebula|czosn|warzyw|brokul|kalaf|kapust|cukini|awokado|pieczark|boczniak|rukol|szpinak|banan|jabl|granat|grusz|cytryn|limonk|owoc|truskawk|malin|borow|winogron|pomarancz|mandaryn|kiwi|pietruszk|szczypior|por|seler|bazyl|koperek|ananas|baklazan|roszpon|bruksel|fasolk)\b/
   },
   { category: 'Papiernicze', pattern: /\b(zeszyt|dlugopis|olowek|papiernicz|blok|notes)\b/ },
   {

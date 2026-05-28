@@ -7,7 +7,11 @@ import {
 import { z } from 'zod';
 import { loadEnv } from '../../shared/env';
 import { DatabaseService } from '../database/database.service';
-import { MealPlanAiChatDto, MealPlanAiDraftEntryDto } from './dto/meal-planner.dto';
+import {
+  MealPlanAiChatDto,
+  MealPlanAiDraftEntryDto,
+  MealPlanAiSuggestDto
+} from './dto/meal-planner.dto';
 
 const mealPlanAiEntrySchema = z.object({
   confidence: z.number().optional(),
@@ -41,6 +45,15 @@ const mealPlanLinkSearchResponseSchema = z.object({
     })
   )
 });
+
+const mealPlanAiSuggestionResponseSchema = z.object({
+  assistantMessage: z.string(),
+  entries: z.array(mealPlanAiEntrySchema),
+  insights: z.array(z.string()),
+  status: z.enum(['ready', 'needs_more_history'])
+});
+
+type MealPlanAiSuggestionResponse = z.infer<typeof mealPlanAiSuggestionResponseSchema>;
 
 const mealPlanAiResponseJsonSchema = {
   properties: {
@@ -266,6 +279,63 @@ export class MealPlannerAiService {
       )),
       limitExhausted: false
     };
+  }
+
+  async suggestFromHistory(
+    householdId: string,
+    dto: MealPlanAiSuggestDto
+  ): Promise<MealPlanAiSuggestionResult> {
+    if (!isMondayDateOnly(dto.targetWeekStartDate)) {
+      throw new BadRequestException('Meal plan AI target week is required');
+    }
+
+    const targetWeekStartDate = dto.targetWeekStartDate;
+    const [mealSlotsPerDay, knownRecipes, history] = await Promise.all([
+      this.getMealSlotsPerDay(householdId),
+      this.listKnownRecipes(householdId),
+      this.listMealHistoryForSuggestions(householdId)
+    ]);
+
+    try {
+      const responseText = await this.callGemini(
+        this.buildHistorySuggestionPrompt({
+          history,
+          knownRecipes,
+          mealSlotsPerDay,
+          targetWeekStartDate
+        }),
+        { useGoogleSearch: true }
+      );
+      const response = this.normalizeSuggestionResponse(
+        this.parseSuggestionResponse(responseText),
+        {
+          history,
+          knownRecipes,
+          mealSlotsPerDay,
+          targetWeekStartDate
+        }
+      );
+
+      return {
+        ...response,
+        limitExhausted: false
+      };
+    } catch (error) {
+      if (!isGeminiRateLimitError(error)) {
+        this.logger.warn(
+          `Gemini meal history suggestions fallback used: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
+
+      return this.buildHistorySuggestionFallback({
+        history,
+        limitExhausted: isGeminiRateLimitError(error),
+        mealSlotsPerDay,
+        targetWeekStartDate
+      });
+    }
   }
 
   private async buildLimitFallbackResponse(
@@ -755,6 +825,170 @@ export class MealPlannerAiService {
     }));
   }
 
+  private async listMealHistoryForSuggestions(householdId: string): Promise<MealHistoryEntry[]> {
+    const result = await this.database.query<MealHistoryRow>(
+      `
+        select
+          mpe.meal_name,
+          mpe.link_url,
+          mpe.note,
+          mpe.weekday,
+          mpe.slot_index,
+          mpw.week_start_date,
+          (mpw.week_start_date + ((mpe.weekday - 1) * interval '1 day'))::date as served_on,
+          (
+            (mpw.week_start_date + ((mpe.weekday - 1) * interval '1 day'))::date
+              >= (current_date - interval '30 days')::date
+          ) as is_recent
+        from meal_plan_entries mpe
+        join meal_plan_weeks mpw on mpw.id = mpe.meal_plan_week_id
+        where mpw.household_id = $1
+          and btrim(mpe.meal_name) <> ''
+          and (mpw.week_start_date + ((mpe.weekday - 1) * interval '1 day'))::date <= current_date
+        order by served_on desc, mpe.weekday asc, mpe.slot_index asc
+        limit 500
+      `,
+      [householdId]
+    );
+
+    return result.rows.map((row) => ({
+      isRecent: Boolean(row.is_recent),
+      linkUrl: row.link_url,
+      mealName: row.meal_name,
+      note: row.note,
+      servedOn: formatDateOnlyValue(row.served_on),
+      slotIndex: row.slot_index,
+      weekStartDate: formatDateOnlyValue(row.week_start_date),
+      weekday: row.weekday
+    }));
+  }
+
+  private parseSuggestionResponse(responseText: string): MealPlanAiSuggestionResponse {
+    try {
+      return mealPlanAiSuggestionResponseSchema.parse(parseJsonResponse(responseText));
+    } catch (error) {
+      this.logger.warn(
+        `Invalid Gemini meal suggestion JSON: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      throw new ServiceUnavailableException('Meal plan AI returned invalid suggestions');
+    }
+  }
+
+  private normalizeSuggestionResponse(
+    response: MealPlanAiSuggestionResponse,
+    input: {
+      history: MealHistoryEntry[];
+      knownRecipes: KnownMealRecipe[];
+      mealSlotsPerDay: number;
+      targetWeekStartDate: string;
+    }
+  ): Omit<MealPlanAiSuggestionResult, 'limitExhausted'> {
+    const entries = applyKnownRecipeLinks(
+      filterRecentlyEatenEntries(
+        normalizeDraftEntries(response.entries, input.mealSlotsPerDay),
+        input.history
+      ),
+      input.knownRecipes
+    );
+    const recentMealNames = getUniqueRecentMealNames(input.history);
+    const assistantMessage = trimToLength(response.assistantMessage, 700) ||
+      buildDefaultHistorySuggestionMessage(entries);
+
+    return {
+      assistantMessage,
+      entries,
+      excludedRecentDays: 30,
+      insights: normalizeInsights(response.insights, input.history, entries.length),
+      recentMealNames,
+      status: entries.length > 0
+        ? 'ready'
+        : response.status === 'needs_more_history'
+          ? 'needs_more_history'
+          : 'ready',
+      targetWeekStartDate: input.targetWeekStartDate
+    };
+  }
+
+  private buildHistorySuggestionFallback(input: {
+    history: MealHistoryEntry[];
+    limitExhausted: boolean;
+    mealSlotsPerDay: number;
+    targetWeekStartDate: string;
+  }): MealPlanAiSuggestionResult {
+    const entries = buildLocalHistorySuggestions(input.history, input.mealSlotsPerDay);
+    const recentMealNames = getUniqueRecentMealNames(input.history);
+
+    return {
+      assistantMessage: entries.length > 0
+        ? input.limitExhausted
+          ? 'Limit AI jest teraz wyczerpany. Przygotowalem lokalne propozycje z historii domu, z pominieciem ostatnich 30 dni.'
+          : 'AI nie odpowiedzialo poprawnie. Przygotowalem lokalne propozycje z historii domu, z pominieciem ostatnich 30 dni.'
+        : 'Nie mam jeszcze dosc starszej historii posilkow, zeby bezpiecznie zaproponowac plan po odjeciu ostatnich 30 dni.',
+      entries,
+      excludedRecentDays: 30,
+      insights: normalizeInsights([], input.history, entries.length),
+      limitExhausted: input.limitExhausted,
+      recentMealNames,
+      status: entries.length > 0
+        ? input.limitExhausted
+          ? 'limit_exhausted'
+          : 'ready'
+        : 'needs_more_history',
+      targetWeekStartDate: input.targetWeekStartDate
+    };
+  }
+
+  private buildHistorySuggestionPrompt(input: {
+    history: MealHistoryEntry[];
+    knownRecipes: KnownMealRecipe[];
+    mealSlotsPerDay: number;
+    targetWeekStartDate: string;
+  }): string {
+    const payload = buildHistoryPromptPayload(input.history);
+
+    return [
+      'Jestes asystentem AI planu posilkow dla polskiego domu.',
+      'Masz przeanalizowac historie jedzenia domownikow, znalezc rytm i upodobania, a potem zaproponowac plan posilkow.',
+      'Masz wlaczone Google Search. Uzyj internetu do dobrania nowych alternatyw, ktore pasuja do wzorcow z historii.',
+      '',
+      'Cel:',
+      `- Przygotuj propozycje na tydzien zaczynajacy sie ${input.targetWeekStartDate}.`,
+      `- W domu sa ${input.mealSlotsPerDay} sloty posilkow dziennie, slotIndex od 0 do ${input.mealSlotsPerDay - 1}.`,
+      '- Wypelnij mozliwie caly tydzien: weekday 1..7, slotIndex wedlug liczby slotow.',
+      '- Zachowaj styl domu: czeste sniadania, obiady, powtarzalne zestawy i ulubione zrodla przepisow.',
+      '',
+      'Twarde zasady wykluczenia:',
+      '- Nie proponuj zadnego posilku, ktory byl jedzony w ostatnich 30 dniach.',
+      '- Nie proponuj tez bliskich wariantow tej samej nazwy, np. jesli niedawno bylo spaghetti, nie dawaj spaghetti bolognese.',
+      '- Lista ostatnich 30 dni ponizej jest zakazana nawet wtedy, gdy jest bardzo popularna w historii.',
+      '',
+      'Zasady internetu:',
+      '- Oprocz propozycji z historii dodaj alternatywy z internetu, ale tylko takie, ktore pasuja do upodoban domu.',
+      '- Szukaj realnych publicznych przepisow. Preferuj polskie zrodla, np. Kwestia Smaku, AniaGotuje, Przepisy.pl, Cookidoo, Knorr, Moje Wypieki albo sensowne publiczne przepisy.',
+      '- linkUrl wypelnij tylko realnym URL-em do konkretnego przepisu lub posta. Nie wymyslaj adresow.',
+      '- W sourceHint wpisz zrodlo lub "Historia domu".',
+      '- W note napisz jedno krotkie uzasadnienie: jaki wzorzec z historii lub jaka alternatywa z internetu.',
+      '',
+      'Odpowiedz wylacznie JSON-em:',
+      '{"status":"ready","assistantMessage":"...","insights":["..."],"entries":[{"weekday":1,"slotIndex":0,"mealName":"...","linkUrl":"https://...","note":"...","sourceHint":"..."}]}',
+      'status ustaw na "needs_more_history" tylko gdy historia jest zbyt mala i nie da sie sensownie zaproponowac planu.',
+      '',
+      'Ostatnie 30 dni - zakazane:',
+      JSON.stringify(payload.recentMeals),
+      '',
+      'Najczestsze starsze posilki i wzorce:',
+      JSON.stringify(payload.frequentMeals),
+      '',
+      'Starsza historia do analizy:',
+      JSON.stringify(payload.olderMeals),
+      '',
+      'Znane przepisy z linkami z domu:',
+      input.knownRecipes.length > 0 ? JSON.stringify(input.knownRecipes) : '[]'
+    ].join('\n');
+  }
+
   private buildPrompt(input: {
     currentDraft: MealPlanAiDraftEntry[];
     knownRecipes: KnownMealRecipe[];
@@ -964,6 +1198,213 @@ function improveLinkAssistantMessage(
   return `${assistantMessage} Uzupelnilem ${linkedCount} linkow do przepisow.`;
 }
 
+function buildHistoryPromptPayload(history: MealHistoryEntry[]): {
+  frequentMeals: MealHistoryFrequency[];
+  olderMeals: MealHistoryPromptMeal[];
+  recentMeals: MealHistoryPromptMeal[];
+} {
+  const recentMeals = history
+    .filter((entry) => entry.isRecent)
+    .slice(0, 120)
+    .map(toHistoryPromptMeal);
+  const olderMeals = history
+    .filter((entry) => !entry.isRecent)
+    .slice(0, 220)
+    .map(toHistoryPromptMeal);
+
+  return {
+    frequentMeals: buildMealFrequency(history.filter((entry) => !entry.isRecent)).slice(0, 80),
+    olderMeals,
+    recentMeals
+  };
+}
+
+function toHistoryPromptMeal(entry: MealHistoryEntry): MealHistoryPromptMeal {
+  return {
+    linkUrl: entry.linkUrl ?? '',
+    mealName: entry.mealName,
+    note: entry.note ?? '',
+    servedOn: entry.servedOn,
+    slotIndex: entry.slotIndex,
+    weekday: entry.weekday
+  };
+}
+
+function buildMealFrequency(history: MealHistoryEntry[]): MealHistoryFrequency[] {
+  const groups = new Map<string, MealHistoryFrequency>();
+
+  for (const entry of history) {
+    const key = normalizeText(entry.mealName);
+
+    if (!key) {
+      continue;
+    }
+
+    const current = groups.get(key);
+
+    if (!current) {
+      groups.set(key, {
+        count: 1,
+        lastServedOn: entry.servedOn,
+        linkUrl: entry.linkUrl ?? '',
+        mealName: entry.mealName,
+        slotIndexes: [entry.slotIndex],
+        weekdays: [entry.weekday]
+      });
+      continue;
+    }
+
+    current.count += 1;
+    current.lastServedOn = current.lastServedOn > entry.servedOn
+      ? current.lastServedOn
+      : entry.servedOn;
+
+    if (!current.linkUrl && entry.linkUrl) {
+      current.linkUrl = entry.linkUrl;
+    }
+
+    if (!current.weekdays.includes(entry.weekday)) {
+      current.weekdays.push(entry.weekday);
+    }
+
+    if (!current.slotIndexes.includes(entry.slotIndex)) {
+      current.slotIndexes.push(entry.slotIndex);
+    }
+  }
+
+  return [...groups.values()].sort(
+    (left, right) => right.count - left.count || right.lastServedOn.localeCompare(left.lastServedOn)
+  );
+}
+
+function filterRecentlyEatenEntries(
+  entries: MealPlanAiDraftEntry[],
+  history: MealHistoryEntry[]
+): MealPlanAiDraftEntry[] {
+  return normalizeDraftEntries(
+    entries.filter((entry) => !isRecentlyEatenMeal(entry.mealName, history)),
+    8
+  );
+}
+
+function isRecentlyEatenMeal(mealName: string, history: MealHistoryEntry[]): boolean {
+  return history
+    .filter((entry) => entry.isRecent)
+    .some((recent) => areRecipeTitlesMatching(mealName, recent.mealName));
+}
+
+function getUniqueRecentMealNames(history: MealHistoryEntry[]): string[] {
+  const names = new Map<string, string>();
+
+  for (const entry of history.filter((item) => item.isRecent)) {
+    const key = normalizeText(entry.mealName);
+
+    if (key && !names.has(key)) {
+      names.set(key, entry.mealName);
+    }
+  }
+
+  return [...names.values()].slice(0, 80);
+}
+
+function normalizeInsights(
+  insights: string[],
+  history: MealHistoryEntry[],
+  entriesCount: number
+): string[] {
+  const cleaned = insights
+    .map((insight) => trimToLength(insight, 220))
+    .filter(Boolean)
+    .slice(0, 5);
+
+  if (cleaned.length > 0) {
+    return cleaned;
+  }
+
+  const frequent = buildMealFrequency(history.filter((entry) => !entry.isRecent)).slice(0, 3);
+  const fallback: string[] = [];
+
+  if (frequent.length > 0) {
+    fallback.push(
+      `Najmocniejsze starsze wzorce: ${frequent.map((item) => item.mealName).join(', ')}.`
+    );
+  }
+
+  fallback.push('Posilki z ostatnich 30 dni zostaly potraktowane jako zakazane.');
+
+  if (entriesCount === 0) {
+    fallback.push('Brakuje starszych kandydatow po odjeciu ostatnich 30 dni.');
+  }
+
+  return fallback.slice(0, 5);
+}
+
+function buildLocalHistorySuggestions(
+  history: MealHistoryEntry[],
+  mealSlotsPerDay: number
+): MealPlanAiDraftEntry[] {
+  const frequencies = buildMealFrequency(
+    history.filter((entry) => !entry.isRecent && !isRecentlyEatenMeal(entry.mealName, history))
+  );
+  const usedNames = new Set<string>();
+  const entries: MealPlanAiDraftEntry[] = [];
+
+  for (let weekday = 1; weekday <= 7; weekday += 1) {
+    for (let slotIndex = 0; slotIndex < mealSlotsPerDay; slotIndex += 1) {
+      const candidate = pickHistoryFrequency(frequencies, weekday, slotIndex, usedNames);
+
+      if (!candidate) {
+        continue;
+      }
+
+      usedNames.add(normalizeText(candidate.mealName));
+      entries.push({
+        linkUrl: normalizeUrl(candidate.linkUrl),
+        mealName: candidate.mealName,
+        note: `Pasuje do historii domu. Ostatnio starsze niz 30 dni: ${candidate.lastServedOn}.`,
+        slotIndex,
+        sourceHint: 'Historia domu',
+        weekday
+      });
+    }
+  }
+
+  return normalizeDraftEntries(entries, mealSlotsPerDay);
+}
+
+function pickHistoryFrequency(
+  frequencies: MealHistoryFrequency[],
+  weekday: number,
+  slotIndex: number,
+  usedNames: Set<string>
+): MealHistoryFrequency | null {
+  const scored = frequencies
+    .filter((item) => !usedNames.has(normalizeText(item.mealName)))
+    .map((item) => ({
+      item,
+      score:
+        item.count * 3 +
+        (item.slotIndexes.includes(slotIndex) ? 8 : 0) +
+        (item.weekdays.includes(weekday) ? 5 : 0) +
+        Math.min(4, item.weekdays.length)
+    }))
+    .sort((left, right) =>
+      right.score - left.score ||
+      right.item.lastServedOn.localeCompare(left.item.lastServedOn) ||
+      left.item.mealName.localeCompare(right.item.mealName)
+    );
+
+  return scored[0]?.item ?? null;
+}
+
+function buildDefaultHistorySuggestionMessage(entries: MealPlanAiDraftEntry[]): string {
+  if (entries.length === 0) {
+    return 'Nie mam jeszcze wystarczajacej historii po odjeciu ostatnich 30 dni.';
+  }
+
+  return `Przygotowalem ${entries.length} propozycji na podstawie historii domu i blokady ostatnich 30 dni.`;
+}
+
 function areRecipeTitlesMatching(left: string, right: string): boolean {
   const normalizedLeft = normalizeText(left);
   const normalizedRight = normalizeText(right);
@@ -1067,7 +1508,12 @@ function parseJsonResponse(value: string): unknown {
 }
 
 function normalizeDraftEntries(
-  entries: Array<MealPlanAiDraftEntryDto | MealPlanAiResponse['entries'][number]>,
+  entries: Array<
+    | MealPlanAiDraftEntry
+    | MealPlanAiDraftEntryDto
+    | MealPlanAiResponse['entries'][number]
+    | MealPlanAiSuggestionResponse['entries'][number]
+  >,
   mealSlotsPerDay: number
 ): MealPlanAiDraftEntry[] {
   const bySlot = new Map<string, MealPlanAiDraftEntry>();
@@ -1275,6 +1721,14 @@ function normalizeUrl(value: string | null | undefined): string | null {
   }
 }
 
+function formatDateOnlyValue(value: Date | string): string {
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10);
+  }
+
+  return String(value).slice(0, 10);
+}
+
 function isMondayDateOnly(value: string | null | undefined): value is string {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     return false;
@@ -1344,6 +1798,17 @@ export interface MealPlanAiChatResult {
   targetWeekStartDate: string;
 }
 
+export interface MealPlanAiSuggestionResult {
+  assistantMessage: string;
+  entries: MealPlanAiDraftEntry[];
+  excludedRecentDays: number;
+  insights: string[];
+  limitExhausted: boolean;
+  recentMealNames: string[];
+  status: 'ready' | 'needs_more_history' | 'limit_exhausted';
+  targetWeekStartDate: string;
+}
+
 interface KnownMealRecipe {
   linkUrl: string;
   note: string;
@@ -1357,6 +1822,46 @@ interface KnownMealRecipeRow {
   source: string;
   title: string;
   updated_at: string;
+}
+
+interface MealHistoryEntry {
+  isRecent: boolean;
+  linkUrl: string | null;
+  mealName: string;
+  note: string | null;
+  servedOn: string;
+  slotIndex: number;
+  weekStartDate: string;
+  weekday: number;
+}
+
+interface MealHistoryRow {
+  is_recent: boolean;
+  link_url: string | null;
+  meal_name: string;
+  note: string | null;
+  served_on: Date | string;
+  slot_index: number;
+  week_start_date: Date | string;
+  weekday: number;
+}
+
+interface MealHistoryFrequency {
+  count: number;
+  lastServedOn: string;
+  linkUrl: string;
+  mealName: string;
+  slotIndexes: number[];
+  weekdays: number[];
+}
+
+interface MealHistoryPromptMeal {
+  linkUrl: string;
+  mealName: string;
+  note: string;
+  servedOn: string;
+  slotIndex: number;
+  weekday: number;
 }
 
 interface GeminiContent {

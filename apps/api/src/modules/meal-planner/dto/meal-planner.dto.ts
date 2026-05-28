@@ -143,6 +143,11 @@ export class MealPlanAiChatDto {
 
 export class MealPlanAiFinalizeDto extends MealPlanAiChatDto {}
 
+export class MealPlanAiSuggestDto {
+  @IsDateString({ strict: true })
+  targetWeekStartDate!: string;
+}
+
 export class CopyMealPlanDto {
   @IsDateString({ strict: true })
   targetWeekStartDate!: string;

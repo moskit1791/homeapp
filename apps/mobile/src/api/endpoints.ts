@@ -72,6 +72,8 @@ import type {
   MealPlanAiChatResponse,
   MealPlanAiFinalizeRequest,
   MealPlanAiFinalizeResponse,
+  MealPlanAiSuggestRequest,
+  MealPlanAiSuggestResponse,
   MealPlanDetail,
   MealPlanEntryRequest,
   MealPlanSummary,
@@ -837,6 +839,23 @@ export function finalizeMealPlanWithAi(
 
   return apiRequest<MealPlanAiFinalizeResponse, MealPlanAiFinalizeRequest>(
     '/meal-plans/ai/finalize',
+    {
+      accessToken: requestOptions.accessToken,
+      body: input,
+      method: 'POST',
+      signal: requestOptions.signal
+    }
+  );
+}
+
+export function suggestMealPlanWithAi(
+  input: MealPlanAiSuggestRequest,
+  options?: ApiCallOptionsInput
+): Promise<MealPlanAiSuggestResponse> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<MealPlanAiSuggestResponse, MealPlanAiSuggestRequest>(
+    '/meal-plans/ai/suggestions',
     {
       accessToken: requestOptions.accessToken,
       body: input,

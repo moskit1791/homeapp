@@ -894,6 +894,14 @@ function formatDateTime(value: string): string {
 }
 
 function createStyles(colors: AppPalette) {
+  const isDark = colors.background === "#0C1220";
+  const todayPanelBackground = isDark ? colors.card : "#FFF9EF";
+  const todayPanelBorder = isDark ? colors.border : "#E8DDCE";
+  const todayPanelText = isDark ? colors.text : "#1E1B16";
+  const todayPanelMuted = isDark ? colors.textMuted : "#5F5B52";
+  const todayPanelEyebrow = isDark ? colors.calendar : "#2C4E90";
+  const todayPanelShadowOpacity = isDark ? 0.18 : 0.08;
+
   return StyleSheet.create({
     avatar: {
       alignItems: "center",
@@ -958,8 +966,8 @@ function createStyles(colors: AppPalette) {
       paddingRight: 116,
     },
     nextEventCard: {
-      backgroundColor: "#FFF9EF",
-      borderColor: "#E8DDCE",
+      backgroundColor: todayPanelBackground,
+      borderColor: todayPanelBorder,
       borderRadius: 14,
       borderWidth: 1,
       elevation: 2,
@@ -969,18 +977,18 @@ function createStyles(colors: AppPalette) {
       padding: spacing.lg,
       shadowColor: "#000000",
       shadowOffset: { height: 12, width: 0 },
-      shadowOpacity: 0.08,
+      shadowOpacity: todayPanelShadowOpacity,
       shadowRadius: 28,
     },
     nextEventDetails: {
-      color: "#5F5B52",
+      color: todayPanelMuted,
       fontSize: 13,
       fontWeight: "700",
       letterSpacing: 0,
       lineHeight: 18,
     },
     nextEventEyebrow: {
-      color: "#2C4E90",
+      color: todayPanelEyebrow,
       fontSize: 12,
       fontWeight: "900",
       letterSpacing: 0,
@@ -1009,14 +1017,14 @@ function createStyles(colors: AppPalette) {
       minWidth: 0,
     },
     nextEventTime: {
-      color: "#1E1B16",
+      color: todayPanelText,
       fontSize: 18,
       fontWeight: "900",
       letterSpacing: 0,
       lineHeight: 23,
     },
     nextEventTitle: {
-      color: "#1E1B16",
+      color: todayPanelText,
       fontSize: 18,
       fontWeight: "900",
       letterSpacing: 0,
@@ -1024,8 +1032,8 @@ function createStyles(colors: AppPalette) {
       marginTop: 4,
     },
     miniTodayCard: {
-      backgroundColor: "#FFF9EF",
-      borderColor: "#E8DDCE",
+      backgroundColor: todayPanelBackground,
+      borderColor: todayPanelBorder,
       borderRadius: 12,
       borderWidth: 1,
       elevation: 3,
@@ -1040,7 +1048,7 @@ function createStyles(colors: AppPalette) {
       position: "relative",
       shadowColor: "#000000",
       shadowOffset: { height: 8, width: 0 },
-      shadowOpacity: 0.09,
+      shadowOpacity: isDark ? 0.18 : 0.09,
       shadowRadius: 16,
     },
     miniTodayImage: {
@@ -1095,7 +1103,7 @@ function createStyles(colors: AppPalette) {
       zIndex: 1,
     },
     miniTodayTitle: {
-      color: "#171510",
+      color: todayPanelText,
       fontSize: 11,
       fontWeight: "900",
       letterSpacing: 0,

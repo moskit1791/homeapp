@@ -550,6 +550,21 @@ export interface MealPlanAiChatResponse {
 export type MealPlanAiFinalizeRequest = MealPlanAiChatRequest;
 export type MealPlanAiFinalizeResponse = MealPlanAiChatResponse;
 
+export interface MealPlanAiSuggestRequest {
+  targetWeekStartDate: string;
+}
+
+export interface MealPlanAiSuggestResponse {
+  assistantMessage: string;
+  entries: MealPlanAiDraftEntry[];
+  excludedRecentDays: number;
+  insights: string[];
+  limitExhausted: boolean;
+  recentMealNames: string[];
+  status: "limit_exhausted" | "needs_more_history" | "ready";
+  targetWeekStartDate: string;
+}
+
 export interface CopyMealPlanRequest {
   targetWeekStartDate: string;
 }
