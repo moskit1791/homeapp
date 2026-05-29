@@ -56,6 +56,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  ExternalLink,
   Google,
   Pencil,
   Plus,
@@ -116,6 +117,8 @@ export default function KalendarzScreen() {
   const [eventTitle, setEventTitle] = useState("");
   const [eventDate, setEventDate] = useState(todayIso());
   const [eventTime, setEventTime] = useState("");
+  const [eventLocationName, setEventLocationName] = useState("");
+  const [eventLocationUrl, setEventLocationUrl] = useState("");
   const [eventNote, setEventNote] = useState("");
   const [eventReminder, setEventReminder] = useState<ReminderValue>("1440");
   const [calendarToast, setCalendarToast] = useState<{
@@ -167,6 +170,8 @@ export default function KalendarzScreen() {
             {
               eventDate,
               eventTime: normalizeEventTime(eventTime),
+              locationName: normalizeOptionalText(eventLocationName),
+              locationUrl: normalizeLocationUrlInput(eventLocationUrl || eventLocationName),
               note: eventNote.trim() || null,
               reminderOffsetMinutes: reminderValueToMinutes(eventReminder),
               scopeType: editingEvent.scopeType,
@@ -178,6 +183,8 @@ export default function KalendarzScreen() {
             {
               eventDate,
               eventTime: normalizeEventTime(eventTime),
+              locationName: normalizeOptionalText(eventLocationName),
+              locationUrl: normalizeLocationUrlInput(eventLocationUrl || eventLocationName),
               note: eventNote.trim() || null,
               reminderOffsetMinutes: reminderValueToMinutes(eventReminder),
               scopeType: "household",
@@ -321,6 +328,8 @@ export default function KalendarzScreen() {
     setEventTitle("");
     setEventDate(date);
     setEventTime("");
+    setEventLocationName("");
+    setEventLocationUrl("");
     setEventNote("");
     setEventReminder("1440");
     setEventModalVisible(true);
@@ -331,6 +340,8 @@ export default function KalendarzScreen() {
     setEventTitle(event.title);
     setEventDate(event.eventDate);
     setEventTime(event.eventTime?.slice(0, 5) ?? "");
+    setEventLocationName(event.locationName ?? "");
+    setEventLocationUrl(event.locationUrl ?? "");
     setEventNote(event.note ?? "");
     setEventReminder(minutesToReminderValue(event.reminderOffsetMinutes));
     setEventModalVisible(true);
@@ -340,6 +351,8 @@ export default function KalendarzScreen() {
     setEditingEvent(null);
     setEventTitle("");
     setEventTime("");
+    setEventLocationName("");
+    setEventLocationUrl("");
     setEventNote("");
     setEventReminder("1440");
     setEventModalVisible(false);
@@ -605,6 +618,22 @@ export default function KalendarzScreen() {
           />
         </View>
         <TextInput
+          onChangeText={setEventLocationName}
+          placeholder="Lokalizacja albo adres"
+          placeholderTextColor={theme.colors.textSubtle}
+          style={styles.input}
+          value={eventLocationName}
+        />
+        <TextInput
+          autoCapitalize="none"
+          keyboardType="url"
+          onChangeText={setEventLocationUrl}
+          placeholder="Link do lokalizacji / Google Maps"
+          placeholderTextColor={theme.colors.textSubtle}
+          style={styles.input}
+          value={eventLocationUrl}
+        />
+        <TextInput
           multiline
           onChangeText={setEventNote}
           placeholder="Notatka"
@@ -853,6 +882,8 @@ function AgendaTimeline({
         const accent = getAgendaAccent(theme.colors, event, index);
         const secondaryText =
           event.note?.trim() || formatTimelineHour(event.eventTime);
+        const locationUrl = getCalendarEventMapsUrl(event);
+        const locationLabel = getCalendarEventLocationLabel(event);
 
         return (
           <View key={event.id} style={styles.timelineRow}>
@@ -896,6 +927,22 @@ function AgendaTimeline({
                 <View style={styles.agendaFooter}>
                   {event.reminderOffsetMinutes ? (
                     <Text style={styles.agendaMeta}>Przypomnienie</Text>
+                  ) : null}
+                  {locationUrl ? (
+                    <Pressable
+                      accessibilityLabel="Otwórz lokalizację w Google Maps"
+                      accessibilityRole="link"
+                      onPress={(pressEvent) => {
+                        pressEvent.stopPropagation();
+                        void openCalendarEventLocation(event);
+                      }}
+                      style={styles.locationPill}
+                    >
+                      <ExternalLink color={accent.color} size={12} />
+                      <Text numberOfLines={1} style={styles.locationPillText}>
+                        {locationLabel}
+                      </Text>
+                    </Pressable>
                   ) : null}
                   <View style={styles.agendaFooterSpacer} />
                   {canDelete ? (
@@ -954,6 +1001,7 @@ function UpcomingEvents({
     <View style={styles.eventStrip}>
       {events.map((event, index) => {
         const accent = getAgendaAccent(theme.colors, event, index);
+        const locationUrl = getCalendarEventMapsUrl(event);
         const meta = [
           [formatDate(event.eventDate), event.eventTime?.slice(0, 5)]
             .filter(Boolean)
@@ -974,6 +1022,19 @@ function UpcomingEvents({
                 {event.title}
               </Text>
               <Text style={styles.eventMeta}>{meta}</Text>
+              {locationUrl ? (
+                <Pressable
+                  accessibilityLabel="Otwórz lokalizację w Google Maps"
+                  accessibilityRole="link"
+                  onPress={() => void openCalendarEventLocation(event)}
+                  style={styles.eventLocationLink}
+                >
+                  <ExternalLink color={accent.color} size={12} />
+                  <Text numberOfLines={1} style={styles.eventLocationText}>
+                    {getCalendarEventLocationLabel(event)}
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
             {canUpdate || canDelete ? (
               <View style={styles.eventPillActions}>
@@ -1605,6 +1666,67 @@ function normalizeEventTime(value: string): string | null {
   return trimmed ? trimmed : null;
 }
 
+function normalizeOptionalText(value: string): string | null {
+  const trimmed = value.trim();
+
+  return trimmed ? trimmed : null;
+}
+
+function normalizeLocationUrlInput(value: string): string | null {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+
+  if (/^[\w.-]+\.[a-z]{2,}/i.test(trimmed)) {
+    return `https://${trimmed}`;
+  }
+
+  return buildGoogleMapsSearchUrl(trimmed);
+}
+
+function getCalendarEventMapsUrl(event: CalendarEvent): string | null {
+  const rawUrl = event.locationUrl?.trim() || "";
+  const rawLocation = event.locationName?.trim() || "";
+
+  if (rawUrl) {
+    return normalizeLocationUrlInput(rawUrl);
+  }
+
+  if (rawLocation) {
+    return normalizeLocationUrlInput(rawLocation);
+  }
+
+  return null;
+}
+
+function getCalendarEventLocationLabel(event: CalendarEvent): string {
+  const rawLocation = event.locationName?.trim();
+
+  if (rawLocation && !/^https?:\/\//i.test(rawLocation)) {
+    return rawLocation;
+  }
+
+  return "Google Maps";
+}
+
+async function openCalendarEventLocation(event: CalendarEvent): Promise<void> {
+  const url = getCalendarEventMapsUrl(event);
+
+  if (url) {
+    await Linking.openURL(url);
+  }
+}
+
+function buildGoogleMapsSearchUrl(value: string): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(value)}`;
+}
+
 function compareCalendarEvents(left: CalendarEvent, right: CalendarEvent) {
   const leftTime = left.eventTime ?? "99:99";
   const rightTime = right.eventTime ?? "99:99";
@@ -1974,6 +2096,20 @@ function createStyles(colors: AppPalette) {
       fontSize: 11,
       letterSpacing: 0,
     },
+    eventLocationLink: {
+      alignItems: "center",
+      alignSelf: "flex-start",
+      flexDirection: "row",
+      gap: 4,
+      marginTop: 2,
+      maxWidth: "100%",
+    },
+    eventLocationText: {
+      color: colors.textMuted,
+      fontSize: 11,
+      fontWeight: "800",
+      letterSpacing: 0,
+    },
     eventPill: {
       alignItems: "center",
       alignSelf: "stretch",
@@ -2071,6 +2207,25 @@ function createStyles(colors: AppPalette) {
       minHeight: 126,
       paddingTop: spacing.md,
       textAlignVertical: "top",
+    },
+    locationPill: {
+      alignItems: "center",
+      backgroundColor: colors.cardMuted,
+      borderColor: colors.border,
+      borderRadius: 999,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: 4,
+      maxWidth: 150,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 5,
+    },
+    locationPillText: {
+      color: colors.text,
+      flexShrink: 1,
+      fontSize: 11,
+      fontWeight: "800",
+      letterSpacing: 0,
     },
     modalFooter: {
       flexDirection: "row",

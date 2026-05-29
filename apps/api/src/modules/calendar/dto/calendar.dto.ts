@@ -61,6 +61,16 @@ export class CreateCalendarEventDto {
   @IsOptional()
   @IsString()
   @MaxLength(500)
+  locationName?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  locationUrl?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
   recurrenceRule?: string | null;
 
   @IsOptional()
@@ -95,6 +105,16 @@ export class UpdateCalendarEventDto {
   @IsString()
   @MaxLength(5000)
   note?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  locationName?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  locationUrl?: string | null;
 
   @IsOptional()
   @IsString()

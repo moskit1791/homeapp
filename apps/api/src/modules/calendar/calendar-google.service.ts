@@ -240,6 +240,8 @@ export class CalendarGoogleService {
             event_date = $4,
             event_time = $5,
             note = $6,
+            location_name = $7,
+            location_url = $8,
             recurrence_rule = null,
             reminder_offset_minutes = null,
             reminder_sent_at = null
@@ -253,6 +255,8 @@ export class CalendarGoogleService {
           event.eventDate,
           event.eventTime,
           event.note,
+          event.locationName,
+          event.locationUrl,
         ],
       );
       await client.query(
@@ -278,10 +282,12 @@ export class CalendarGoogleService {
           event_date,
           event_time,
           note,
+          location_name,
+          location_url,
           recurrence_rule,
           reminder_offset_minutes
         )
-        values ($1, 'member', $2, $3, $4, $5, $6, null, null)
+        values ($1, 'member', $2, $3, $4, $5, $6, $7, $8, null, null)
         returning id
       `,
       [
@@ -291,6 +297,8 @@ export class CalendarGoogleService {
         event.eventDate,
         event.eventTime,
         event.note,
+        event.locationName,
+        event.locationUrl,
       ],
     );
     const eventId = inserted.rows[0]?.id;
@@ -519,8 +527,8 @@ export class CalendarGoogleService {
     const eventDate = start.slice(0, 10);
     const eventTime =
       hasTime && start.length >= 16 ? start.slice(11, 16) : null;
+    const locationName = event.location?.trim() || null;
     const noteParts = [
-      event.location ? `Miejsce: ${event.location}` : null,
       event.description ? event.description : null,
       "Źródło: Google Calendar",
     ].filter(Boolean);
@@ -530,6 +538,8 @@ export class CalendarGoogleService {
       eventTime,
       googleEventId: event.id,
       googleUpdatedAt: event.updated ?? null,
+      locationName,
+      locationUrl: locationName ? this.buildGoogleMapsSearchUrl(locationName) : null,
       note: noteParts.join("\n\n").slice(0, 4000) || null,
       title: (event.summary?.trim() || "Wydarzenie z Google Calendar").slice(
         0,
@@ -550,6 +560,10 @@ export class CalendarGoogleService {
       from: this.formatDate(from),
       to: this.formatDate(to),
     };
+  }
+
+  private buildGoogleMapsSearchUrl(location: string): string {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}`;
   }
 
   private normalizeEncryptionKey(value: string): Buffer {
@@ -694,6 +708,8 @@ interface ImportedGoogleEvent {
   eventTime: string | null;
   googleEventId: string;
   googleUpdatedAt: string | null;
+  locationName: string | null;
+  locationUrl: string | null;
   note: string | null;
   title: string;
 }

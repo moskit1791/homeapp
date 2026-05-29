@@ -75,8 +75,10 @@ import {
 } from "../../src/ui";
 import {
   Broom,
+  CalendarDays,
   ChartBar,
   Check,
+  ChevronLeft,
   ChevronRight,
   Close,
   Cog,
@@ -363,6 +365,8 @@ function CleaningPanel() {
   const [name, setName] = useState("");
   const [frequencyDays, setFrequencyDays] = useState("7");
   const [nextDueAt, setNextDueAt] = useState(todayIso());
+  const [datePickerVisible, setDatePickerVisible] = useState(false);
+  const [datePickerMonth, setDatePickerMonth] = useState(() => monthAnchor(new Date()));
   const [editingTask, setEditingTask] = useState<CleaningTask | null>(null);
   const [completionNotice, setCompletionNotice] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
@@ -443,6 +447,8 @@ function CleaningPanel() {
     setName("");
     setFrequencyDays("7");
     setNextDueAt(todayIso());
+    setDatePickerMonth(monthAnchor(new Date()));
+    setDatePickerVisible(false);
     setModalVisible(true);
   }
 
@@ -451,11 +457,14 @@ function CleaningPanel() {
     setName(task.name);
     setFrequencyDays(String(task.frequencyDays));
     setNextDueAt(task.nextDueAt);
+    setDatePickerMonth(monthAnchor(parseIsoDate(task.nextDueAt)));
+    setDatePickerVisible(false);
     setModalVisible(true);
   }
 
   function closeTaskModal() {
     setEditingTask(null);
+    setDatePickerVisible(false);
     setModalVisible(false);
   }
 
@@ -533,14 +542,30 @@ function CleaningPanel() {
             style={[styles.input, styles.flexInput]}
             value={frequencyDays}
           />
-          <TextInput
-            onChangeText={setNextDueAt}
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor={theme.colors.textSubtle}
-            style={[styles.input, styles.dateInput]}
-            value={nextDueAt}
-          />
+          <Pressable
+            accessibilityLabel="Wybierz termin w kalendarzu"
+            accessibilityRole="button"
+            onPress={() => setDatePickerVisible((value) => !value)}
+            style={[styles.input, styles.dateInput, styles.datePickerTrigger]}
+          >
+            <Text numberOfLines={1} style={styles.datePickerTriggerText}>
+              {formatDateFull(nextDueAt)}
+            </Text>
+            <CalendarDays color={theme.colors.textMuted} size={18} />
+          </Pressable>
         </View>
+        {datePickerVisible ? (
+          <InlineDatePicker
+            month={datePickerMonth}
+            onChangeMonth={setDatePickerMonth}
+            onSelectDate={(date) => {
+              setNextDueAt(date);
+              setDatePickerMonth(monthAnchor(parseIsoDate(date)));
+              setDatePickerVisible(false);
+            }}
+            selectedDate={nextDueAt}
+          />
+        ) : null}
         {updateMutation.error ? (
           <InlineAlert tone="error" text="Nie udało się zapisać zadania." />
         ) : null}
@@ -549,6 +574,87 @@ function CleaningPanel() {
         ) : null}
       </FormModal>
     </ModulePanel>
+  );
+}
+
+function InlineDatePicker({
+  month,
+  onChangeMonth,
+  onSelectDate,
+  selectedDate,
+}: {
+  month: Date;
+  onChangeMonth: (month: Date) => void;
+  onSelectDate: (date: string) => void;
+  selectedDate: string;
+}) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+  const days = getCalendarDays(month);
+
+  return (
+    <View style={styles.inlineDatePicker}>
+      <View style={styles.inlineDatePickerHeader}>
+        <IconButton
+          accessibilityLabel="Poprzedni miesiąc"
+          onPress={() => onChangeMonth(addMonths(month, -1))}
+          style={styles.inlineDatePickerNav}
+        >
+          <ChevronLeft color={theme.colors.textMuted} size={18} />
+        </IconButton>
+        <Text style={styles.inlineDatePickerTitle}>{formatMonthTitle(month)}</Text>
+        <IconButton
+          accessibilityLabel="Następny miesiąc"
+          onPress={() => onChangeMonth(addMonths(month, 1))}
+          style={styles.inlineDatePickerNav}
+        >
+          <ChevronRight color={theme.colors.textMuted} size={18} />
+        </IconButton>
+      </View>
+      <View style={styles.inlineDatePickerWeekRow}>
+        {["Pn", "Wt", "Śr", "Cz", "Pt", "So", "Nd"].map((weekday) => (
+          <Text key={weekday} style={styles.inlineDatePickerWeekLabel}>
+            {weekday}
+          </Text>
+        ))}
+      </View>
+      <View style={styles.inlineDatePickerGrid}>
+        {days.map((day, index) => {
+          const selected = day.iso === selectedDate;
+          const today = day.iso === todayIso();
+
+          return (
+            <Pressable
+              accessibilityLabel={day.iso ? `Wybierz ${formatDateFull(day.iso)}` : undefined}
+              accessibilityRole={day.iso ? "button" : undefined}
+              disabled={!day.iso}
+              key={`${day.iso ?? "empty"}-${day.label}-${index}`}
+              onPress={() => {
+                if (day.iso) {
+                  onSelectDate(day.iso);
+                }
+              }}
+              style={[
+                styles.inlineDatePickerDay,
+                !day.inMonth && styles.inlineDatePickerDayMuted,
+                today && styles.inlineDatePickerDayToday,
+                selected && styles.inlineDatePickerDaySelected,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.inlineDatePickerDayText,
+                  !day.inMonth && styles.inlineDatePickerDayTextMuted,
+                  (today || selected) && styles.inlineDatePickerDayTextActive,
+                ]}
+              >
+                {day.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
   );
 }
 
@@ -2594,6 +2700,81 @@ function todayIso() {
   ).padStart(2, "0")}`;
 }
 
+function parseIsoDate(value: string) {
+  const [year = "0", month = "1", day = "1"] = value.split("-");
+
+  return new Date(Number(year), Number(month) - 1, Number(day));
+}
+
+function monthAnchor(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function addMonths(date: Date, amount: number) {
+  return new Date(date.getFullYear(), date.getMonth() + amount, 1);
+}
+
+function isoFromParts(year: number, monthIndex: number, day: number) {
+  return `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function getCalendarDays(month: Date) {
+  const year = month.getFullYear();
+  const monthIndex = month.getMonth();
+  const firstDay = new Date(year, monthIndex, 1);
+  const firstOffset = (firstDay.getDay() + 6) % 7;
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+  const daysInPreviousMonth = new Date(year, monthIndex, 0).getDate();
+  const days: Array<{ inMonth: boolean; iso: string | null; label: number }> = [];
+
+  for (let index = firstOffset - 1; index >= 0; index -= 1) {
+    days.push({
+      inMonth: false,
+      iso: null,
+      label: daysInPreviousMonth - index,
+    });
+  }
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    days.push({
+      inMonth: true,
+      iso: isoFromParts(year, monthIndex, day),
+      label: day,
+    });
+  }
+
+  while (days.length % 7 !== 0) {
+    days.push({
+      inMonth: false,
+      iso: null,
+      label: days.length - firstOffset - daysInMonth + 1,
+    });
+  }
+
+  return days;
+}
+
+function formatMonthTitle(date: Date): string {
+  const title = new Intl.DateTimeFormat("pl-PL", {
+    month: "long",
+    year: "numeric",
+  }).format(date);
+
+  return title.charAt(0).toUpperCase() + title.slice(1);
+}
+
+function formatDateFull(value: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("pl-PL", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(parseIsoDate(value));
+}
+
 function parseOptionalNumber(value: string): number | null {
   const normalized = value.replace(",", ".").trim();
 
@@ -2866,12 +3047,96 @@ function createStyles(colors: AppPalette) {
     dateInput: {
       minWidth: 132,
     },
+    datePickerTrigger: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.sm,
+      justifyContent: "space-between",
+      paddingVertical: 0,
+    },
+    datePickerTriggerText: {
+      color: colors.text,
+      flex: 1,
+      fontSize: 14,
+      fontWeight: "800",
+      letterSpacing: 0,
+    },
     flexInput: {
       flex: 1,
     },
     formRow: {
       flexDirection: "row",
       gap: spacing.sm,
+    },
+    inlineDatePicker: {
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      gap: spacing.sm,
+      padding: spacing.sm,
+    },
+    inlineDatePickerDay: {
+      alignItems: "center",
+      borderRadius: 999,
+      flexBasis: "14.285%",
+      height: 36,
+      justifyContent: "center",
+    },
+    inlineDatePickerDayMuted: {
+      opacity: 0.42,
+    },
+    inlineDatePickerDaySelected: {
+      backgroundColor: colors.primary,
+    },
+    inlineDatePickerDayText: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    inlineDatePickerDayTextActive: {
+      color: colors.inverseText,
+    },
+    inlineDatePickerDayTextMuted: {
+      color: colors.textSubtle,
+    },
+    inlineDatePickerDayToday: {
+      backgroundColor: colors.calendar,
+    },
+    inlineDatePickerGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+    },
+    inlineDatePickerHeader: {
+      alignItems: "center",
+      flexDirection: "row",
+      justifyContent: "space-between",
+    },
+    inlineDatePickerNav: {
+      height: 34,
+      width: 34,
+    },
+    inlineDatePickerTitle: {
+      color: colors.text,
+      flex: 1,
+      fontSize: 14,
+      fontWeight: "900",
+      letterSpacing: 0,
+      textAlign: "center",
+      textTransform: "capitalize",
+    },
+    inlineDatePickerWeekLabel: {
+      color: colors.textMuted,
+      flex: 1,
+      fontSize: 10,
+      fontWeight: "900",
+      letterSpacing: 0,
+      textAlign: "center",
+      textTransform: "uppercase",
+    },
+    inlineDatePickerWeekRow: {
+      flexDirection: "row",
     },
     hidden: {
       display: "none",

@@ -83,6 +83,8 @@ export class StartService {
       googleCalendarConnectionId: event.googleCalendarConnectionId,
       googleCalendarOwnerMemberId: event.googleCalendarOwnerMemberId,
       id: event.id,
+      locationName: event.locationName,
+      locationUrl: event.locationUrl,
       ownerMemberId: event.ownerMemberId,
       scopeType: event.scopeType,
       sourceType: event.sourceType,
@@ -230,6 +232,8 @@ export interface StartCalendarEvent {
   googleCalendarConnectionId: string | null;
   googleCalendarOwnerMemberId: string | null;
   id: string;
+  locationName: string | null;
+  locationUrl: string | null;
   ownerMemberId: string | null;
   scopeType: "household" | "member";
   sourceType: "google" | "manual";

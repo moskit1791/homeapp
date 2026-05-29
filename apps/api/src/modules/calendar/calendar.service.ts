@@ -91,12 +91,15 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
           event_date,
           event_time,
           note,
+          location_name,
+          location_url,
           recurrence_rule,
           reminder_offset_minutes
         )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         returning id, household_id, scope_type, owner_member_id, title, event_date, event_time,
-          note, recurrence_rule, reminder_offset_minutes, reminder_sent_at, created_at, updated_at
+          note, location_name, location_url, recurrence_rule, reminder_offset_minutes,
+          reminder_sent_at, created_at, updated_at
       `,
       [
         householdId,
@@ -106,6 +109,8 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
         dto.eventDate,
         this.normalizeNullableText(dto.eventTime),
         this.normalizeNullableText(dto.note),
+        this.normalizeNullableText(dto.locationName),
+        this.normalizeNullableText(dto.locationUrl),
         this.normalizeRecurrenceRule(dto.recurrenceRule),
         dto.reminderOffsetMinutes === undefined
           ? 1440
@@ -129,6 +134,8 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
       dto.eventDate === undefined &&
       dto.eventTime === undefined &&
       dto.note === undefined &&
+      dto.locationName === undefined &&
+      dto.locationUrl === undefined &&
       dto.recurrenceRule === undefined &&
       dto.reminderOffsetMinutes === undefined &&
       dto.scopeType === undefined &&
@@ -161,19 +168,22 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
           event_date = $6,
           event_time = $7,
           note = $8,
-          recurrence_rule = $9,
-          reminder_offset_minutes = $10,
+          location_name = $9,
+          location_url = $10,
+          recurrence_rule = $11,
+          reminder_offset_minutes = $12,
           reminder_sent_at = case
             when $6 <> event_date
               or $7 is distinct from event_time
-              or $10 is distinct from reminder_offset_minutes
+              or $12 is distinct from reminder_offset_minutes
             then null
             else reminder_sent_at
           end
         where household_id = $1
           and id = $2
         returning id, household_id, scope_type, owner_member_id, title, event_date, event_time,
-          note, recurrence_rule, reminder_offset_minutes, reminder_sent_at, created_at, updated_at
+          note, location_name, location_url, recurrence_rule, reminder_offset_minutes,
+          reminder_sent_at, created_at, updated_at
       `,
       [
         householdId,
@@ -190,6 +200,12 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
         dto.note === undefined
           ? current.note
           : this.normalizeNullableText(dto.note),
+        dto.locationName === undefined
+          ? current.locationName
+          : this.normalizeNullableText(dto.locationName),
+        dto.locationUrl === undefined
+          ? current.locationUrl
+          : this.normalizeNullableText(dto.locationUrl),
         dto.recurrenceRule === undefined
           ? current.recurrenceRule
           : this.normalizeRecurrenceRule(dto.recurrenceRule),
@@ -244,6 +260,8 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
           ce.event_date,
           ce.event_time,
           ce.note,
+          ce.location_name,
+          ce.location_url,
           ce.recurrence_rule,
           ce.reminder_offset_minutes,
           ce.reminder_sent_at,
@@ -284,6 +302,8 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
           ce.event_date,
           ce.event_time,
           ce.note,
+          ce.location_name,
+          ce.location_url,
           ce.recurrence_rule,
           ce.reminder_offset_minutes,
           ce.reminder_sent_at,
@@ -528,6 +548,8 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
             ce.event_date,
             ce.event_time,
             ce.note,
+            ce.location_name,
+            ce.location_url,
             ce.recurrence_rule,
             ce.reminder_offset_minutes,
             ce.reminder_sent_at,
@@ -714,6 +736,8 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
       googleCalendarOwnerMemberId: row.google_owner_member_id ?? null,
       householdId: row.household_id,
       id: row.id,
+      locationName: row.location_name,
+      locationUrl: row.location_url,
       note: row.note,
       ownerMemberId: row.owner_member_id,
       recurrenceRule: row.recurrence_rule,
@@ -758,6 +782,8 @@ interface CalendarEventRow {
   google_owner_member_id?: string | null;
   household_id: string;
   id: string;
+  location_name: string | null;
+  location_url: string | null;
   note: string | null;
   owner_member_id: string | null;
   recurrence_rule: string | null;
@@ -777,6 +803,8 @@ export interface CalendarEventRecord {
   googleCalendarOwnerMemberId: string | null;
   householdId: string;
   id: string;
+  locationName: string | null;
+  locationUrl: string | null;
   note: string | null;
   ownerMemberId: string | null;
   recurrenceRule: string | null;

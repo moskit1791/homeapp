@@ -24,6 +24,23 @@ import {
   UpdateHouseholdDto
 } from './dto/household.dto';
 
+const DEFAULT_BUDGET_CATEGORIES = [
+  'Auto i transport',
+  'Jedzenie',
+  'Kieszonkowe',
+  'Rachunki i media',
+  'Zobowiązania',
+  'Remont',
+  'Oszczędności',
+  'Dzieci',
+  'Różne',
+  'Subskrypcje i usługi cyfrowe',
+  'Prezenty i okazje',
+  'Rozrywka',
+  'Zdrowie i uroda',
+  'Dom i środki czystości'
+];
+
 @Injectable()
 export class HouseholdsService {
   private readonly logger = new Logger(HouseholdsService.name);
@@ -90,6 +107,7 @@ export class HouseholdsService {
         throw new Error('Expected owner membership');
       }
 
+      await this.createDefaultBudgetCategories(client, household.id);
       await this.createInitialBudgetMonth(client, household.id, membership.id);
       await this.createDefaultShoppingLists(client, household.id);
       await client.query(
@@ -589,6 +607,32 @@ export class HouseholdsService {
         on conflict (household_id) do nothing
       `,
       [householdId]
+    );
+  }
+
+  private async createDefaultBudgetCategories(client: PoolClient, householdId: string) {
+    await client.query(
+      `
+        insert into budget_categories (
+          household_id,
+          name,
+          display_order,
+          copy_budget_to_next_month,
+          is_active
+        )
+        select
+          $1,
+          category_name,
+          display_order::integer - 1,
+          false,
+          true
+        from unnest($2::text[]) with ordinality as defaults(category_name, display_order)
+        on conflict (household_id, name) do update
+        set
+          is_active = true,
+          updated_at = now()
+      `,
+      [householdId, DEFAULT_BUDGET_CATEGORIES]
     );
   }
 

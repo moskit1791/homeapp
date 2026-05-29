@@ -149,6 +149,8 @@ export interface StartCalendarEvent {
   googleCalendarConnectionId: string | null;
   googleCalendarOwnerMemberId: string | null;
   id: string;
+  locationName: string | null;
+  locationUrl: string | null;
   ownerMemberId: string | null;
   scopeType: ScopeType;
   sourceType: "google" | "manual";
@@ -439,6 +441,8 @@ export interface FinanceSavingsTransaction {
   createdAt: string;
   direction: FinanceSavingsDirection;
   id: string;
+  locationName: string | null;
+  locationUrl: string | null;
   note: string | null;
   savingsAccountId: string;
 }
@@ -614,6 +618,8 @@ export interface CalendarEvent {
   googleCalendarConnectionId: string | null;
   googleCalendarOwnerMemberId: string | null;
   id: string;
+  locationName: string | null;
+  locationUrl: string | null;
   note: string | null;
   ownerMemberId: string | null;
   recurrenceRule: string | null;
@@ -628,6 +634,8 @@ export interface CalendarEvent {
 export interface CreateCalendarEventRequest {
   eventDate: string;
   eventTime?: string | null;
+  locationName?: string | null;
+  locationUrl?: string | null;
   note?: string | null;
   ownerMemberId?: string | null;
   recurrenceRule?: string | null;

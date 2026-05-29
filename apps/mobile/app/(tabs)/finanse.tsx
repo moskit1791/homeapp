@@ -219,6 +219,7 @@ export default function FinanseScreen() {
   const [selectedExpenseCategoryId, setSelectedExpenseCategoryId] = useState("");
   const [selectedExpenseItemId, setSelectedExpenseItemId] = useState("");
   const [expenseQuickItemId, setExpenseQuickItemId] = useState<string | null>(null);
+  const [expenseQuickCategoryId, setExpenseQuickCategoryId] = useState<string | null>(null);
   const [historyBudgetItemId, setHistoryBudgetItemId] = useState<string | null>(null);
   const [copyCategory, setCopyCategory] = useState(true);
   const [activeFinanceView, setActiveFinanceView] = useState<FinanceView>("budget");
@@ -354,43 +355,47 @@ export default function FinanseScreen() {
 
     return [...owners.entries()].map(([id, label]) => ({ id, label }));
   }, [incomes, visibleFlatItems]);
-  const expenseOwnerOptions = useMemo(() => {
-    const itemOwnerIds = new Set(
-      visibleFlatItems
-        .map((item) => item.owner?.memberId)
-        .filter((ownerId): ownerId is string => Boolean(ownerId)),
-    );
-
-    return financeOwnerOptions.filter((owner) => itemOwnerIds.has(owner.id));
-  }, [financeOwnerOptions, visibleFlatItems]);
+  const expenseOwnerOptions = financeOwnerOptions;
   const expenseCategoryOptions = useMemo(() => {
     if (!selectedExpenseOwnerId) {
       return [];
     }
 
-    return categories
-      .map((category) => ({
-        category,
-        items: getCategoryItems(category)
-          .filter((item) => item.owner?.memberId === selectedExpenseOwnerId)
-          .map((item) => ({ ...item, category })),
-      }))
-      .filter((option) => option.items.length > 0);
+    return categories.map((category) => ({
+      category,
+      items: getCategoryItems(category)
+        .filter((item) => item.owner?.memberId === selectedExpenseOwnerId)
+        .map((item) => ({ ...item, category })),
+    }));
   }, [categories, selectedExpenseOwnerId]);
   const expenseItems = useMemo(
     () =>
       expenseCategoryOptions.find((option) => option.category.id === selectedExpenseCategoryId)?.items ?? [],
     [expenseCategoryOptions, selectedExpenseCategoryId],
   );
+  const selectedExpenseCategory = useMemo(
+    () => categories.find((category) => category.id === selectedExpenseCategoryId) ?? null,
+    [categories, selectedExpenseCategoryId],
+  );
+  const selectedExpenseOwner = useMemo(
+    () => expenseOwnerOptions.find((owner) => owner.id === selectedExpenseOwnerId) ?? null,
+    [expenseOwnerOptions, selectedExpenseOwnerId],
+  );
   const selectedExpenseItem = useMemo(
     () => expenseItems.find((item) => item.id === selectedExpenseItemId),
     [expenseItems, selectedExpenseItemId],
   );
   const isQuickExpense = Boolean(expenseQuickItemId && selectedExpenseItem);
+  const isQuickCategoryExpense = Boolean(expenseQuickCategoryId && selectedExpenseCategory);
+  const isPresetExpense = isQuickExpense || isQuickCategoryExpense;
   const historyExpenses = historyBudgetItem?.expenses ?? [];
   const filteredRows = useMemo(
     () => applyFinanceFilters(visibleFlatItems, financeFilters),
     [financeFilters, visibleFlatItems],
+  );
+  const filteredCategories = useMemo(
+    () => applyFinanceCategoryFilters(categories, financeFilters, filteredRows),
+    [categories, financeFilters, filteredRows],
   );
 
   function selectAdjacentMonth(direction: -1 | 1) {
@@ -740,17 +745,40 @@ export default function FinanseScreen() {
     },
   });
   const expenseMutation = useMutation({
-    mutationFn: () =>
-      createExpense(
+    mutationFn: async () => {
+      let budgetItemId = selectedExpenseItemId;
+
+      if (!budgetItemId && expenseQuickCategoryId && selectedExpenseCategory && visibleMonth?.id) {
+        const createdItem = await createBudgetItem(
+          {
+            budgetAmount: null,
+            budgetMonthId: visibleMonth.id,
+            categoryId: selectedExpenseCategory.id,
+            name: selectedExpenseCategory.name,
+            ownerMemberId: selectedExpenseOwnerId,
+          },
+          { accessToken },
+        );
+
+        budgetItemId = createdItem.id;
+      }
+
+      if (!budgetItemId) {
+        throw new Error("Missing budget item");
+      }
+
+      return createExpense(
         {
           amount: parseMoney(expenseAmount),
-          budgetItemId: selectedExpenseItemId,
+          budgetItemId,
         },
         { accessToken },
-      ),
+      );
+    },
     onSuccess: async () => {
       setValue("expenseAmount", "");
       setExpenseQuickItemId(null);
+      setExpenseQuickCategoryId(null);
       setFinanceModal(null);
       await invalidateFinance();
       await queryClient.invalidateQueries({ queryKey: queryKeys.start });
@@ -851,6 +879,7 @@ export default function FinanseScreen() {
     setEditingDebt(null);
     setSelectedSavingsAccount(null);
     setExpenseQuickItemId(null);
+    setExpenseQuickCategoryId(null);
     setHistoryBudgetItemId(null);
   }
 
@@ -859,6 +888,7 @@ export default function FinanseScreen() {
     setSelectedExpenseCategoryId("");
     setSelectedExpenseItemId("");
     setExpenseQuickItemId(null);
+    setExpenseQuickCategoryId(null);
     setValue("expenseAmount", "");
     setFinanceModal("expense");
   }
@@ -868,6 +898,28 @@ export default function FinanseScreen() {
     setSelectedExpenseCategoryId(item.category.id);
     setSelectedExpenseItemId(item.id);
     setExpenseQuickItemId(item.id);
+    setExpenseQuickCategoryId(null);
+    setValue("expenseAmount", "");
+    setFinanceModal("expense");
+  }
+
+  function openExpenseModalForCategory(category: BudgetCategoryWithItems) {
+    const ownerId =
+      financeFilters.ownerMemberId ||
+      selectedIncomeMemberId ||
+      incomes.find((income) => Number(income.amount) > 0)?.ownerMemberId ||
+      incomes[0]?.ownerMemberId ||
+      "";
+    const firstItem =
+      ownerId
+        ? getCategoryItems(category).find((item) => item.owner?.memberId === ownerId)
+        : getCategoryItems(category)[0];
+
+    setSelectedExpenseOwnerId(ownerId);
+    setSelectedExpenseCategoryId(category.id);
+    setSelectedExpenseItemId(firstItem?.id ?? "");
+    setExpenseQuickItemId(null);
+    setExpenseQuickCategoryId(category.id);
     setValue("expenseAmount", "");
     setFinanceModal("expense");
   }
@@ -962,7 +1014,15 @@ export default function FinanseScreen() {
     Boolean(selectedItemOwnerId) &&
     (!itemAmount.trim() || isValidMoney(itemAmount));
   const canSaveExpense =
-    canCreate && Boolean(selectedExpenseItem) && isPositiveMoney(expenseAmount);
+    canCreate &&
+    isPositiveMoney(expenseAmount) &&
+    (Boolean(selectedExpenseItem) ||
+      Boolean(
+        expenseQuickCategoryId &&
+          selectedExpenseCategory &&
+          selectedExpenseOwnerId &&
+          visibleMonth?.id,
+      ));
   const canSaveDebt =
     (editingDebt ? canUpdate : canCreate) &&
     Boolean(debtLenderName.trim()) &&
@@ -1101,7 +1161,9 @@ export default function FinanseScreen() {
             <FinanceSheet
               canCreateExpense={canCreateVisibleExpense}
               canUpdate={canEditVisibleMonth}
+              categories={filteredCategories}
               currencyCode={currencyCode}
+              onAddCategoryExpense={openExpenseModalForCategory}
               onAddExpense={openExpenseModalForItem}
               onEdit={openEditBudgetItem}
               onHistory={openExpenseHistory}
@@ -1111,7 +1173,9 @@ export default function FinanseScreen() {
             <FinanceCategoryCards
               canCreateExpense={canCreateVisibleExpense}
               canUpdate={canEditVisibleMonth}
+              categories={filteredCategories}
               currencyCode={currencyCode}
+              onAddCategoryExpense={openExpenseModalForCategory}
               onAddExpense={openExpenseModalForItem}
               onEdit={openEditBudgetItem}
               onHistory={openExpenseHistory}
@@ -1442,23 +1506,30 @@ export default function FinanseScreen() {
             }
             onClose={closeFinanceModal}
             subtitle={
-              isQuickExpense
-                ? "Pozycja jest już wybrana. Wpisz tylko kwotę wydatku."
+              isPresetExpense
+                ? "Kategoria jest już wybrana. Wpisz tylko kwotę wydatku."
                 : "Najpierw wybierz osobę, potem kategorię, pozycję i kwotę."
             }
             title="Dodaj wydatek"
             visible={financeModal === "expense"}
           >
-            {isQuickExpense && selectedExpenseItem ? (
+            {isPresetExpense ? (
               <View style={styles.expenseContextCard}>
-                <Text style={styles.expenseContextLabel}>{formatOwner(selectedExpenseItem.owner)}</Text>
-                <Text style={styles.expenseContextTitle}>{selectedExpenseItem.name}</Text>
+                <Text style={styles.expenseContextLabel}>
+                  {selectedExpenseItem ? formatOwner(selectedExpenseItem.owner) : selectedExpenseOwner?.label}
+                </Text>
+                <Text style={styles.expenseContextTitle}>
+                  {selectedExpenseItem?.name ?? selectedExpenseCategory?.name}
+                </Text>
                 <Text style={styles.expenseContextMeta}>
-                  {selectedExpenseItem.category.name} / wydano{" "}
-                  {formatMoney(selectedExpenseItem.spentAmount, currencyCode)} z{" "}
-                  {selectedExpenseItem.budgetAmount
-                    ? formatMoney(selectedExpenseItem.budgetAmount, currencyCode)
-                    : "bez limitu"}
+                  {selectedExpenseCategory?.name}
+                  {selectedExpenseItem
+                    ? ` / wydano ${formatMoney(selectedExpenseItem.spentAmount, currencyCode)} z ${
+                        selectedExpenseItem.budgetAmount
+                          ? formatMoney(selectedExpenseItem.budgetAmount, currencyCode)
+                          : "bez limitu"
+                      }`
+                    : " / pozycja powstanie automatycznie"}
                 </Text>
               </View>
             ) : (
@@ -1509,7 +1580,7 @@ export default function FinanseScreen() {
                 ) : null}
               </>
             )}
-            {selectedExpenseItem ? (
+            {selectedExpenseItem || isQuickCategoryExpense ? (
               <TextField
                 control={control}
                 keyboardType="decimal-pad"
@@ -2322,7 +2393,9 @@ function FilterChip({
 function FinanceSheet({
   canCreateExpense,
   canUpdate,
+  categories,
   currencyCode,
+  onAddCategoryExpense,
   onAddExpense,
   onEdit,
   onHistory,
@@ -2330,7 +2403,9 @@ function FinanceSheet({
 }: {
   canCreateExpense: boolean;
   canUpdate: boolean;
+  categories: BudgetCategoryWithItems[];
   currencyCode: SupportedCurrencyCode;
+  onAddCategoryExpense: (category: BudgetCategoryWithItems) => void;
   onAddExpense: (item: BudgetItemWithCategory) => void;
   onEdit: (item: BudgetItemWithCategory) => void;
   onHistory: (item: BudgetItemWithCategory) => void;
@@ -2340,11 +2415,11 @@ function FinanceSheet({
   const styles = createStyles(theme.colors);
   const [collapsedCategoryIds, setCollapsedCategoryIds] = useState<Set<string>>(() => new Set());
 
-  if (rows.length === 0) {
+  if (rows.length === 0 && categories.length === 0) {
     return <InlineAlert text="Brak pozycji pasujących do filtrów." />;
   }
 
-  const groups = groupRowsByCategory(rows);
+  const groups = groupRowsByCategory(rows, categories);
 
   function toggleCategory(categoryId: string) {
     setCollapsedCategoryIds((current) => {
@@ -2390,18 +2465,29 @@ function FinanceSheet({
                   </Text>
                 </View>
               </View>
-              <Pressable
-                accessibilityLabel={collapsed ? "Rozwiń kategorię" : "Zwiń kategorię"}
-                accessibilityRole="button"
-                onPress={() => toggleCategory(group.category.id)}
-                style={styles.categoryToggleCell}
-              >
-                {collapsed ? (
-                  <ChevronRight color={accent.text} size={20} />
-                ) : (
-                  <ChevronDown color={accent.text} size={20} />
-                )}
-              </Pressable>
+              <View style={styles.categoryToggleCell}>
+                {canCreateExpense ? (
+                  <IconButton
+                    accessibilityLabel={`Dodaj wydatek w kategorii ${group.category.name}`}
+                    onPress={() => onAddCategoryExpense(group.category)}
+                    style={styles.sheetActionButton}
+                  >
+                    <Plus color={theme.colors.primaryDark} size={15} />
+                  </IconButton>
+                ) : null}
+                <Pressable
+                  accessibilityLabel={collapsed ? "Rozwiń kategorię" : "Zwiń kategorię"}
+                  accessibilityRole="button"
+                  onPress={() => toggleCategory(group.category.id)}
+                  style={styles.categoryCollapseButton}
+                >
+                  {collapsed ? (
+                    <ChevronRight color={accent.text} size={20} />
+                  ) : (
+                    <ChevronDown color={accent.text} size={20} />
+                  )}
+                </Pressable>
+              </View>
             </View>
             {collapsed ? null : group.items.map((item) => (
               <View key={item.id} style={styles.sheetRow}>
@@ -2462,7 +2548,9 @@ function FinanceSheet({
 function FinanceCategoryCards({
   canCreateExpense,
   canUpdate,
+  categories,
   currencyCode,
+  onAddCategoryExpense,
   onAddExpense,
   onEdit,
   onHistory,
@@ -2471,7 +2559,9 @@ function FinanceCategoryCards({
 }: {
   canCreateExpense: boolean;
   canUpdate: boolean;
+  categories: BudgetCategoryWithItems[];
   currencyCode: SupportedCurrencyCode;
+  onAddCategoryExpense: (category: BudgetCategoryWithItems) => void;
   onAddExpense: (item: BudgetItemWithCategory) => void;
   onEdit: (item: BudgetItemWithCategory) => void;
   onHistory: (item: BudgetItemWithCategory) => void;
@@ -2506,11 +2596,11 @@ function FinanceCategoryCards({
     return () => clearTimeout(timeout);
   }, [scrollRef, selectedCategoryId]);
 
-  if (rows.length === 0) {
+  if (rows.length === 0 && categories.length === 0) {
     return <InlineAlert text="Brak pozycji pasujących do filtrów." />;
   }
 
-  const groups = groupRowsByCategory(rows);
+  const groups = groupRowsByCategory(rows, categories);
   const selectedGroup = groups.find((group) => group.category.id === selectedCategoryId);
 
   return (
@@ -2573,6 +2663,15 @@ function FinanceCategoryCards({
                 </Text>
                 <Text style={styles.categoryCardMeta}>zostaje</Text>
               </View>
+              {canCreateExpense ? (
+                <IconButton
+                  accessibilityLabel={`Dodaj wydatek w kategorii ${group.category.name}`}
+                  onPress={() => onAddCategoryExpense(group.category)}
+                  style={styles.categoryCardAddButton}
+                >
+                  <Plus color={theme.colors.inverseText} size={16} />
+                </IconButton>
+              ) : null}
             </Pressable>
           );
         })}
@@ -2581,12 +2680,27 @@ function FinanceCategoryCards({
       {selectedGroup ? (
         <View ref={detailsRef} style={styles.categoryDetails}>
           <View style={styles.categoryDetailsHeader}>
-            <Text style={styles.categoryDetailsTitle}>{selectedGroup.category.name}</Text>
-            <Text style={styles.categoryDetailsMeta}>
-              {selectedGroup.items.length} pozycji / zostaje {formatMoney(selectedGroup.remaining, currencyCode)}
-            </Text>
+            <View style={styles.categoryDetailsHeaderTop}>
+              <View style={styles.categoryDetailsTitleBlock}>
+                <Text style={styles.categoryDetailsTitle}>{selectedGroup.category.name}</Text>
+                <Text style={styles.categoryDetailsMeta}>
+                  {selectedGroup.items.length} pozycji / zostaje {formatMoney(selectedGroup.remaining, currencyCode)}
+                </Text>
+              </View>
+              {canCreateExpense ? (
+                <IconButton
+                  accessibilityLabel={`Dodaj wydatek w kategorii ${selectedGroup.category.name}`}
+                  onPress={() => onAddCategoryExpense(selectedGroup.category)}
+                  style={styles.sheetActionButton}
+                >
+                  <Plus color={theme.colors.primaryDark} size={16} />
+                </IconButton>
+              ) : null}
+            </View>
           </View>
-          {selectedGroup.items.map((item) => (
+          {selectedGroup.items.length === 0 ? (
+            <InlineAlert text="Ta kategoria nie ma jeszcze pozycji. Dodaj wydatek przyciskiem plus." />
+          ) : selectedGroup.items.map((item) => (
             <Pressable
               accessibilityLabel={`Pokaż historię pozycji ${item.name}`}
               accessibilityRole="button"
@@ -2730,6 +2844,33 @@ function applyFinanceFilters(
   return filtered.sort((left, right) => compareFinanceRows(left, right, filters));
 }
 
+function applyFinanceCategoryFilters(
+  categories: BudgetCategoryWithItems[],
+  filters: FinanceFilters,
+  filteredRows: BudgetItemWithCategory[],
+): BudgetCategoryWithItems[] {
+  const normalizedSearch = filters.search.trim().toLocaleLowerCase("pl-PL");
+  const rowCategoryIds = new Set(filteredRows.map((row) => row.category.id));
+
+  return categories.filter((category) => {
+    const categoryName = category.name.toLocaleLowerCase("pl-PL");
+
+    if (filters.categoryId && category.id !== filters.categoryId) {
+      return false;
+    }
+
+    if (filters.onlyOverBudget && !rowCategoryIds.has(category.id)) {
+      return false;
+    }
+
+    if (normalizedSearch && !categoryName.includes(normalizedSearch) && !rowCategoryIds.has(category.id)) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
 function compareFinanceRows(
   left: BudgetItemWithCategory,
   right: BudgetItemWithCategory,
@@ -2784,8 +2925,21 @@ function describeFinanceFilters(filters: FinanceFilters, resultCount: number, to
   return active.join(" / ");
 }
 
-function groupRowsByCategory(rows: BudgetItemWithCategory[]): BudgetCategoryGroup[] {
+function groupRowsByCategory(
+  rows: BudgetItemWithCategory[],
+  categories: BudgetCategoryWithItems[] = [],
+): BudgetCategoryGroup[] {
   const groups = new Map<string, BudgetCategoryGroup>();
+
+  categories.forEach((category) => {
+    groups.set(category.id, {
+      category,
+      items: [],
+      planned: 0,
+      remaining: 0,
+      spent: 0,
+    });
+  });
 
   rows.forEach((row) => {
     const group =
@@ -3136,6 +3290,11 @@ function createStyles(colors: AppPalette) {
       borderWidth: 2,
       shadowOpacity: 0.18,
     },
+    categoryCardAddButton: {
+      backgroundColor: colors.primary,
+      height: 34,
+      width: 34,
+    },
     categoryCardAmount: {
       color: colors.text,
       fontSize: 12,
@@ -3236,6 +3395,12 @@ function createStyles(colors: AppPalette) {
     categoryDetailsHeader: {
       gap: 2,
     },
+    categoryDetailsHeaderTop: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.sm,
+      justifyContent: "space-between",
+    },
     categoryDetailsItemMeta: {
       color: colors.textMuted,
       fontSize: 12,
@@ -3277,6 +3442,11 @@ function createStyles(colors: AppPalette) {
       textAlign: "right",
     },
     categoryDetailsText: {
+      flex: 1,
+      gap: 2,
+      minWidth: 0,
+    },
+    categoryDetailsTitleBlock: {
       flex: 1,
       gap: 2,
       minWidth: 0,
@@ -3349,8 +3519,17 @@ function createStyles(colors: AppPalette) {
       alignItems: "center",
       borderColor: colors.line,
       borderLeftWidth: 1,
+      flexDirection: "row",
+      gap: 2,
       justifyContent: "center",
       width: 78,
+    },
+    categoryCollapseButton: {
+      alignItems: "center",
+      borderRadius: 999,
+      height: 32,
+      justifyContent: "center",
+      width: 32,
     },
     chipRow: {
       flexDirection: "row",
