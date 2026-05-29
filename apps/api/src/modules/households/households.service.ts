@@ -596,7 +596,8 @@ export class HouseholdsService {
         values
           ($1, 'daily', 'Dzisiaj'),
           ($1, 'tomorrow', 'Jutro'),
-          ($1, 'long_term', 'Na później')
+          ($1, 'long_term', 'Na później'),
+          ($1, 'pantry', 'Spiżarnia')
       `,
       [householdId]
     );

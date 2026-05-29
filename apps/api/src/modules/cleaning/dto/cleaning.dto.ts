@@ -32,6 +32,11 @@ export class CreateCleaningTaskDto {
 
   @Matches(DATE_PATTERN)
   nextDueAt!: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 180)
+  location?: string;
 }
 
 export class UpdateCleaningTaskDto {
@@ -59,6 +64,11 @@ export class UpdateCleaningTaskDto {
   @IsOptional()
   @Matches(DATE_PATTERN)
   nextDueAt?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 180)
+  location?: string;
 }
 
 export class CompleteCleaningTaskDto {

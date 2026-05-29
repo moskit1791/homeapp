@@ -87,6 +87,7 @@ export const ShieldCheck = createIcon("shield-check-outline");
 export const ShoppingCart = createIcon("cart-outline");
 export const Smartphone = createIcon("cellphone");
 export const Sparkles = createIcon("auto-fix");
+export const Sun = createIcon("weather-sunny");
 export const TableLarge = createIcon("table-large");
 export const Trash2 = createIcon("trash-can-outline");
 export const UserPlus = createIcon("account-plus-outline");

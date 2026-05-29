@@ -145,9 +145,9 @@ export default function TabsLayout() {
         name="lista"
         options={{
           href: shouldShow(["shopping", "meal_planner"]) ? undefined : null,
-          title: "Lista",
+          title: "Jedzenie",
           tabBarIcon: ({ focused }) => (
-            <TabGlyph focused={focused} icon={(color) => <ListChecks color={color} size={20} />} label="Lista" />
+            <TabGlyph focused={focused} icon={(color) => <Utensils color={color} size={20} />} label="Jedzenie" />
           ),
         }}
       />

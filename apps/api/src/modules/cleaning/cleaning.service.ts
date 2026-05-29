@@ -26,6 +26,7 @@ export class CleaningService {
           ct.frequency_mode,
           ct.frequency_days,
           ct.completion_window_days,
+          ct.location,
           ct.next_due_at,
           coalesce(vco.is_overdue, false) as is_overdue,
           ct.created_at,
@@ -56,9 +57,10 @@ export class CleaningService {
           frequency_mode,
           frequency_days,
           completion_window_days,
+          location,
           next_due_at
         )
-        values ($1, $2, $3, $4, $5, $6)
+        values ($1, $2, $3, $4, $5, $6, $7)
         returning
           id,
           household_id,
@@ -66,6 +68,7 @@ export class CleaningService {
           frequency_mode,
           frequency_days,
           completion_window_days,
+          location,
           next_due_at,
           (next_due_at < current_date) as is_overdue,
           created_at,
@@ -77,6 +80,7 @@ export class CleaningService {
         dto.frequencyMode,
         dto.frequencyDays,
         dto.completionWindowDays ?? 0,
+        dto.location ?? null,
         dto.nextDueAt
       ]
     );
@@ -97,6 +101,7 @@ export class CleaningService {
       dto.frequencyMode === undefined &&
       dto.frequencyDays === undefined &&
       dto.completionWindowDays === undefined &&
+      dto.location === undefined &&
       dto.nextDueAt === undefined
     ) {
       throw new BadRequestException('No cleaning task fields to update');
@@ -116,7 +121,8 @@ export class CleaningService {
           frequency_mode = $4,
           frequency_days = $5,
           completion_window_days = $6,
-          next_due_at = $7
+          location = $7,
+          next_due_at = $8
         where household_id = $1
           and id = $2
         returning
@@ -126,6 +132,7 @@ export class CleaningService {
           frequency_mode,
           frequency_days,
           completion_window_days,
+          location,
           next_due_at,
           (next_due_at < current_date) as is_overdue,
           created_at,
@@ -138,6 +145,7 @@ export class CleaningService {
         dto.frequencyMode ?? current.frequencyMode,
         dto.frequencyDays ?? current.frequencyDays,
         dto.completionWindowDays ?? current.completionWindowDays,
+        dto.location !== undefined ? dto.location : current.location,
         dto.nextDueAt ?? current.nextDueAt
       ]
     );
@@ -186,6 +194,7 @@ export class CleaningService {
             frequency_mode,
             frequency_days,
             completion_window_days,
+            location,
             next_due_at,
             (next_due_at < current_date) as is_overdue,
             created_at,
@@ -229,6 +238,7 @@ export class CleaningService {
             frequency_mode,
             frequency_days,
             completion_window_days,
+            location,
             next_due_at,
             (next_due_at < current_date) as is_overdue,
             created_at,
@@ -302,6 +312,7 @@ export class CleaningService {
           ct.frequency_mode,
           ct.frequency_days,
           ct.completion_window_days,
+          ct.location,
           ct.next_due_at,
           coalesce(vco.is_overdue, false) as is_overdue,
           ct.created_at,
@@ -360,6 +371,7 @@ export class CleaningService {
       householdId: row.household_id,
       id: row.id,
       isOverdue: row.is_overdue,
+      location: row.location ?? null,
       name: row.name,
       nextDueAt: this.formatDateOnly(row.next_due_at),
       updatedAt: row.updated_at
@@ -387,6 +399,7 @@ interface CleaningTaskRow {
   household_id: string;
   id: string;
   is_overdue: boolean;
+  location: string | null;
   name: string;
   next_due_at: Date | string;
   updated_at: string;
@@ -409,6 +422,7 @@ export interface CleaningTaskRecord {
   householdId: string;
   id: string;
   isOverdue: boolean;
+  location: string | null;
   name: string;
   nextDueAt: string;
   updatedAt: string;

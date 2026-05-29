@@ -1,5 +1,6 @@
 import type {
   AccountStatus,
+  CleaningFrequencyMode,
   HouseholdMemberRole,
   ModuleKey,
   PermissionSet,
@@ -722,15 +723,17 @@ export interface CleaningTask {
   householdId: string;
   id: string;
   isOverdue: boolean;
+  location: string | null;
   name: string;
   nextDueAt: string;
   updatedAt: string;
 }
 
 export interface CreateCleaningTaskRequest {
-  completionWindowDays?: number;
+  completionWindowDays: number;
   frequencyDays: number;
-  frequencyMode: "preset" | "custom_days";
+  frequencyMode: CleaningFrequencyMode;
+  location?: string;
   name: string;
   nextDueAt: string;
 }

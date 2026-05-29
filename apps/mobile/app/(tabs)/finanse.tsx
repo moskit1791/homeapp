@@ -8,6 +8,7 @@ import {
   Archive,
   Banknote,
   Car,
+  CartPlus,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -903,6 +904,14 @@ export default function FinanseScreen() {
     setFinanceModal("expense");
   }
 
+  function openItemModalForCategory(category: BudgetCategoryWithItems) {
+    setEditingBudgetItem(null);
+    setSelectedItemCategoryId(category.id);
+    setValue("itemName", "");
+    setValue("itemAmount", "");
+    setFinanceModal("item");
+  }
+
   function openExpenseModalForCategory(category: BudgetCategoryWithItems) {
     const ownerId =
       financeFilters.ownerMemberId ||
@@ -1160,10 +1169,11 @@ export default function FinanseScreen() {
           {budgetLayout === "table" ? (
             <FinanceSheet
               canCreateExpense={canCreateVisibleExpense}
+              canCreateItem={canEditVisibleMonth}
               canUpdate={canEditVisibleMonth}
               categories={filteredCategories}
               currencyCode={currencyCode}
-              onAddCategoryExpense={openExpenseModalForCategory}
+              onAddCategoryItem={openItemModalForCategory}
               onAddExpense={openExpenseModalForItem}
               onEdit={openEditBudgetItem}
               onHistory={openExpenseHistory}
@@ -1172,10 +1182,11 @@ export default function FinanseScreen() {
           ) : (
             <FinanceCategoryCards
               canCreateExpense={canCreateVisibleExpense}
+              canCreateItem={canEditVisibleMonth}
               canUpdate={canEditVisibleMonth}
               categories={filteredCategories}
               currencyCode={currencyCode}
-              onAddCategoryExpense={openExpenseModalForCategory}
+              onAddCategoryItem={openItemModalForCategory}
               onAddExpense={openExpenseModalForItem}
               onEdit={openEditBudgetItem}
               onHistory={openExpenseHistory}
@@ -2392,20 +2403,22 @@ function FilterChip({
 
 function FinanceSheet({
   canCreateExpense,
+  canCreateItem,
   canUpdate,
   categories,
   currencyCode,
-  onAddCategoryExpense,
+  onAddCategoryItem,
   onAddExpense,
   onEdit,
   onHistory,
   rows,
 }: {
   canCreateExpense: boolean;
+  canCreateItem: boolean;
   canUpdate: boolean;
   categories: BudgetCategoryWithItems[];
   currencyCode: SupportedCurrencyCode;
-  onAddCategoryExpense: (category: BudgetCategoryWithItems) => void;
+  onAddCategoryItem: (category: BudgetCategoryWithItems) => void;
   onAddExpense: (item: BudgetItemWithCategory) => void;
   onEdit: (item: BudgetItemWithCategory) => void;
   onHistory: (item: BudgetItemWithCategory) => void;
@@ -2466,15 +2479,6 @@ function FinanceSheet({
                 </View>
               </View>
               <View style={styles.categoryToggleCell}>
-                {canCreateExpense ? (
-                  <IconButton
-                    accessibilityLabel={`Dodaj wydatek w kategorii ${group.category.name}`}
-                    onPress={() => onAddCategoryExpense(group.category)}
-                    style={styles.sheetActionButton}
-                  >
-                    <Plus color={theme.colors.primaryDark} size={15} />
-                  </IconButton>
-                ) : null}
                 <Pressable
                   accessibilityLabel={collapsed ? "Rozwiń kategorię" : "Zwiń kategorię"}
                   accessibilityRole="button"
@@ -2489,54 +2493,70 @@ function FinanceSheet({
                 </Pressable>
               </View>
             </View>
-            {collapsed ? null : group.items.map((item) => (
-              <View key={item.id} style={styles.sheetRow}>
-                <Pressable
-                  accessibilityLabel={`Pokaż historię pozycji ${item.name}`}
-                  accessibilityRole="button"
-                  onPress={() => onHistory(item)}
-                  style={({ pressed }) => [styles.sheetRowContent, pressed && styles.pressedRow]}
-                >
-                  <Text numberOfLines={1} style={[styles.bodyCell, styles.personCell]}>
-                    {formatOwner(item.owner)}
-                  </Text>
-                  <Text numberOfLines={1} style={[styles.bodyCell, styles.categoryCell]}>
-                    {item.name}
-                  </Text>
-                  <Text style={styles.amountCell}>{formatMoney(item.budgetAmount, currencyCode)}</Text>
-                  <Text style={styles.amountCell}>{formatMoney(item.spentAmount, currencyCode)}</Text>
-                  <Text
-                    style={[
-                      styles.amountCell,
-                      Number(item.remainingAmount ?? 0) < 0 && styles.dangerText,
-                      Number(item.remainingAmount ?? 0) >= 0 && styles.positiveText,
-                    ]}
-                  >
-                    {item.budgetAmount ? formatMoney(item.remainingAmount ?? 0, currencyCode) : "bez limitu"}
-                  </Text>
-                </Pressable>
-                <View style={styles.actionCell}>
-                  {canCreateExpense ? (
-                    <IconButton
-                      accessibilityLabel="Dodaj wydatek"
-                      onPress={() => onAddExpense(item)}
-                      style={styles.sheetActionButton}
+            {collapsed ? null : (
+              <>
+                {group.items.map((item) => (
+                  <View key={item.id} style={styles.sheetRow}>
+                    <Pressable
+                      accessibilityLabel={`Pokaż historię pozycji ${item.name}`}
+                      accessibilityRole="button"
+                      onPress={() => onHistory(item)}
+                      style={({ pressed }) => [styles.sheetRowContent, pressed && styles.pressedRow]}
                     >
-                      <Plus color={theme.colors.primaryDark} size={15} />
-                    </IconButton>
-                  ) : null}
-                  {canUpdate ? (
-                    <IconButton
-                      accessibilityLabel="Edytuj pozycję"
-                      onPress={() => onEdit(item)}
-                      style={styles.sheetActionButton}
+                      <Text numberOfLines={1} style={[styles.bodyCell, styles.personCell]}>
+                        {formatOwner(item.owner)}
+                      </Text>
+                      <Text numberOfLines={1} style={[styles.bodyCell, styles.categoryCell]}>
+                        {item.name}
+                      </Text>
+                      <Text style={styles.amountCell}>{formatMoney(item.budgetAmount, currencyCode)}</Text>
+                      <Text style={styles.amountCell}>{formatMoney(item.spentAmount, currencyCode)}</Text>
+                      <Text
+                        style={[
+                          styles.amountCell,
+                          Number(item.remainingAmount ?? 0) < 0 && styles.dangerText,
+                          Number(item.remainingAmount ?? 0) >= 0 && styles.positiveText,
+                        ]}
+                      >
+                        {item.budgetAmount ? formatMoney(item.remainingAmount ?? 0, currencyCode) : "bez limitu"}
+                      </Text>
+                    </Pressable>
+                    <View style={styles.actionCell}>
+                      {canCreateExpense ? (
+                        <IconButton
+                          accessibilityLabel="Dodaj wydatek"
+                          onPress={() => onAddExpense(item)}
+                          style={styles.sheetActionButton}
+                        >
+                          <CartPlus color={theme.colors.primaryDark} size={15} />
+                        </IconButton>
+                      ) : null}
+                      {canUpdate ? (
+                        <IconButton
+                          accessibilityLabel="Edytuj pozycję"
+                          onPress={() => onEdit(item)}
+                          style={styles.sheetActionButton}
+                        >
+                          <Pencil color={theme.colors.textMuted} size={15} />
+                        </IconButton>
+                      ) : null}
+                    </View>
+                  </View>
+                ))}
+                {canCreateItem ? (
+                  <View style={[styles.sheetRow, { paddingHorizontal: 12 }]}>
+                    <Pressable
+                      accessibilityLabel={`Dodaj pozycję w kategorii ${group.category.name}`}
+                      accessibilityRole="button"
+                      onPress={() => onAddCategoryItem(group.category)}
+                      style={{ paddingVertical: 12, alignItems: "flex-start", width: "100%" }}
                     >
-                      <Pencil color={theme.colors.textMuted} size={15} />
-                    </IconButton>
-                  ) : null}
-                </View>
-              </View>
-            ))}
+                      <Text style={{ color: theme.colors.primaryDark, fontWeight: "600" }}>+ Dodaj pozycję</Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+              </>
+            )}
           </View>
         );
         })}
@@ -2547,10 +2567,11 @@ function FinanceSheet({
 
 function FinanceCategoryCards({
   canCreateExpense,
+  canCreateItem,
   canUpdate,
   categories,
   currencyCode,
-  onAddCategoryExpense,
+  onAddCategoryItem,
   onAddExpense,
   onEdit,
   onHistory,
@@ -2558,10 +2579,11 @@ function FinanceCategoryCards({
   scrollRef,
 }: {
   canCreateExpense: boolean;
+  canCreateItem: boolean;
   canUpdate: boolean;
   categories: BudgetCategoryWithItems[];
   currencyCode: SupportedCurrencyCode;
-  onAddCategoryExpense: (category: BudgetCategoryWithItems) => void;
+  onAddCategoryItem: (category: BudgetCategoryWithItems) => void;
   onAddExpense: (item: BudgetItemWithCategory) => void;
   onEdit: (item: BudgetItemWithCategory) => void;
   onHistory: (item: BudgetItemWithCategory) => void;
@@ -2571,30 +2593,22 @@ function FinanceCategoryCards({
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
-  const detailsRef = useRef<View>(null);
+  const [detailsY, setDetailsY] = useState<number | null>(null);
 
   useEffect(() => {
     if (!selectedCategoryId) {
+      setDetailsY(null);
       return;
     }
 
-    const timeout = setTimeout(() => {
-      const scrollNode = scrollRef.current ? findNodeHandle(scrollRef.current) : null;
+    if (detailsY !== null) {
+      const timeout = setTimeout(() => {
+        scrollRef.current?.scrollTo({ animated: true, y: Math.max(0, detailsY - 12) });
+      }, 80);
 
-      if (!scrollNode || !detailsRef.current) {
-        scrollRef.current?.scrollToEnd({ animated: true });
-        return;
-      }
-
-      detailsRef.current.measureLayout(
-        scrollNode,
-        (_x, y) => scrollRef.current?.scrollTo({ animated: true, y: Math.max(0, y - 12) }),
-        () => scrollRef.current?.scrollToEnd({ animated: true }),
-      );
-    }, 80);
-
-    return () => clearTimeout(timeout);
-  }, [scrollRef, selectedCategoryId]);
+      return () => clearTimeout(timeout);
+    }
+  }, [scrollRef, selectedCategoryId, detailsY]);
 
   if (rows.length === 0 && categories.length === 0) {
     return <InlineAlert text="Brak pozycji pasujących do filtrów." />;
@@ -2663,22 +2677,13 @@ function FinanceCategoryCards({
                 </Text>
                 <Text style={styles.categoryCardMeta}>zostaje</Text>
               </View>
-              {canCreateExpense ? (
-                <IconButton
-                  accessibilityLabel={`Dodaj wydatek w kategorii ${group.category.name}`}
-                  onPress={() => onAddCategoryExpense(group.category)}
-                  style={styles.categoryCardAddButton}
-                >
-                  <Plus color={theme.colors.inverseText} size={16} />
-                </IconButton>
-              ) : null}
             </Pressable>
           );
         })}
       </View>
 
       {selectedGroup ? (
-        <View ref={detailsRef} style={styles.categoryDetails}>
+        <View onLayout={(e) => setDetailsY(e.nativeEvent.layout.y)} style={styles.categoryDetails}>
           <View style={styles.categoryDetailsHeader}>
             <View style={styles.categoryDetailsHeaderTop}>
               <View style={styles.categoryDetailsTitleBlock}>
@@ -2687,19 +2692,18 @@ function FinanceCategoryCards({
                   {selectedGroup.items.length} pozycji / zostaje {formatMoney(selectedGroup.remaining, currencyCode)}
                 </Text>
               </View>
-              {canCreateExpense ? (
-                <IconButton
-                  accessibilityLabel={`Dodaj wydatek w kategorii ${selectedGroup.category.name}`}
-                  onPress={() => onAddCategoryExpense(selectedGroup.category)}
-                  style={styles.sheetActionButton}
-                >
-                  <Plus color={theme.colors.primaryDark} size={16} />
-                </IconButton>
+              {canCreateItem ? (
+                <ActionButton
+                  onPress={() => onAddCategoryItem(selectedGroup.category)}
+                  size="small"
+                  title="Dodaj pozycję"
+                  variant="secondary"
+                />
               ) : null}
             </View>
           </View>
           {selectedGroup.items.length === 0 ? (
-            <InlineAlert text="Ta kategoria nie ma jeszcze pozycji. Dodaj wydatek przyciskiem plus." />
+            <InlineAlert text="Ta kategoria nie ma jeszcze pozycji. Dodaj nową pozycję, aby zarządzać wydatkami." />
           ) : selectedGroup.items.map((item) => (
             <Pressable
               accessibilityLabel={`Pokaż historię pozycji ${item.name}`}
@@ -2732,7 +2736,7 @@ function FinanceCategoryCards({
               <View style={styles.categoryDetailsActions}>
                 {canCreateExpense ? (
                   <IconButton accessibilityLabel="Dodaj wydatek" onPress={() => onAddExpense(item)}>
-                    <Plus color={theme.colors.primaryDark} size={15} />
+                    <CartPlus color={theme.colors.primaryDark} size={15} />
                   </IconButton>
                 ) : null}
                 {canUpdate ? (

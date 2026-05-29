@@ -1,6 +1,6 @@
 import { IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Min } from 'class-validator';
 
-export const SHOPPING_LIST_TYPES = ['daily', 'tomorrow', 'long_term'] as const;
+export const SHOPPING_LIST_TYPES = ['daily', 'tomorrow', 'long_term', 'pantry'] as const;
 
 export type ShoppingListType = (typeof SHOPPING_LIST_TYPES)[number];
 

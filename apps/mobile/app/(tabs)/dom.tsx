@@ -363,6 +363,7 @@ function CleaningPanel() {
   const accessToken = session?.accessToken;
   const accent = getSegmentAccent(theme.colors, "cleaning");
   const [name, setName] = useState("");
+  const [location, setLocation] = useState("");
   const [frequencyDays, setFrequencyDays] = useState("7");
   const [nextDueAt, setNextDueAt] = useState(todayIso());
   const [datePickerVisible, setDatePickerVisible] = useState(false);
@@ -382,6 +383,7 @@ function CleaningPanel() {
           completionWindowDays: 0,
           frequencyDays: Number(frequencyDays) || 1,
           frequencyMode: "preset",
+          location: location.trim() || undefined,
           name: name.trim(),
           nextDueAt,
         },
@@ -414,6 +416,7 @@ function CleaningPanel() {
           completionWindowDays: editingTask.completionWindowDays,
           frequencyDays: Number(frequencyDays) || 1,
           frequencyMode: editingTask.frequencyMode,
+          location: location.trim() || undefined,
           name: name.trim(),
           nextDueAt,
         },
@@ -445,6 +448,7 @@ function CleaningPanel() {
   function openCreateTask() {
     setEditingTask(null);
     setName("");
+    setLocation("");
     setFrequencyDays("7");
     setNextDueAt(todayIso());
     setDatePickerMonth(monthAnchor(new Date()));
@@ -455,6 +459,7 @@ function CleaningPanel() {
   function openEditTask(task: CleaningTask) {
     setEditingTask(task);
     setName(task.name);
+    setLocation(task.location ?? "");
     setFrequencyDays(String(task.frequencyDays));
     setNextDueAt(task.nextDueAt);
     setDatePickerMonth(monthAnchor(parseIsoDate(task.nextDueAt)));
@@ -532,6 +537,13 @@ function CleaningPanel() {
           placeholderTextColor={theme.colors.textSubtle}
           style={styles.input}
           value={name}
+        />
+        <TextInput
+          onChangeText={setLocation}
+          placeholder="Lokalizacja (np. Łazienka)"
+          placeholderTextColor={theme.colors.textSubtle}
+          style={styles.input}
+          value={location}
         />
         <View style={styles.formRow}>
           <TextInput
@@ -2409,7 +2421,7 @@ function CleaningRow({
       <View style={[styles.itemMarker, { backgroundColor: task.isOverdue ? theme.colors.danger : accent.color }]} />
       <View style={styles.itemText}>
         <Text style={styles.itemName}>{task.name}</Text>
-        <Text style={styles.itemMeta}>Termin: {task.nextDueAt} / co {task.frequencyDays} dni</Text>
+        <Text style={styles.itemMeta}>Termin: {task.nextDueAt} / co {task.frequencyDays} dni{task.location ? ` • ${task.location}` : ""}</Text>
       </View>
       <ActionButton
         disabled={!canUpdate || completing}

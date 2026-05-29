@@ -10,6 +10,17 @@ async function bootstrap() {
 
   configureApp(app);
 
+  const { Pool } = require('pg');
+  const pool = new Pool({ connectionString: env.DATABASE_URL });
+  try {
+    await pool.query("alter type shopping_list_type add value if not exists 'pantry'");
+    await pool.query('alter table cleaning_tasks add column if not exists location text');
+  } catch (e) {
+    console.error('Failed to run dynamic migrations:', e);
+  } finally {
+    await pool.end();
+  }
+
   await app.listen(env.PORT, env.HOST);
 }
 
