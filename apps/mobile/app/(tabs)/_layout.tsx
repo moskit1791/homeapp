@@ -6,7 +6,6 @@ import {
   CalendarDays,
   CheckCircle2,
   Home,
-  ListChecks,
   MoreHorizontal,
   NotebookText,
   ShoppingCart,

@@ -3,7 +3,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import type { ReactNode, RefObject } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
-import { findNodeHandle, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import {
   Archive,
   Banknote,
@@ -912,26 +912,7 @@ export default function FinanseScreen() {
     setFinanceModal("item");
   }
 
-  function openExpenseModalForCategory(category: BudgetCategoryWithItems) {
-    const ownerId =
-      financeFilters.ownerMemberId ||
-      selectedIncomeMemberId ||
-      incomes.find((income) => Number(income.amount) > 0)?.ownerMemberId ||
-      incomes[0]?.ownerMemberId ||
-      "";
-    const firstItem =
-      ownerId
-        ? getCategoryItems(category).find((item) => item.owner?.memberId === ownerId)
-        : getCategoryItems(category)[0];
 
-    setSelectedExpenseOwnerId(ownerId);
-    setSelectedExpenseCategoryId(category.id);
-    setSelectedExpenseItemId(firstItem?.id ?? "");
-    setExpenseQuickItemId(null);
-    setExpenseQuickCategoryId(category.id);
-    setValue("expenseAmount", "");
-    setFinanceModal("expense");
-  }
 
   function openExpenseHistory(item: BudgetItemWithCategory) {
     setHistoryBudgetItemId(item.id);
