@@ -149,10 +149,17 @@ export class BudgetItemsService {
       `
         update budget_items
         set is_deleted = true
-        where id = $1
+        where id = $2
           and is_deleted = false
+          and exists (
+            select 1
+            from budget_months bm
+            where bm.id = budget_items.budget_month_id
+              and bm.household_id = $1
+              and bm.is_current = true
+          )
       `,
-      [budgetItemId]
+      [householdId, budgetItemId]
     );
 
     const deleted = Boolean(result.rowCount && result.rowCount > 0);

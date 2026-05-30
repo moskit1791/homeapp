@@ -72,6 +72,7 @@ import type {
   MealPlanAiChatResponse,
   MealPlanAiFinalizeRequest,
   MealPlanAiFinalizeResponse,
+  MealPlanDetail,
   MealPlanEntryRequest,
   MealPlanSummary,
   MealRandomizeRequest,

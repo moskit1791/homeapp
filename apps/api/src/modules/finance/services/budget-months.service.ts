@@ -365,16 +365,18 @@ export class BudgetMonthsService {
           set
             is_current = false,
             archived_at = coalesce(archived_at, now())
-          where id = $1
+          where household_id = $1
+            and id = $2
         `,
-        [current.id]
+        [householdId, current.id]
       );
 
       const promotedResult = await client.query<BudgetMonthRow>(
         `
           update budget_months
           set is_current = true
-          where id = $1
+          where household_id = $1
+            and id = $2
           returning
             id,
             household_id,
@@ -387,7 +389,7 @@ export class BudgetMonthsService {
             created_at,
             updated_at
         `,
-        [nextMonth.id]
+        [householdId, nextMonth.id]
       );
 
       return this.mapMonthOrThrow(promotedResult.rows[0], 'Expected current budget month');

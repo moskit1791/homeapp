@@ -25,7 +25,7 @@ export class FinanceSavingsService {
       [householdId]
     );
 
-    return this.attachTransactions(accounts.rows);
+    return this.attachTransactions(householdId, accounts.rows);
   }
 
   async createAccount(
@@ -162,7 +162,7 @@ export class FinanceSavingsService {
       `,
       [householdId, accountId]
     );
-    const accounts = await this.attachTransactions(result.rows);
+    const accounts = await this.attachTransactions(householdId, result.rows);
     const account = accounts[0];
 
     if (!account) {
@@ -173,6 +173,7 @@ export class FinanceSavingsService {
   }
 
   private async attachTransactions(
+    householdId: string,
     accountRows: FinanceSavingsAccountRow[]
   ): Promise<FinanceSavingsAccountRecord[]> {
     if (accountRows.length === 0) {
@@ -183,18 +184,21 @@ export class FinanceSavingsService {
     const transactionRows = await this.database.query<FinanceSavingsTransactionRow>(
       `
         select
-          id,
-          savings_account_id,
-          direction,
-          amount,
-          changed_at,
-          note,
-          created_at
-        from finance_savings_transactions
-        where savings_account_id = any($1::uuid[])
-        order by changed_at desc, created_at desc
+          fst.id,
+          fst.savings_account_id,
+          fst.direction,
+          fst.amount,
+          fst.changed_at,
+          fst.note,
+          fst.created_at
+        from finance_savings_transactions fst
+        join finance_savings_accounts fsa
+          on fsa.id = fst.savings_account_id
+        where fsa.household_id = $1
+          and fst.savings_account_id = any($2::uuid[])
+        order by fst.changed_at desc, fst.created_at desc
       `,
-      [accountIds]
+      [householdId, accountIds]
     );
     const byAccount = new Map<string, FinanceSavingsTransactionRecord[]>();
 

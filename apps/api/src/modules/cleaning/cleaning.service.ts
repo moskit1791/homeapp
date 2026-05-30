@@ -277,12 +277,14 @@ export class CleaningService {
           u.display_name as completed_by_display_name,
           cth.created_at
         from cleaning_task_history cth
+        join cleaning_tasks ct on ct.id = cth.cleaning_task_id
         left join household_members hm on hm.id = cth.completed_by_member_id
         left join users u on u.id = hm.user_id
-        where cth.cleaning_task_id = $1
+        where ct.household_id = $1
+          and cth.cleaning_task_id = $2
         order by cth.completed_at desc, cth.created_at desc
       `,
-      [taskId]
+      [householdId, taskId]
     );
 
     return result.rows.map((row) => ({

@@ -158,10 +158,13 @@ export class AnnualCostsService {
             executed_at,
             amount
           )
-          values ($1, $2, $3)
+          select ac.id, $3, $4
+          from annual_costs ac
+          where ac.household_id = $1
+            and ac.id = $2
           returning id, annual_cost_id, executed_at, amount, created_at
         `,
-        [costId, dto.executedAt, dto.amount ?? null]
+        [householdId, costId, dto.executedAt, dto.amount ?? null]
       );
 
       return {

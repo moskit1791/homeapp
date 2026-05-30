@@ -388,6 +388,7 @@ export class ShoppingService {
             quantity = $2,
             category = coalesce($5, category)
           where id = $1
+            and shopping_list_id = $6
           returning
             id,
             shopping_list_id,
@@ -407,7 +408,8 @@ export class ShoppingService {
           mergeQuantity(existing.quantity, dto.quantity),
           householdId,
           type,
-          normalizeShoppingCategory(dto.category)
+          normalizeShoppingCategory(dto.category),
+          listId
         ]
       );
 

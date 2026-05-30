@@ -204,10 +204,13 @@ export class MealPlannerService {
 
       await client.query(
         `
-          delete from meal_plan_entries
-          where meal_plan_week_id = $1
+          delete from meal_plan_entries mpe
+          using meal_plan_weeks mpw
+          where mpw.id = mpe.meal_plan_week_id
+            and mpw.household_id = $1
+            and mpe.meal_plan_week_id = $2
         `,
-        [target.id]
+        [householdId, target.id]
       );
       await client.query(
         `
@@ -220,16 +223,18 @@ export class MealPlannerService {
             note
           )
           select
-            $2,
-            weekday,
-            slot_index,
-            meal_name,
-            link_url,
-            note
-          from meal_plan_entries
-          where meal_plan_week_id = $1
+            $3,
+            mpe.weekday,
+            mpe.slot_index,
+            mpe.meal_name,
+            mpe.link_url,
+            mpe.note
+          from meal_plan_entries mpe
+          join meal_plan_weeks mpw on mpw.id = mpe.meal_plan_week_id
+          where mpw.household_id = $1
+            and mpe.meal_plan_week_id = $2
         `,
-        [source.id, target.id]
+        [householdId, source.id, target.id]
       );
 
       return target.id;
@@ -273,12 +278,15 @@ export class MealPlannerService {
 
     await this.database.query(
       `
-        delete from meal_plan_entries
-        where meal_plan_week_id = $1
-          and weekday = $2
-          and slot_index = $3
+        delete from meal_plan_entries mpe
+        using meal_plan_weeks mpw
+        where mpw.id = mpe.meal_plan_week_id
+          and mpw.household_id = $1
+          and mpe.meal_plan_week_id = $2
+          and mpe.weekday = $3
+          and mpe.slot_index = $4
       `,
-      [mealPlanId, dto.weekday, dto.slotIndex]
+      [householdId, mealPlanId, dto.weekday, dto.slotIndex]
     );
 
     const updated = await this.getPlanDetail(householdId, mealPlanId);
@@ -432,7 +440,7 @@ export class MealPlannerService {
       throw new BadRequestException('Meal plan not found');
     }
 
-    const entries = await this.listEntries(plan.id);
+    const entries = await this.listEntries(householdId, plan.id);
 
     return {
       entries,
@@ -476,24 +484,29 @@ export class MealPlannerService {
     return result.rows[0] ? this.mapWeek(result.rows[0]) : null;
   }
 
-  private async listEntries(mealPlanId: string): Promise<MealPlanEntryRecord[]> {
+  private async listEntries(
+    householdId: string,
+    mealPlanId: string
+  ): Promise<MealPlanEntryRecord[]> {
     const result = await this.database.query<MealPlanEntryRow>(
       `
         select
-          id,
-          meal_plan_week_id,
-          weekday,
-          slot_index,
-          meal_name,
-          link_url,
-          note,
-          created_at,
-          updated_at
-        from meal_plan_entries
-        where meal_plan_week_id = $1
-        order by weekday asc, slot_index asc
+          mpe.id,
+          mpe.meal_plan_week_id,
+          mpe.weekday,
+          mpe.slot_index,
+          mpe.meal_name,
+          mpe.link_url,
+          mpe.note,
+          mpe.created_at,
+          mpe.updated_at
+        from meal_plan_entries mpe
+        join meal_plan_weeks mpw on mpw.id = mpe.meal_plan_week_id
+        where mpw.household_id = $1
+          and mpe.meal_plan_week_id = $2
+        order by mpe.weekday asc, mpe.slot_index asc
       `,
-      [mealPlanId]
+      [householdId, mealPlanId]
     );
 
     return result.rows.map((row) => this.mapEntry(row));
