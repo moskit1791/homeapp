@@ -98,7 +98,7 @@ import shoppingCategoryPantryImage from "../../assets/shopping-category-pantry.p
 import shoppingCategoryProduceImage from "../../assets/shopping-category-produce.png";
 import shoppingCategorySnacksImage from "../../assets/shopping-category-snacks.png";
 
-type MainSegment = "shopping" | "meals";
+type MainSegment = "shopping" | "meals" | "pantry";
 type MealLayout = "list" | "cards";
 
 const mealLayoutStorageKey = "homeapp.meals.layout.v1";
@@ -181,6 +181,9 @@ export default function ListaScreen() {
         mealPermission.canRead
           ? { label: "Posiłki", value: "meals" as const }
           : null,
+        shoppingPermission.canRead
+          ? { label: "Spiżarnia", value: "pantry" as const }
+          : null,
       ].filter(Boolean) as Array<{ label: string; value: MainSegment }>,
     [mealPermission.canRead, shoppingPermission.canRead],
   );
@@ -262,7 +265,7 @@ export default function ListaScreen() {
 
   if (permissionsQuery.isLoading) {
     return (
-      <AppScreen title="Lista">
+      <AppScreen title="Jedzenie">
         <QueryState isLoading />
       </AppScreen>
     );
@@ -270,7 +273,7 @@ export default function ListaScreen() {
 
   if (!hasModuleRead(permissionsQuery.data, ["shopping", "meal_planner"])) {
     return (
-      <AppScreen title="Lista">
+      <AppScreen title="Jedzenie">
         <InlineAlert text="Nie masz dostępu do listy zakupów ani planu posiłków." />
       </AppScreen>
     );
@@ -316,7 +319,7 @@ export default function ListaScreen() {
           </View>
         ) : undefined
       }
-      title="Lista"
+      title="Jedzenie"
     >
       <SegmentedControl
         onChange={selectMainSegment}
@@ -339,6 +342,9 @@ export default function ListaScreen() {
           onRouteActionHandled={clearRouteAction}
           resetRequest={mealViewResetRequest}
         />
+      ) : null}
+      {activeSegment === "pantry" ? (
+        <PantryBoard />
       ) : null}
     </AppScreen>
   );
@@ -2450,6 +2456,249 @@ function weekdayShort(day: number): string {
   return ["Pn", "Wt", "Śr", "Cz", "Pt", "So", "Nd"][day - 1] ?? String(day);
 }
 
+function PantryBoard() {
+  const { session } = useSession();
+  const queryClient = useQueryClient();
+  const permission = useModulePermission("shopping");
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+  const accessToken = session?.accessToken;
+  const [name, setName] = useState("");
+  const [quantity, setQuantity] = useState("");
+  const [modalVisible, setModalVisible] = useState(false);
+
+  const pantryQueryKey = useMemo(
+    () => [...queryKeys.shopping, "pantry", "items"] as const,
+    [],
+  );
+
+  const pantryQuery = useQuery({
+    enabled: permission.canRead && Boolean(accessToken),
+    queryFn: () => listShoppingItems("pantry", { accessToken }),
+    queryKey: pantryQueryKey,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (data: { name: string; quantity: string }) =>
+      createShoppingItem("pantry", data, { accessToken }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: pantryQueryKey });
+      setName("");
+      setQuantity("");
+      setModalVisible(false);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteShoppingItem(id, { accessToken }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: pantryQueryKey });
+    },
+  });
+
+  const groupedItems = useMemo(() => {
+    const items = pantryQuery.data ?? [];
+    const groups: Record<string, ShoppingItem[]> = {};
+
+    for (const item of items) {
+      const category = isShoppingCategory(item.category)
+        ? item.category
+        : "other";
+
+      if (!groups[category]) {
+        groups[category] = [];
+      }
+
+      groups[category].push(item);
+    }
+
+    return Object.entries(groups)
+      .map(([key, groupItems]) => ({
+        category: key as ShoppingCategory,
+        items: groupItems,
+        meta: getShoppingCategoryMeta(key as ShoppingCategory),
+      }))
+      .sort((a, b) => a.meta.order - b.meta.order);
+  }, [pantryQuery.data]);
+
+  const productSuggestions = useMemo(
+    () => getShoppingProductSuggestions(name, 8),
+    [name],
+  );
+  const suggestedCategory = useMemo(
+    () => (name.trim() ? categorizeShoppingProduct(name) : null),
+    [name],
+  );
+
+  if (!permission.canRead) {
+    return <InlineAlert text="Nie masz dostępu do spiżarni." />;
+  }
+
+  return (
+    <View style={styles.board}>
+      <QueryState
+        error={pantryQuery.error}
+        isEmpty={!pantryQuery.isLoading && (pantryQuery.data ?? []).length === 0}
+        isLoading={pantryQuery.isLoading}
+      />
+
+      <View style={styles.groupList}>
+        {groupedItems.map((group) => (
+          <PantryGroupCard
+            category={group.category}
+            items={group.items}
+            key={group.category}
+            meta={group.meta}
+            onDelete={(id) => deleteMutation.mutate(id)}
+          />
+        ))}
+      </View>
+
+      {permission.canCreate ? (
+        <View style={styles.boardFab}>
+          <IconButton
+            accessibilityLabel="Dodaj produkt do spiżarni"
+            onPress={() => setModalVisible(true)}
+            size="large"
+            variant="primary"
+          >
+            <Plus color="#FFFFFF" size={32} />
+          </IconButton>
+        </View>
+      ) : null}
+
+      <FormModal
+        isSaving={createMutation.isPending}
+        onClose={() => setModalVisible(false)}
+        onSave={() => {
+          if (!name.trim()) return;
+          createMutation.mutate({ name, quantity });
+        }}
+        saveDisabled={!name.trim()}
+        title="Dodaj do spiżarni"
+        visible={modalVisible}
+      >
+        <Text style={styles.formLabel}>Co masz w spiżarni?</Text>
+        <TextInput
+          autoFocus
+          onChangeText={setName}
+          onSubmitEditing={() => {
+            if (name.trim()) {
+              createMutation.mutate({ name, quantity });
+            }
+          }}
+          placeholder="np. Mąka pszenna"
+          placeholderTextColor={theme.colors.textMuted}
+          style={styles.formInput}
+          value={name}
+        />
+        {suggestedCategory ? (
+          <Text style={styles.formHint}>
+            Kategoria:{" "}
+            {getShoppingCategoryMeta(suggestedCategory).label.toLowerCase()}
+          </Text>
+        ) : null}
+
+        {productSuggestions.length > 0 ? (
+          <View style={styles.suggestionChips}>
+            {productSuggestions.map((suggestion) => (
+              <Pressable
+                key={suggestion.name}
+                onPress={() => setName(suggestion.name)}
+                style={styles.suggestionChip}
+              >
+                <Text style={styles.suggestionChipText}>{suggestion.name}</Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+
+        <Text style={styles.formLabel}>Ile tego masz? (opcjonalnie)</Text>
+        <TextInput
+          onChangeText={setQuantity}
+          onSubmitEditing={() => {
+            if (name.trim()) {
+              createMutation.mutate({ name, quantity });
+            }
+          }}
+          placeholder="np. 2 kg, 3 szt."
+          placeholderTextColor={theme.colors.textMuted}
+          style={styles.formInput}
+          value={quantity}
+        />
+      </FormModal>
+    </View>
+  );
+}
+
+function PantryGroupCard({
+  category,
+  items,
+  meta,
+  onDelete,
+}: {
+  category: ShoppingCategory;
+  items: ShoppingItem[];
+  meta: ReturnType<typeof getShoppingCategoryMeta>;
+  onDelete: (id: string) => void;
+}) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+  const images: Record<ShoppingCategory, ImageSourcePropType> = {
+    bakery: shoppingCategoryBakeryImage,
+    care: shoppingCategoryCareImage,
+    cleaning: shoppingCategoryCleaningImage,
+    dairy: shoppingCategoryDairyImage,
+    drinks: shoppingCategoryDrinksImage,
+    family: shoppingCategoryFamilyImage,
+    meat: shoppingCategoryMeatImage,
+    other: shoppingCategoryDefaultImage,
+    pantry: shoppingCategoryPantryImage,
+    produce: shoppingCategoryProduceImage,
+    snacks: shoppingCategorySnacksImage,
+  };
+
+  return (
+    <View style={styles.shoppingGroup}>
+      <View style={styles.groupHeader}>
+        <View style={styles.groupIconWrapper}>
+          <Image
+            resizeMode="contain"
+            source={images[category]}
+            style={styles.groupIconImage}
+          />
+        </View>
+        <Text style={styles.shoppingGroupTitle}>{meta.label}</Text>
+      </View>
+      <View style={styles.groupBody}>
+        {items.map((item, index) => (
+          <View
+            key={item.id}
+            style={[
+              styles.shoppingItemRow,
+              { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+              index < items.length - 1 && { borderBottomColor: theme.colors.border, borderBottomWidth: 1 },
+            ]}
+          >
+            <View style={{ flex: 1, gap: 2, paddingVertical: 12 }}>
+              <Text style={styles.shoppingItemName}>{item.name}</Text>
+              {item.quantity ? (
+                <Text style={styles.shoppingItemMeta}>{item.quantity}</Text>
+              ) : null}
+            </View>
+            <IconButton
+              accessibilityLabel="Usuń ze spiżarni"
+              onPress={() => onDelete(item.id)}
+            >
+              <Trash2 color={theme.colors.textMuted} size={18} />
+            </IconButton>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 function createStyles(colors: AppPalette) {
   const isDark = colors.background === "#0C1220";
   const shoppingCardBackground = isDark ? colors.card : "#FFFFFF";
@@ -2779,11 +3028,10 @@ function createStyles(colors: AppPalette) {
       minHeight: 29,
     },
     itemMoveActions: {
-      flexDirection: "row",
-      flexWrap: "wrap",
+      flexDirection: "column",
       gap: spacing.xs,
-      justifyContent: "flex-end",
-      maxWidth: 118,
+      justifyContent: "center",
+      maxWidth: 76,
     },
     itemText: {
       flex: 1,
