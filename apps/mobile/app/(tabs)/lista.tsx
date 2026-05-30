@@ -8,6 +8,7 @@ import {
   type ShoppingCategory,
 } from "@homeapp/shared-types";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { setStringAsync } from "expo-clipboard";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Image,
@@ -38,7 +39,7 @@ import {
   moveShoppingItem,
   moveUncheckedShoppingToTomorrow,
   queryKeys,
-  suggestMealPlanWithAi,
+  generateMealPlanAiPrompt,
   type MealPlanAiDraftEntry,
   type MealPlanAiMessage,
   type MealPlanEntry,
@@ -73,14 +74,12 @@ import {
 } from "../../src/ui";
 import {
   CalendarDays,
-  CalendarPlus,
   Check,
   ChevronRight,
   ExternalLink,
   Pencil,
   Plus,
   Sparkles,
-  Sun,
   TableLarge,
   Trash2,
   Utensils,
@@ -99,7 +98,7 @@ import shoppingCategoryPantryImage from "../../assets/shopping-category-pantry.p
 import shoppingCategoryProduceImage from "../../assets/shopping-category-produce.png";
 import shoppingCategorySnacksImage from "../../assets/shopping-category-snacks.png";
 
-type MainSegment = "shopping" | "pantry" | "meals";
+type MainSegment = "shopping" | "meals";
 type MealLayout = "list" | "cards";
 
 const mealLayoutStorageKey = "homeapp.meals.layout.v1";
@@ -178,9 +177,6 @@ export default function ListaScreen() {
       [
         shoppingPermission.canRead
           ? { label: "Zakupy", value: "shopping" as const }
-          : null,
-        shoppingPermission.canRead
-          ? { label: "Spiżarnia", value: "pantry" as const }
           : null,
         mealPermission.canRead
           ? { label: "Posiłki", value: "meals" as const }
@@ -328,11 +324,10 @@ export default function ListaScreen() {
         value={activeSegment}
       />
 
-      {activeSegment === "shopping" || activeSegment === "pantry" ? (
+      {activeSegment === "shopping" ? (
         <ShoppingBoard
           action={params.action}
           aiOpenRequest={shoppingAiOpenRequest}
-          isPantryMode={activeSegment === "pantry"}
           onRouteActionHandled={clearRouteAction}
         />
       ) : null}
@@ -353,12 +348,10 @@ function ShoppingBoard({
   action,
   aiOpenRequest,
   onRouteActionHandled,
-  isPantryMode,
 }: {
   action?: string;
   aiOpenRequest: number;
   onRouteActionHandled: () => void;
-  isPantryMode?: boolean;
 }) {
   const { session } = useSession();
   const queryClient = useQueryClient();
@@ -366,8 +359,7 @@ function ShoppingBoard({
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
   const accessToken = session?.accessToken;
-  const [internalActiveType, setInternalActiveType] = useState<ShoppingListType>("daily");
-  const activeType = isPantryMode ? "pantry" : internalActiveType;
+  const [activeType, setActiveType] = useState<ShoppingListType>("daily");
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState("");
   const [aiMessage, setAiMessage] = useState("");
@@ -517,17 +509,14 @@ function ShoppingBoard({
   const items = itemsQuery.data ?? [];
   const uncheckedItems = items.filter((item) => !item.isChecked);
   const checkedItems = items.filter((item) => item.isChecked);
-  const itemsToGroup = isPantryMode ? items : uncheckedItems;
-  const groups = groupShoppingItems(itemsToGroup);
+  const groups = groupShoppingItems(uncheckedItems);
   const currentList =
     listsQuery.data?.find((list) => list.type === activeType)?.name ??
-    (isPantryMode 
-      ? "Twoja Spiżarnia"
-      : activeType === "daily"
-        ? "Zakupy na dziś"
-        : activeType === "tomorrow"
-          ? "Zakupy na jutro"
-          : "Lista na później");
+    (activeType === "daily"
+      ? "Zakupy na dziś"
+      : activeType === "tomorrow"
+        ? "Zakupy na jutro"
+        : "Lista na później");
   const canAdd =
     permission.canCreate && Boolean(name.trim()) && !createMutation.isPending;
   const canImportWithAi =
@@ -537,13 +526,11 @@ function ShoppingBoard({
 
   return (
     <>
-      {!isPantryMode && (
-        <SegmentedControl
-          onChange={setInternalActiveType}
-          options={listTypes}
-          value={internalActiveType}
-        />
-      )}
+      <SegmentedControl
+        onChange={setActiveType}
+        options={listTypes}
+        value={activeType}
+      />
 
       <QueryState error={itemsQuery.error} isLoading={itemsQuery.isLoading} />
 
@@ -551,9 +538,7 @@ function ShoppingBoard({
         <View>
           <Text style={styles.sectionTitle}>{currentList}</Text>
           <Text style={styles.sectionMeta}>
-            {isPantryMode
-              ? `${items.length} pozycji w spiżarni`
-              : `${uncheckedItems.length} do kupienia / ${checkedItems.length} kupione`}
+            {uncheckedItems.length} do kupienia / {checkedItems.length} kupione
           </Text>
         </View>
         {permission.canCreate ? (
@@ -621,7 +606,7 @@ function ShoppingBoard({
             isUpdating={shoppingToggle.isSyncing}
           />
         ))}
-        {!isPantryMode && checkedItems.length > 0 ? (
+        {checkedItems.length > 0 ? (
           <ShoppingGroupCard
             canDelete={permission.canDelete}
             canUpdate={permission.canUpdate}
@@ -1055,36 +1040,14 @@ function MealsBoard({
       await queryClient.invalidateQueries({ queryKey: queryKeys.start });
     },
   });
-  const aiSuggestMutation = useMutation({
+  const aiPromptMutation = useMutation({
     mutationFn: async () => {
-      if (
-        !aiTargetWeekConfirmed ||
-        !isValidWeekStartDate(aiTargetWeekStartDate)
-      ) {
-        throw new Error("Missing AI target week");
-      }
-
-      return suggestMealPlanWithAi(
-        { targetWeekStartDate: aiTargetWeekStartDate },
-        { accessToken },
-      );
+      return generateMealPlanAiPrompt({ accessToken });
     },
-    onSuccess: (response) => {
-      setAiDraft(response.entries);
-      setAiInsights(response.insights);
-      setAiMessages([
-        {
-          content: response.assistantMessage,
-          role: "assistant",
-        },
-      ]);
-      setAiInput("");
-      if (response.limitExhausted) {
-        setAiNotice(
-          "Limit AI jest wyczerpany. Aplikacja uzyla lokalnych propozycji z historii.",
-        );
-        setTimeout(() => setAiNotice(""), 3500);
-      }
+    onSuccess: async (response) => {
+      await setStringAsync(response.prompt);
+      setAiNotice("Prompt skopiowany do schowka.");
+      setTimeout(() => setAiNotice(""), 3500);
     },
   });
   const aiChatMutation = useMutation({
@@ -1239,14 +1202,7 @@ function MealsBoard({
     aiTargetWeekConfirmed &&
     isValidWeekStartDate(aiTargetWeekStartDate) &&
     aiInput.trim().length >= 3 &&
-    !aiChatMutation.isPending &&
-    !aiSuggestMutation.isPending;
-  const canSuggestAi =
-    aiTargetWeekConfirmed &&
-    isValidWeekStartDate(aiTargetWeekStartDate) &&
-    !aiChatMutation.isPending &&
-    !aiSaveMutation.isPending &&
-    !aiSuggestMutation.isPending;
+    !aiChatMutation.isPending;
   const hasAiConversation =
     aiDraft.length > 0 ||
     aiMessages.some((message) => message.role === "assistant");
@@ -1257,7 +1213,7 @@ function MealsBoard({
     isValidWeekStartDate(aiTargetWeekStartDate) &&
     hasAiConversation &&
     !aiChatMutation.isPending &&
-    !aiSuggestMutation.isPending &&
+    !aiPromptMutation.isPending &&
     !aiSaveMutation.isPending;
   const aiDraftGroups = groupMealDraftEntries(aiDraft);
 
@@ -1661,10 +1617,9 @@ function MealsBoard({
         footer={
           <View style={styles.aiFooter}>
             <ActionButton
-              disabled={!canSuggestAi}
-              loading={aiSuggestMutation.isPending}
-              onPress={() => aiSuggestMutation.mutate()}
-              title="Proponuj z historii"
+              loading={aiPromptMutation.isPending}
+              onPress={() => aiPromptMutation.mutate()}
+              title="Kopiuj prompt dla AI"
               variant="secondary"
             />
             <View style={styles.modalFooter}>
@@ -1821,12 +1776,12 @@ function MealsBoard({
             )}
           />
         ) : null}
-        {aiSuggestMutation.error ? (
+        {aiPromptMutation.error ? (
           <InlineAlert
             tone="error"
             text={getMealAiErrorText(
-              aiSuggestMutation.error,
-              "AI nie przygotowalo propozycji z historii.",
+              aiPromptMutation.error,
+              "Nie udalo sie wygenerowac promptu.",
             )}
           />
         ) : null}
@@ -1883,24 +1838,18 @@ function ShoppingGroupCard({
         <View style={styles.groupItems}>
           {group.items.map((item) => (
             <View key={item.id} style={[styles.itemRow, styles.shoppingItemRow]}>
-              {listType !== "pantry" ? (
-                <Pressable
-                  disabled={!canUpdate || isUpdating(item.id)}
-                  onPress={() => onCheck(item)}
-                  style={[styles.checkBox, item.isChecked && styles.checkBoxDone]}
-                >
-                  {item.isChecked ? (
-                    <Check color={theme.colors.card} size={14} />
-                  ) : null}
-                </Pressable>
-              ) : null}
               <Pressable
                 disabled={!canUpdate || isUpdating(item.id)}
-                onPress={() => {
-                  if (listType !== "pantry") {
-                    onCheck(item);
-                  }
-                }}
+                onPress={() => onCheck(item)}
+                style={[styles.checkBox, item.isChecked && styles.checkBoxDone]}
+              >
+                {item.isChecked ? (
+                  <Check color={theme.colors.card} size={14} />
+                ) : null}
+              </Pressable>
+              <Pressable
+                disabled={!canUpdate || isUpdating(item.id)}
+                onPress={() => onCheck(item)}
                 style={styles.itemText}
               >
                 <Text
@@ -1916,30 +1865,18 @@ function ShoppingGroupCard({
               </Pressable>
               {listType === "long_term" && canUpdate ? (
                 <View style={styles.itemMoveActions}>
-                  <IconButton
-                    accessibilityLabel="Dziś"
-                    disabled={moving}
-                    onPress={() => onMove(item, "daily")}
-                    style={{ marginRight: 4 }}
-                  >
-                    <Sun color={theme.colors.primaryDark} size={18} />
-                  </IconButton>
-                  <IconButton
-                    accessibilityLabel="Jutro"
-                    disabled={moving}
-                    onPress={() => onMove(item, "tomorrow")}
-                  >
-                    <CalendarPlus color={theme.colors.primaryDark} size={18} />
-                  </IconButton>
-                </View>
-              ) : null}
-              {listType === "pantry" && canUpdate ? (
-                <View style={styles.itemMoveActions}>
                   <ActionButton
                     disabled={moving}
                     onPress={() => onMove(item, "daily")}
                     size="small"
-                    title="Do koszyka"
+                    title="Dziś"
+                    variant="secondary"
+                  />
+                  <ActionButton
+                    disabled={moving}
+                    onPress={() => onMove(item, "tomorrow")}
+                    size="small"
+                    title="Jutro"
                     variant="secondary"
                   />
                 </View>

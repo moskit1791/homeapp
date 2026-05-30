@@ -23,7 +23,6 @@ import {
   CreateMealPlanDto,
   MealPlanAiChatDto,
   MealPlanAiFinalizeDto,
-  MealPlanAiSuggestDto,
   MealPlanEntryTargetDto,
   MealIdeaIdParamDto,
   MealPlanIdParamDto,
@@ -108,15 +107,13 @@ export class MealPlannerController {
     );
   }
 
-  @Post('meal-plans/ai/suggestions')
+  @Get('meal-plans/ai/prompt')
   @RequirePermission('meal_planner', 'read')
-  suggestAiPlan(
-    @CurrentHousehold() household: HouseholdContext | undefined,
-    @Body() dto: MealPlanAiSuggestDto
+  getAiPrompt(
+    @CurrentHousehold() household: HouseholdContext | undefined
   ) {
-    return this.mealPlannerAiService.suggestFromHistory(
-      this.requireHousehold(household).householdId,
-      dto
+    return this.mealPlannerService.generateAiPrompt(
+      this.requireHousehold(household).householdId
     );
   }
 

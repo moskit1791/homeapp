@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { loadEnv } from './shared/env';
 import { configureApp } from './shared/http/configure-app';
+import { Pool } from 'pg';
 
 async function bootstrap() {
   const env = loadEnv();
@@ -10,7 +11,6 @@ async function bootstrap() {
 
   configureApp(app);
 
-  const { Pool } = require('pg');
   const pool = new Pool({ connectionString: env.DATABASE_URL });
   try {
     await pool.query("alter type shopping_list_type add value if not exists 'pantry'");

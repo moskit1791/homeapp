@@ -744,6 +744,52 @@ export class MealPlannerService {
         .filter(([weekday, count]) => weekday >= 1 && weekday <= 7 && count > 0)
     );
   }
+
+  async generateAiPrompt(householdId: string): Promise<{ prompt: string }> {
+    const mealSlotsPerDay = await this.getMealSlotsPerDay(householdId);
+    
+    const historyResult = await this.database.query(
+      `
+        with recent_weeks as (
+          select id, week_start_date
+          from meal_plan_weeks
+          where household_id = $1
+          order by week_start_date desc
+          limit 10
+        )
+        select
+          rw.week_start_date,
+          mpe.weekday,
+          mpe.slot_index,
+          mpe.meal_name
+        from meal_plan_entries mpe
+        join recent_weeks rw on rw.id = mpe.meal_plan_week_id
+        order by rw.week_start_date desc, mpe.weekday asc, mpe.slot_index asc
+      `,
+      [householdId]
+    );
+
+    const historyByWeek: Record<string, Array<{ weekday: number; slotIndex: number; mealName: string }>> = {};
+    for (const row of historyResult.rows) {
+      const dateKey = this.formatDateOnly(row.week_start_date);
+      if (!historyByWeek[dateKey]) {
+        historyByWeek[dateKey] = [];
+      }
+      historyByWeek[dateKey].push({
+        weekday: row.weekday,
+        slotIndex: row.slot_index,
+        mealName: row.meal_name
+      });
+    }
+
+    const latestWeeks = Object.entries(historyByWeek)
+      .map(([week, entries]) => ({ week, entries }));
+
+    const historyJson = JSON.stringify(latestWeeks, null, 2);
+    const prompt = `Przygotuj listę posiłków o strukturze ${mealSlotsPerDay} posiłków dziennie. Biorąc pod uwagę posiłki głównie z historii a o to historia:\n${historyJson}\nNastępnie każ AI złapać zależności w tych posiłkach więc trzeba je przeanalizować bardzo dogłębnie. Np. że w każdy wtorek są kanapki. Ważne: posiłki 1 to śniadanie i nie mieszaj go z pozostałymi posiłkami.`;
+
+    return { prompt };
+  }
 }
 
 interface MealPlanWeekRow {
