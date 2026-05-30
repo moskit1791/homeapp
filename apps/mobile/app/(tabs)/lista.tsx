@@ -2462,7 +2462,6 @@ function PantryBoard() {
   const queryClient = useQueryClient();
   const permission = useModulePermission("shopping");
   const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
   const accessToken = session?.accessToken;
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState("");
