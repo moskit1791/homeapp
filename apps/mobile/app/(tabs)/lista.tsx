@@ -2518,7 +2518,7 @@ function PantryBoard() {
         items: groupItems,
         meta: getShoppingCategoryMeta(key as ShoppingCategory),
       }))
-      .sort((a, b) => a.meta.order - b.meta.order);
+      .sort((a, b) => a.meta.title.localeCompare(b.meta.title));
   }, [pantryQuery.data]);
 
   const productSuggestions = useMemo(
@@ -2535,14 +2535,14 @@ function PantryBoard() {
   }
 
   return (
-    <View style={styles.board}>
+    <View style={{ flex: 1 }}>
       <QueryState
         error={pantryQuery.error}
         isEmpty={!pantryQuery.isLoading && (pantryQuery.data ?? []).length === 0}
         isLoading={pantryQuery.isLoading}
       />
 
-      <View style={styles.groupList}>
+      <View style={{ gap: 16, padding: 16, paddingBottom: 100 }}>
         {groupedItems.map((group) => (
           <PantryGroupCard
             category={group.category}
@@ -2555,12 +2555,11 @@ function PantryBoard() {
       </View>
 
       {permission.canCreate ? (
-        <View style={styles.boardFab}>
+        <View style={{ bottom: 24, position: "absolute", right: 24 }}>
           <IconButton
             accessibilityLabel="Dodaj produkt do spiżarni"
             onPress={() => setModalVisible(true)}
-            size="large"
-            variant="primary"
+            style={{ backgroundColor: theme.colors.primary, borderRadius: 32, elevation: 6, height: 64, width: 64, alignItems: "center", justifyContent: "center" }}
           >
             <Plus color="#FFFFFF" size={32} />
           </IconButton>
@@ -2568,17 +2567,16 @@ function PantryBoard() {
       ) : null}
 
       <FormModal
-        isSaving={createMutation.isPending}
         onClose={() => setModalVisible(false)}
         onSave={() => {
           if (!name.trim()) return;
           createMutation.mutate({ name, quantity });
         }}
-        saveDisabled={!name.trim()}
+        saveDisabled={!name.trim() || createMutation.isPending}
         title="Dodaj do spiżarni"
         visible={modalVisible}
       >
-        <Text style={styles.formLabel}>Co masz w spiżarni?</Text>
+        <Text style={{ color: theme.colors.text, fontSize: 14, fontWeight: "800", marginBottom: 8 }}>Co masz w spiżarni?</Text>
         <TextInput
           autoFocus
           onChangeText={setName}
@@ -2589,31 +2587,31 @@ function PantryBoard() {
           }}
           placeholder="np. Mąka pszenna"
           placeholderTextColor={theme.colors.textMuted}
-          style={styles.formInput}
+          style={{ backgroundColor: theme.colors.card, borderColor: theme.colors.border, borderRadius: 8, borderWidth: 1, color: theme.colors.text, fontSize: 16, minHeight: 48, paddingHorizontal: 16 }}
           value={name}
         />
         {suggestedCategory ? (
-          <Text style={styles.formHint}>
+          <Text style={{ color: theme.colors.textMuted, fontSize: 12, marginTop: 4 }}>
             Kategoria:{" "}
-            {getShoppingCategoryMeta(suggestedCategory).label.toLowerCase()}
+            {getShoppingCategoryMeta(suggestedCategory).title.toLowerCase()}
           </Text>
         ) : null}
 
         {productSuggestions.length > 0 ? (
-          <View style={styles.suggestionChips}>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
             {productSuggestions.map((suggestion) => (
               <Pressable
                 key={suggestion.name}
                 onPress={() => setName(suggestion.name)}
-                style={styles.suggestionChip}
+                style={{ backgroundColor: theme.colors.cardMuted, borderColor: theme.colors.border, borderRadius: 16, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 6 }}
               >
-                <Text style={styles.suggestionChipText}>{suggestion.name}</Text>
+                <Text style={{ color: theme.colors.text, fontSize: 13, fontWeight: "700" }}>{suggestion.name}</Text>
               </Pressable>
             ))}
           </View>
         ) : null}
 
-        <Text style={styles.formLabel}>Ile tego masz? (opcjonalnie)</Text>
+        <Text style={{ color: theme.colors.text, fontSize: 14, fontWeight: "800", marginBottom: 8, marginTop: 24 }}>Ile tego masz? (opcjonalnie)</Text>
         <TextInput
           onChangeText={setQuantity}
           onSubmitEditing={() => {
@@ -2623,7 +2621,7 @@ function PantryBoard() {
           }}
           placeholder="np. 2 kg, 3 szt."
           placeholderTextColor={theme.colors.textMuted}
-          style={styles.formInput}
+          style={{ backgroundColor: theme.colors.card, borderColor: theme.colors.border, borderRadius: 8, borderWidth: 1, color: theme.colors.text, fontSize: 16, minHeight: 48, paddingHorizontal: 16 }}
           value={quantity}
         />
       </FormModal>
@@ -2644,7 +2642,7 @@ function PantryGroupCard({
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
-  const images: Record<ShoppingCategory, ImageSourcePropType> = {
+  const images: Partial<Record<ShoppingCategory, ImageSourcePropType>> = {
     bakery: shoppingCategoryBakeryImage,
     care: shoppingCategoryCareImage,
     cleaning: shoppingCategoryCleaningImage,
@@ -2660,17 +2658,17 @@ function PantryGroupCard({
 
   return (
     <View style={styles.shoppingGroup}>
-      <View style={styles.groupHeader}>
-        <View style={styles.groupIconWrapper}>
+      <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
+        <View style={{ alignItems: "center", backgroundColor: theme.colors.cardMuted, borderRadius: 12, height: 48, justifyContent: "center", width: 48 }}>
           <Image
             resizeMode="contain"
-            source={images[category]}
-            style={styles.groupIconImage}
+            source={images[category] ?? shoppingCategoryDefaultImage}
+            style={{ bottom: -8, height: 58, position: "absolute", right: -8, width: 58 }}
           />
         </View>
-        <Text style={styles.shoppingGroupTitle}>{meta.label}</Text>
+        <Text style={styles.shoppingGroupTitle}>{meta.title}</Text>
       </View>
-      <View style={styles.groupBody}>
+      <View style={{ gap: 0, marginTop: 12 }}>
         {items.map((item, index) => (
           <View
             key={item.id}
