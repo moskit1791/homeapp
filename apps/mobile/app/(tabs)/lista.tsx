@@ -48,6 +48,7 @@ import {
   type ShoppingItem,
   type ShoppingListType,
   toggleShoppingItem,
+  updateShoppingItem,
   upsertMealSlot,
 } from "../../src/api";
 import {
@@ -2467,6 +2468,9 @@ function PantryBoard() {
   const [quantity, setQuantity] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
 
+  const [editItem, setEditItem] = useState<ShoppingItem | null>(null);
+  const [editQuantity, setEditQuantity] = useState("");
+
   const pantryQueryKey = useMemo(
     () => [...queryKeys.shopping, "pantry", "items"] as const,
     [],
@@ -2489,12 +2493,20 @@ function PantryBoard() {
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => deleteShoppingItem(id, { accessToken }),
+  const updateMutation = useMutation({
+    mutationFn: (data: { id: string; quantity: string }) =>
+      updateShoppingItem(data.id, { quantity: data.quantity }, { accessToken }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: pantryQueryKey });
+      setEditItem(null);
     },
   });
+
+  const isZeroQuantity = useCallback((qty: string | null | undefined) => {
+    if (!qty) return false;
+    const str = qty.trim().toLowerCase();
+    return str === "0" || str.startsWith("0 ") || str === "brak" || str === "0szt";
+  }, []);
 
   const groupedItems = useMemo(() => {
     const items = pantryQuery.data ?? [];
@@ -2513,13 +2525,22 @@ function PantryBoard() {
     }
 
     return Object.entries(groups)
-      .map(([key, groupItems]) => ({
-        category: key as ShoppingCategory,
-        items: groupItems,
-        meta: getShoppingCategoryMeta(key as ShoppingCategory),
-      }))
+      .map(([key, groupItems]) => {
+        const sortedItems = [...groupItems].sort((a, b) => {
+          const aZero = isZeroQuantity(a.quantity);
+          const bZero = isZeroQuantity(b.quantity);
+          if (aZero && !bZero) return 1;
+          if (!aZero && bZero) return -1;
+          return a.name.localeCompare(b.name);
+        });
+        return {
+          category: key as ShoppingCategory,
+          items: sortedItems,
+          meta: getShoppingCategoryMeta(key as ShoppingCategory),
+        };
+      })
       .sort((a, b) => a.meta.title.localeCompare(b.meta.title));
-  }, [pantryQuery.data]);
+  }, [pantryQuery.data, isZeroQuantity]);
 
   const productSuggestions = useMemo(
     () => getShoppingProductSuggestions(name, 8),
@@ -2549,7 +2570,10 @@ function PantryBoard() {
             items={group.items}
             key={group.category}
             meta={group.meta}
-            onDelete={(id) => deleteMutation.mutate(id)}
+            onItemPress={(item) => {
+              setEditItem(item);
+              setEditQuantity(item.quantity ?? "");
+            }}
           />
         ))}
       </View>
@@ -2568,11 +2592,27 @@ function PantryBoard() {
 
       <FormModal
         onClose={() => setModalVisible(false)}
-        onSave={() => {
-          if (!name.trim()) return;
-          createMutation.mutate({ name, quantity });
-        }}
-        saveDisabled={!name.trim() || createMutation.isPending}
+        footer={
+          <View style={{ flexDirection: "row", gap: 12 }}>
+            <ActionButton
+              onPress={() => setModalVisible(false)}
+              style={{ flex: 1 }}
+              title="Anuluj"
+              variant="secondary"
+            />
+            <ActionButton
+              disabled={!name.trim() || createMutation.isPending}
+              onPress={() => {
+                if (name.trim()) {
+                  createMutation.mutate({ name, quantity });
+                }
+              }}
+              style={{ flex: 1 }}
+              title="Zapisz"
+              variant="primary"
+            />
+          </View>
+        }
         title="Dodaj do spiżarni"
         visible={modalVisible}
       >
@@ -2625,6 +2665,51 @@ function PantryBoard() {
           value={quantity}
         />
       </FormModal>
+
+      <FormModal
+        onClose={() => setEditItem(null)}
+        footer={
+          <View style={{ flexDirection: "row", gap: 12 }}>
+            <ActionButton
+              onPress={() => setEditItem(null)}
+              style={{ flex: 1 }}
+              title="Anuluj"
+              variant="secondary"
+            />
+            <ActionButton
+              disabled={updateMutation.isPending}
+              onPress={() => {
+                if (editItem) {
+                  updateMutation.mutate({ id: editItem.id, quantity: editQuantity });
+                }
+              }}
+              style={{ flex: 1 }}
+              title="Zapisz"
+              variant="primary"
+            />
+          </View>
+        }
+        title="Edytuj produkt"
+        visible={!!editItem}
+      >
+        <Text style={{ color: theme.colors.text, fontSize: 14, fontWeight: "800", marginBottom: 8 }}>Ilość w spiżarni</Text>
+        <TextInput
+          autoFocus
+          onChangeText={setEditQuantity}
+          onSubmitEditing={() => {
+            if (editItem) {
+              updateMutation.mutate({ id: editItem.id, quantity: editQuantity });
+            }
+          }}
+          placeholder="np. 0, 2 kg, brak"
+          placeholderTextColor={theme.colors.textMuted}
+          style={{ backgroundColor: theme.colors.card, borderColor: theme.colors.border, borderRadius: 8, borderWidth: 1, color: theme.colors.text, fontSize: 16, minHeight: 48, paddingHorizontal: 16 }}
+          value={editQuantity}
+        />
+        <View style={{ marginTop: 24 }}>
+          <ActionButton onPress={() => setEditQuantity("0")} title="Ustaw ilość na 0" variant="secondary" />
+        </View>
+      </FormModal>
     </View>
   );
 }
@@ -2633,27 +2718,20 @@ function PantryGroupCard({
   category,
   items,
   meta,
-  onDelete,
+  onItemPress,
 }: {
   category: ShoppingCategory;
   items: ShoppingItem[];
   meta: ReturnType<typeof getShoppingCategoryMeta>;
-  onDelete: (id: string) => void;
+  onItemPress: (item: ShoppingItem) => void;
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
-  const images: Partial<Record<ShoppingCategory, ImageSourcePropType>> = {
-    bakery: shoppingCategoryBakeryImage,
-    care: shoppingCategoryCareImage,
-    cleaning: shoppingCategoryCleaningImage,
-    dairy: shoppingCategoryDairyImage,
-    drinks: shoppingCategoryDrinksImage,
-    family: shoppingCategoryFamilyImage,
-    meat: shoppingCategoryMeatImage,
-    other: shoppingCategoryDefaultImage,
-    pantry: shoppingCategoryPantryImage,
-    produce: shoppingCategoryProduceImage,
-    snacks: shoppingCategorySnacksImage,
+  
+  const isZeroQuantity = (qty: string | null | undefined) => {
+    if (!qty) return false;
+    const str = qty.trim().toLowerCase();
+    return str === "0" || str.startsWith("0 ") || str === "brak" || str === "0szt";
   };
 
   return (
@@ -2662,7 +2740,7 @@ function PantryGroupCard({
         <View style={{ alignItems: "center", backgroundColor: theme.colors.cardMuted, borderRadius: 12, height: 48, justifyContent: "center", width: 48 }}>
           <Image
             resizeMode="contain"
-            source={images[category] ?? shoppingCategoryDefaultImage}
+            source={getShoppingGroupIllustration(category, meta.title)}
             style={{ bottom: -8, height: 58, position: "absolute", right: -8, width: 58 }}
           />
         </View>
@@ -2670,12 +2748,14 @@ function PantryGroupCard({
       </View>
       <View style={{ gap: 0, marginTop: 12 }}>
         {items.map((item, index) => (
-          <View
+          <Pressable
             key={item.id}
+            onPress={() => onItemPress(item)}
             style={[
               styles.shoppingItemRow,
               { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
               index < items.length - 1 && { borderBottomColor: theme.colors.border, borderBottomWidth: 1 },
+              isZeroQuantity(item.quantity) && { opacity: 0.5 }
             ]}
           >
             <View style={{ flex: 1, gap: 2, paddingVertical: 12 }}>
@@ -2684,13 +2764,8 @@ function PantryGroupCard({
                 <Text style={styles.shoppingItemMeta}>{item.quantity}</Text>
               ) : null}
             </View>
-            <IconButton
-              accessibilityLabel="Usuń ze spiżarni"
-              onPress={() => onDelete(item.id)}
-            >
-              <Trash2 color={theme.colors.textMuted} size={18} />
-            </IconButton>
-          </View>
+            <ChevronRight color={theme.colors.border} size={20} />
+          </Pressable>
         ))}
       </View>
     </View>
