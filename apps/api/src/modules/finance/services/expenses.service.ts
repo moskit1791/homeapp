@@ -39,7 +39,6 @@ export class ExpensesService {
         where e.budget_item_id = bi.id
           and bi.budget_month_id = bm.id
           and bm.household_id = $1
-          and bm.is_current = true
           and e.id = $2
       `,
       [householdId, expenseId]
@@ -64,7 +63,6 @@ export class ExpensesService {
         from budget_items bi
         join budget_months bm on bm.id = bi.budget_month_id
         where bm.household_id = $1
-          and bm.is_current = true
           and bi.id = $2
           and bi.is_deleted = false
         limit 1
@@ -73,7 +71,7 @@ export class ExpensesService {
     );
 
     if (!result.rows[0]) {
-      throw new BadRequestException('Budget item is not editable in current month');
+      throw new BadRequestException('Budget item is not editable in this household');
     }
   }
 

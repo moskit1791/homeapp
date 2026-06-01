@@ -379,11 +379,11 @@ export default function FinanseScreen() {
     monthTabs.find((month) => month.id === selectedMonthId) ?? visibleMonth;
   const showingArchiveMonth =
     Boolean(selectedMonthId) && selectedMonthId !== currentSummary?.month.id;
-  const isVisibleMonthCurrent = Boolean(visibleMonth?.isCurrent);
-  const canCreateVisibleBudgetItem = canCreate && isVisibleMonthCurrent;
-  const canUpdateVisibleBudgetItem = canUpdate && isVisibleMonthCurrent;
-  const canCreateVisibleExpense = canCreate && isVisibleMonthCurrent;
-  const canDeleteVisibleMonthItems = canDelete && isVisibleMonthCurrent;
+  const hasVisibleMonth = Boolean(visibleMonth?.id);
+  const canCreateVisibleBudgetItem = canCreate && hasVisibleMonth;
+  const canUpdateVisibleBudgetItem = canUpdate && hasVisibleMonth;
+  const canCreateVisibleExpense = canCreate && hasVisibleMonth;
+  const canDeleteVisibleMonthItems = canDelete && hasVisibleMonth;
   const canGoPreviousMonth = selectedMonthIndex > 0;
   const canGoNextMonth =
     selectedMonthIndex >= 0 && selectedMonthIndex < monthTabs.length - 1;
@@ -516,6 +516,24 @@ export default function FinanseScreen() {
         ? { ...current, [item.id]: getGenerateAmountDefault(item) }
         : current,
     );
+  }
+
+  function setGenerateAllItemsCopy(checked: boolean) {
+    if (!checked) {
+      setGenerateCopyItemIds([]);
+      return;
+    }
+
+    setGenerateCopyItemIds(generateSourceItems.map((item) => item.id));
+    setGenerateAmountInputs((current) => ({
+      ...Object.fromEntries(
+        generateSourceItems.map((item) => [
+          item.id,
+          getGenerateAmountDefault(item),
+        ]),
+      ),
+      ...current,
+    }));
   }
 
   function setGenerateCategoryCopy(
@@ -1463,6 +1481,33 @@ export default function FinanseScreen() {
           >
             {generateSourceItems.length > 0 ? (
               <View style={styles.generateCopyList}>
+                <View style={styles.generateToolbar}>
+                  <Text style={styles.generateToolbarMeta}>
+                    Wybrano {selectedGenerateItems.length}/
+                    {generateSourceItems.length} pozycji
+                  </Text>
+                  <View style={styles.generateToolbarActions}>
+                    <ActionButton
+                      disabled={
+                        selectedGenerateItems.length ===
+                        generateSourceItems.length
+                      }
+                      onPress={() => setGenerateAllItemsCopy(true)}
+                      size="small"
+                      style={styles.generateToolbarButton}
+                      title="Kopiuj wszystko"
+                      variant="secondary"
+                    />
+                    <ActionButton
+                      disabled={selectedGenerateItems.length === 0}
+                      onPress={() => setGenerateAllItemsCopy(false)}
+                      size="small"
+                      style={styles.generateToolbarButton}
+                      title="Pusty miesiąc"
+                      variant="ghost"
+                    />
+                  </View>
+                </View>
                 {generateSourceCategories.map((category) => {
                   const categoryItems = getCategoryItems(category).map(
                     (item) => ({ ...item, category }),
@@ -4471,6 +4516,27 @@ function createStyles(colors: AppPalette) {
     },
     generateCopyList: {
       gap: spacing.sm,
+    },
+    generateToolbar: {
+      backgroundColor: colors.cardMuted,
+      borderColor: colors.border,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      gap: spacing.sm,
+      padding: spacing.sm,
+    },
+    generateToolbarActions: {
+      flexDirection: "row",
+      gap: spacing.sm,
+    },
+    generateToolbarButton: {
+      flex: 1,
+    },
+    generateToolbarMeta: {
+      color: colors.textMuted,
+      fontSize: 12,
+      fontWeight: "800",
+      letterSpacing: 0,
     },
     generateItemCheckButton: {
       alignItems: "center",

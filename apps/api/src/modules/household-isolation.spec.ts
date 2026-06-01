@@ -64,6 +64,85 @@ describe('household isolation guards in services', () => {
     expect(realtime.publish).not.toHaveBeenCalled();
   });
 
+  it('allows creating a budget item in any month that belongs to the household', async () => {
+    const database = {
+      query: vi
+        .fn()
+        .mockResolvedValueOnce(queryResult([{ id: 'archived-month' }]))
+        .mockResolvedValueOnce(queryResult([{ id: 'member-b' }]))
+        .mockResolvedValueOnce(queryResult([{ id: 'category-b' }]))
+        .mockResolvedValueOnce(queryResult([{ next_display_order: 0 }]))
+        .mockResolvedValueOnce(
+          queryResult([
+            {
+              budget_amount: '10.00',
+              budget_month_id: 'archived-month',
+              category_id: 'category-b',
+              created_at: '2026-06-01T00:00:00.000Z',
+              display_order: 0,
+              id: 'budget-item-b',
+              is_deleted: false,
+              name: 'Archiwalna pozycja',
+              owner_member_id: 'member-b',
+              updated_at: '2026-06-01T00:00:00.000Z'
+            }
+          ])
+        )
+    };
+    const realtime = createRealtime();
+    const service = new BudgetItemsService(database as never, realtime as never);
+
+    await expect(
+      service.createBudgetItem('household-b', {
+        budgetAmount: 10,
+        budgetMonthId: 'archived-month',
+        categoryId: 'category-b',
+        name: 'Archiwalna pozycja',
+        ownerMemberId: 'member-b'
+      })
+    ).resolves.toMatchObject({
+      budgetMonthId: 'archived-month',
+      id: 'budget-item-b'
+    });
+
+    expect(database.query.mock.calls[0]?.[0]).toContain('where household_id = $1');
+    expect(database.query.mock.calls[0]?.[0]).not.toContain('is_current = true');
+  });
+
+  it('allows adding an expense to an archived month item in the same household', async () => {
+    const database = {
+      query: vi
+        .fn()
+        .mockResolvedValueOnce(queryResult([{ id: 'budget-item-b' }]))
+        .mockResolvedValueOnce(
+          queryResult([
+            {
+              amount: '25.00',
+              budget_item_id: 'budget-item-b',
+              created_at: '2026-06-01T00:00:00.000Z',
+              id: 'expense-b',
+              updated_at: '2026-06-01T00:00:00.000Z'
+            }
+          ])
+        )
+    };
+    const realtime = createRealtime();
+    const service = new ExpensesService(database as never, realtime as never);
+
+    await expect(
+      service.createExpense('household-b', {
+        amount: 25,
+        budgetItemId: 'budget-item-b'
+      })
+    ).resolves.toMatchObject({
+      budgetItemId: 'budget-item-b',
+      id: 'expense-b'
+    });
+
+    expect(database.query.mock.calls[0]?.[0]).toContain('bm.household_id = $1');
+    expect(database.query.mock.calls[0]?.[0]).not.toContain('bm.is_current = true');
+  });
+
   it('does not create a savings transaction for an account outside the current household', async () => {
     const client = {
       query: vi.fn().mockResolvedValueOnce(queryResult())

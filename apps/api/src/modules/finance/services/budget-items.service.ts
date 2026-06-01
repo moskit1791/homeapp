@@ -14,7 +14,7 @@ export class BudgetItemsService {
     householdId: string,
     dto: CreateBudgetItemDto
   ): Promise<BudgetItemRecord> {
-    await this.ensureCurrentBudgetMonth(householdId, dto.budgetMonthId);
+    await this.ensureBudgetMonth(householdId, dto.budgetMonthId);
     await this.ensureActiveMember(householdId, dto.ownerMemberId);
     await this.ensureActiveCategory(householdId, dto.categoryId);
 
@@ -104,7 +104,6 @@ export class BudgetItemsService {
             from budget_months bm
             where bm.id = budget_items.budget_month_id
               and bm.household_id = $1
-              and bm.is_current = true
           )
         returning
           id,
@@ -156,7 +155,6 @@ export class BudgetItemsService {
             from budget_months bm
             where bm.id = budget_items.budget_month_id
               and bm.household_id = $1
-              and bm.is_current = true
           )
       `,
       [householdId, budgetItemId]
@@ -191,7 +189,6 @@ export class BudgetItemsService {
         from budget_items bi
         join budget_months bm on bm.id = bi.budget_month_id
         where bm.household_id = $1
-          and bm.is_current = true
           and bi.id = $2
           and bi.is_deleted = false
         limit 1
@@ -202,7 +199,7 @@ export class BudgetItemsService {
     return result.rows[0] ? this.mapItem(result.rows[0]) : null;
   }
 
-  private async ensureCurrentBudgetMonth(
+  private async ensureBudgetMonth(
     householdId: string,
     budgetMonthId: string
   ): Promise<void> {
@@ -212,14 +209,13 @@ export class BudgetItemsService {
         from budget_months
         where household_id = $1
           and id = $2
-          and is_current = true
         limit 1
       `,
       [householdId, budgetMonthId]
     );
 
     if (!result.rows[0]) {
-      throw new BadRequestException('Budget month is not current');
+      throw new BadRequestException('Budget month not found');
     }
   }
 
