@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PoolClient } from 'pg';
 import { DatabaseService } from '../../database/database.service';
 import { RealtimeService } from '../../realtime/realtime.service';
-import { CreateBudgetMonthDto } from '../dto/finance.dto';
+import { CreateBudgetMonthDto, GenerateNextBudgetMonthDto } from '../dto/finance.dto';
 
 @Injectable()
 export class BudgetMonthsService {
@@ -86,10 +86,7 @@ export class BudgetMonthsService {
     return result.rows.map((row) => this.mapMonth(row));
   }
 
-  async createMonth(
-    householdId: string,
-    dto: CreateBudgetMonthDto
-  ): Promise<BudgetMonthRecord> {
+  async createMonth(householdId: string, dto: CreateBudgetMonthDto): Promise<BudgetMonthRecord> {
     if (dto.month < 1 || dto.month > 12) {
       throw new BadRequestException('Budget month must be between 1 and 12');
     }
@@ -274,7 +271,7 @@ export class BudgetMonthsService {
     return deleted;
   }
 
-  async generateNextMonth(householdId: string): Promise<BudgetMonthRecord> {
+  async generateNextMonth(householdId: string, dto: GenerateNextBudgetMonthDto = {}): Promise<BudgetMonthRecord> {
     const generated = await this.database.transaction(async (client) => {
       await client.query(
         `
@@ -351,12 +348,9 @@ export class BudgetMonthsService {
         `,
         [householdId, next.year, next.month, current.id]
       );
-      const nextMonth = this.mapMonthOrThrow(
-        nextMonthResult.rows[0],
-        'Expected generated budget month'
-      );
+      const nextMonth = this.mapMonthOrThrow(nextMonthResult.rows[0], 'Expected generated budget month');
 
-      await this.copyBudgetItems(client, current.id, nextMonth.id);
+      await this.copyBudgetItems(client, current.id, nextMonth.id, dto.items);
       await this.createZeroIncomesForActiveMembers(client, householdId, nextMonth.id);
 
       await client.query(
@@ -404,8 +398,14 @@ export class BudgetMonthsService {
   private async copyBudgetItems(
     client: PoolClient,
     sourceBudgetMonthId: string,
-    targetBudgetMonthId: string
+    targetBudgetMonthId: string,
+    selectedItems?: BudgetMonthCopySelection[]
   ): Promise<void> {
+    if (selectedItems !== undefined) {
+      await this.copySelectedBudgetItems(client, sourceBudgetMonthId, targetBudgetMonthId, selectedItems);
+      return;
+    }
+
     await client.query(
       `
         insert into budget_items (
@@ -433,11 +433,72 @@ export class BudgetMonthsService {
     );
   }
 
-  private async getMonthForUpdate(
+  private async copySelectedBudgetItems(
     client: PoolClient,
-    householdId: string,
-    monthId: string
+    sourceBudgetMonthId: string,
+    targetBudgetMonthId: string,
+    selectedItems: BudgetMonthCopySelection[]
   ): Promise<void> {
+    const selectedById = new Map<string, BudgetMonthCopySelection>();
+
+    for (const item of selectedItems) {
+      selectedById.set(item.budgetItemId, item);
+    }
+
+    if (selectedById.size === 0) {
+      return;
+    }
+
+    const selectedItemIds = [...selectedById.keys()];
+    const result = await client.query<BudgetItemCopyRow>(
+      `
+        select
+          bi.id,
+          bi.owner_member_id,
+          bi.category_id,
+          bi.name,
+          bi.budget_amount,
+          bi.display_order
+        from budget_items bi
+        where bi.budget_month_id = $1
+          and bi.is_deleted = false
+          and bi.id = any($2::uuid[])
+      `,
+      [sourceBudgetMonthId, selectedItemIds]
+    );
+
+    if (result.rows.length !== selectedById.size) {
+      throw new BadRequestException('Selected budget items are not available in current month');
+    }
+
+    for (const row of result.rows) {
+      const selected = selectedById.get(row.id);
+
+      await client.query(
+        `
+          insert into budget_items (
+            budget_month_id,
+            owner_member_id,
+            category_id,
+            name,
+            budget_amount,
+            display_order
+          )
+          values ($1, $2, $3, $4, $5, $6)
+        `,
+        [
+          targetBudgetMonthId,
+          row.owner_member_id,
+          row.category_id,
+          row.name,
+          selected?.budgetAmount === undefined ? row.budget_amount : selected.budgetAmount,
+          row.display_order
+        ]
+      );
+    }
+  }
+
+  private async getMonthForUpdate(client: PoolClient, householdId: string, monthId: string): Promise<void> {
     const result = await client.query<{ id: string }>(
       `
         select id
@@ -533,4 +594,18 @@ export interface BudgetMonthRecord {
   sourceBudgetMonthId: string | null;
   updatedAt: string;
   year: number;
+}
+
+interface BudgetMonthCopySelection {
+  budgetAmount?: number | null;
+  budgetItemId: string;
+}
+
+interface BudgetItemCopyRow {
+  budget_amount: string | null;
+  category_id: string;
+  display_order: number;
+  id: string;
+  name: string;
+  owner_member_id: string;
 }

@@ -16,9 +16,9 @@ Nie commituj tu surowych hasel, tokenow Proxmox ani pliku `.env`; do deployu wys
 Proxmox jest potrzebny tylko awaryjnie, gdy trzeba sprawdzic konfiguracje kontenera albo odzyskac dostep SSH.
 Zwykly deploy idzie bezposrednio po SSH na `homeapp@192.168.100.246`.
 
-Uwaga z deployu 2026-05-13: `/opt/homeapp` na produkcji jest kopia plikow bez katalogu `.git`.
-Jesli ten stan sie nie zmieni, nie uzywaj tam `git pull`; przenies zmienione pliki backendu przez `scp`
-i dopiero potem przebuduj Compose.
+Stan zweryfikowany 2026-06-01: `/opt/homeapp` na produkcji jest repozytorium git na galezi `forgravity`.
+Standardowy deploy idzie przez `git fetch` + `git pull --ff-only`; nie przerzucaj recznie plikow przez `scp`,
+chyba ze produkcyjne repo zostanie awaryjnie uszkodzone.
 
 ## Szybki deploy z Windows
 
@@ -30,7 +30,7 @@ pnpm.cmd test
 git status --short --branch
 git add .
 git commit -m "Opis zmian"
-git push origin forA
+git push origin forgravity
 ```
 
 Nastepnie na produkcji:
@@ -44,8 +44,8 @@ Na serwerze:
 ```bash
 cd /opt/homeapp
 git fetch origin
-git checkout forA
-git pull --ff-only origin forA
+git checkout forgravity
+git pull --ff-only origin forgravity
 docker compose -f compose.prod.yml --env-file .env up -d --build
 docker compose -f compose.prod.yml --env-file .env ps
 curl -fsS http://127.0.0.1:3003/api/health
@@ -138,7 +138,7 @@ Invoke-RestMethod https://app.porabkihome.pl/api/health
 Oczekiwany wynik healthchecka:
 
 ```json
-{"status":"ok","service":"homeapp-api"}
+{ "status": "ok", "service": "homeapp-api" }
 ```
 
 ## Kontrola AI zakupów
@@ -158,23 +158,10 @@ cd /opt/homeapp
 docker compose -f compose.prod.yml --env-file .env up -d --build
 ```
 
-## Deploy bez `.git` na produkcji
+## Awaryjnie bez `.git`
 
-Z lokalnego repo skopiuj zmienione pliki backendu, na przyklad:
-
-```powershell
-$key = "$env:USERPROFILE\.ssh\homeapp_prod_ed25519"
-scp -i $key apps/api/src/modules/calendar/calendar.service.ts homeapp@192.168.100.246:/opt/homeapp/apps/api/src/modules/calendar/calendar.service.ts
-```
-
-Potem na serwerze:
-
-```bash
-cd /opt/homeapp
-docker compose -f compose.prod.yml --env-file .env up -d --build
-docker compose -f compose.prod.yml --env-file .env ps
-curl -fsS http://127.0.0.1:3003/api/health
-```
+Ta sciezka jest nieaktualna dla normalnych deployow. Uzyj recznego `scp` tylko wtedy, gdy `/opt/homeapp/.git`
+zniknie albo repo na produkcji bedzie uszkodzone i nie da sie wykonac `git pull --ff-only`.
 
 ## Gdzie trzymac sekrety
 

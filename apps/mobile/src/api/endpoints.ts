@@ -56,6 +56,7 @@ import type {
   ForgotPasswordResponse,
   FinanceDebt,
   FinanceSavingsAccount,
+  GenerateNextBudgetMonthRequest,
   GoogleCalendarConnectResponse,
   GoogleCalendarConnectionStatus,
   GoogleCalendarSyncResponse,
@@ -123,10 +124,7 @@ export interface ApiCallOptions {
 
 export type ApiCallOptionsInput = ApiCallOptions | string | null | undefined;
 
-export function register(
-  input: RegisterRequest,
-  options?: ApiCallOptionsInput
-): Promise<RegisterResponse> {
+export function register(input: RegisterRequest, options?: ApiCallOptionsInput): Promise<RegisterResponse> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<RegisterResponse, RegisterRequest>('/auth/register', {
@@ -136,10 +134,7 @@ export function register(
   });
 }
 
-export function verifyEmail(
-  input: VerifyEmailRequest,
-  options?: ApiCallOptionsInput
-): Promise<VerifyEmailResponse> {
+export function verifyEmail(input: VerifyEmailRequest, options?: ApiCallOptionsInput): Promise<VerifyEmailResponse> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<VerifyEmailResponse, VerifyEmailRequest>('/auth/verify-email', {
@@ -155,14 +150,11 @@ export function resendVerification(
 ): Promise<ResendVerificationResponse> {
   const requestOptions = normalizeApiCallOptions(options);
 
-  return apiRequest<ResendVerificationResponse, ResendVerificationRequest>(
-    '/auth/resend-verification',
-    {
-      body: input,
-      method: 'POST',
-      signal: requestOptions.signal
-    }
-  );
+  return apiRequest<ResendVerificationResponse, ResendVerificationRequest>('/auth/resend-verification', {
+    body: input,
+    method: 'POST',
+    signal: requestOptions.signal
+  });
 }
 
 export function login(input: LoginRequest, options?: ApiCallOptionsInput): Promise<LoginResponse> {
@@ -175,10 +167,7 @@ export function login(input: LoginRequest, options?: ApiCallOptionsInput): Promi
   });
 }
 
-export function refreshSession(
-  input: RefreshTokenRequest,
-  options?: ApiCallOptionsInput
-): Promise<LoginResponse> {
+export function refreshSession(input: RefreshTokenRequest, options?: ApiCallOptionsInput): Promise<LoginResponse> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<LoginResponse, RefreshTokenRequest>('/auth/refresh', {
@@ -188,10 +177,7 @@ export function refreshSession(
   });
 }
 
-export function loginWithGoogle(
-  input: GoogleLoginRequest,
-  options?: ApiCallOptionsInput
-): Promise<LoginResponse> {
+export function loginWithGoogle(input: GoogleLoginRequest, options?: ApiCallOptionsInput): Promise<LoginResponse> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<LoginResponse, GoogleLoginRequest>('/auth/google', {
@@ -277,10 +263,7 @@ export function getMyPermissions(options?: ApiCallOptionsInput): Promise<Effecti
   });
 }
 
-export function registerPushToken(
-  input: RegisterPushTokenRequest,
-  options?: ApiCallOptionsInput
-): Promise<PushToken> {
+export function registerPushToken(input: RegisterPushTokenRequest, options?: ApiCallOptionsInput): Promise<PushToken> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<PushToken, RegisterPushTokenRequest>('/notifications/push-tokens', {
@@ -291,10 +274,7 @@ export function registerPushToken(
   });
 }
 
-export function sendTestPush(
-  input: SendTestPushRequest = {},
-  options?: ApiCallOptionsInput
-): Promise<PushSendResult> {
+export function sendTestPush(input: SendTestPushRequest = {}, options?: ApiCallOptionsInput): Promise<PushSendResult> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<PushSendResult, SendTestPushRequest>('/notifications/test-push', {
@@ -305,9 +285,7 @@ export function sendTestPush(
   });
 }
 
-export function listNotificationPreferences(
-  options?: ApiCallOptionsInput
-): Promise<NotificationPreference[]> {
+export function listNotificationPreferences(options?: ApiCallOptionsInput): Promise<NotificationPreference[]> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<NotificationPreference[]>('/notifications/preferences', {
@@ -322,15 +300,12 @@ export function updateNotificationPreferences(
 ): Promise<NotificationPreference[]> {
   const requestOptions = normalizeApiCallOptions(options);
 
-  return apiRequest<NotificationPreference[], UpdateNotificationPreferencesRequest>(
-    '/notifications/preferences',
-    {
-      accessToken: requestOptions.accessToken,
-      body: input,
-      method: 'PATCH',
-      signal: requestOptions.signal
-    }
-  );
+  return apiRequest<NotificationPreference[], UpdateNotificationPreferencesRequest>('/notifications/preferences', {
+    accessToken: requestOptions.accessToken,
+    body: input,
+    method: 'PATCH',
+    signal: requestOptions.signal
+  });
 }
 
 export function getMyHousehold(options?: ApiCallOptionsInput): Promise<Household> {
@@ -342,10 +317,7 @@ export function getMyHousehold(options?: ApiCallOptionsInput): Promise<Household
   });
 }
 
-export function updateMyHousehold(
-  input: UpdateHouseholdRequest,
-  options?: ApiCallOptionsInput
-): Promise<Household> {
+export function updateMyHousehold(input: UpdateHouseholdRequest, options?: ApiCallOptionsInput): Promise<Household> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<Household, UpdateHouseholdRequest>('/households/me', {
@@ -365,10 +337,7 @@ export function listHouseholdMembers(options?: ApiCallOptionsInput): Promise<Hou
   });
 }
 
-export function listMemberPermissions(
-  memberId: string,
-  options?: ApiCallOptionsInput
-): Promise<EffectivePermission[]> {
+export function listMemberPermissions(memberId: string, options?: ApiCallOptionsInput): Promise<EffectivePermission[]> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<EffectivePermission[]>(`/households/me/members/${memberId}/permissions`, {
@@ -405,10 +374,7 @@ export function acceptInvitation(
   });
 }
 
-export function previewInvitation(
-  token: string,
-  options?: ApiCallOptionsInput
-): Promise<InvitationPreview> {
+export function previewInvitation(token: string, options?: ApiCallOptionsInput): Promise<InvitationPreview> {
   const requestOptions = normalizeApiCallOptions(options);
   const query = `token=${encodeURIComponent(token)}`;
 
@@ -423,20 +389,17 @@ export function completeInvitationRegistration(
 ): Promise<CompleteInvitationRegistrationResponse> {
   const requestOptions = normalizeApiCallOptions(options);
 
-  return apiRequest<
-    CompleteInvitationRegistrationResponse,
-    CompleteInvitationRegistrationRequest
-  >('/invitations/complete-registration', {
-    body: input,
-    method: 'POST',
-    signal: requestOptions.signal
-  });
+  return apiRequest<CompleteInvitationRegistrationResponse, CompleteInvitationRegistrationRequest>(
+    '/invitations/complete-registration',
+    {
+      body: input,
+      method: 'POST',
+      signal: requestOptions.signal
+    }
+  );
 }
 
-export function removeHouseholdMember(
-  memberId: string,
-  options?: ApiCallOptionsInput
-): Promise<OkResponse> {
+export function removeHouseholdMember(memberId: string, options?: ApiCallOptionsInput): Promise<OkResponse> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<OkResponse>(`/households/me/members/${memberId}`, {
@@ -475,10 +438,7 @@ export function getCurrentBudgetMonth(options?: ApiCallOptionsInput): Promise<Bu
 
 export const getFinanceSummary = getCurrentBudgetMonth;
 
-export function getBudgetMonth(
-  monthId: string,
-  options?: ApiCallOptionsInput
-): Promise<BudgetMonthDetail> {
+export function getBudgetMonth(monthId: string, options?: ApiCallOptionsInput): Promise<BudgetMonthDetail> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<BudgetMonthDetail>(`/finance/months/${monthId}`, {
@@ -497,12 +457,18 @@ export function listBudgetMonths(options?: ApiCallOptionsInput): Promise<BudgetM
 }
 
 export function generateNextBudgetMonth(
+  inputOrOptions?: GenerateNextBudgetMonthRequest | ApiCallOptionsInput,
   options?: ApiCallOptionsInput
 ): Promise<BudgetMonthDetail> {
-  const requestOptions = normalizeApiCallOptions(options);
+  const hasRequestBody = typeof inputOrOptions === 'object' && inputOrOptions !== null && 'items' in inputOrOptions;
+  const input: GenerateNextBudgetMonthRequest = hasRequestBody
+    ? (inputOrOptions as GenerateNextBudgetMonthRequest)
+    : {};
+  const requestOptions = normalizeApiCallOptions(hasRequestBody ? options : (inputOrOptions as ApiCallOptionsInput));
 
-  return apiRequest<BudgetMonthDetail>('/finance/months/generate-next', {
+  return apiRequest<BudgetMonthDetail, GenerateNextBudgetMonthRequest>('/finance/months/generate-next', {
     accessToken: requestOptions.accessToken,
+    body: input,
     method: 'POST',
     signal: requestOptions.signal
   });
@@ -522,10 +488,7 @@ export function createBudgetMonth(
   });
 }
 
-export function deleteBudgetMonth(
-  monthId: string,
-  options?: ApiCallOptionsInput
-): Promise<OkResponse> {
+export function deleteBudgetMonth(monthId: string, options?: ApiCallOptionsInput): Promise<OkResponse> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<OkResponse>(`/finance/months/${monthId}`, {
@@ -558,18 +521,13 @@ export function createBudgetCategory(
   });
 }
 
-export async function listBudgetItems(
-  options?: ApiCallOptionsInput
-): Promise<BudgetItemSummary[]> {
+export async function listBudgetItems(options?: ApiCallOptionsInput): Promise<BudgetItemSummary[]> {
   const detail = await getCurrentBudgetMonth(options);
 
   return detail.categories.flatMap((category) => category.items);
 }
 
-export function createBudgetItem(
-  input: CreateBudgetItemRequest,
-  options?: ApiCallOptionsInput
-): Promise<BudgetItem> {
+export function createBudgetItem(input: CreateBudgetItemRequest, options?: ApiCallOptionsInput): Promise<BudgetItem> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<BudgetItem, CreateBudgetItemRequest>('/finance/budget-items', {
@@ -595,10 +553,7 @@ export function updateBudgetItem(
   });
 }
 
-export function deleteBudgetItem(
-  budgetItemId: string,
-  options?: ApiCallOptionsInput
-): Promise<OkResponse> {
+export function deleteBudgetItem(budgetItemId: string, options?: ApiCallOptionsInput): Promise<OkResponse> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<OkResponse>(`/finance/budget-items/${budgetItemId}`, {
@@ -608,10 +563,7 @@ export function deleteBudgetItem(
   });
 }
 
-export function createExpense(
-  input: CreateExpenseRequest,
-  options?: ApiCallOptionsInput
-): Promise<Expense> {
+export function createExpense(input: CreateExpenseRequest, options?: ApiCallOptionsInput): Promise<Expense> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<Expense, CreateExpenseRequest>('/finance/expenses', {
@@ -681,10 +633,7 @@ export function updateFinanceDebt(
   });
 }
 
-export function deleteFinanceDebt(
-  debtId: string,
-  options?: ApiCallOptionsInput
-): Promise<OkResponse> {
+export function deleteFinanceDebt(debtId: string, options?: ApiCallOptionsInput): Promise<OkResponse> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<OkResponse>(`/finance/debts/${debtId}`, {
@@ -694,9 +643,7 @@ export function deleteFinanceDebt(
   });
 }
 
-export function listFinanceSavings(
-  options?: ApiCallOptionsInput
-): Promise<FinanceSavingsAccount[]> {
+export function listFinanceSavings(options?: ApiCallOptionsInput): Promise<FinanceSavingsAccount[]> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<FinanceSavingsAccount[]>('/finance/savings', {
@@ -737,10 +684,7 @@ export function createFinanceSavingsTransaction(
   );
 }
 
-export function deleteFinanceSavingsAccount(
-  accountId: string,
-  options?: ApiCallOptionsInput
-): Promise<OkResponse> {
+export function deleteFinanceSavingsAccount(accountId: string, options?: ApiCallOptionsInput): Promise<OkResponse> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<OkResponse>(`/finance/savings/${accountId}`, {
@@ -750,9 +694,7 @@ export function deleteFinanceSavingsAccount(
   });
 }
 
-export async function getCurrentMealPlanWeek(
-  options?: ApiCallOptionsInput
-): Promise<MealPlanDetail | null> {
+export async function getCurrentMealPlanWeek(options?: ApiCallOptionsInput): Promise<MealPlanDetail | null> {
   const requestOptions = normalizeApiCallOptions(options);
 
   const currentPlan = await apiRequest<MealPlanDetail | null | undefined>('/meal-plans/current', {
@@ -763,9 +705,7 @@ export async function getCurrentMealPlanWeek(
   return currentPlan ?? null;
 }
 
-export function listMealPlanHistory(
-  options?: ApiCallOptionsInput
-): Promise<MealPlanSummary[]> {
+export function listMealPlanHistory(options?: ApiCallOptionsInput): Promise<MealPlanSummary[]> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<MealPlanSummary[]>('/meal-plans/history', {
@@ -774,10 +714,7 @@ export function listMealPlanHistory(
   });
 }
 
-export function getMealPlanWeek(
-  planId: string,
-  options?: ApiCallOptionsInput
-): Promise<MealPlanDetail> {
+export function getMealPlanWeek(planId: string, options?: ApiCallOptionsInput): Promise<MealPlanDetail> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<MealPlanDetail>(`/meal-plans/${planId}`, {
@@ -786,10 +723,7 @@ export function getMealPlanWeek(
   });
 }
 
-export function createMealPlan(
-  input: CreateMealPlanRequest,
-  options?: ApiCallOptionsInput
-): Promise<MealPlanDetail> {
+export function createMealPlan(input: CreateMealPlanRequest, options?: ApiCallOptionsInput): Promise<MealPlanDetail> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<MealPlanDetail, CreateMealPlanRequest>('/meal-plans', {
@@ -835,36 +769,25 @@ export function finalizeMealPlanWithAi(
 ): Promise<MealPlanAiFinalizeResponse> {
   const requestOptions = normalizeApiCallOptions(options);
 
-  return apiRequest<MealPlanAiFinalizeResponse, MealPlanAiFinalizeRequest>(
-    '/meal-plans/ai/finalize',
-    {
-      accessToken: requestOptions.accessToken,
-      body: input,
-      method: 'POST',
-      signal: requestOptions.signal
-    }
-  );
+  return apiRequest<MealPlanAiFinalizeResponse, MealPlanAiFinalizeRequest>('/meal-plans/ai/finalize', {
+    accessToken: requestOptions.accessToken,
+    body: input,
+    method: 'POST',
+    signal: requestOptions.signal
+  });
 }
 
-export function generateMealPlanAiPrompt(
-  options?: ApiCallOptionsInput
-): Promise<{ prompt: string }> {
+export function generateMealPlanAiPrompt(options?: ApiCallOptionsInput): Promise<{ prompt: string }> {
   const requestOptions = normalizeApiCallOptions(options);
 
-  return apiRequest<{ prompt: string }>(
-    '/meal-plans/ai/prompt',
-    {
-      accessToken: requestOptions.accessToken,
-      method: 'GET',
-      signal: requestOptions.signal
-    }
-  );
+  return apiRequest<{ prompt: string }>('/meal-plans/ai/prompt', {
+    accessToken: requestOptions.accessToken,
+    method: 'GET',
+    signal: requestOptions.signal
+  });
 }
 
-export function deleteMealPlanWeek(
-  planId: string,
-  options?: ApiCallOptionsInput
-): Promise<OkResponse> {
+export function deleteMealPlanWeek(planId: string, options?: ApiCallOptionsInput): Promise<OkResponse> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<OkResponse>(`/meal-plans/${planId}`, {
@@ -935,10 +858,7 @@ export function listMealIdeas(options?: ApiCallOptionsInput): Promise<MealIdea[]
   });
 }
 
-export function createMealIdea(
-  input: CreateMealIdeaRequest,
-  options?: ApiCallOptionsInput
-): Promise<MealIdea> {
+export function createMealIdea(input: CreateMealIdeaRequest, options?: ApiCallOptionsInput): Promise<MealIdea> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<MealIdea, CreateMealIdeaRequest>('/meal-ideas', {
@@ -949,10 +869,7 @@ export function createMealIdea(
   });
 }
 
-export function listCalendarUpcoming(
-  limit = 8,
-  options?: ApiCallOptionsInput
-): Promise<CalendarEvent[]> {
+export function listCalendarUpcoming(limit = 8, options?: ApiCallOptionsInput): Promise<CalendarEvent[]> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<CalendarEvent[]>(`/calendar/upcoming?limit=${limit}`, {
@@ -961,20 +878,13 @@ export function listCalendarUpcoming(
   });
 }
 
-export function listCalendarEvents(
-  from: string,
-  to: string,
-  options?: ApiCallOptionsInput
-): Promise<CalendarEvent[]> {
+export function listCalendarEvents(from: string, to: string, options?: ApiCallOptionsInput): Promise<CalendarEvent[]> {
   const requestOptions = normalizeApiCallOptions(options);
 
-  return apiRequest<CalendarEvent[]>(
-    `/calendar/events?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
-    {
-      accessToken: requestOptions.accessToken,
-      signal: requestOptions.signal
-    }
-  );
+  return apiRequest<CalendarEvent[]>(`/calendar/events?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, {
+    accessToken: requestOptions.accessToken,
+    signal: requestOptions.signal
+  });
 }
 
 export function createCalendarEvent(
@@ -1006,10 +916,7 @@ export function updateCalendarEvent(
   });
 }
 
-export function deleteCalendarEvent(
-  eventId: string,
-  options?: ApiCallOptionsInput
-): Promise<OkResponse> {
+export function deleteCalendarEvent(eventId: string, options?: ApiCallOptionsInput): Promise<OkResponse> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<OkResponse>(`/calendar/events/${eventId}`, {
@@ -1019,9 +926,7 @@ export function deleteCalendarEvent(
   });
 }
 
-export function getGoogleCalendarStatus(
-  options?: ApiCallOptionsInput
-): Promise<GoogleCalendarConnectionStatus> {
+export function getGoogleCalendarStatus(options?: ApiCallOptionsInput): Promise<GoogleCalendarConnectionStatus> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<GoogleCalendarConnectionStatus>('/calendar/google/status', {
@@ -1030,9 +935,7 @@ export function getGoogleCalendarStatus(
   });
 }
 
-export function connectGoogleCalendar(
-  options?: ApiCallOptionsInput
-): Promise<GoogleCalendarConnectResponse> {
+export function connectGoogleCalendar(options?: ApiCallOptionsInput): Promise<GoogleCalendarConnectResponse> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<GoogleCalendarConnectResponse>('/calendar/google/connect', {
@@ -1042,9 +945,7 @@ export function connectGoogleCalendar(
   });
 }
 
-export function syncGoogleCalendar(
-  options?: ApiCallOptionsInput
-): Promise<GoogleCalendarSyncResponse> {
+export function syncGoogleCalendar(options?: ApiCallOptionsInput): Promise<GoogleCalendarSyncResponse> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<GoogleCalendarSyncResponse>('/calendar/google/sync', {
@@ -1054,10 +955,7 @@ export function syncGoogleCalendar(
   });
 }
 
-export function listTodoItems(
-  status?: 'todo' | 'done',
-  options?: ApiCallOptionsInput
-): Promise<TodoItem[]> {
+export function listTodoItems(status?: 'todo' | 'done', options?: ApiCallOptionsInput): Promise<TodoItem[]> {
   const requestOptions = normalizeApiCallOptions(options);
   const query = status ? `?status=${status}` : '';
 
@@ -1067,10 +965,7 @@ export function listTodoItems(
   });
 }
 
-export function createTodoItem(
-  input: CreateTodoItemRequest,
-  options?: ApiCallOptionsInput
-): Promise<TodoItem> {
+export function createTodoItem(input: CreateTodoItemRequest, options?: ApiCallOptionsInput): Promise<TodoItem> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<TodoItem, CreateTodoItemRequest>('/todo-items', {
@@ -1150,10 +1045,7 @@ export function listNotes(options?: ApiCallOptionsInput): Promise<Note[]> {
   });
 }
 
-export function createNote(
-  input: CreateNoteRequest,
-  options?: ApiCallOptionsInput
-): Promise<Note> {
+export function createNote(input: CreateNoteRequest, options?: ApiCallOptionsInput): Promise<Note> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<Note, CreateNoteRequest>('/notes', {
@@ -1164,11 +1056,7 @@ export function createNote(
   });
 }
 
-export function updateNote(
-  noteId: string,
-  input: UpdateNoteRequest,
-  options?: ApiCallOptionsInput
-): Promise<Note> {
+export function updateNote(noteId: string, input: UpdateNoteRequest, options?: ApiCallOptionsInput): Promise<Note> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<Note, UpdateNoteRequest>(`/notes/${noteId}`, {
@@ -1242,10 +1130,7 @@ export function updateCleaningTask(
   });
 }
 
-export function deleteCleaningTask(
-  taskId: string,
-  options?: ApiCallOptionsInput
-): Promise<OkResponse> {
+export function deleteCleaningTask(taskId: string, options?: ApiCallOptionsInput): Promise<OkResponse> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<OkResponse>(`/cleaning/${taskId}`, {
@@ -1264,10 +1149,7 @@ export function listAnnualCosts(options?: ApiCallOptionsInput): Promise<AnnualCo
   });
 }
 
-export function createAnnualCost(
-  input: CreateAnnualCostRequest,
-  options?: ApiCallOptionsInput
-): Promise<AnnualCost> {
+export function createAnnualCost(input: CreateAnnualCostRequest, options?: ApiCallOptionsInput): Promise<AnnualCost> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<AnnualCost, CreateAnnualCostRequest>('/annual-costs', {
@@ -1285,21 +1167,15 @@ export function completeAnnualCost(
 ): Promise<AnnualCostCompletion> {
   const requestOptions = normalizeApiCallOptions(options);
 
-  return apiRequest<AnnualCostCompletion, CompleteAnnualCostRequest>(
-    `/annual-costs/${costId}/complete`,
-    {
-      accessToken: requestOptions.accessToken,
-      body: input,
-      method: 'POST',
-      signal: requestOptions.signal
-    }
-  );
+  return apiRequest<AnnualCostCompletion, CompleteAnnualCostRequest>(`/annual-costs/${costId}/complete`, {
+    accessToken: requestOptions.accessToken,
+    body: input,
+    method: 'POST',
+    signal: requestOptions.signal
+  });
 }
 
-export function listAnnualCostHistory(
-  year: number,
-  options?: ApiCallOptionsInput
-): Promise<AnnualCostHistory[]> {
+export function listAnnualCostHistory(year: number, options?: ApiCallOptionsInput): Promise<AnnualCostHistory[]> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<AnnualCostHistory[]>(`/annual-costs/history?year=${year}`, {
@@ -1308,10 +1184,7 @@ export function listAnnualCostHistory(
   });
 }
 
-export function listDataEntries(
-  search?: string,
-  options?: ApiCallOptionsInput
-): Promise<DataEntry[]> {
+export function listDataEntries(search?: string, options?: ApiCallOptionsInput): Promise<DataEntry[]> {
   const requestOptions = normalizeApiCallOptions(options);
   const query = search ? `?search=${encodeURIComponent(search)}` : '';
 
@@ -1321,10 +1194,7 @@ export function listDataEntries(
   });
 }
 
-export function createDataEntry(
-  input: CreateDataEntryRequest,
-  options?: ApiCallOptionsInput
-): Promise<DataEntry> {
+export function createDataEntry(input: CreateDataEntryRequest, options?: ApiCallOptionsInput): Promise<DataEntry> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<DataEntry, CreateDataEntryRequest>('/data-entries', {
@@ -1345,10 +1215,7 @@ export function deleteDataEntry(id: string, options?: ApiCallOptionsInput): Prom
   });
 }
 
-export function listAttachments(
-  search?: string,
-  options?: ApiCallOptionsInput
-): Promise<Attachment[]> {
+export function listAttachments(search?: string, options?: ApiCallOptionsInput): Promise<Attachment[]> {
   const requestOptions = normalizeApiCallOptions(options);
   const query = search ? `?search=${encodeURIComponent(search)}` : '';
 
@@ -1364,15 +1231,12 @@ export function createAttachmentUploadUrl(
 ): Promise<AttachmentUploadContract> {
   const requestOptions = normalizeApiCallOptions(options);
 
-  return apiRequest<AttachmentUploadContract, CreateAttachmentUploadUrlRequest>(
-    '/attachments/upload-url',
-    {
-      accessToken: requestOptions.accessToken,
-      body: input,
-      method: 'POST',
-      signal: requestOptions.signal
-    }
-  );
+  return apiRequest<AttachmentUploadContract, CreateAttachmentUploadUrlRequest>('/attachments/upload-url', {
+    accessToken: requestOptions.accessToken,
+    body: input,
+    method: 'POST',
+    signal: requestOptions.signal
+  });
 }
 
 export async function uploadAttachmentFile(
@@ -1460,9 +1324,7 @@ export function getAttachmentFileRequest(
   options?: ApiCallOptionsInput
 ): { headers?: Record<string, string>; uri: string } {
   const requestOptions = normalizeApiCallOptions(options);
-  const headers = requestOptions.accessToken
-    ? { Authorization: `Bearer ${requestOptions.accessToken}` }
-    : undefined;
+  const headers = requestOptions.accessToken ? { Authorization: `Bearer ${requestOptions.accessToken}` } : undefined;
 
   return {
     headers,
@@ -1479,10 +1341,7 @@ export function listShoppingLists(options?: ApiCallOptionsInput): Promise<Shoppi
   });
 }
 
-export function listShoppingItems(
-  type: ShoppingListType,
-  options?: ApiCallOptionsInput
-): Promise<ShoppingItem[]> {
+export function listShoppingItems(type: ShoppingListType, options?: ApiCallOptionsInput): Promise<ShoppingItem[]> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<ShoppingItem[]>(`/shopping-lists/${type}/items`, {
@@ -1539,10 +1398,7 @@ export function updateShoppingItem(
   });
 }
 
-export function checkShoppingItem(
-  id: string,
-  options?: ApiCallOptionsInput
-): Promise<ShoppingItem> {
+export function checkShoppingItem(id: string, options?: ApiCallOptionsInput): Promise<ShoppingItem> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<ShoppingItem>(`/shopping-lists/items/${id}/check`, {
@@ -1552,10 +1408,7 @@ export function checkShoppingItem(
   });
 }
 
-export function toggleShoppingItem(
-  id: string,
-  options?: ApiCallOptionsInput
-): Promise<ShoppingItem> {
+export function toggleShoppingItem(id: string, options?: ApiCallOptionsInput): Promise<ShoppingItem> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<ShoppingItem>(`/shopping-lists/items/${id}/toggle`, {
@@ -1580,10 +1433,7 @@ export function moveShoppingItem(
   });
 }
 
-export function clearShoppingList(
-  type: ShoppingListType,
-  options?: ApiCallOptionsInput
-): Promise<BulkShoppingResult> {
+export function clearShoppingList(type: ShoppingListType, options?: ApiCallOptionsInput): Promise<BulkShoppingResult> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<BulkShoppingResult>(`/shopping-lists/${type}/items`, {
@@ -1593,9 +1443,7 @@ export function clearShoppingList(
   });
 }
 
-export function moveUncheckedShoppingToTomorrow(
-  options?: ApiCallOptionsInput
-): Promise<BulkShoppingResult> {
+export function moveUncheckedShoppingToTomorrow(options?: ApiCallOptionsInput): Promise<BulkShoppingResult> {
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<BulkShoppingResult>('/shopping-lists/daily/move-unchecked-to-tomorrow', {

@@ -1,14 +1,17 @@
 import {
+  ArrayMaxSize,
   IsBoolean,
   IsDateString,
   IsInt,
   IsIn,
+  IsArray,
   IsNumber,
   IsOptional,
   IsString,
   IsUUID,
   Length,
-  Min
+  Min,
+  ValidateNested
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -61,6 +64,26 @@ export class CreateBudgetMonthDto {
   @IsInt()
   @Min(2000)
   year!: number;
+}
+
+export class GenerateNextBudgetMonthCopyItemDto {
+  @IsUUID()
+  budgetItemId!: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  budgetAmount?: number | null;
+}
+
+export class GenerateNextBudgetMonthDto {
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(500)
+  @ValidateNested({ each: true })
+  @Type(() => GenerateNextBudgetMonthCopyItemDto)
+  items?: GenerateNextBudgetMonthCopyItemDto[];
 }
 
 export class CreateBudgetCategoryDto {

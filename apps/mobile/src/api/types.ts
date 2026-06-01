@@ -265,6 +265,15 @@ export interface CreateBudgetMonthRequest {
   year: number;
 }
 
+export interface GenerateNextBudgetMonthItemRequest {
+  budgetAmount?: number | null;
+  budgetItemId: string;
+}
+
+export interface GenerateNextBudgetMonthRequest {
+  items?: GenerateNextBudgetMonthItemRequest[];
+}
+
 export interface FinanceTotalSummary {
   incomeAmount: string;
   totalBudgetAmount: string;

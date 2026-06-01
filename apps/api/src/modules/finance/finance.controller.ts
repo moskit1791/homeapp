@@ -32,6 +32,7 @@ import {
   FinanceMemberIdParamDto,
   FinanceMonthIdParamDto,
   FinanceSavingsAccountIdParamDto,
+  GenerateNextBudgetMonthDto,
   UpdateBudgetCategoryDto,
   UpdateBudgetItemDto,
   UpdateFinanceDebtDto,
@@ -63,39 +64,29 @@ export class FinanceController {
   @Get('current-month')
   @RequirePermission('finances', 'read')
   getCurrentMonth(@CurrentHousehold() household: HouseholdContext | undefined) {
-    return this.financeSummaryService.getCurrentMonthDetail(
-      this.requireHousehold(household).householdId
-    );
+    return this.financeSummaryService.getCurrentMonthDetail(this.requireHousehold(household).householdId);
   }
 
   @Post('months/generate-next')
   @RequirePermission('finances', 'create')
-  async generateNextMonth(@CurrentHousehold() household: HouseholdContext | undefined) {
-    const generated = await this.budgetMonthsService.generateNextMonth(
-      this.requireHousehold(household).householdId
-    );
-
-    return this.financeSummaryService.getMonthDetail(
-      this.requireHousehold(household).householdId,
-      generated.id
-    );
-  }
-
-  @Post('months')
-  @RequirePermission('finances', 'create')
-  async createMonth(
+  async generateNextMonth(
     @CurrentHousehold() household: HouseholdContext | undefined,
-    @Body() dto: CreateBudgetMonthDto
+    @Body() dto: GenerateNextBudgetMonthDto = {}
   ) {
-    const created = await this.budgetMonthsService.createMonth(
+    const generated = await this.budgetMonthsService.generateNextMonth(
       this.requireHousehold(household).householdId,
       dto
     );
 
-    return this.financeSummaryService.getMonthDetail(
-      this.requireHousehold(household).householdId,
-      created.id
-    );
+    return this.financeSummaryService.getMonthDetail(this.requireHousehold(household).householdId, generated.id);
+  }
+
+  @Post('months')
+  @RequirePermission('finances', 'create')
+  async createMonth(@CurrentHousehold() household: HouseholdContext | undefined, @Body() dto: CreateBudgetMonthDto) {
+    const created = await this.budgetMonthsService.createMonth(this.requireHousehold(household).householdId, dto);
+
+    return this.financeSummaryService.getMonthDetail(this.requireHousehold(household).householdId, created.id);
   }
 
   @Get('months/archive')
@@ -106,14 +97,8 @@ export class FinanceController {
 
   @Get('months/:id')
   @RequirePermission('finances', 'read')
-  getMonth(
-    @CurrentHousehold() household: HouseholdContext | undefined,
-    @Param() params: FinanceMonthIdParamDto
-  ) {
-    return this.financeSummaryService.getMonthDetail(
-      this.requireHousehold(household).householdId,
-      params.id
-    );
+  getMonth(@CurrentHousehold() household: HouseholdContext | undefined, @Param() params: FinanceMonthIdParamDto) {
+    return this.financeSummaryService.getMonthDetail(this.requireHousehold(household).householdId, params.id);
   }
 
   @Delete('months/:id')
@@ -122,10 +107,7 @@ export class FinanceController {
     @CurrentHousehold() household: HouseholdContext | undefined,
     @Param() params: FinanceMonthIdParamDto
   ) {
-    const deleted = await this.budgetMonthsService.deleteMonth(
-      this.requireHousehold(household).householdId,
-      params.id
-    );
+    const deleted = await this.budgetMonthsService.deleteMonth(this.requireHousehold(household).householdId, params.id);
 
     if (!deleted) {
       throw new NotFoundException('Budget month not found');
@@ -140,30 +122,19 @@ export class FinanceController {
     @CurrentHousehold() household: HouseholdContext | undefined,
     @Param() params: FinanceMonthIdParamDto
   ) {
-    return this.financeSummaryService.getPersonSummary(
-      this.requireHousehold(household).householdId,
-      params.id
-    );
+    return this.financeSummaryService.getPersonSummary(this.requireHousehold(household).householdId, params.id);
   }
 
   @Get('categories')
   @RequirePermission('finances', 'read')
   listCategories(@CurrentHousehold() household: HouseholdContext | undefined) {
-    return this.budgetCategoriesService.listCategories(
-      this.requireHousehold(household).householdId
-    );
+    return this.budgetCategoriesService.listCategories(this.requireHousehold(household).householdId);
   }
 
   @Post('categories')
   @RequirePermission('finances', 'create')
-  createCategory(
-    @CurrentHousehold() household: HouseholdContext | undefined,
-    @Body() dto: CreateBudgetCategoryDto
-  ) {
-    return this.budgetCategoriesService.createCategory(
-      this.requireHousehold(household).householdId,
-      dto
-    );
+  createCategory(@CurrentHousehold() household: HouseholdContext | undefined, @Body() dto: CreateBudgetCategoryDto) {
+    return this.budgetCategoriesService.createCategory(this.requireHousehold(household).householdId, dto);
   }
 
   @Patch('categories/:id')
@@ -188,14 +159,8 @@ export class FinanceController {
 
   @Post('budget-items')
   @RequirePermission('finances', 'create')
-  createBudgetItem(
-    @CurrentHousehold() household: HouseholdContext | undefined,
-    @Body() dto: CreateBudgetItemDto
-  ) {
-    return this.budgetItemsService.createBudgetItem(
-      this.requireHousehold(household).householdId,
-      dto
-    );
+  createBudgetItem(@CurrentHousehold() household: HouseholdContext | undefined, @Body() dto: CreateBudgetItemDto) {
+    return this.budgetItemsService.createBudgetItem(this.requireHousehold(household).householdId, dto);
   }
 
   @Patch('budget-items/:id')
@@ -238,10 +203,7 @@ export class FinanceController {
 
   @Post('expenses')
   @RequirePermission('finances', 'create')
-  createExpense(
-    @CurrentHousehold() household: HouseholdContext | undefined,
-    @Body() dto: CreateExpenseDto
-  ) {
+  createExpense(@CurrentHousehold() household: HouseholdContext | undefined, @Body() dto: CreateExpenseDto) {
     return this.expensesService.createExpense(this.requireHousehold(household).householdId, dto);
   }
 
@@ -251,10 +213,7 @@ export class FinanceController {
     @CurrentHousehold() household: HouseholdContext | undefined,
     @Param() params: FinanceExpenseIdParamDto
   ) {
-    const deleted = await this.expensesService.deleteExpense(
-      this.requireHousehold(household).householdId,
-      params.id
-    );
+    const deleted = await this.expensesService.deleteExpense(this.requireHousehold(household).householdId, params.id);
 
     if (!deleted) {
       throw new NotFoundException('Expense not found');
@@ -270,11 +229,7 @@ export class FinanceController {
     @Param() params: FinanceMemberIdParamDto,
     @Body() dto: UpsertIncomeDto
   ) {
-    return this.incomesService.upsertCurrentIncome(
-      this.requireHousehold(household).householdId,
-      params.memberId,
-      dto
-    );
+    return this.incomesService.upsertCurrentIncome(this.requireHousehold(household).householdId, params.memberId, dto);
   }
 
   @Get('debts')
@@ -285,14 +240,8 @@ export class FinanceController {
 
   @Post('debts')
   @RequirePermission('finances', 'create')
-  createDebt(
-    @CurrentHousehold() household: HouseholdContext | undefined,
-    @Body() dto: CreateFinanceDebtDto
-  ) {
-    return this.financeDebtsService.createDebt(
-      this.requireHousehold(household).householdId,
-      dto
-    );
+  createDebt(@CurrentHousehold() household: HouseholdContext | undefined, @Body() dto: CreateFinanceDebtDto) {
+    return this.financeDebtsService.createDebt(this.requireHousehold(household).householdId, dto);
   }
 
   @Patch('debts/:id')
@@ -321,10 +270,7 @@ export class FinanceController {
     @CurrentHousehold() household: HouseholdContext | undefined,
     @Param() params: FinanceDebtIdParamDto
   ) {
-    const deleted = await this.financeDebtsService.deleteDebt(
-      this.requireHousehold(household).householdId,
-      params.id
-    );
+    const deleted = await this.financeDebtsService.deleteDebt(this.requireHousehold(household).householdId, params.id);
 
     if (!deleted) {
       throw new NotFoundException('Finance debt not found');
@@ -336,9 +282,7 @@ export class FinanceController {
   @Get('savings')
   @RequirePermission('finances', 'read')
   listSavings(@CurrentHousehold() household: HouseholdContext | undefined) {
-    return this.financeSavingsService.listAccounts(
-      this.requireHousehold(household).householdId
-    );
+    return this.financeSavingsService.listAccounts(this.requireHousehold(household).householdId);
   }
 
   @Post('savings')
@@ -347,10 +291,7 @@ export class FinanceController {
     @CurrentHousehold() household: HouseholdContext | undefined,
     @Body() dto: CreateFinanceSavingsAccountDto
   ) {
-    return this.financeSavingsService.createAccount(
-      this.requireHousehold(household).householdId,
-      dto
-    );
+    return this.financeSavingsService.createAccount(this.requireHousehold(household).householdId, dto);
   }
 
   @Post('savings/:id/transactions')

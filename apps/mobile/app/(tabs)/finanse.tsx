@@ -3,12 +3,21 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import type { ReactNode, RefObject } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
-import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import {
   Archive,
   Banknote,
   Car,
   CartPlus,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -34,7 +43,6 @@ import {
 import {
   createBudgetCategory,
   createBudgetItem,
-  createBudgetMonth,
   createExpense,
   createFinanceDebt,
   createFinanceSavingsAccount,
@@ -55,7 +63,6 @@ import {
   updateBudgetItem,
   updateFinanceDebt,
   type BudgetCategoryWithItems,
-  type BudgetMonthDetail,
   type BudgetMonth,
   type FinanceDebt,
   type FinanceSavingsAccount,
@@ -65,7 +72,10 @@ import {
   upsertIncome,
 } from "../../src/api";
 import { useModulePermission } from "../../src/permissions/use-permissions";
-import { loadStoredJson, saveStoredJson } from "../../src/session/secure-session-store";
+import {
+  loadStoredJson,
+  saveStoredJson,
+} from "../../src/session/secure-session-store";
 import { useSession } from "../../src/session/session-context";
 import { radii, spacing } from "../../src/theme/tokens";
 import { useAppTheme, type AppPalette } from "../../src/theme/use-app-theme";
@@ -96,7 +106,6 @@ type FinanceFormValues = {
   incomeAmount: string;
   itemAmount: string;
   itemName: string;
-  monthInput: string;
   savingsAmount: string;
   savingsName: string;
   savingsNote: string;
@@ -125,15 +134,20 @@ type FinanceModal =
   | "editItem"
   | "expense"
   | "expenseHistory"
-  | "copyAmounts"
+  | "generateMonth"
   | "debt"
-  | "month"
   | "savingsAccount"
   | "savingsTransaction"
   | null;
 type FinanceView = "budget" | "debts" | "savings";
 type FinanceBudgetLayout = "table" | "cards";
-type FinanceSortKey = "category" | "owner" | "name" | "budget" | "spent" | "remaining";
+type FinanceSortKey =
+  | "category"
+  | "owner"
+  | "name"
+  | "budget"
+  | "spent"
+  | "remaining";
 type FinanceSortDirection = "asc" | "desc";
 
 type FinanceFilters = {
@@ -174,7 +188,8 @@ export default function FinanseScreen() {
   const theme = useAppTheme();
   const styles = useMemo(() => createStyles(theme.colors), [theme.colors]);
   const screenScrollRef = useRef<ScrollView>(null);
-  const { canCreate, canDelete, canRead, canUpdate, permissionsQuery } = useModulePermission("finances");
+  const { canCreate, canDelete, canRead, canUpdate, permissionsQuery } =
+    useModulePermission("finances");
   const accessToken = session?.accessToken;
   const { control, setValue, watch } = useForm<FinanceFormValues>({
     defaultValues: {
@@ -188,7 +203,6 @@ export default function FinanseScreen() {
       incomeAmount: "",
       itemAmount: "",
       itemName: "",
-      monthInput: "",
       savingsAmount: "",
       savingsName: "",
       savingsNote: "",
@@ -201,7 +215,6 @@ export default function FinanseScreen() {
   const categoryName = watch("categoryName");
   const itemName = watch("itemName");
   const itemAmount = watch("itemAmount");
-  const monthInput = watch("monthInput");
   const expenseAmount = watch("expenseAmount");
   const debtAmount = watch("debtAmount");
   const debtDueDate = watch("debtDueDate");
@@ -217,28 +230,47 @@ export default function FinanseScreen() {
   const [selectedItemCategoryId, setSelectedItemCategoryId] = useState("");
   const [selectedItemOwnerId, setSelectedItemOwnerId] = useState("");
   const [selectedExpenseOwnerId, setSelectedExpenseOwnerId] = useState("");
-  const [selectedExpenseCategoryId, setSelectedExpenseCategoryId] = useState("");
+  const [selectedExpenseCategoryId, setSelectedExpenseCategoryId] =
+    useState("");
   const [selectedExpenseItemId, setSelectedExpenseItemId] = useState("");
-  const [expenseQuickItemId, setExpenseQuickItemId] = useState<string | null>(null);
-  const [expenseQuickCategoryId, setExpenseQuickCategoryId] = useState<string | null>(null);
-  const [historyBudgetItemId, setHistoryBudgetItemId] = useState<string | null>(null);
+  const [expenseQuickItemId, setExpenseQuickItemId] = useState<string | null>(
+    null,
+  );
+  const [expenseQuickCategoryId, setExpenseQuickCategoryId] = useState<
+    string | null
+  >(null);
+  const [historyBudgetItemId, setHistoryBudgetItemId] = useState<string | null>(
+    null,
+  );
   const [copyCategory, setCopyCategory] = useState(true);
-  const [activeFinanceView, setActiveFinanceView] = useState<FinanceView>("budget");
+  const [activeFinanceView, setActiveFinanceView] =
+    useState<FinanceView>("budget");
   const [selectedMonthId, setSelectedMonthId] = useState<string | null>(null);
   const [financeModal, setFinanceModal] = useState<FinanceModal>(null);
-  const [editingBudgetItem, setEditingBudgetItem] = useState<BudgetItemWithCategory | null>(null);
+  const [editingBudgetItem, setEditingBudgetItem] =
+    useState<BudgetItemWithCategory | null>(null);
   const [editingDebt, setEditingDebt] = useState<FinanceDebt | null>(null);
-  const [selectedSavingsAccount, setSelectedSavingsAccount] = useState<FinanceSavingsAccount | null>(null);
-  const [savingsDirection, setSavingsDirection] = useState<FinanceSavingsDirection>("add");
-  const [copiedMonthDetail, setCopiedMonthDetail] = useState<BudgetMonthDetail | null>(null);
-  const [copyAmountInputs, setCopyAmountInputs] = useState<Record<string, string>>({});
-  const [budgetLayout, setBudgetLayout] = useState<FinanceBudgetLayout>("table");
+  const [selectedSavingsAccount, setSelectedSavingsAccount] =
+    useState<FinanceSavingsAccount | null>(null);
+  const [savingsDirection, setSavingsDirection] =
+    useState<FinanceSavingsDirection>("add");
+  const [generateCopyItemIds, setGenerateCopyItemIds] = useState<string[]>([]);
+  const [generateAmountInputs, setGenerateAmountInputs] = useState<
+    Record<string, string>
+  >({});
+  const [budgetLayout, setBudgetLayout] =
+    useState<FinanceBudgetLayout>("table");
   const [budgetLayoutLoaded, setBudgetLayoutLoaded] = useState(false);
-  const [financeFilters, setFinanceFilters] = useState<FinanceFilters>(defaultFinanceFilters);
+  const [financeFilters, setFinanceFilters] = useState<FinanceFilters>(
+    defaultFinanceFilters,
+  );
   const [financeFiltersLoaded, setFinanceFiltersLoaded] = useState(false);
   const [financeFiltersExpanded, setFinanceFiltersExpanded] = useState(false);
-  const [deleteMonthConfirmVisible, setDeleteMonthConfirmVisible] = useState(false);
-  const [handledRouteAction, setHandledRouteAction] = useState<string | null>(null);
+  const [deleteMonthConfirmVisible, setDeleteMonthConfirmVisible] =
+    useState(false);
+  const [handledRouteAction, setHandledRouteAction] = useState<string | null>(
+    null,
+  );
 
   const currentQuery = useQuery({
     enabled: canRead && Boolean(accessToken),
@@ -298,7 +330,8 @@ export default function FinanseScreen() {
     [categories],
   );
   const historyBudgetItem = useMemo(
-    () => visibleFlatItems.find((item) => item.id === historyBudgetItemId) ?? null,
+    () =>
+      visibleFlatItems.find((item) => item.id === historyBudgetItemId) ?? null,
     [historyBudgetItemId, visibleFlatItems],
   );
   const currentMonth = currentSummary?.month;
@@ -317,37 +350,68 @@ export default function FinanseScreen() {
   const debts = debtsQuery.data ?? [];
   const openDebts = debts.filter((debt) => !debt.isSettled);
   const settledDebts = debts.filter((debt) => debt.isSettled);
-  const openDebtTotal = openDebts.reduce((sum, debt) => sum + Number(debt.amount ?? 0), 0);
+  const openDebtTotal = openDebts.reduce(
+    (sum, debt) => sum + Number(debt.amount ?? 0),
+    0,
+  );
   const savings = savingsQuery.data ?? [];
-  const savingsTotal = savings.reduce((sum, account) => sum + Number(account.currentAmount ?? 0), 0);
+  const savingsTotal = savings.reduce(
+    (sum, account) => sum + Number(account.currentAmount ?? 0),
+    0,
+  );
   const monthTabs = useMemo(() => {
-    const months = [...(archiveQuery.data ?? []), ...(currentMonth ? [currentMonth] : [])];
+    const months = [
+      ...(archiveQuery.data ?? []),
+      ...(currentMonth ? [currentMonth] : []),
+    ];
     const unique = new Map<string, BudgetMonth>();
 
     months.forEach((month) => unique.set(month.id, month));
 
-    return [...unique.values()]
-      .sort((left, right) => left.year - right.year || left.month - right.month);
+    return [...unique.values()].sort(
+      (left, right) => left.year - right.year || left.month - right.month,
+    );
   }, [archiveQuery.data, currentMonth]);
-  const selectedMonthIndex = monthTabs.findIndex((month) => month.id === selectedMonthId);
-  const selectedMonth = monthTabs.find((month) => month.id === selectedMonthId) ?? visibleMonth;
-  const showingArchiveMonth = Boolean(selectedMonthId) && selectedMonthId !== currentSummary?.month.id;
-  const canEditVisibleMonth = canUpdate && Boolean(visibleMonth?.id);
-  const canCreateVisibleExpense = canCreate && Boolean(visibleMonth?.isCurrent);
-  const canDeleteVisibleMonthItems = canDelete && Boolean(visibleMonth?.id);
+  const selectedMonthIndex = monthTabs.findIndex(
+    (month) => month.id === selectedMonthId,
+  );
+  const selectedMonth =
+    monthTabs.find((month) => month.id === selectedMonthId) ?? visibleMonth;
+  const showingArchiveMonth =
+    Boolean(selectedMonthId) && selectedMonthId !== currentSummary?.month.id;
+  const isVisibleMonthCurrent = Boolean(visibleMonth?.isCurrent);
+  const canCreateVisibleBudgetItem = canCreate && isVisibleMonthCurrent;
+  const canUpdateVisibleBudgetItem = canUpdate && isVisibleMonthCurrent;
+  const canCreateVisibleExpense = canCreate && isVisibleMonthCurrent;
+  const canDeleteVisibleMonthItems = canDelete && isVisibleMonthCurrent;
   const canGoPreviousMonth = selectedMonthIndex > 0;
-  const canGoNextMonth = selectedMonthIndex >= 0 && selectedMonthIndex < monthTabs.length - 1;
-  const copiedMonthItems = useMemo<BudgetItemWithCategory[]>(
+  const canGoNextMonth =
+    selectedMonthIndex >= 0 && selectedMonthIndex < monthTabs.length - 1;
+  const generateSourceCategories = currentSummary?.categories ?? [];
+  const generateSourceItems = useMemo<BudgetItemWithCategory[]>(
     () =>
-      (copiedMonthDetail?.categories ?? []).flatMap((category) =>
+      generateSourceCategories.flatMap((category) =>
         getCategoryItems(category).map((item) => ({ ...item, category })),
       ),
-    [copiedMonthDetail],
+    [generateSourceCategories],
+  );
+  const generateSelectedItemSet = useMemo(
+    () => new Set(generateCopyItemIds),
+    [generateCopyItemIds],
+  );
+  const selectedGenerateItems = useMemo(
+    () =>
+      generateSourceItems.filter((item) =>
+        generateSelectedItemSet.has(item.id),
+      ),
+    [generateSelectedItemSet, generateSourceItems],
   );
   const financeOwnerOptions = useMemo(() => {
     const owners = new Map<string, string>();
 
-    incomes.forEach((income) => owners.set(income.ownerMemberId, income.displayName || income.email));
+    incomes.forEach((income) =>
+      owners.set(income.ownerMemberId, income.displayName || income.email),
+    );
     visibleFlatItems.forEach((item) => {
       if (item.owner?.memberId) {
         owners.set(item.owner.memberId, formatOwner(item.owner));
@@ -371,15 +435,23 @@ export default function FinanseScreen() {
   }, [categories, selectedExpenseOwnerId]);
   const expenseItems = useMemo(
     () =>
-      expenseCategoryOptions.find((option) => option.category.id === selectedExpenseCategoryId)?.items ?? [],
+      expenseCategoryOptions.find(
+        (option) => option.category.id === selectedExpenseCategoryId,
+      )?.items ?? [],
     [expenseCategoryOptions, selectedExpenseCategoryId],
   );
   const selectedExpenseCategory = useMemo(
-    () => categories.find((category) => category.id === selectedExpenseCategoryId) ?? null,
+    () =>
+      categories.find(
+        (category) => category.id === selectedExpenseCategoryId,
+      ) ?? null,
     [categories, selectedExpenseCategoryId],
   );
   const selectedExpenseOwner = useMemo(
-    () => expenseOwnerOptions.find((owner) => owner.id === selectedExpenseOwnerId) ?? null,
+    () =>
+      expenseOwnerOptions.find(
+        (owner) => owner.id === selectedExpenseOwnerId,
+      ) ?? null,
     [expenseOwnerOptions, selectedExpenseOwnerId],
   );
   const selectedExpenseItem = useMemo(
@@ -387,7 +459,9 @@ export default function FinanseScreen() {
     [expenseItems, selectedExpenseItemId],
   );
   const isQuickExpense = Boolean(expenseQuickItemId && selectedExpenseItem);
-  const isQuickCategoryExpense = Boolean(expenseQuickCategoryId && selectedExpenseCategory);
+  const isQuickCategoryExpense = Boolean(
+    expenseQuickCategoryId && selectedExpenseCategory,
+  );
   const isPresetExpense = isQuickExpense || isQuickCategoryExpense;
   const historyExpenses = historyBudgetItem?.expenses ?? [];
   const filteredRows = useMemo(
@@ -407,6 +481,80 @@ export default function FinanseScreen() {
     }
   }
 
+  function getGenerateAmountDefault(item: BudgetItemWithCategory): string {
+    return item.budgetAmount ? formatMoneyInput(item.budgetAmount) : "";
+  }
+
+  function openGenerateMonthModal() {
+    setGenerateCopyItemIds(generateSourceItems.map((item) => item.id));
+    setGenerateAmountInputs(
+      Object.fromEntries(
+        generateSourceItems.map((item) => [
+          item.id,
+          getGenerateAmountDefault(item),
+        ]),
+      ),
+    );
+    setFinanceModal("generateMonth");
+  }
+
+  function toggleGenerateItemCopy(item: BudgetItemWithCategory) {
+    const isSelected = generateSelectedItemSet.has(item.id);
+
+    if (isSelected) {
+      setGenerateCopyItemIds((current) =>
+        current.filter((id) => id !== item.id),
+      );
+      return;
+    }
+
+    setGenerateCopyItemIds((current) =>
+      current.includes(item.id) ? current : [...current, item.id],
+    );
+    setGenerateAmountInputs((current) =>
+      current[item.id] === undefined
+        ? { ...current, [item.id]: getGenerateAmountDefault(item) }
+        : current,
+    );
+  }
+
+  function setGenerateCategoryCopy(
+    category: BudgetCategoryWithItems,
+    checked: boolean,
+  ) {
+    const categoryItems = getCategoryItems(category).map((item) => ({
+      ...item,
+      category,
+    }));
+    const categoryItemIds = categoryItems.map((item) => item.id);
+
+    setGenerateCopyItemIds((current) => {
+      const next = new Set(current);
+
+      categoryItemIds.forEach((id) => {
+        if (checked) {
+          next.add(id);
+        } else {
+          next.delete(id);
+        }
+      });
+
+      return [...next];
+    });
+
+    if (checked) {
+      setGenerateAmountInputs((current) => ({
+        ...Object.fromEntries(
+          categoryItems.map((item) => [
+            item.id,
+            getGenerateAmountDefault(item),
+          ]),
+        ),
+        ...current,
+      }));
+    }
+  }
+
   useEffect(() => {
     if (!selectedMonthId && currentMonth?.id) {
       setSelectedMonthId(currentMonth.id);
@@ -416,17 +564,19 @@ export default function FinanseScreen() {
   useEffect(() => {
     let isMounted = true;
 
-    loadStoredJson<Partial<FinanceFilters>>(financeFilterStorageKey).then((storedFilters) => {
-      if (!isMounted) {
-        return;
-      }
+    loadStoredJson<Partial<FinanceFilters>>(financeFilterStorageKey).then(
+      (storedFilters) => {
+        if (!isMounted) {
+          return;
+        }
 
-      if (storedFilters) {
-        setFinanceFilters({ ...defaultFinanceFilters, ...storedFilters });
-      }
+        if (storedFilters) {
+          setFinanceFilters({ ...defaultFinanceFilters, ...storedFilters });
+        }
 
-      setFinanceFiltersLoaded(true);
-    });
+        setFinanceFiltersLoaded(true);
+      },
+    );
 
     return () => {
       isMounted = false;
@@ -444,13 +594,18 @@ export default function FinanseScreen() {
   useEffect(() => {
     let isMounted = true;
 
-    loadStoredJson<{ layout?: FinanceBudgetLayout }>(financeBudgetLayoutStorageKey)
+    loadStoredJson<{ layout?: FinanceBudgetLayout }>(
+      financeBudgetLayoutStorageKey,
+    )
       .then((storedLayout) => {
         if (!isMounted) {
           return;
         }
 
-        if (storedLayout?.layout === "table" || storedLayout?.layout === "cards") {
+        if (
+          storedLayout?.layout === "table" ||
+          storedLayout?.layout === "cards"
+        ) {
           setBudgetLayout(storedLayout.layout);
         }
 
@@ -552,7 +707,9 @@ export default function FinanseScreen() {
       return;
     }
 
-    const categoryIds = new Set(expenseCategoryOptions.map((option) => option.category.id));
+    const categoryIds = new Set(
+      expenseCategoryOptions.map((option) => option.category.id),
+    );
 
     if (categoryIds.has(selectedExpenseCategoryId)) {
       return;
@@ -588,9 +745,15 @@ export default function FinanseScreen() {
     }
 
     setSelectedExpenseItemId("");
-  }, [expenseItems, financeModal, selectedExpenseCategoryId, selectedExpenseItemId]);
+  }, [
+    expenseItems,
+    financeModal,
+    selectedExpenseCategoryId,
+    selectedExpenseItemId,
+  ]);
 
-  const invalidateFinance = () => queryClient.invalidateQueries({ queryKey: queryKeys.finances });
+  const invalidateFinance = () =>
+    queryClient.invalidateQueries({ queryKey: queryKeys.finances });
   const incomeMutation = useMutation({
     mutationFn: () =>
       upsertIncome(
@@ -662,7 +825,8 @@ export default function FinanseScreen() {
     },
   });
   const deleteItemMutation = useMutation({
-    mutationFn: (budgetItemId: string) => deleteBudgetItem(budgetItemId, { accessToken }),
+    mutationFn: (budgetItemId: string) =>
+      deleteBudgetItem(budgetItemId, { accessToken }),
     onSuccess: async (_, budgetItemId) => {
       if (selectedExpenseItemId === budgetItemId) {
         setSelectedExpenseItemId("");
@@ -693,7 +857,11 @@ export default function FinanseScreen() {
   });
   const settleDebtMutation = useMutation({
     mutationFn: (debt: FinanceDebt) =>
-      updateFinanceDebt(debt.id, { isSettled: !debt.isSettled }, { accessToken }),
+      updateFinanceDebt(
+        debt.id,
+        { isSettled: !debt.isSettled },
+        { accessToken },
+      ),
     onSuccess: async () => {
       await invalidateFinance();
     },
@@ -740,7 +908,8 @@ export default function FinanseScreen() {
     },
   });
   const deleteSavingsAccountMutation = useMutation({
-    mutationFn: (accountId: string) => deleteFinanceSavingsAccount(accountId, { accessToken }),
+    mutationFn: (accountId: string) =>
+      deleteFinanceSavingsAccount(accountId, { accessToken }),
     onSuccess: async () => {
       await invalidateFinance();
     },
@@ -749,7 +918,12 @@ export default function FinanseScreen() {
     mutationFn: async () => {
       let budgetItemId = selectedExpenseItemId;
 
-      if (!budgetItemId && expenseQuickCategoryId && selectedExpenseCategory && visibleMonth?.id) {
+      if (
+        !budgetItemId &&
+        expenseQuickCategoryId &&
+        selectedExpenseCategory &&
+        visibleMonth?.id
+      ) {
         const createdItem = await createBudgetItem(
           {
             budgetAmount: null,
@@ -786,74 +960,24 @@ export default function FinanseScreen() {
     },
   });
   const nextMonthMutation = useMutation({
-    mutationFn: () => generateNextBudgetMonth({ accessToken }),
-    onSuccess: async (nextMonth) => {
-      setSelectedMonthId(nextMonth.month.id);
-      setCopiedMonthDetail(nextMonth);
-      setCopyAmountInputs(
-        Object.fromEntries(
-          nextMonth.categories.flatMap((category) =>
-            getCategoryItems(category).map((item) => [item.id, item.budgetAmount ?? ""]),
-          ),
-        ),
-      );
-      setFinanceModal("copyAmounts");
-      await invalidateFinance();
-      await queryClient.invalidateQueries({ queryKey: queryKeys.start });
-    },
-  });
-  const createMonthMutation = useMutation({
-    mutationFn: () => {
-      const parsed = parseMonthInput(monthInput);
-
-      if (!parsed) {
-        throw new Error("Invalid month");
-      }
-
-      return createBudgetMonth(
+    mutationFn: () =>
+      generateNextBudgetMonth(
         {
-          month: parsed.month,
-          sourceBudgetMonthId: visibleMonth?.id ?? null,
-          year: parsed.year,
+          items: selectedGenerateItems.map((item) => {
+            const amountInput = generateAmountInputs[item.id]?.trim() ?? "";
+
+            return {
+              budgetAmount: amountInput ? parseMoney(amountInput) : null,
+              budgetItemId: item.id,
+            };
+          }),
         },
         { accessToken },
-      );
-    },
-    onSuccess: async (createdMonth) => {
-      setValue("monthInput", "");
-      setSelectedMonthId(createdMonth.month.id);
-      setCopiedMonthDetail(createdMonth);
-      setCopyAmountInputs(
-        Object.fromEntries(
-          createdMonth.categories.flatMap((category) =>
-            getCategoryItems(category).map((item) => [item.id, item.budgetAmount ?? ""]),
-          ),
-        ),
-      );
-      await invalidateFinance();
-      await queryClient.invalidateQueries({ queryKey: queryKeys.start });
-      setFinanceModal(createdMonth.categories.some((category) => getCategoryItems(category).length > 0) ? "copyAmounts" : null);
-    },
-  });
-  const copyAmountsMutation = useMutation({
-    mutationFn: async () => {
-      await Promise.all(
-        copiedMonthItems.map((item) =>
-          updateBudgetItem(
-            item.id,
-            {
-              budgetAmount: copyAmountInputs[item.id]?.trim()
-                ? parseMoney(copyAmountInputs[item.id] ?? "")
-                : null,
-            },
-            { accessToken },
-          ),
-        ),
-      );
-    },
-    onSuccess: async () => {
-      setCopiedMonthDetail(null);
-      setCopyAmountInputs({});
+      ),
+    onSuccess: async (nextMonth) => {
+      setSelectedMonthId(nextMonth.month.id);
+      setGenerateCopyItemIds([]);
+      setGenerateAmountInputs({});
       setFinanceModal(null);
       await invalidateFinance();
       await queryClient.invalidateQueries({ queryKey: queryKeys.start });
@@ -867,7 +991,9 @@ export default function FinanseScreen() {
       setFinanceModal(null);
       setSelectedMonthId(null);
       if (deletedMonthId) {
-        queryClient.removeQueries({ queryKey: [...queryKeys.finances, "month", deletedMonthId] });
+        queryClient.removeQueries({
+          queryKey: [...queryKeys.finances, "month", deletedMonthId],
+        });
       }
       await invalidateFinance();
       await queryClient.invalidateQueries({ queryKey: queryKeys.start });
@@ -882,6 +1008,8 @@ export default function FinanseScreen() {
     setExpenseQuickItemId(null);
     setExpenseQuickCategoryId(null);
     setHistoryBudgetItemId(null);
+    setGenerateCopyItemIds([]);
+    setGenerateAmountInputs({});
   }
 
   function openExpenseModal() {
@@ -912,8 +1040,6 @@ export default function FinanseScreen() {
     setFinanceModal("item");
   }
 
-
-
   function openExpenseHistory(item: BudgetItemWithCategory) {
     setHistoryBudgetItemId(item.id);
     setFinanceModal("expenseHistory");
@@ -924,7 +1050,10 @@ export default function FinanseScreen() {
     setSelectedItemCategoryId(item.categoryId);
     setSelectedItemOwnerId(item.owner?.memberId ?? "");
     setValue("itemName", item.name);
-    setValue("itemAmount", item.budgetAmount ? formatMoneyInput(item.budgetAmount) : "");
+    setValue(
+      "itemAmount",
+      item.budgetAmount ? formatMoneyInput(item.budgetAmount) : "",
+    );
     setFinanceModal("item");
   }
 
@@ -978,7 +1107,10 @@ export default function FinanseScreen() {
     setValue("savingsTransactionNote", "");
   }
 
-  function openSavingsTransaction(account: FinanceSavingsAccount, direction: FinanceSavingsDirection) {
+  function openSavingsTransaction(
+    account: FinanceSavingsAccount,
+    direction: FinanceSavingsDirection,
+  ) {
     setSelectedSavingsAccount(account);
     setSavingsDirection(direction);
     setValue("savingsTransactionAmount", "");
@@ -990,14 +1122,13 @@ export default function FinanseScreen() {
     canUpdate && Boolean(selectedIncomeMemberId) && isValidMoney(incomeAmount);
   const canSaveCategory = canCreate && Boolean(categoryName.trim());
   const canSaveItem =
-    canCreate &&
-    Boolean(visibleMonth?.id) &&
+    canCreateVisibleBudgetItem &&
     Boolean(itemName.trim()) &&
     Boolean(selectedItemCategoryId) &&
     Boolean(selectedItemOwnerId) &&
     (!itemAmount.trim() || isValidMoney(itemAmount));
   const canSaveEditedItem =
-    canUpdate &&
+    canUpdateVisibleBudgetItem &&
     Boolean(editingBudgetItem?.id) &&
     Boolean(itemName.trim()) &&
     Boolean(selectedItemCategoryId) &&
@@ -1009,9 +1140,9 @@ export default function FinanseScreen() {
     (Boolean(selectedExpenseItem) ||
       Boolean(
         expenseQuickCategoryId &&
-          selectedExpenseCategory &&
-          selectedExpenseOwnerId &&
-          visibleMonth?.id,
+        selectedExpenseCategory &&
+        selectedExpenseOwnerId &&
+        visibleMonth?.id,
       ));
   const canSaveDebt =
     (editingDebt ? canUpdate : canCreate) &&
@@ -1020,23 +1151,25 @@ export default function FinanseScreen() {
     isPositiveMoney(debtAmount) &&
     (!debtDueDate.trim() || /^\d{4}-\d{2}-\d{2}$/.test(debtDueDate));
   const canSaveSavingsAccount =
-    canCreate &&
-    Boolean(savingsName.trim()) &&
-    isValidMoney(savingsAmount);
+    canCreate && Boolean(savingsName.trim()) && isValidMoney(savingsAmount);
   const canSaveSavingsTransaction =
     canUpdate &&
     Boolean(selectedSavingsAccount?.id) &&
     isPositiveMoney(savingsTransactionAmount);
-  const canSaveCopyAmounts =
-    copiedMonthItems.length > 0 &&
-    copiedMonthItems.every((item) => {
-      const value = copyAmountInputs[item.id] ?? "";
+  const canGenerateNextMonth =
+    canCreate &&
+    Boolean(currentMonth?.id) &&
+    !nextMonthMutation.isPending &&
+    selectedGenerateItems.every((item) => {
+      const value = generateAmountInputs[item.id] ?? "";
 
       return !value.trim() || isValidMoney(value);
     });
   const canRemoveSelectedMonth =
-    canDelete && Boolean(selectedMonthId) && monthTabs.length > 1 && !deleteMonthMutation.isPending;
-  const canCreateMonth = canCreate && Boolean(parseMonthInput(monthInput)) && !createMonthMutation.isPending;
+    canDelete &&
+    Boolean(selectedMonthId) &&
+    monthTabs.length > 1 &&
+    !deleteMonthMutation.isPending;
 
   if (permissionsQuery.isLoading) {
     return (
@@ -1058,7 +1191,10 @@ export default function FinanseScreen() {
     <AppScreen scrollRef={screenScrollRef} title="Finanse">
       <QueryState
         emptyText="Brak danych finansowych."
-        error={currentQuery.error ?? (showingArchiveMonth ? selectedArchiveQuery.error : null)}
+        error={
+          currentQuery.error ??
+          (showingArchiveMonth ? selectedArchiveQuery.error : null)
+        }
         isEmpty={!currentQuery.isLoading && !summary}
         isLoading={currentQuery.isLoading || selectedArchiveQuery.isLoading}
       />
@@ -1083,7 +1219,14 @@ export default function FinanseScreen() {
                 onPress={() => selectAdjacentMonth(-1)}
                 style={styles.monthNavButton}
               >
-                <ChevronLeft color={canGoPreviousMonth ? theme.colors.textMuted : theme.colors.textSubtle} size={20} />
+                <ChevronLeft
+                  color={
+                    canGoPreviousMonth
+                      ? theme.colors.textMuted
+                      : theme.colors.textSubtle
+                  }
+                  size={20}
+                />
               </IconButton>
               <Text numberOfLines={1} style={styles.monthSwitcherTitle}>
                 {visibleMonth ? formatMonthLong(visibleMonth) : "Miesiąc"}
@@ -1094,7 +1237,14 @@ export default function FinanseScreen() {
                 onPress={() => selectAdjacentMonth(1)}
                 style={styles.monthNavButton}
               >
-                <ChevronRight color={canGoNextMonth ? theme.colors.textMuted : theme.colors.textSubtle} size={20} />
+                <ChevronRight
+                  color={
+                    canGoNextMonth
+                      ? theme.colors.textMuted
+                      : theme.colors.textSubtle
+                  }
+                  size={20}
+                />
               </IconButton>
             </View>
             <IconButton
@@ -1120,7 +1270,11 @@ export default function FinanseScreen() {
                 style={styles.monthDeleteButton}
               >
                 <Trash2
-                  color={canRemoveSelectedMonth ? theme.colors.danger : theme.colors.textSubtle}
+                  color={
+                    canRemoveSelectedMonth
+                      ? theme.colors.danger
+                      : theme.colors.textSubtle
+                  }
                   size={19}
                 />
               </IconButton>
@@ -1141,7 +1295,9 @@ export default function FinanseScreen() {
             expanded={financeFiltersExpanded}
             filters={financeFilters}
             onChange={updateFinanceFilters}
-            onToggleExpanded={() => setFinanceFiltersExpanded((value) => !value)}
+            onToggleExpanded={() =>
+              setFinanceFiltersExpanded((value) => !value)
+            }
             owners={financeOwnerOptions}
             resultCount={filteredRows.length}
             totalCount={visibleFlatItems.length}
@@ -1150,8 +1306,8 @@ export default function FinanseScreen() {
           {budgetLayout === "table" ? (
             <FinanceSheet
               canCreateExpense={canCreateVisibleExpense}
-              canCreateItem={canEditVisibleMonth}
-              canUpdate={canEditVisibleMonth}
+              canCreateItem={canCreateVisibleBudgetItem}
+              canUpdate={canUpdateVisibleBudgetItem}
               categories={filteredCategories}
               currencyCode={currencyCode}
               onAddCategoryItem={openItemModalForCategory}
@@ -1163,8 +1319,8 @@ export default function FinanseScreen() {
           ) : (
             <FinanceCategoryCards
               canCreateExpense={canCreateVisibleExpense}
-              canCreateItem={canEditVisibleMonth}
-              canUpdate={canEditVisibleMonth}
+              canCreateItem={canCreateVisibleBudgetItem}
+              canUpdate={canUpdateVisibleBudgetItem}
               categories={filteredCategories}
               currencyCode={currencyCode}
               onAddCategoryItem={openItemModalForCategory}
@@ -1178,67 +1334,106 @@ export default function FinanseScreen() {
 
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>RAZEM</Text>
-            <Text style={styles.totalValue}>{formatMoney(budgetAmount, currencyCode)}</Text>
-            <Text style={styles.totalValue}>{formatMoney(spentAmount, currencyCode)}</Text>
-            <Text style={[styles.totalValue, remainingAmount < 0 && styles.dangerText]}>
+            <Text style={styles.totalValue}>
+              {formatMoney(budgetAmount, currencyCode)}
+            </Text>
+            <Text style={styles.totalValue}>
+              {formatMoney(spentAmount, currencyCode)}
+            </Text>
+            <Text
+              style={[
+                styles.totalValue,
+                remainingAmount < 0 && styles.dangerText,
+              ]}
+            >
               {formatMoney(remainingAmount, currencyCode)}
             </Text>
           </View>
 
           {canRead ? (
-            <Pressable onPress={() => setFinanceModal("menu")} style={styles.fab}>
+            <Pressable
+              onPress={() => setFinanceModal("menu")}
+              style={styles.fab}
+            >
               <Plus color={theme.colors.card} size={25} />
             </Pressable>
           ) : null}
 
           <FormModal
             onClose={closeFinanceModal}
-            subtitle="Zmień układ tabeli albo wybierz, co chcesz dopisać do finansów."
             title="Menu finansów"
             visible={financeModal === "menu"}
           >
-            <View style={styles.actionPicker}>
-              <ActionButton
-                onPress={toggleBudgetLayout}
-                title={budgetLayout === "table" ? "Układ: kafelki" : "Układ: tabela"}
-                variant="secondary"
-              />
-              {canUpdate ? (
-                <ActionButton onPress={() => setFinanceModal("income")} title="Zmień dochód" variant="secondary" />
-              ) : null}
+            <View style={styles.financeMenu}>
               {canCreate ? (
-                <>
-                  <ActionButton onPress={() => setFinanceModal("category")} title="Dodaj kategorię" variant="secondary" />
-                  <ActionButton onPress={() => setFinanceModal("month")} title="Dodaj miesiąc" variant="secondary" />
-                  <ActionButton
-                    onPress={() => {
-                      setEditingBudgetItem(null);
-                      setValue("itemName", "");
-                      setValue("itemAmount", "");
-                      setFinanceModal("item");
-                    }}
-                    title="Dodaj pozycję budżetu"
-                  />
-                  <ActionButton onPress={openExpenseModal} title="Dodaj wydatek" variant="secondary" />
-                  <ActionButton
-                    disabled={nextMonthMutation.isPending}
-                    loading={nextMonthMutation.isPending}
-                    onPress={() => nextMonthMutation.mutate()}
-                    title="Wygeneruj kolejny miesiąc"
-                    variant="ghost"
-                  />
-                </>
+                <View style={styles.financeMenuSection}>
+                  <Text style={styles.financeMenuHeading}>Budżet</Text>
+                  <View style={styles.actionPicker}>
+                    <ActionButton
+                      onPress={() => setFinanceModal("category")}
+                      title="Dodaj kategorię"
+                      variant="secondary"
+                    />
+                    <ActionButton
+                      disabled={!canCreateVisibleBudgetItem}
+                      onPress={() => {
+                        setEditingBudgetItem(null);
+                        setValue("itemName", "");
+                        setValue("itemAmount", "");
+                        setFinanceModal("item");
+                      }}
+                      title="Dodaj pozycję budżetu"
+                    />
+                    <ActionButton
+                      disabled={!canCreateVisibleExpense}
+                      onPress={openExpenseModal}
+                      title="Dodaj wydatek"
+                      variant="secondary"
+                    />
+                  </View>
+                </View>
               ) : null}
-              {canDelete ? (
-                <ActionButton
-                  disabled={!canRemoveSelectedMonth}
-                  onPress={() => setDeleteMonthConfirmVisible(true)}
-                  title="Usuń wybrany miesiąc"
-                  variant="ghost"
-                />
+
+              {canCreate || canDelete ? (
+                <View style={styles.financeMenuSection}>
+                  <Text style={styles.financeMenuHeading}>Miesiąc</Text>
+                  <View style={styles.actionPicker}>
+                    {canCreate ? (
+                      <ActionButton
+                        disabled={!currentMonth?.id}
+                        onPress={openGenerateMonthModal}
+                        title="Wygeneruj nowy miesiąc"
+                      />
+                    ) : null}
+                    {canDelete ? (
+                      <ActionButton
+                        disabled={!canRemoveSelectedMonth}
+                        onPress={() => setDeleteMonthConfirmVisible(true)}
+                        title="Usuń wybrany miesiąc"
+                        variant="ghost"
+                      />
+                    ) : null}
+                  </View>
+                </View>
+              ) : null}
+
+              {canUpdate ? (
+                <View style={styles.financeMenuSection}>
+                  <Text style={styles.financeMenuHeading}>Domownicy</Text>
+                  <View style={styles.actionPicker}>
+                    <ActionButton
+                      onPress={() => setFinanceModal("income")}
+                      title="Zmień dochód"
+                      variant="secondary"
+                    />
+                  </View>
+                </View>
               ) : null}
               {deleteMonthMutation.error ? (
-                <InlineAlert tone="error" text="Nie udało się usunąć miesiąca." />
+                <InlineAlert
+                  tone="error"
+                  text="Nie udało się usunąć miesiąca."
+                />
               ) : null}
             </View>
           </FormModal>
@@ -1253,27 +1448,156 @@ export default function FinanseScreen() {
                   variant="secondary"
                 />
                 <ActionButton
-                  disabled={!canCreateMonth}
-                  loading={createMonthMutation.isPending}
-                  onPress={() => createMonthMutation.mutate()}
+                  disabled={!canGenerateNextMonth}
+                  loading={nextMonthMutation.isPending}
+                  onPress={() => nextMonthMutation.mutate()}
                   style={styles.modalFooterButton}
-                  title="Dodaj"
+                  title="Wygeneruj"
                 />
               </View>
             }
             onClose={closeFinanceModal}
-            subtitle="Struktura pozycji zostanie skopiowana z wybranego miesiąca bez kwot."
-            title="Dodaj miesiąc"
-            visible={financeModal === "month"}
+            subtitle={currentMonth ? formatMonthLong(currentMonth) : undefined}
+            title="Wygeneruj nowy miesiąc"
+            visible={financeModal === "generateMonth"}
           >
-            <TextField
-              control={control}
-              label="Miesiąc"
-              name="monthInput"
-              placeholder="YYYY-MM"
-            />
-            {createMonthMutation.error ? (
-              <InlineAlert tone="error" text="Podaj miesiąc w formacie YYYY-MM, który jeszcze nie istnieje." />
+            {generateSourceItems.length > 0 ? (
+              <View style={styles.generateCopyList}>
+                {generateSourceCategories.map((category) => {
+                  const categoryItems = getCategoryItems(category).map(
+                    (item) => ({ ...item, category }),
+                  );
+
+                  if (categoryItems.length === 0) {
+                    return null;
+                  }
+
+                  const selectedCount = categoryItems.filter((item) =>
+                    generateSelectedItemSet.has(item.id),
+                  ).length;
+                  const allSelected = selectedCount === categoryItems.length;
+                  const partiallySelected = selectedCount > 0 && !allSelected;
+
+                  return (
+                    <View
+                      key={category.id}
+                      style={styles.generateCategoryGroup}
+                    >
+                      <Pressable
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: allSelected }}
+                        onPress={() =>
+                          setGenerateCategoryCopy(category, !allSelected)
+                        }
+                        style={styles.generateCategoryHeader}
+                      >
+                        <View
+                          style={[
+                            styles.generateCheckbox,
+                            allSelected && styles.generateCheckboxChecked,
+                            partiallySelected && styles.generateCheckboxPartial,
+                          ]}
+                        >
+                          {allSelected ? (
+                            <Check color={theme.colors.inverseText} size={13} />
+                          ) : partiallySelected ? (
+                            <Minus color={theme.colors.inverseText} size={13} />
+                          ) : null}
+                        </View>
+                        <View style={styles.generateCategoryText}>
+                          <Text
+                            numberOfLines={1}
+                            style={styles.generateCategoryTitle}
+                          >
+                            {category.name}
+                          </Text>
+                          <Text style={styles.generateCategoryMeta}>
+                            {selectedCount}/{categoryItems.length} pozycji
+                          </Text>
+                        </View>
+                      </Pressable>
+
+                      <View style={styles.generateItemList}>
+                        {categoryItems.map((item) => {
+                          const selected = generateSelectedItemSet.has(item.id);
+
+                          return (
+                            <View
+                              key={item.id}
+                              style={[
+                                styles.generateItemRow,
+                                !selected && styles.generateItemRowMuted,
+                              ]}
+                            >
+                              <Pressable
+                                accessibilityRole="checkbox"
+                                accessibilityState={{ checked: selected }}
+                                onPress={() => toggleGenerateItemCopy(item)}
+                                style={styles.generateItemCheckButton}
+                              >
+                                <View
+                                  style={[
+                                    styles.generateCheckbox,
+                                    selected && styles.generateCheckboxChecked,
+                                  ]}
+                                >
+                                  {selected ? (
+                                    <Check
+                                      color={theme.colors.inverseText}
+                                      size={13}
+                                    />
+                                  ) : null}
+                                </View>
+                              </Pressable>
+                              <View style={styles.copyAmountText}>
+                                <Text
+                                  numberOfLines={1}
+                                  style={styles.copyAmountTitle}
+                                >
+                                  {item.name}
+                                </Text>
+                                <Text
+                                  numberOfLines={1}
+                                  style={styles.copyAmountMeta}
+                                >
+                                  {formatOwner(item.owner)}
+                                </Text>
+                              </View>
+                              {selected ? (
+                                <TextInput
+                                  keyboardType="decimal-pad"
+                                  onChangeText={(value) =>
+                                    setGenerateAmountInputs((current) => ({
+                                      ...current,
+                                      [item.id]: value,
+                                    }))
+                                  }
+                                  placeholder="0,00"
+                                  placeholderTextColor={theme.colors.textSubtle}
+                                  style={styles.copyAmountInput}
+                                  value={generateAmountInputs[item.id] ?? ""}
+                                />
+                              ) : null}
+                            </View>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            ) : null}
+            {generateSourceItems.length === 0 ? (
+              <InlineAlert
+                tone="info"
+                text="Bieżący miesiąc nie ma jeszcze pozycji budżetu."
+              />
+            ) : null}
+            {nextMonthMutation.error ? (
+              <InlineAlert
+                tone="error"
+                text="Nie udało się wygenerować nowego miesiąca."
+              />
             ) : null}
           </FormModal>
 
@@ -1307,8 +1631,9 @@ export default function FinanseScreen() {
             <View style={styles.deleteWarning}>
               <Trash2 color={theme.colors.danger} size={18} />
               <Text style={styles.deleteWarningText}>
-                Ta akcja usuwa miesiąc budżetowy, jego pozycje, dochody i wydatki. Jeśli usuwasz aktualny miesiąc,
-                poprzedni miesiąc wróci jako aktywny.
+                Ta akcja usuwa miesiąc budżetowy, jego pozycje, dochody i
+                wydatki. Jeśli usuwasz aktualny miesiąc, poprzedni miesiąc wróci
+                jako aktywny.
               </Text>
             </View>
           </FormModal>
@@ -1387,7 +1712,9 @@ export default function FinanseScreen() {
               placeholder="Np. rachunki"
             />
             <View style={styles.switchRow}>
-              <Text style={styles.muted}>Kopiuj pozycje do kolejnego miesiąca</Text>
+              <Text style={styles.muted}>
+                Kopiuj pozycje do kolejnego miesiąca
+              </Text>
               <Switch
                 onValueChange={setCopyCategory}
                 thumbColor={theme.colors.card}
@@ -1413,17 +1740,35 @@ export default function FinanseScreen() {
                   variant="secondary"
                 />
                 <ActionButton
-                  disabled={editingBudgetItem ? !canSaveEditedItem : !canSaveItem}
-                  loading={editingBudgetItem ? updateItemMutation.isPending : itemMutation.isPending}
-                  onPress={() => (editingBudgetItem ? updateItemMutation.mutate() : itemMutation.mutate())}
+                  disabled={
+                    editingBudgetItem ? !canSaveEditedItem : !canSaveItem
+                  }
+                  loading={
+                    editingBudgetItem
+                      ? updateItemMutation.isPending
+                      : itemMutation.isPending
+                  }
+                  onPress={() =>
+                    editingBudgetItem
+                      ? updateItemMutation.mutate()
+                      : itemMutation.mutate()
+                  }
                   style={styles.modalFooterButton}
                   title={editingBudgetItem ? "Zapisz" : "Dodaj"}
                 />
               </View>
             }
             onClose={closeFinanceModal}
-            subtitle={editingBudgetItem ? "Zmieniasz nazwę, osobę, kategorię albo limit tej pozycji." : "Pozycja to konkretny limit lub koszt w aktualnym miesiącu."}
-            title={editingBudgetItem ? "Edytuj pozycję budżetu" : "Dodaj pozycję budżetu"}
+            subtitle={
+              editingBudgetItem
+                ? "Zmieniasz nazwę, osobę, kategorię albo limit tej pozycji."
+                : "Pozycja to konkretny limit lub koszt w aktualnym miesiącu."
+            }
+            title={
+              editingBudgetItem
+                ? "Edytuj pozycję budżetu"
+                : "Dodaj pozycję budżetu"
+            }
             visible={financeModal === "item"}
           >
             <TextField
@@ -1508,7 +1853,9 @@ export default function FinanseScreen() {
             {isPresetExpense ? (
               <View style={styles.expenseContextCard}>
                 <Text style={styles.expenseContextLabel}>
-                  {selectedExpenseItem ? formatOwner(selectedExpenseItem.owner) : selectedExpenseOwner?.label}
+                  {selectedExpenseItem
+                    ? formatOwner(selectedExpenseItem.owner)
+                    : selectedExpenseOwner?.label}
                 </Text>
                 <Text style={styles.expenseContextTitle}>
                   {selectedExpenseItem?.name ?? selectedExpenseCategory?.name}
@@ -1518,7 +1865,10 @@ export default function FinanseScreen() {
                   {selectedExpenseItem
                     ? ` / wydano ${formatMoney(selectedExpenseItem.spentAmount, currencyCode)} z ${
                         selectedExpenseItem.budgetAmount
-                          ? formatMoney(selectedExpenseItem.budgetAmount, currencyCode)
+                          ? formatMoney(
+                              selectedExpenseItem.budgetAmount,
+                              currencyCode,
+                            )
                           : "bez limitu"
                       }`
                     : " / pozycja powstanie automatycznie"}
@@ -1598,7 +1948,11 @@ export default function FinanseScreen() {
               </View>
             }
             onClose={closeFinanceModal}
-            subtitle={historyBudgetItem ? `${historyBudgetItem.category.name} / ${historyBudgetItem.name}` : undefined}
+            subtitle={
+              historyBudgetItem
+                ? `${historyBudgetItem.category.name} / ${historyBudgetItem.name}`
+                : undefined
+            }
             title="Historia wpłat"
             visible={financeModal === "expenseHistory"}
           >
@@ -1615,19 +1969,27 @@ export default function FinanseScreen() {
                     <Text style={styles.expenseContextMeta}>
                       Budżet{" "}
                       {historyBudgetItem.budgetAmount
-                        ? formatMoney(historyBudgetItem.budgetAmount, currencyCode)
+                        ? formatMoney(
+                            historyBudgetItem.budgetAmount,
+                            currencyCode,
+                          )
                         : "bez limitu"}
                     </Text>
                     <Text
                       style={[
                         styles.expenseContextMeta,
-                        Number(historyBudgetItem.remainingAmount ?? 0) < 0 && styles.dangerText,
-                        Number(historyBudgetItem.remainingAmount ?? 0) >= 0 && styles.positiveText,
+                        Number(historyBudgetItem.remainingAmount ?? 0) < 0 &&
+                          styles.dangerText,
+                        Number(historyBudgetItem.remainingAmount ?? 0) >= 0 &&
+                          styles.positiveText,
                       ]}
                     >
                       Zostaje{" "}
                       {historyBudgetItem.budgetAmount
-                        ? formatMoney(historyBudgetItem.remainingAmount ?? 0, currencyCode)
+                        ? formatMoney(
+                            historyBudgetItem.remainingAmount ?? 0,
+                            currencyCode,
+                          )
                         : "bez limitu"}
                     </Text>
                   </View>
@@ -1656,58 +2018,6 @@ export default function FinanseScreen() {
               <InlineAlert text="Nie znaleziono wybranej pozycji budżetu." />
             )}
           </FormModal>
-
-          <FormModal
-            footer={
-              <View style={styles.modalFooter}>
-                <ActionButton
-                  onPress={closeFinanceModal}
-                  style={styles.modalFooterButton}
-                  title="Później"
-                  variant="secondary"
-                />
-                <ActionButton
-                  disabled={!canSaveCopyAmounts}
-                  loading={copyAmountsMutation.isPending}
-                  onPress={() => copyAmountsMutation.mutate()}
-                  style={styles.modalFooterButton}
-                  title="Zapisz kwoty"
-                />
-              </View>
-            }
-            onClose={closeFinanceModal}
-            subtitle="Pozycje zostały skopiowane bez kwot. Wpisz tylko te limity, które znasz."
-            title="Kwoty nowego miesiąca"
-            visible={financeModal === "copyAmounts"}
-          >
-            <View style={styles.copyAmountList}>
-              {copiedMonthItems.map((item) => (
-                <View key={item.id} style={styles.copyAmountRow}>
-                  <View style={styles.copyAmountText}>
-                    <Text numberOfLines={1} style={styles.copyAmountTitle}>
-                      {item.name}
-                    </Text>
-                    <Text numberOfLines={1} style={styles.copyAmountMeta}>
-                      {item.category.name} / {formatOwner(item.owner)}
-                    </Text>
-                  </View>
-                  <TextInput
-                    keyboardType="decimal-pad"
-                    onChangeText={(value) =>
-                      setCopyAmountInputs((current) => ({ ...current, [item.id]: value }))
-                    }
-                    placeholder="0,00"
-                    placeholderTextColor={theme.colors.textSubtle}
-                    style={styles.copyAmountInput}
-                    value={copyAmountInputs[item.id] ?? ""}
-                  />
-                </View>
-              ))}
-            </View>
-            {copyAmountsMutation.error ? (
-              <InlineAlert tone="error" text="Nie udało się zapisać kwot nowego miesiąca." />
-            ) : null}
-          </FormModal>
         </>
       ) : null}
 
@@ -1716,7 +2026,9 @@ export default function FinanseScreen() {
           <View style={styles.debtSummary}>
             <View>
               <Text style={styles.debtSummaryLabel}>Do oddania</Text>
-              <Text style={styles.debtSummaryValue}>{formatMoney(openDebtTotal, currencyCode)}</Text>
+              <Text style={styles.debtSummaryValue}>
+                {formatMoney(openDebtTotal, currencyCode)}
+              </Text>
             </View>
             <Text style={styles.debtSummaryMeta}>
               {openDebts.length} aktywne / {settledDebts.length} spłacone
@@ -1767,13 +2079,42 @@ export default function FinanseScreen() {
             title={editingDebt ? "Edytuj pożyczkę" : "Dodaj pożyczkę/debet"}
             visible={financeModal === "debt"}
           >
-            <TextField control={control} keyboardType="decimal-pad" label="Kwota" name="debtAmount" placeholder="0,00" />
-            <TextField control={control} label="Od kogo" name="debtLenderName" placeholder="Np. rodzice, znajomy, bank" />
-            <TextField control={control} label="Na co" name="debtPurpose" placeholder="Np. naprawa auta" />
-            <TextField control={control} label="Termin oddania" name="debtDueDate" placeholder="YYYY-MM-DD, opcjonalnie" />
-            <TextField control={control} label="Notatka" name="debtNote" placeholder="Opcjonalnie" />
+            <TextField
+              control={control}
+              keyboardType="decimal-pad"
+              label="Kwota"
+              name="debtAmount"
+              placeholder="0,00"
+            />
+            <TextField
+              control={control}
+              label="Od kogo"
+              name="debtLenderName"
+              placeholder="Np. rodzice, znajomy, bank"
+            />
+            <TextField
+              control={control}
+              label="Na co"
+              name="debtPurpose"
+              placeholder="Np. naprawa auta"
+            />
+            <TextField
+              control={control}
+              label="Termin oddania"
+              name="debtDueDate"
+              placeholder="YYYY-MM-DD, opcjonalnie"
+            />
+            <TextField
+              control={control}
+              label="Notatka"
+              name="debtNote"
+              placeholder="Opcjonalnie"
+            />
             {saveDebtMutation.error ? (
-              <InlineAlert tone="error" text="Nie udało się zapisać pożyczki." />
+              <InlineAlert
+                tone="error"
+                text="Nie udało się zapisać pożyczki."
+              />
             ) : null}
           </FormModal>
         </>
@@ -1786,7 +2127,9 @@ export default function FinanseScreen() {
               <PiggyBank color={theme.colors.primaryDark} size={20} />
               <View>
                 <Text style={styles.debtSummaryLabel}>Oszczędności domu</Text>
-                <Text style={[styles.debtSummaryValue, styles.savingsSummaryValue]}>
+                <Text
+                  style={[styles.debtSummaryValue, styles.savingsSummaryValue]}
+                >
                   {formatMoney(savingsTotal, currencyCode)}
                 </Text>
               </View>
@@ -1805,7 +2148,9 @@ export default function FinanseScreen() {
             canUpdate={canUpdate}
             currencyCode={currencyCode}
             deleting={deleteSavingsAccountMutation.isPending}
-            onDelete={(account) => deleteSavingsAccountMutation.mutate(account.id)}
+            onDelete={(account) =>
+              deleteSavingsAccountMutation.mutate(account.id)
+            }
             onTransaction={openSavingsTransaction}
             updating={savingsTransactionMutation.isPending}
           />
@@ -1837,11 +2182,30 @@ export default function FinanseScreen() {
             title="Dodaj oszczędności"
             visible={financeModal === "savingsAccount"}
           >
-            <TextField control={control} label="Nazwa" name="savingsName" placeholder="Np. Poduszka finansowa" />
-            <TextField control={control} keyboardType="decimal-pad" label="Kwota" name="savingsAmount" placeholder="0,00" />
-            <TextField control={control} label="Notatka" name="savingsNote" placeholder="Opcjonalnie" />
+            <TextField
+              control={control}
+              label="Nazwa"
+              name="savingsName"
+              placeholder="Np. Poduszka finansowa"
+            />
+            <TextField
+              control={control}
+              keyboardType="decimal-pad"
+              label="Kwota"
+              name="savingsAmount"
+              placeholder="0,00"
+            />
+            <TextField
+              control={control}
+              label="Notatka"
+              name="savingsNote"
+              placeholder="Opcjonalnie"
+            />
             {savingsAccountMutation.error ? (
-              <InlineAlert tone="error" text="Nie udało się dodać oszczędności." />
+              <InlineAlert
+                tone="error"
+                text="Nie udało się dodać oszczędności."
+              />
             ) : null}
           </FormModal>
           <FormModal
@@ -1868,7 +2232,11 @@ export default function FinanseScreen() {
                 ? `${selectedSavingsAccount.name} / obecnie ${formatMoney(selectedSavingsAccount.currentAmount, currencyCode)}`
                 : undefined
             }
-            title={savingsDirection === "add" ? "Dodaj do oszczędności" : "Odejmij z oszczędności"}
+            title={
+              savingsDirection === "add"
+                ? "Dodaj do oszczędności"
+                : "Odejmij z oszczędności"
+            }
             visible={financeModal === "savingsTransaction"}
           >
             <TextField
@@ -1885,7 +2253,10 @@ export default function FinanseScreen() {
               placeholder="Opcjonalnie"
             />
             {savingsTransactionMutation.error ? (
-              <InlineAlert tone="error" text="Nie udało się zapisać zmiany oszczędności." />
+              <InlineAlert
+                tone="error"
+                text="Nie udało się zapisać zmiany oszczędności."
+              />
             ) : null}
           </FormModal>
         </>
@@ -1903,7 +2274,11 @@ export default function FinanseScreen() {
           totals={totals}
         />
         {canUpdate ? (
-          <ActionButton onPress={() => setFinanceModal("income")} title="Zmień dochód" variant="secondary" />
+          <ActionButton
+            onPress={() => setFinanceModal("income")}
+            title="Zmień dochód"
+            variant="secondary"
+          />
         ) : null}
       </FormModal>
     </AppScreen>
@@ -1936,11 +2311,16 @@ function FinanceSummaryCard({
         accessibilityLabel="Dochody domowników"
         accessibilityRole="button"
         onPress={onIncomePress}
-        style={({ pressed }) => [styles.financeSummarySide, pressed && styles.metricPressed]}
+        style={({ pressed }) => [
+          styles.financeSummarySide,
+          pressed && styles.metricPressed,
+        ]}
       >
         <View style={styles.financeSummaryLabelRow}>
           <Banknote color="#8CE1BF" size={16} />
-          <Text style={[styles.financeSummaryLabel, { color: "#8CE1BF" }]}>Dochody</Text>
+          <Text style={[styles.financeSummaryLabel, { color: "#8CE1BF" }]}>
+            Dochody
+          </Text>
         </View>
         <Text numberOfLines={1} style={styles.financeSummaryValue}>
           {formatMoney(incomeAmount, currencyCode)}
@@ -1950,7 +2330,13 @@ function FinanceSummaryCard({
       <View style={styles.financeSummaryCenter}>
         <FinanceSummaryRing spentRatio={spentRatio} />
         <View pointerEvents="none" style={styles.financeSummaryCenterText}>
-          <Text numberOfLines={1} style={[styles.financeSummaryRingValue, remainingAmount < 0 && styles.dangerText]}>
+          <Text
+            numberOfLines={1}
+            style={[
+              styles.financeSummaryRingValue,
+              remainingAmount < 0 && styles.dangerText,
+            ]}
+          >
             {formatMoney(remainingAmount, currencyCode)}
           </Text>
           <Text style={styles.financeSummaryRingLabel}>zostało</Text>
@@ -1960,7 +2346,9 @@ function FinanceSummaryCard({
       <View style={styles.financeSummarySide}>
         <View style={styles.financeSummaryLabelRow}>
           <ReceiptText color="#FFAD6F" size={16} />
-          <Text style={[styles.financeSummaryLabel, { color: "#FFAD6F" }]}>Wydatki</Text>
+          <Text style={[styles.financeSummaryLabel, { color: "#FFAD6F" }]}>
+            Wydatki
+          </Text>
         </View>
         <Text numberOfLines={1} style={styles.financeSummaryValue}>
           {formatMoney(spentAmount, currencyCode)}
@@ -2033,25 +2421,32 @@ function IncomeBreakdownList({
         return (
           <View
             key={row.ownerMemberId}
-            style={[styles.incomeBreakdownRow, isSelected && styles.incomeBreakdownRowActive]}
+            style={[
+              styles.incomeBreakdownRow,
+              isSelected && styles.incomeBreakdownRowActive,
+            ]}
           >
             <View style={styles.incomeBreakdownText}>
               <Text numberOfLines={1} style={styles.incomeBreakdownName}>
                 {row.displayName || row.email}
               </Text>
               <Text style={styles.incomeBreakdownMeta}>
-                Budżet {formatMoney(row.totalBudgetAmount, currencyCode)} / wydano{" "}
-                {formatMoney(row.totalSpentAmount, currencyCode)} / zostaje{" "}
-                {formatMoney(row.totalRemainingAmount, currencyCode)}
+                Budżet {formatMoney(row.totalBudgetAmount, currencyCode)} /
+                wydano {formatMoney(row.totalSpentAmount, currencyCode)} /
+                zostaje {formatMoney(row.totalRemainingAmount, currencyCode)}
               </Text>
             </View>
-            <Text style={styles.incomeBreakdownValue}>{formatMoney(row.incomeAmount, currencyCode)}</Text>
+            <Text style={styles.incomeBreakdownValue}>
+              {formatMoney(row.incomeAmount, currencyCode)}
+            </Text>
           </View>
         );
       })}
       <View style={styles.incomeBreakdownTotal}>
         <Text style={styles.totalLabel}>RAZEM DOM</Text>
-        <Text style={styles.totalValue}>{formatMoney(total.incomeAmount, currencyCode)}</Text>
+        <Text style={styles.totalValue}>
+          {formatMoney(total.incomeAmount, currencyCode)}
+        </Text>
       </View>
     </View>
   );
@@ -2088,19 +2483,35 @@ function FinanceDebtsList({
   return (
     <View style={styles.debtList}>
       {debts.map((debt) => (
-        <View key={debt.id} style={[styles.debtCard, debt.isSettled && styles.debtCardSettled]}>
+        <View
+          key={debt.id}
+          style={[styles.debtCard, debt.isSettled && styles.debtCardSettled]}
+        >
           <View style={styles.debtCardText}>
-            <Text numberOfLines={1} style={[styles.debtTitle, debt.isSettled && styles.debtSettledText]}>
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.debtTitle,
+                debt.isSettled && styles.debtSettledText,
+              ]}
+            >
               {debt.purpose}
             </Text>
             <Text style={styles.debtMeta}>
               {debt.lenderName}
               {debt.dueDate ? ` / do ${formatDateShort(debt.dueDate)}` : ""}
             </Text>
-            {debt.note ? <Text style={styles.debtNote}>{debt.note}</Text> : null}
+            {debt.note ? (
+              <Text style={styles.debtNote}>{debt.note}</Text>
+            ) : null}
           </View>
           <View style={styles.debtSide}>
-            <Text style={[styles.debtAmount, debt.isSettled && styles.debtSettledText]}>
+            <Text
+              style={[
+                styles.debtAmount,
+                debt.isSettled && styles.debtSettledText,
+              ]}
+            >
               {formatMoney(debt.amount, currencyCode)}
             </Text>
             <View style={styles.debtActions}>
@@ -2114,7 +2525,10 @@ function FinanceDebtsList({
                 />
               ) : null}
               {canUpdate ? (
-                <IconButton accessibilityLabel="Edytuj pożyczkę" onPress={() => onEdit(debt)}>
+                <IconButton
+                  accessibilityLabel="Edytuj pożyczkę"
+                  onPress={() => onEdit(debt)}
+                >
                   <Pencil color={theme.colors.textMuted} size={15} />
                 </IconButton>
               ) : null}
@@ -2151,7 +2565,10 @@ function FinanceSavingsList({
   currencyCode: SupportedCurrencyCode;
   deleting: boolean;
   onDelete: (account: FinanceSavingsAccount) => void;
-  onTransaction: (account: FinanceSavingsAccount, direction: FinanceSavingsDirection) => void;
+  onTransaction: (
+    account: FinanceSavingsAccount,
+    direction: FinanceSavingsDirection,
+  ) => void;
   updating: boolean;
 }) {
   const theme = useAppTheme();
@@ -2178,7 +2595,9 @@ function FinanceSavingsList({
                 </Text>
               </View>
               <View style={styles.debtSide}>
-                <Text style={styles.savingsAmount}>{formatMoney(account.currentAmount, currencyCode)}</Text>
+                <Text style={styles.savingsAmount}>
+                  {formatMoney(account.currentAmount, currencyCode)}
+                </Text>
                 <View style={styles.debtActions}>
                   {canUpdate ? (
                     <>
@@ -2215,23 +2634,34 @@ function FinanceSavingsList({
             <View style={styles.savingsHistory}>
               {recentTransactions.length > 0 ? (
                 recentTransactions.map((transaction) => (
-                  <View key={transaction.id} style={styles.savingsTransactionRow}>
+                  <View
+                    key={transaction.id}
+                    style={styles.savingsTransactionRow}
+                  >
                     <Text
                       style={[
                         styles.savingsDelta,
-                        transaction.direction === "add" ? styles.savingsDeltaAdd : styles.savingsDeltaSubtract,
+                        transaction.direction === "add"
+                          ? styles.savingsDeltaAdd
+                          : styles.savingsDeltaSubtract,
                       ]}
                     >
-                      {transaction.direction === "add" ? "+" : "-"}{formatMoney(transaction.amount, currencyCode)}
+                      {transaction.direction === "add" ? "+" : "-"}
+                      {formatMoney(transaction.amount, currencyCode)}
                     </Text>
-                    <Text numberOfLines={1} style={styles.savingsTransactionMeta}>
+                    <Text
+                      numberOfLines={1}
+                      style={styles.savingsTransactionMeta}
+                    >
                       {formatDateFull(transaction.changedAt)}
                       {transaction.note ? ` / ${transaction.note}` : ""}
                     </Text>
                   </View>
                 ))
               ) : (
-                <Text style={styles.savingsTransactionMeta}>Brak historii zmian.</Text>
+                <Text style={styles.savingsTransactionMeta}>
+                  Brak historii zmian.
+                </Text>
               )}
             </View>
           </View>
@@ -2268,9 +2698,15 @@ function FinanceFiltersPanel({
     <View style={styles.filterPanel}>
       <View style={styles.filterHeader}>
         <Text style={styles.filterTitle}>Widok budżetu</Text>
-        <Text style={styles.filterCount}>{resultCount}/{totalCount}</Text>
+        <Text style={styles.filterCount}>
+          {resultCount}/{totalCount}
+        </Text>
       </View>
-      <Pressable accessibilityRole="button" onPress={onToggleExpanded} style={styles.filterToggleButton}>
+      <Pressable
+        accessibilityRole="button"
+        onPress={onToggleExpanded}
+        style={styles.filterToggleButton}
+      >
         <Text numberOfLines={1} style={styles.filterSummary}>
           {summary}
         </Text>
@@ -2278,74 +2714,83 @@ function FinanceFiltersPanel({
       </Pressable>
       {expanded ? (
         <>
-      <TextInput
-        onChangeText={(search) => onChange({ search })}
-        placeholder="Szukaj pozycji"
-        placeholderTextColor={theme.colors.textSubtle}
-        style={styles.filterInput}
-        value={filters.search}
-      />
-      <View style={styles.filterGroup}>
-        <Text style={styles.filterLabel}>Osoba</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={styles.filterChipRow}>
-            <FilterChip active={!filters.ownerMemberId} label="Wszyscy" onPress={() => onChange({ ownerMemberId: "" })} />
-            {owners.map((owner) => (
-              <FilterChip
-                active={filters.ownerMemberId === owner.id}
-                key={owner.id}
-                label={owner.label}
-                onPress={() => onChange({ ownerMemberId: owner.id })}
-              />
-            ))}
+          <TextInput
+            onChangeText={(search) => onChange({ search })}
+            placeholder="Szukaj pozycji"
+            placeholderTextColor={theme.colors.textSubtle}
+            style={styles.filterInput}
+            value={filters.search}
+          />
+          <View style={styles.filterGroup}>
+            <Text style={styles.filterLabel}>Osoba</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={styles.filterChipRow}>
+                <FilterChip
+                  active={!filters.ownerMemberId}
+                  label="Wszyscy"
+                  onPress={() => onChange({ ownerMemberId: "" })}
+                />
+                {owners.map((owner) => (
+                  <FilterChip
+                    active={filters.ownerMemberId === owner.id}
+                    key={owner.id}
+                    label={owner.label}
+                    onPress={() => onChange({ ownerMemberId: owner.id })}
+                  />
+                ))}
+              </View>
+            </ScrollView>
           </View>
-        </ScrollView>
-      </View>
-      <View style={styles.filterGroup}>
-        <Text style={styles.filterLabel}>Kategoria</Text>
-        <View style={[styles.filterChipRow, styles.filterCategoryGrid]}>
-          <FilterChip
-            active={!filters.categoryId}
-            compact
-            label="Wszystkie"
-            onPress={() => onChange({ categoryId: "" })}
-          />
-          {categories.map((category) => (
-            <FilterChip
-              active={filters.categoryId === category.id}
-              compact
-              key={category.id}
-              label={category.name}
-              onPress={() => onChange({ categoryId: category.id })}
-            />
-          ))}
-        </View>
-      </View>
-      <View style={styles.filterGroup}>
-        <Text style={styles.filterLabel}>Sortowanie</Text>
-        <View style={styles.filterChipRow}>
-          {financeSortOptions.map((option) => (
-            <FilterChip
-              active={filters.sortBy === option.id}
-              key={option.id}
-              label={option.label}
-              onPress={() => onChange({ sortBy: option.id })}
-            />
-          ))}
-          <FilterChip
-            active={filters.sortDirection === "desc"}
-            label={filters.sortDirection === "asc" ? "Rosnąco" : "Malejąco"}
-            onPress={() =>
-              onChange({ sortDirection: filters.sortDirection === "asc" ? "desc" : "asc" })
-            }
-          />
-          <FilterChip
-            active={filters.onlyOverBudget}
-            label="Po limicie"
-            onPress={() => onChange({ onlyOverBudget: !filters.onlyOverBudget })}
-          />
-        </View>
-      </View>
+          <View style={styles.filterGroup}>
+            <Text style={styles.filterLabel}>Kategoria</Text>
+            <View style={[styles.filterChipRow, styles.filterCategoryGrid]}>
+              <FilterChip
+                active={!filters.categoryId}
+                compact
+                label="Wszystkie"
+                onPress={() => onChange({ categoryId: "" })}
+              />
+              {categories.map((category) => (
+                <FilterChip
+                  active={filters.categoryId === category.id}
+                  compact
+                  key={category.id}
+                  label={category.name}
+                  onPress={() => onChange({ categoryId: category.id })}
+                />
+              ))}
+            </View>
+          </View>
+          <View style={styles.filterGroup}>
+            <Text style={styles.filterLabel}>Sortowanie</Text>
+            <View style={styles.filterChipRow}>
+              {financeSortOptions.map((option) => (
+                <FilterChip
+                  active={filters.sortBy === option.id}
+                  key={option.id}
+                  label={option.label}
+                  onPress={() => onChange({ sortBy: option.id })}
+                />
+              ))}
+              <FilterChip
+                active={filters.sortDirection === "desc"}
+                label={filters.sortDirection === "asc" ? "Rosnąco" : "Malejąco"}
+                onPress={() =>
+                  onChange({
+                    sortDirection:
+                      filters.sortDirection === "asc" ? "desc" : "asc",
+                  })
+                }
+              />
+              <FilterChip
+                active={filters.onlyOverBudget}
+                label="Po limicie"
+                onPress={() =>
+                  onChange({ onlyOverBudget: !filters.onlyOverBudget })
+                }
+              />
+            </View>
+          </View>
         </>
       ) : null}
     </View>
@@ -2375,7 +2820,10 @@ function FilterChip({
         active && styles.filterChipActive,
       ]}
     >
-      <Text numberOfLines={1} style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+      <Text
+        numberOfLines={1}
+        style={[styles.filterChipText, active && styles.filterChipTextActive]}
+      >
         {label}
       </Text>
     </Pressable>
@@ -2407,7 +2855,9 @@ function FinanceSheet({
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
-  const [collapsedCategoryIds, setCollapsedCategoryIds] = useState<Set<string>>(() => new Set());
+  const [collapsedCategoryIds, setCollapsedCategoryIds] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   if (rows.length === 0 && categories.length === 0) {
     return <InlineAlert text="Brak pozycji pasujących do filtrów." />;
@@ -2430,7 +2880,11 @@ function FinanceSheet({
   }
 
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sheetScroller}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={styles.sheetScroller}
+    >
       <View style={styles.sheet}>
         <View style={styles.sheetHeader}>
           <Text style={[styles.headerCell, styles.personCell]}>Osoba</Text>
@@ -2445,101 +2899,153 @@ function FinanceSheet({
           const collapsed = collapsedCategoryIds.has(group.category.id);
 
           return (
-          <View key={group.category.id}>
-            <View style={[styles.categoryRow, { backgroundColor: theme.colors.cardMuted, borderTopColor: accent.border }]}>
-              <View style={styles.categoryRowMain}>
-                <View style={[styles.categoryColorBar, { backgroundColor: accent.color }]} />
-                <View style={styles.categoryRowTitleBlock}>
-                  <Text style={[styles.categoryRowText, { color: accent.text }]}>
-                    {group.category.name.toUpperCase()}
-                  </Text>
-                  <Text style={styles.categoryRowMeta}>
-                    {group.items.length} pozycji / {formatMoney(group.spent, currencyCode)} z{" "}
-                    {formatMoney(group.planned, currencyCode)}
-                  </Text>
+            <View key={group.category.id}>
+              <View
+                style={[
+                  styles.categoryRow,
+                  {
+                    backgroundColor: theme.colors.cardMuted,
+                    borderTopColor: accent.border,
+                  },
+                ]}
+              >
+                <View style={styles.categoryRowMain}>
+                  <View
+                    style={[
+                      styles.categoryColorBar,
+                      { backgroundColor: accent.color },
+                    ]}
+                  />
+                  <View style={styles.categoryRowTitleBlock}>
+                    <Text
+                      style={[styles.categoryRowText, { color: accent.text }]}
+                    >
+                      {group.category.name.toUpperCase()}
+                    </Text>
+                    <Text style={styles.categoryRowMeta}>
+                      {group.items.length} pozycji /{" "}
+                      {formatMoney(group.spent, currencyCode)} z{" "}
+                      {formatMoney(group.planned, currencyCode)}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.categoryToggleCell}>
+                  <Pressable
+                    accessibilityLabel={
+                      collapsed ? "Rozwiń kategorię" : "Zwiń kategorię"
+                    }
+                    accessibilityRole="button"
+                    onPress={() => toggleCategory(group.category.id)}
+                    style={styles.categoryCollapseButton}
+                  >
+                    {collapsed ? (
+                      <ChevronRight color={accent.text} size={20} />
+                    ) : (
+                      <ChevronDown color={accent.text} size={20} />
+                    )}
+                  </Pressable>
                 </View>
               </View>
-              <View style={styles.categoryToggleCell}>
-                <Pressable
-                  accessibilityLabel={collapsed ? "Rozwiń kategorię" : "Zwiń kategorię"}
-                  accessibilityRole="button"
-                  onPress={() => toggleCategory(group.category.id)}
-                  style={styles.categoryCollapseButton}
-                >
-                  {collapsed ? (
-                    <ChevronRight color={accent.text} size={20} />
-                  ) : (
-                    <ChevronDown color={accent.text} size={20} />
-                  )}
-                </Pressable>
-              </View>
-            </View>
-            {collapsed ? null : (
-              <>
-                {group.items.map((item) => (
-                  <View key={item.id} style={styles.sheetRow}>
-                    <Pressable
-                      accessibilityLabel={`Pokaż historię pozycji ${item.name}`}
-                      accessibilityRole="button"
-                      onPress={() => onHistory(item)}
-                      style={({ pressed }) => [styles.sheetRowContent, pressed && styles.pressedRow]}
-                    >
-                      <Text numberOfLines={1} style={[styles.bodyCell, styles.personCell]}>
-                        {formatOwner(item.owner)}
-                      </Text>
-                      <Text numberOfLines={1} style={[styles.bodyCell, styles.categoryCell]}>
-                        {item.name}
-                      </Text>
-                      <Text style={styles.amountCell}>{formatMoney(item.budgetAmount, currencyCode)}</Text>
-                      <Text style={styles.amountCell}>{formatMoney(item.spentAmount, currencyCode)}</Text>
-                      <Text
-                        style={[
-                          styles.amountCell,
-                          Number(item.remainingAmount ?? 0) < 0 && styles.dangerText,
-                          Number(item.remainingAmount ?? 0) >= 0 && styles.positiveText,
+              {collapsed ? null : (
+                <>
+                  {group.items.map((item) => (
+                    <View key={item.id} style={styles.sheetRow}>
+                      <Pressable
+                        accessibilityLabel={`Pokaż historię pozycji ${item.name}`}
+                        accessibilityRole="button"
+                        onPress={() => onHistory(item)}
+                        style={({ pressed }) => [
+                          styles.sheetRowContent,
+                          pressed && styles.pressedRow,
                         ]}
                       >
-                        {item.budgetAmount ? formatMoney(item.remainingAmount ?? 0, currencyCode) : "bez limitu"}
-                      </Text>
-                    </Pressable>
-                    <View style={styles.actionCell}>
-                      {canCreateExpense ? (
-                        <IconButton
-                          accessibilityLabel="Dodaj wydatek"
-                          onPress={() => onAddExpense(item)}
-                          style={styles.sheetActionButton}
+                        <Text
+                          numberOfLines={1}
+                          style={[styles.bodyCell, styles.personCell]}
                         >
-                          <CartPlus color={theme.colors.primaryDark} size={15} />
-                        </IconButton>
-                      ) : null}
-                      {canUpdate ? (
-                        <IconButton
-                          accessibilityLabel="Edytuj pozycję"
-                          onPress={() => onEdit(item)}
-                          style={styles.sheetActionButton}
+                          {formatOwner(item.owner)}
+                        </Text>
+                        <Text
+                          numberOfLines={1}
+                          style={[styles.bodyCell, styles.categoryCell]}
                         >
-                          <Pencil color={theme.colors.textMuted} size={15} />
-                        </IconButton>
-                      ) : null}
+                          {item.name}
+                        </Text>
+                        <Text style={styles.amountCell}>
+                          {formatMoney(item.budgetAmount, currencyCode)}
+                        </Text>
+                        <Text style={styles.amountCell}>
+                          {formatMoney(item.spentAmount, currencyCode)}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.amountCell,
+                            Number(item.remainingAmount ?? 0) < 0 &&
+                              styles.dangerText,
+                            Number(item.remainingAmount ?? 0) >= 0 &&
+                              styles.positiveText,
+                          ]}
+                        >
+                          {item.budgetAmount
+                            ? formatMoney(
+                                item.remainingAmount ?? 0,
+                                currencyCode,
+                              )
+                            : "bez limitu"}
+                        </Text>
+                      </Pressable>
+                      <View style={styles.actionCell}>
+                        {canCreateExpense ? (
+                          <IconButton
+                            accessibilityLabel="Dodaj wydatek"
+                            onPress={() => onAddExpense(item)}
+                            style={styles.sheetActionButton}
+                          >
+                            <CartPlus
+                              color={theme.colors.primaryDark}
+                              size={15}
+                            />
+                          </IconButton>
+                        ) : null}
+                        {canUpdate ? (
+                          <IconButton
+                            accessibilityLabel="Edytuj pozycję"
+                            onPress={() => onEdit(item)}
+                            style={styles.sheetActionButton}
+                          >
+                            <Pencil color={theme.colors.textMuted} size={15} />
+                          </IconButton>
+                        ) : null}
+                      </View>
                     </View>
-                  </View>
-                ))}
-                {canCreateItem ? (
-                  <View style={[styles.sheetRow, { paddingHorizontal: 12 }]}>
-                    <Pressable
-                      accessibilityLabel={`Dodaj pozycję w kategorii ${group.category.name}`}
-                      accessibilityRole="button"
-                      onPress={() => onAddCategoryItem(group.category)}
-                      style={{ paddingVertical: 12, alignItems: "flex-start", width: "100%" }}
-                    >
-                      <Text style={{ color: theme.colors.primaryDark, fontWeight: "600" }}>+ Dodaj pozycję</Text>
-                    </Pressable>
-                  </View>
-                ) : null}
-              </>
-            )}
-          </View>
-        );
+                  ))}
+                  {canCreateItem ? (
+                    <View style={[styles.sheetRow, { paddingHorizontal: 12 }]}>
+                      <Pressable
+                        accessibilityLabel={`Dodaj pozycję w kategorii ${group.category.name}`}
+                        accessibilityRole="button"
+                        onPress={() => onAddCategoryItem(group.category)}
+                        style={{
+                          paddingVertical: 12,
+                          alignItems: "flex-start",
+                          width: "100%",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: theme.colors.primaryDark,
+                            fontWeight: "600",
+                          }}
+                        >
+                          + Dodaj pozycję
+                        </Text>
+                      </Pressable>
+                    </View>
+                  ) : null}
+                </>
+              )}
+            </View>
+          );
         })}
       </View>
     </ScrollView>
@@ -2573,7 +3079,9 @@ function FinanceCategoryCards({
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
+    null,
+  );
   const [detailsY, setDetailsY] = useState<number | null>(null);
 
   useEffect(() => {
@@ -2584,7 +3092,10 @@ function FinanceCategoryCards({
 
     if (detailsY !== null) {
       const timeout = setTimeout(() => {
-        scrollRef.current?.scrollTo({ animated: true, y: Math.max(0, detailsY - 12) });
+        scrollRef.current?.scrollTo({
+          animated: true,
+          y: Math.max(0, detailsY - 12),
+        });
       }, 80);
 
       return () => clearTimeout(timeout);
@@ -2596,7 +3107,9 @@ function FinanceCategoryCards({
   }
 
   const groups = groupRowsByCategory(rows, categories);
-  const selectedGroup = groups.find((group) => group.category.id === selectedCategoryId);
+  const selectedGroup = groups.find(
+    (group) => group.category.id === selectedCategoryId,
+  );
 
   return (
     <View style={styles.categoryCardsSection}>
@@ -2609,7 +3122,10 @@ function FinanceCategoryCards({
             group.remaining >= 0
               ? formatMoney(group.remaining, currencyCode)
               : `-${formatMoney(Math.abs(group.remaining), currencyCode)}`;
-          const progressText = group.planned > 0 ? `${Math.round(spentProgress * 100)}%` : "bez limitu";
+          const progressText =
+            group.planned > 0
+              ? `${Math.round(spentProgress * 100)}%`
+              : "bez limitu";
 
           return (
             <Pressable
@@ -2617,14 +3133,21 @@ function FinanceCategoryCards({
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
               key={group.category.id}
-              onPress={() => setSelectedCategoryId(active ? null : group.category.id)}
+              onPress={() =>
+                setSelectedCategoryId(active ? null : group.category.id)
+              }
               style={[
                 styles.categoryCard,
                 active && styles.categoryCardActive,
-                active && { borderColor: accent.color, shadowColor: accent.color },
+                active && {
+                  borderColor: accent.color,
+                  shadowColor: accent.color,
+                },
               ]}
             >
-              <View style={[styles.categoryCardIcon, { borderColor: accent.color }]}>
+              <View
+                style={[styles.categoryCardIcon, { borderColor: accent.color }]}
+              >
                 {getBudgetCategoryIcon(group.category.name, accent.color)}
               </View>
               <View style={styles.categoryCardContent}>
@@ -2646,13 +3169,18 @@ function FinanceCategoryCards({
                       },
                     ]}
                   />
-                  <Text style={styles.categoryProgressValue}>{progressText}</Text>
+                  <Text style={styles.categoryProgressValue}>
+                    {progressText}
+                  </Text>
                 </View>
               </View>
               <View style={styles.categoryCardRemainingBlock}>
                 <Text
                   numberOfLines={1}
-                  style={[styles.categoryCardAmount, group.remaining < 0 && styles.dangerText]}
+                  style={[
+                    styles.categoryCardAmount,
+                    group.remaining < 0 && styles.dangerText,
+                  ]}
                 >
                   {remainingLabel}
                 </Text>
@@ -2664,13 +3192,19 @@ function FinanceCategoryCards({
       </View>
 
       {selectedGroup ? (
-        <View onLayout={(e) => setDetailsY(e.nativeEvent.layout.y)} style={styles.categoryDetails}>
+        <View
+          onLayout={(e) => setDetailsY(e.nativeEvent.layout.y)}
+          style={styles.categoryDetails}
+        >
           <View style={styles.categoryDetailsHeader}>
             <View style={styles.categoryDetailsHeaderTop}>
               <View style={styles.categoryDetailsTitleBlock}>
-                <Text style={styles.categoryDetailsTitle}>{selectedGroup.category.name}</Text>
+                <Text style={styles.categoryDetailsTitle}>
+                  {selectedGroup.category.name}
+                </Text>
                 <Text style={styles.categoryDetailsMeta}>
-                  {selectedGroup.items.length} pozycji / zostaje {formatMoney(selectedGroup.remaining, currencyCode)}
+                  {selectedGroup.items.length} pozycji / zostaje{" "}
+                  {formatMoney(selectedGroup.remaining, currencyCode)}
                 </Text>
               </View>
               {canCreateItem ? (
@@ -2685,49 +3219,74 @@ function FinanceCategoryCards({
           </View>
           {selectedGroup.items.length === 0 ? (
             <InlineAlert text="Ta kategoria nie ma jeszcze pozycji. Dodaj nową pozycję, aby zarządzać wydatkami." />
-          ) : selectedGroup.items.map((item) => (
-            <Pressable
-              accessibilityLabel={`Pokaż historię pozycji ${item.name}`}
-              accessibilityRole="button"
-              key={item.id}
-              onPress={() => onHistory(item)}
-              style={({ pressed }) => [styles.categoryDetailsRow, pressed && styles.pressedRow]}
-            >
-              <View style={styles.categoryDetailsText}>
-                <Text numberOfLines={1} style={styles.categoryDetailsItemTitle}>
-                  {item.name}
-                </Text>
-                <Text numberOfLines={1} style={styles.categoryDetailsItemMeta}>
-                  {formatOwner(item.owner)}
-                </Text>
-              </View>
-              <View style={styles.categoryDetailsAmounts}>
-                <Text style={styles.categoryDetailsAmount}>{formatMoney(item.budgetAmount, currencyCode)}</Text>
-                <Text style={styles.categoryDetailsSpent}>wydano {formatMoney(item.spentAmount, currencyCode)}</Text>
-                <Text
-                  style={[
-                    styles.categoryDetailsRemaining,
-                    Number(item.remainingAmount ?? 0) < 0 && styles.dangerText,
-                    Number(item.remainingAmount ?? 0) >= 0 && styles.positiveText,
-                  ]}
-                >
-                  {item.budgetAmount ? formatMoney(item.remainingAmount ?? 0, currencyCode) : "bez limitu"}
-                </Text>
-              </View>
-              <View style={styles.categoryDetailsActions}>
-                {canCreateExpense ? (
-                  <IconButton accessibilityLabel="Dodaj wydatek" onPress={() => onAddExpense(item)}>
-                    <CartPlus color={theme.colors.primaryDark} size={15} />
-                  </IconButton>
-                ) : null}
-                {canUpdate ? (
-                  <IconButton accessibilityLabel="Edytuj pozycję" onPress={() => onEdit(item)}>
-                    <Pencil color={theme.colors.textMuted} size={15} />
-                  </IconButton>
-                ) : null}
-              </View>
-            </Pressable>
-          ))}
+          ) : (
+            selectedGroup.items.map((item) => (
+              <Pressable
+                accessibilityLabel={`Pokaż historię pozycji ${item.name}`}
+                accessibilityRole="button"
+                key={item.id}
+                onPress={() => onHistory(item)}
+                style={({ pressed }) => [
+                  styles.categoryDetailsRow,
+                  pressed && styles.pressedRow,
+                ]}
+              >
+                <View style={styles.categoryDetailsText}>
+                  <Text
+                    numberOfLines={1}
+                    style={styles.categoryDetailsItemTitle}
+                  >
+                    {item.name}
+                  </Text>
+                  <Text
+                    numberOfLines={1}
+                    style={styles.categoryDetailsItemMeta}
+                  >
+                    {formatOwner(item.owner)}
+                  </Text>
+                </View>
+                <View style={styles.categoryDetailsAmounts}>
+                  <Text style={styles.categoryDetailsAmount}>
+                    {formatMoney(item.budgetAmount, currencyCode)}
+                  </Text>
+                  <Text style={styles.categoryDetailsSpent}>
+                    wydano {formatMoney(item.spentAmount, currencyCode)}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.categoryDetailsRemaining,
+                      Number(item.remainingAmount ?? 0) < 0 &&
+                        styles.dangerText,
+                      Number(item.remainingAmount ?? 0) >= 0 &&
+                        styles.positiveText,
+                    ]}
+                  >
+                    {item.budgetAmount
+                      ? formatMoney(item.remainingAmount ?? 0, currencyCode)
+                      : "bez limitu"}
+                  </Text>
+                </View>
+                <View style={styles.categoryDetailsActions}>
+                  {canCreateExpense ? (
+                    <IconButton
+                      accessibilityLabel="Dodaj wydatek"
+                      onPress={() => onAddExpense(item)}
+                    >
+                      <CartPlus color={theme.colors.primaryDark} size={15} />
+                    </IconButton>
+                  ) : null}
+                  {canUpdate ? (
+                    <IconButton
+                      accessibilityLabel="Edytuj pozycję"
+                      onPress={() => onEdit(item)}
+                    >
+                      <Pencil color={theme.colors.textMuted} size={15} />
+                    </IconButton>
+                  ) : null}
+                </View>
+              </Pressable>
+            ))
+          )}
         </View>
       ) : null}
     </View>
@@ -2809,7 +3368,10 @@ function applyFinanceFilters(
 
   const filtered = rows.filter((row) => {
     const ownerId = row.owner?.memberId ?? "";
-    const searchable = `${row.name} ${row.category.name} ${formatOwner(row.owner)}`.toLocaleLowerCase("pl-PL");
+    const searchable =
+      `${row.name} ${row.category.name} ${formatOwner(row.owner)}`.toLocaleLowerCase(
+        "pl-PL",
+      );
 
     if (filters.ownerMemberId && ownerId !== filters.ownerMemberId) {
       return false;
@@ -2826,7 +3388,9 @@ function applyFinanceFilters(
     return !normalizedSearch || searchable.includes(normalizedSearch);
   });
 
-  return filtered.sort((left, right) => compareFinanceRows(left, right, filters));
+  return filtered.sort((left, right) =>
+    compareFinanceRows(left, right, filters),
+  );
 }
 
 function applyFinanceCategoryFilters(
@@ -2848,7 +3412,11 @@ function applyFinanceCategoryFilters(
       return false;
     }
 
-    if (normalizedSearch && !categoryName.includes(normalizedSearch) && !rowCategoryIds.has(category.id)) {
+    if (
+      normalizedSearch &&
+      !categoryName.includes(normalizedSearch) &&
+      !rowCategoryIds.has(category.id)
+    ) {
       return false;
     }
 
@@ -2862,16 +3430,26 @@ function compareFinanceRows(
   filters: FinanceFilters,
 ): number {
   const direction = filters.sortDirection === "asc" ? 1 : -1;
-  const textCompare = (a: string, b: string) => a.localeCompare(b, "pl-PL") * direction;
+  const textCompare = (a: string, b: string) =>
+    a.localeCompare(b, "pl-PL") * direction;
   const numberCompare = (a: number, b: number) => (a - b) * direction;
 
   switch (filters.sortBy) {
     case "budget":
-      return numberCompare(Number(left.budgetAmount ?? 0), Number(right.budgetAmount ?? 0));
+      return numberCompare(
+        Number(left.budgetAmount ?? 0),
+        Number(right.budgetAmount ?? 0),
+      );
     case "spent":
-      return numberCompare(Number(left.spentAmount ?? 0), Number(right.spentAmount ?? 0));
+      return numberCompare(
+        Number(left.spentAmount ?? 0),
+        Number(right.spentAmount ?? 0),
+      );
     case "remaining":
-      return numberCompare(Number(left.remainingAmount ?? 0), Number(right.remainingAmount ?? 0));
+      return numberCompare(
+        Number(left.remainingAmount ?? 0),
+        Number(right.remainingAmount ?? 0),
+      );
     case "owner":
       return textCompare(formatOwner(left.owner), formatOwner(right.owner));
     case "name":
@@ -2886,7 +3464,11 @@ function compareFinanceRows(
   }
 }
 
-function describeFinanceFilters(filters: FinanceFilters, resultCount: number, totalCount: number): string {
+function describeFinanceFilters(
+  filters: FinanceFilters,
+  resultCount: number,
+  totalCount: number,
+): string {
   const active: string[] = [`${resultCount}/${totalCount} pozycji`];
 
   if (filters.search.trim()) {
@@ -2927,15 +3509,13 @@ function groupRowsByCategory(
   });
 
   rows.forEach((row) => {
-    const group =
-      groups.get(row.category.id) ??
-      {
-        category: row.category,
-        items: [],
-        planned: 0,
-        remaining: 0,
-        spent: 0,
-      };
+    const group = groups.get(row.category.id) ?? {
+      category: row.category,
+      items: [],
+      planned: 0,
+      remaining: 0,
+      spent: 0,
+    };
 
     group.items.push(row);
     group.planned += Number(row.budgetAmount ?? 0);
@@ -2947,7 +3527,12 @@ function groupRowsByCategory(
   return [...groups.values()];
 }
 
-function getCategoryAccent(index: number): { border: string; color: string; onColor: string; text: string } {
+function getCategoryAccent(index: number): {
+  border: string;
+  color: string;
+  onColor: string;
+  text: string;
+} {
   const colors = [
     "#FF9F43",
     "#65D6A4",
@@ -2986,7 +3571,11 @@ function getBudgetCategoryIcon(categoryName: string, color: string): ReactNode {
     return <Utensils color={color} size={iconSize} />;
   }
 
-  if (normalized.includes("dom") || normalized.includes("media") || normalized.includes("rachunki")) {
+  if (
+    normalized.includes("dom") ||
+    normalized.includes("media") ||
+    normalized.includes("rachunki")
+  ) {
     return <Home color={color} size={iconSize} />;
   }
 
@@ -3077,23 +3666,6 @@ function parseMoney(value: string): number {
   return Number.isFinite(parsed) ? Math.round(parsed * 100) / 100 : Number.NaN;
 }
 
-function parseMonthInput(value: string): { month: number; year: number } | null {
-  const match = value.trim().match(/^(\d{4})-(\d{2})$/);
-
-  if (!match) {
-    return null;
-  }
-
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-
-  if (!Number.isInteger(year) || !Number.isInteger(month) || year < 2000 || year > 2100 || month < 1 || month > 12) {
-    return null;
-  }
-
-  return { month, year };
-}
-
 function isValidMoney(value: string): boolean {
   const parsed = parseMoney(value);
 
@@ -3171,6 +3743,19 @@ function formatMonthLong(month: BudgetMonth): string {
 function createStyles(colors: AppPalette) {
   return StyleSheet.create({
     actionPicker: {
+      gap: spacing.sm,
+    },
+    financeMenu: {
+      gap: spacing.lg,
+    },
+    financeMenuHeading: {
+      color: colors.textMuted,
+      fontSize: 11,
+      fontWeight: "900",
+      letterSpacing: 0,
+      textTransform: "uppercase",
+    },
+    financeMenuSection: {
       gap: spacing.sm,
     },
     actionCell: {
@@ -3835,6 +4420,81 @@ function createStyles(colors: AppPalette) {
       fontSize: 13,
       fontWeight: "900",
       letterSpacing: 0,
+    },
+    generateCategoryGroup: {
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      overflow: "hidden",
+    },
+    generateCategoryHeader: {
+      alignItems: "center",
+      backgroundColor: colors.cardMuted,
+      flexDirection: "row",
+      gap: spacing.sm,
+      padding: spacing.sm,
+    },
+    generateCategoryMeta: {
+      color: colors.textMuted,
+      fontSize: 11,
+      letterSpacing: 0,
+    },
+    generateCategoryText: {
+      flex: 1,
+      gap: 2,
+      minWidth: 0,
+    },
+    generateCategoryTitle: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    generateCheckbox: {
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderColor: colors.line,
+      borderRadius: 5,
+      borderWidth: 1,
+      height: 22,
+      justifyContent: "center",
+      width: 22,
+    },
+    generateCheckboxChecked: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    generateCheckboxPartial: {
+      backgroundColor: colors.textMuted,
+      borderColor: colors.textMuted,
+    },
+    generateCopyList: {
+      gap: spacing.sm,
+    },
+    generateItemCheckButton: {
+      alignItems: "center",
+      alignSelf: "stretch",
+      justifyContent: "center",
+      paddingRight: 2,
+    },
+    generateItemList: {
+      gap: spacing.xs,
+      padding: spacing.sm,
+    },
+    generateItemRow: {
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      minHeight: 52,
+      padding: spacing.sm,
+    },
+    generateItemRowMuted: {
+      opacity: 0.64,
     },
     fab: {
       alignItems: "center",
