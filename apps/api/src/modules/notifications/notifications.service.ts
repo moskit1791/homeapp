@@ -307,6 +307,61 @@ export class NotificationsService {
     }
   }
 
+  async sendCleaningTaskReminder(input: {
+    householdId: string;
+    location: string | null;
+    nextDueAt: string;
+    taskName: string;
+  }): Promise<PushSendResult> {
+    const recipients = await this.listEnabledTokensForHouseholdEvent(
+      input.householdId,
+      "cleaning.changed",
+    );
+
+    if (recipients.length === 0) {
+      return { sent: 0, tickets: [] };
+    }
+
+    const taskLabel = input.location
+      ? `${input.taskName} w ${input.location}`
+      : input.taskName;
+    const messages = recipients.map((token) => ({
+      body: taskLabel,
+      data: {
+        eventType: "cleaning.changed",
+        kind: "cleaning-reminder",
+        nextDueAt: input.nextDueAt,
+      },
+      sound: "default" as const,
+      title: "Mija termin sprzątania",
+      to: token.expoPushToken,
+    }));
+
+    try {
+      const tickets = await this.sendExpoMessages(messages);
+
+      await Promise.all(
+        tickets.map((ticket, index) =>
+          ticket.status === "error" &&
+          ticket.details?.error === "DeviceNotRegistered"
+            ? this.disableToken(recipients[index]!.expoPushToken)
+            : undefined,
+        ),
+      );
+
+      return {
+        sent: messages.length,
+        tickets,
+      };
+    } catch (error) {
+      this.logger.warn(
+        "Failed to send cleaning reminder push notification",
+        error,
+      );
+      return { sent: 0, tickets: [] };
+    }
+  }
+
   private async listEnabledTokensForMember(
     householdId: string,
     householdMemberId: string,

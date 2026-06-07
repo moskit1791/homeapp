@@ -1,4 +1,8 @@
-import { REALTIME_EVENTS, type ModuleKey, type RealtimeEventType } from "@homeapp/shared-types";
+import {
+  REALTIME_EVENTS,
+  type ModuleKey,
+  type RealtimeEventType,
+} from "@homeapp/shared-types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as FileSystem from "expo-file-system";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -6,9 +10,30 @@ import * as ImagePicker from "expo-image-picker";
 import * as MediaLibrary from "expo-media-library";
 import * as Sharing from "expo-sharing";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ActivityIndicator, Alert, Image, Linking, Modal, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions, type LayoutChangeEvent } from "react-native";
-import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Linking,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  useWindowDimensions,
+  type LayoutChangeEvent,
+} from "react-native";
+import {
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+} from "react-native-gesture-handler";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import {
   completeAnnualCost,
   completeCleaningTask,
@@ -40,6 +65,7 @@ import {
   updateNotificationPreferences,
   uploadAttachmentFile,
   type AnnualCost,
+  type AnnualCostHistory,
   type Attachment,
   type CleaningTask,
   type DataEntry,
@@ -47,7 +73,10 @@ import {
   type NotificationPreference,
 } from "../../src/api";
 import { registerForPushNotifications } from "../../src/notifications/register-push-notifications";
-import { useModulePermission, usePermissions } from "../../src/permissions/use-permissions";
+import {
+  useModulePermission,
+  usePermissions,
+} from "../../src/permissions/use-permissions";
 import { useSession } from "../../src/session/session-context";
 import { radii, spacing } from "../../src/theme/tokens";
 import {
@@ -87,6 +116,7 @@ import {
   FileText,
   Folder,
   MailPlus,
+  MapPin,
   Pencil,
   Trash2,
   Users,
@@ -94,7 +124,10 @@ import {
 
 type HomeSegment = "cleaning" | "annual_costs" | "data_entries" | "attachments";
 type SettingsView = "main" | "appearance" | "members";
-type ImageAttachmentMimeType = Extract<Attachment["mimeType"], "image/jpeg" | "image/png" | "image/webp">;
+type ImageAttachmentMimeType = Extract<
+  Attachment["mimeType"],
+  "image/jpeg" | "image/png" | "image/webp"
+>;
 const neutralAccentValues = new Set([
   "#A16207",
   "#92400E",
@@ -120,7 +153,11 @@ type PickedAttachmentPhoto = {
   uri: string;
 };
 
-const imageAttachmentMimeTypes = ["image/jpeg", "image/png", "image/webp"] as const;
+const imageAttachmentMimeTypes = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+] as const;
 
 type Accent = {
   color: string;
@@ -164,7 +201,10 @@ const moduleTiles: Array<{
   },
 ];
 
-const notificationPreferenceLabels: Record<RealtimeEventType, { label: string; meta: string }> = {
+const notificationPreferenceLabels: Record<
+  RealtimeEventType,
+  { label: string; meta: string }
+> = {
   "annual_cost.changed": {
     label: "Koszty roczne",
     meta: "Nowe, zmienione i oznaczone koszty roczne.",
@@ -228,15 +268,21 @@ const visibleNotificationEventTypes = REALTIME_EVENTS.filter(
 );
 
 export default function DomScreen() {
-  const params = useLocalSearchParams<{ segment?: HomeSegment; settings?: string }>();
+  const params = useLocalSearchParams<{
+    segment?: HomeSegment;
+    settings?: string;
+  }>();
   const permissionsQuery = usePermissions();
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
   const [activeSegment, setActiveSegment] = useState<HomeSegment>("cleaning");
   const availableTiles = useMemo(
     () =>
-      moduleTiles.filter((tile) =>
-        permissionsQuery.data?.find((permission) => permission.moduleKey === tile.moduleKey)?.canRead,
+      moduleTiles.filter(
+        (tile) =>
+          permissionsQuery.data?.find(
+            (permission) => permission.moduleKey === tile.moduleKey,
+          )?.canRead,
       ),
     [permissionsQuery.data],
   );
@@ -257,7 +303,12 @@ export default function DomScreen() {
     ) {
       setActiveSegment(availableTiles[0]!.value);
     }
-  }, [activeSegment, availableTiles, params.segment, permissionsQuery.isSuccess]);
+  }, [
+    activeSegment,
+    availableTiles,
+    params.segment,
+    permissionsQuery.isSuccess,
+  ]);
 
   if (permissionsQuery.isLoading) {
     return (
@@ -291,7 +342,9 @@ export default function DomScreen() {
         </View>
       )}
 
-      {availableTiles.length > 0 ? <ActiveModule segment={activeSegment} /> : null}
+      {availableTiles.length > 0 ? (
+        <ActiveModule segment={activeSegment} />
+      ) : null}
     </AppScreen>
   );
 }
@@ -333,7 +386,9 @@ function ModuleTile({
           {getSegmentIcon(segment, accent.color, 30)}
         </View>
       </View>
-      <Text numberOfLines={2} style={styles.moduleTitle}>{title}</Text>
+      <Text numberOfLines={2} style={styles.moduleTitle}>
+        {title}
+      </Text>
     </Pressable>
   );
 }
@@ -361,20 +416,23 @@ function CleaningPanel() {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
   const accessToken = session?.accessToken;
+  const cleaningTasksQueryKey = [...queryKeys.cleaning, "tasks"] as const;
   const accent = getSegmentAccent(theme.colors, "cleaning");
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
   const [frequencyDays, setFrequencyDays] = useState("7");
   const [nextDueAt, setNextDueAt] = useState(todayIso());
   const [datePickerVisible, setDatePickerVisible] = useState(false);
-  const [datePickerMonth, setDatePickerMonth] = useState(() => monthAnchor(new Date()));
+  const [datePickerMonth, setDatePickerMonth] = useState(() =>
+    monthAnchor(new Date()),
+  );
   const [editingTask, setEditingTask] = useState<CleaningTask | null>(null);
   const [completionNotice, setCompletionNotice] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
   const tasksQuery = useQuery({
     enabled: permission.canRead && Boolean(accessToken),
     queryFn: () => listCleaningTasks({ accessToken }),
-    queryKey: [...queryKeys.cleaning, "tasks"],
+    queryKey: cleaningTasksQueryKey,
   });
   const createMutation = useMutation({
     mutationFn: () =>
@@ -389,7 +447,11 @@ function CleaningPanel() {
         },
         { accessToken },
       ),
-    onSuccess: async () => {
+    onSuccess: async (task) => {
+      queryClient.setQueryData<CleaningTask[]>(
+        cleaningTasksQueryKey,
+        (current = []) => sortCleaningTasksForDisplay([...current, task]),
+      );
       setName("");
       setModalVisible(false);
       await queryClient.invalidateQueries({ queryKey: queryKeys.cleaning });
@@ -398,10 +460,58 @@ function CleaningPanel() {
   const completeMutation = useMutation({
     mutationFn: (id: string) =>
       completeCleaningTask(id, { completedAt: todayIso() }, { accessToken }),
-    onSuccess: async () => {
-      setCompletionNotice("Zadanie oznaczone jako wykonane. Termin został przeliczony.");
-      setTimeout(() => setCompletionNotice(""), 2200);
+    onError: (
+      _error,
+      _id,
+      context: { previousTasks?: CleaningTask[] } | undefined,
+    ) => {
+      if (context?.previousTasks) {
+        queryClient.setQueryData(cleaningTasksQueryKey, context.previousTasks);
+      }
+    },
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.cleaning });
+      const previousTasks = queryClient.getQueryData<CleaningTask[]>(
+        cleaningTasksQueryKey,
+      );
+      const completedAt = todayIso();
+      const updatedAt = new Date().toISOString();
+
+      queryClient.setQueryData<CleaningTask[]>(
+        cleaningTasksQueryKey,
+        (current = []) =>
+          sortCleaningTasksForDisplay(
+            current.map((task) =>
+              task.id === id
+                ? {
+                    ...task,
+                    isOverdue: false,
+                    nextDueAt: addDaysIsoDate(completedAt, task.frequencyDays),
+                    reminderSentAt: null,
+                    updatedAt,
+                  }
+                : task,
+            ),
+          ),
+      );
+
+      return { previousTasks };
+    },
+    onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.cleaning });
+    },
+    onSuccess: (task) => {
+      queryClient.setQueryData<CleaningTask[]>(
+        cleaningTasksQueryKey,
+        (current = []) =>
+          sortCleaningTasksForDisplay(
+            current.map((item) => (item.id === task.id ? task : item)),
+          ),
+      );
+      setCompletionNotice(
+        "Zadanie oznaczone jako wykonane. Termin został przeliczony.",
+      );
+      setTimeout(() => setCompletionNotice(""), 2200);
     },
   });
   const updateMutation = useMutation({
@@ -423,7 +533,14 @@ function CleaningPanel() {
         { accessToken },
       );
     },
-    onSuccess: async () => {
+    onSuccess: async (task) => {
+      queryClient.setQueryData<CleaningTask[]>(
+        cleaningTasksQueryKey,
+        (current = []) =>
+          sortCleaningTasksForDisplay(
+            current.map((item) => (item.id === task.id ? task : item)),
+          ),
+      );
       setName("");
       setEditingTask(null);
       setModalVisible(false);
@@ -432,7 +549,29 @@ function CleaningPanel() {
   });
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteCleaningTask(id, { accessToken }),
-    onSuccess: async () => {
+    onError: (
+      _error,
+      _id,
+      context: { previousTasks?: CleaningTask[] } | undefined,
+    ) => {
+      if (context?.previousTasks) {
+        queryClient.setQueryData(cleaningTasksQueryKey, context.previousTasks);
+      }
+    },
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.cleaning });
+      const previousTasks = queryClient.getQueryData<CleaningTask[]>(
+        cleaningTasksQueryKey,
+      );
+
+      queryClient.setQueryData<CleaningTask[]>(
+        cleaningTasksQueryKey,
+        (current = []) => current.filter((task) => task.id !== id),
+      );
+
+      return { previousTasks };
+    },
+    onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.cleaning });
     },
   });
@@ -498,8 +637,13 @@ function CleaningPanel() {
             accent={accent}
             canDelete={permission.canDelete}
             canUpdate={permission.canUpdate}
-            completing={completeMutation.isPending}
-            deleting={deleteMutation.isPending}
+            completing={
+              completeMutation.isPending &&
+              completeMutation.variables === task.id
+            }
+            deleting={
+              deleteMutation.isPending && deleteMutation.variables === task.id
+            }
             key={task.id}
             onComplete={() => completeMutation.mutate(task.id)}
             onDelete={() => deleteMutation.mutate(task.id)}
@@ -520,7 +664,9 @@ function CleaningPanel() {
             <ActionButton
               disabled={!canSave}
               loading={createMutation.isPending || updateMutation.isPending}
-              onPress={() => (editingTask ? updateMutation.mutate() : createMutation.mutate())}
+              onPress={() =>
+                editingTask ? updateMutation.mutate() : createMutation.mutate()
+              }
               style={styles.modalFooterButton}
               title={editingTask ? "Zapisz" : "Dodaj"}
             />
@@ -614,7 +760,9 @@ function InlineDatePicker({
         >
           <ChevronLeft color={theme.colors.textMuted} size={18} />
         </IconButton>
-        <Text style={styles.inlineDatePickerTitle}>{formatMonthTitle(month)}</Text>
+        <Text style={styles.inlineDatePickerTitle}>
+          {formatMonthTitle(month)}
+        </Text>
         <IconButton
           accessibilityLabel="Następny miesiąc"
           onPress={() => onChangeMonth(addMonths(month, 1))}
@@ -637,7 +785,9 @@ function InlineDatePicker({
 
           return (
             <Pressable
-              accessibilityLabel={day.iso ? `Wybierz ${formatDateFull(day.iso)}` : undefined}
+              accessibilityLabel={
+                day.iso ? `Wybierz ${formatDateFull(day.iso)}` : undefined
+              }
               accessibilityRole={day.iso ? "button" : undefined}
               disabled={!day.iso}
               key={`${day.iso ?? "empty"}-${day.label}-${index}`}
@@ -687,15 +837,21 @@ function AnnualCostsPanel() {
   const [paymentNotice, setPaymentNotice] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
   const year = new Date().getFullYear();
+  const annualCostsQueryKey = [...queryKeys.annualCosts, "items"] as const;
+  const annualCostHistoryQueryKey = [
+    ...queryKeys.annualCosts,
+    "history",
+    year,
+  ] as const;
   const costsQuery = useQuery({
     enabled: permission.canRead && Boolean(accessToken),
     queryFn: () => listAnnualCosts({ accessToken }),
-    queryKey: [...queryKeys.annualCosts, "items"],
+    queryKey: annualCostsQueryKey,
   });
   const historyQuery = useQuery({
     enabled: permission.canRead && Boolean(accessToken),
     queryFn: () => listAnnualCostHistory(year, { accessToken }),
-    queryKey: [...queryKeys.annualCosts, "history", year],
+    queryKey: annualCostHistoryQueryKey,
   });
   const householdQuery = useQuery({
     enabled: Boolean(accessToken),
@@ -712,7 +868,15 @@ function AnnualCostsPanel() {
         },
         { accessToken },
       ),
-    onSuccess: async () => {
+    onSuccess: async (cost) => {
+      queryClient.setQueryData<AnnualCost[]>(
+        annualCostsQueryKey,
+        (current = []) =>
+          sortAnnualCostsForDisplay([
+            ...current.filter((item) => item.id !== cost.id),
+            cost,
+          ]),
+      );
       setName("");
       setAmount("");
       setModalVisible(false);
@@ -734,18 +898,116 @@ function AnnualCostsPanel() {
         { accessToken },
       );
     },
-    onSuccess: async () => {
-      setPaymentCost(null);
-      setPaymentNotice("Koszt oznaczony jako opłacony. Następny termin został odświeżony.");
-      setTimeout(() => setPaymentNotice(""), 2200);
+    onError: (
+      _error,
+      _variables,
+      context:
+        | {
+            previousCosts?: AnnualCost[];
+            previousHistory?: AnnualCostHistory[];
+          }
+        | undefined,
+    ) => {
+      if (context?.previousCosts) {
+        queryClient.setQueryData(annualCostsQueryKey, context.previousCosts);
+      }
+
+      if (context?.previousHistory) {
+        queryClient.setQueryData(
+          annualCostHistoryQueryKey,
+          context.previousHistory,
+        );
+      }
+    },
+    onMutate: async () => {
+      if (!paymentCost) {
+        return {};
+      }
+
+      await queryClient.cancelQueries({ queryKey: queryKeys.annualCosts });
+      const previousCosts =
+        queryClient.getQueryData<AnnualCost[]>(annualCostsQueryKey);
+      const previousHistory = queryClient.getQueryData<AnnualCostHistory[]>(
+        annualCostHistoryQueryKey,
+      );
+      const updatedAt = new Date().toISOString();
+      const parsedAmount = parseOptionalNumber(paymentAmount);
+      const optimisticCost: AnnualCost = {
+        ...paymentCost,
+        nextDueDate: addYearsIsoDate(paymentDate, 1),
+        updatedAt,
+      };
+      const optimisticHistory: AnnualCostHistory = {
+        amount: parsedAmount === null ? null : String(parsedAmount),
+        annualCostId: paymentCost.id,
+        annualCostName: paymentCost.name,
+        createdAt: updatedAt,
+        executedAt: paymentDate,
+        id: `pending-${paymentCost.id}-${paymentDate}`,
+      };
+
+      queryClient.setQueryData<AnnualCost[]>(
+        annualCostsQueryKey,
+        (current = []) =>
+          sortAnnualCostsForDisplay(
+            current.map((cost) =>
+              cost.id === paymentCost.id ? optimisticCost : cost,
+            ),
+          ),
+      );
+      queryClient.setQueryData<AnnualCostHistory[]>(
+        annualCostHistoryQueryKey,
+        (current = []) =>
+          sortAnnualCostHistoryForDisplay([
+            optimisticHistory,
+            ...current.filter(
+              (item) =>
+                item.annualCostId !== paymentCost.id ||
+                item.executedAt !== paymentDate,
+            ),
+          ]),
+      );
+
+      return { previousCosts, previousHistory };
+    },
+    onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.annualCosts });
+    },
+    onSuccess: (completion) => {
+      queryClient.setQueryData<AnnualCost[]>(
+        annualCostsQueryKey,
+        (current = []) =>
+          sortAnnualCostsForDisplay(
+            current.map((cost) =>
+              cost.id === completion.cost.id ? completion.cost : cost,
+            ),
+          ),
+      );
+      queryClient.setQueryData<AnnualCostHistory[]>(
+        annualCostHistoryQueryKey,
+        (current = []) =>
+          sortAnnualCostHistoryForDisplay([
+            completion.history,
+            ...current.filter(
+              (item) =>
+                item.id !==
+                `pending-${completion.cost.id}-${completion.history.executedAt}`,
+            ),
+          ]),
+      );
+      setPaymentCost(null);
+      setPaymentNotice(
+        "Koszt oznaczony jako opłacony. Następny termin został odświeżony.",
+      );
+      setTimeout(() => setPaymentNotice(""), 2200);
     },
   });
   const costs = costsQuery.data ?? [];
   const history = historyQuery.data ?? [];
   const currencyCode = normalizeCurrencyCode(householdQuery.data?.currencyCode);
   const paidCostIds = new Set(history.map((item) => item.annualCostId));
-  const canAdd = permission.canCreate && Boolean(name.trim()) && !createMutation.isPending;
+  const canAdd =
+    permission.canCreate && Boolean(name.trim()) && !createMutation.isPending;
   const canSavePayment =
     Boolean(paymentCost) &&
     /^\d{4}-\d{2}-\d{2}$/.test(paymentDate) &&
@@ -762,7 +1024,11 @@ function AnnualCostsPanel() {
       accent={accent}
       action={
         permission.canCreate ? (
-          <ActionButton onPress={() => setModalVisible(true)} size="small" title="+ Dodaj" />
+          <ActionButton
+            onPress={() => setModalVisible(true)}
+            size="small"
+            title="+ Dodaj"
+          />
         ) : undefined
       }
       icon={<ChartBar color={accent.color} size={18} />}
@@ -882,7 +1148,10 @@ function AnnualCostsPanel() {
           />
         </View>
         {completeMutation.error ? (
-          <InlineAlert tone="error" text="Nie udało się zapisać opłaconego kosztu." />
+          <InlineAlert
+            tone="error"
+            text="Nie udało się zapisać opłaconego kosztu."
+          />
         ) : null}
       </FormModal>
     </ModulePanel>
@@ -901,14 +1170,30 @@ function DataEntriesPanel() {
   const [title, setTitle] = useState("");
   const [value, setValue] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
+  const dataEntriesQueryKey = [
+    ...queryKeys.dataEntries,
+    search.trim(),
+  ] as const;
   const entriesQuery = useQuery({
     enabled: permission.canRead && Boolean(accessToken),
     queryFn: () => listDataEntries(search.trim() || undefined, { accessToken }),
-    queryKey: [...queryKeys.dataEntries, search.trim()],
+    queryKey: dataEntriesQueryKey,
   });
   const createMutation = useMutation({
-    mutationFn: () => createDataEntry({ title: title.trim(), value: value.trim() }, { accessToken }),
-    onSuccess: async () => {
+    mutationFn: () =>
+      createDataEntry(
+        { title: title.trim(), value: value.trim() },
+        { accessToken },
+      ),
+    onSuccess: async (entry) => {
+      queryClient.setQueryData<DataEntry[]>(
+        dataEntriesQueryKey,
+        (current = []) =>
+          sortDataEntriesForDisplay([
+            ...current.filter((item) => item.id !== entry.id),
+            entry,
+          ]),
+      );
       setTitle("");
       setValue("");
       setModalVisible(false);
@@ -917,17 +1202,44 @@ function DataEntriesPanel() {
   });
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteDataEntry(id, { accessToken }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.dataEntries }),
+    onError: (
+      _error,
+      _id,
+      context: { previousEntries?: DataEntry[] } | undefined,
+    ) => {
+      if (context?.previousEntries) {
+        queryClient.setQueryData(dataEntriesQueryKey, context.previousEntries);
+      }
+    },
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.dataEntries });
+      const previousEntries =
+        queryClient.getQueryData<DataEntry[]>(dataEntriesQueryKey);
+
+      queryClient.setQueryData<DataEntry[]>(
+        dataEntriesQueryKey,
+        (current = []) => current.filter((entry) => entry.id !== id),
+      );
+
+      return { previousEntries };
+    },
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.dataEntries }),
   });
   const entries = entriesQuery.data ?? [];
-  const canAdd = permission.canCreate && Boolean(title.trim()) && !createMutation.isPending;
+  const canAdd =
+    permission.canCreate && Boolean(title.trim()) && !createMutation.isPending;
 
   return (
     <ModulePanel
       accent={accent}
       action={
         permission.canCreate ? (
-          <ActionButton onPress={() => setModalVisible(true)} size="small" title="+ Dodaj" />
+          <ActionButton
+            onPress={() => setModalVisible(true)}
+            size="small"
+            title="+ Dodaj"
+          />
         ) : undefined
       }
       icon={<Database color={accent.color} size={18} />}
@@ -952,7 +1264,9 @@ function DataEntriesPanel() {
           <DataRow
             accent={accent}
             canDelete={permission.canDelete}
-            deleting={deleteMutation.isPending}
+            deleting={
+              deleteMutation.isPending && deleteMutation.variables === entry.id
+            }
             entry={entry}
             key={entry.id}
             onDelete={() => deleteMutation.mutate(entry.id)}
@@ -1017,22 +1331,34 @@ function AttachmentsPanel() {
   const [caption, setCaption] = useState("");
   const [editCaption, setEditCaption] = useState("");
   const [editFileName, setEditFileName] = useState("");
-  const [editingAttachment, setEditingAttachment] = useState<Attachment | null>(null);
-  const [pickedPhoto, setPickedPhoto] = useState<PickedAttachmentPhoto | null>(null);
-  const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null);
+  const [editingAttachment, setEditingAttachment] = useState<Attachment | null>(
+    null,
+  );
+  const [pickedPhoto, setPickedPhoto] = useState<PickedAttachmentPhoto | null>(
+    null,
+  );
+  const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(
+    null,
+  );
   const [previewError, setPreviewError] = useState("");
   const [openingAttachment, setOpeningAttachment] = useState(false);
-  const [downloadingAttachmentId, setDownloadingAttachmentId] = useState<string | null>(null);
+  const [downloadingAttachmentId, setDownloadingAttachmentId] = useState<
+    string | null
+  >(null);
   const [downloadError, setDownloadError] = useState("");
   const [downloadNeedsSettings, setDownloadNeedsSettings] = useState(false);
   const [downloadNotice, setDownloadNotice] = useState("");
   const [uploadError, setUploadError] = useState("");
   const [uploadNeedsSettings, setUploadNeedsSettings] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
+  const attachmentsQueryKey = [
+    ...queryKeys.attachments,
+    search.trim(),
+  ] as const;
   const attachmentsQuery = useQuery({
     enabled: permission.canRead && Boolean(accessToken),
     queryFn: () => listAttachments(search.trim() || undefined, { accessToken }),
-    queryKey: [...queryKeys.attachments, search.trim()],
+    queryKey: attachmentsQueryKey,
   });
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -1069,7 +1395,15 @@ function AttachmentsPanel() {
         { accessToken },
       );
     },
-    onSuccess: async () => {
+    onSuccess: async (attachment) => {
+      queryClient.setQueryData<Attachment[]>(
+        attachmentsQueryKey,
+        (current = []) =>
+          sortAttachmentsForDisplay([
+            ...current.filter((item) => item.id !== attachment.id),
+            attachment,
+          ]),
+      );
       setPickedPhoto(null);
       setCaption("");
       setUploadError("");
@@ -1092,17 +1426,52 @@ function AttachmentsPanel() {
         { accessToken },
       );
     },
-    onSuccess: async () => {
+    onSuccess: async (attachment) => {
+      queryClient.setQueryData<Attachment[]>(
+        attachmentsQueryKey,
+        (current = []) =>
+          sortAttachmentsForDisplay(
+            current.map((item) =>
+              item.id === attachment.id ? attachment : item,
+            ),
+          ),
+      );
       setEditingAttachment(null);
       await queryClient.invalidateQueries({ queryKey: queryKeys.attachments });
     },
   });
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteAttachment(id, { accessToken }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.attachments }),
+    onError: (
+      _error,
+      _id,
+      context: { previousAttachments?: Attachment[] } | undefined,
+    ) => {
+      if (context?.previousAttachments) {
+        queryClient.setQueryData(
+          attachmentsQueryKey,
+          context.previousAttachments,
+        );
+      }
+    },
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.attachments });
+      const previousAttachments =
+        queryClient.getQueryData<Attachment[]>(attachmentsQueryKey);
+
+      queryClient.setQueryData<Attachment[]>(
+        attachmentsQueryKey,
+        (current = []) => current.filter((attachment) => attachment.id !== id),
+      );
+
+      return { previousAttachments };
+    },
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.attachments }),
   });
   const attachments = attachmentsQuery.data ?? [];
-  const canAdd = permission.canCreate && Boolean(pickedPhoto) && !createMutation.isPending;
+  const canAdd =
+    permission.canCreate && Boolean(pickedPhoto) && !createMutation.isPending;
 
   function openEditAttachment(attachment: Attachment) {
     setEditingAttachment(attachment);
@@ -1132,7 +1501,9 @@ function AttachmentsPanel() {
     try {
       await shareAttachmentFile(previewAttachment, accessToken);
     } catch {
-      setPreviewError("Nie udało się otworzyć pliku. Spróbuj ponownie za chwilę.");
+      setPreviewError(
+        "Nie udało się otworzyć pliku. Spróbuj ponownie za chwilę.",
+      );
     } finally {
       setOpeningAttachment(false);
     }
@@ -1146,7 +1517,11 @@ function AttachmentsPanel() {
 
     try {
       const target = await downloadAttachmentFile(attachment, accessToken);
-      setDownloadNotice(target === "gallery" ? "Zdjęcie zapisane w galerii." : "Plik zapisany w pamięci aplikacji.");
+      setDownloadNotice(
+        target === "gallery"
+          ? "Zdjęcie zapisane w galerii."
+          : "Plik zapisany w pamięci aplikacji.",
+      );
     } catch (error) {
       if (error instanceof PhotoLibraryPermissionError) {
         setDownloadError(error.message);
@@ -1164,7 +1539,9 @@ function AttachmentsPanel() {
   }
 
   async function ensurePhotoLibraryPermission(): Promise<boolean> {
-    const currentPermission = await MediaLibrary.getPermissionsAsync(false, ["photo"]);
+    const currentPermission = await MediaLibrary.getPermissionsAsync(false, [
+      "photo",
+    ]);
     const permissionResult = hasFullPhotoLibraryAccess(currentPermission)
       ? currentPermission
       : currentPermission.canAskAgain
@@ -1233,7 +1610,11 @@ function AttachmentsPanel() {
       accent={accent}
       action={
         permission.canCreate ? (
-          <ActionButton onPress={handlePickPhoto} size="small" title="+ Zdjęcie" />
+          <ActionButton
+            onPress={handlePickPhoto}
+            size="small"
+            title="+ Zdjęcie"
+          />
         ) : undefined
       }
       icon={<Folder color={accent.color} size={18} />}
@@ -1242,7 +1623,12 @@ function AttachmentsPanel() {
     >
       {uploadError ? <InlineAlert tone="error" text={uploadError} /> : null}
       {uploadNeedsSettings ? (
-        <ActionButton onPress={openAppSettings} size="small" title="Otwórz ustawienia" variant="secondary" />
+        <ActionButton
+          onPress={openAppSettings}
+          size="small"
+          title="Otwórz ustawienia"
+          variant="secondary"
+        />
       ) : null}
       <TextInput
         onChangeText={setSearch}
@@ -1265,7 +1651,10 @@ function AttachmentsPanel() {
             attachment={attachment}
             canDelete={permission.canDelete}
             canUpdate={permission.canUpdate}
-            deleting={deleteMutation.isPending}
+            deleting={
+              deleteMutation.isPending &&
+              deleteMutation.variables === attachment.id
+            }
             downloading={downloadingAttachmentId === attachment.id}
             key={attachment.id}
             onDelete={() => deleteMutation.mutate(attachment.id)}
@@ -1278,7 +1667,12 @@ function AttachmentsPanel() {
       {downloadNotice ? <InlineAlert text={downloadNotice} /> : null}
       {downloadError ? <InlineAlert tone="error" text={downloadError} /> : null}
       {downloadNeedsSettings ? (
-        <ActionButton onPress={openAppSettings} size="small" title="Otwórz ustawienia" variant="secondary" />
+        <ActionButton
+          onPress={openAppSettings}
+          size="small"
+          title="Otwórz ustawienia"
+          variant="secondary"
+        />
       ) : null}
       <FormModal
         footer={
@@ -1305,21 +1699,30 @@ function AttachmentsPanel() {
       >
         {pickedPhoto ? (
           <View style={styles.photoPreviewCard}>
-            <Image source={{ uri: pickedPhoto.uri }} style={styles.photoPreview} />
+            <Image
+              source={{ uri: pickedPhoto.uri }}
+              style={styles.photoPreview}
+            />
             <View style={styles.photoMeta}>
               <Text numberOfLines={1} style={styles.itemName}>
                 {pickedPhoto.fileName}
               </Text>
               <Text style={styles.itemMeta}>
                 {pickedPhoto.mimeType.replace("image/", "").toUpperCase()}
-                {pickedPhoto.fileSize ? ` / ${formatBytes(pickedPhoto.fileSize)}` : ""}
+                {pickedPhoto.fileSize
+                  ? ` / ${formatBytes(pickedPhoto.fileSize)}`
+                  : ""}
               </Text>
             </View>
           </View>
         ) : (
           <InlineAlert text="Wybierz zdjęcie z galerii." />
         )}
-        <ActionButton onPress={handlePickPhoto} title="Zmień zdjęcie" variant="secondary" />
+        <ActionButton
+          onPress={handlePickPhoto}
+          title="Zmień zdjęcie"
+          variant="secondary"
+        />
         <TextInput
           onChangeText={setCaption}
           placeholder="Opis zdjęcia (opcjonalnie)"
@@ -1392,7 +1795,8 @@ function AttachmentsPanel() {
               title="Zamknij"
               variant="secondary"
             />
-            {previewAttachment && !previewAttachment.mimeType.startsWith("image/") ? (
+            {previewAttachment &&
+            !previewAttachment.mimeType.startsWith("image/") ? (
               <ActionButton
                 loading={openingAttachment}
                 onPress={handleOpenAttachmentFile}
@@ -1403,15 +1807,21 @@ function AttachmentsPanel() {
           </View>
         }
         onClose={closePreviewAttachment}
-        subtitle={previewAttachment?.caption || "Podgląd pliku z domowego folderu."}
+        subtitle={
+          previewAttachment?.caption || "Podgląd pliku z domowego folderu."
+        }
         title={previewAttachment?.fileName ?? "Podgląd pliku"}
-        visible={Boolean(previewAttachment && !previewAttachment.mimeType.startsWith("image/"))}
+        visible={Boolean(
+          previewAttachment && !previewAttachment.mimeType.startsWith("image/"),
+        )}
       >
         {previewError ? <InlineAlert tone="error" text={previewError} /> : null}
         <View style={styles.attachmentPreviewPlaceholder}>
           <FileText color={accent.color} size={32} />
           <Text style={styles.itemName}>Ten plik nie jest zdjęciem.</Text>
-          <Text style={styles.itemMeta}>Możesz otworzyć go w aplikacji obsługującej ten typ pliku.</Text>
+          <Text style={styles.itemMeta}>
+            Możesz otworzyć go w aplikacji obsługującej ten typ pliku.
+          </Text>
         </View>
       </FormModal>
     </ModulePanel>
@@ -1454,7 +1864,16 @@ function ZoomableImageModal({
     savedY.value = 0;
     setError("");
     setLoading(Boolean(source));
-  }, [savedScale, savedX, savedY, scale, source, translateX, translateY, visible]);
+  }, [
+    savedScale,
+    savedX,
+    savedY,
+    scale,
+    source,
+    translateX,
+    translateY,
+    visible,
+  ]);
 
   const pinchGesture = Gesture.Pinch()
     .onUpdate((event) => {
@@ -1496,7 +1915,10 @@ function ZoomableImageModal({
       savedX.value = 0;
       savedY.value = 0;
     });
-  const composedGesture = Gesture.Exclusive(doubleTapGesture, Gesture.Simultaneous(pinchGesture, panGesture));
+  const composedGesture = Gesture.Exclusive(
+    doubleTapGesture,
+    Gesture.Simultaneous(pinchGesture, panGesture),
+  );
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
       { translateX: translateX.value },
@@ -1506,51 +1928,58 @@ function ZoomableImageModal({
   }));
 
   return (
-    <Modal animationType="fade" onRequestClose={onClose} transparent visible={visible}>
+    <Modal
+      animationType="fade"
+      onRequestClose={onClose}
+      transparent
+      visible={visible}
+    >
       <GestureHandlerRootView style={styles.zoomGestureRoot}>
         <View style={styles.zoomModal}>
-        <View style={styles.zoomHeader}>
-          <Text numberOfLines={1} style={styles.zoomTitle}>
-            {title}
+          <View style={styles.zoomHeader}>
+            <Text numberOfLines={1} style={styles.zoomTitle}>
+              {title}
+            </Text>
+            <IconButton
+              accessibilityLabel="Zamknij podgląd zdjęcia"
+              onPress={onClose}
+            >
+              <Close color={theme.colors.text} size={20} />
+            </IconButton>
+          </View>
+          <View style={styles.zoomCanvas}>
+            {source ? (
+              <GestureDetector gesture={composedGesture}>
+                <Animated.Image
+                  onError={() => {
+                    setError("Nie udało się wczytać zdjęcia.");
+                    setLoading(false);
+                  }}
+                  onLoadEnd={() => setLoading(false)}
+                  onLoadStart={() => setLoading(true)}
+                  resizeMode="contain"
+                  source={source}
+                  style={[
+                    styles.zoomImage,
+                    {
+                      height: height * 0.78,
+                      width,
+                    },
+                    animatedStyle,
+                  ]}
+                />
+              </GestureDetector>
+            ) : null}
+            {loading ? (
+              <View style={styles.zoomLoader}>
+                <ActivityIndicator color={theme.colors.primary} />
+              </View>
+            ) : null}
+            {error ? <InlineAlert tone="error" text={error} /> : null}
+          </View>
+          <Text style={styles.zoomHint}>
+            Uszczypnij, przesuń albo stuknij dwa razy.
           </Text>
-          <IconButton
-            accessibilityLabel="Zamknij podgląd zdjęcia"
-            onPress={onClose}
-          >
-            <Close color={theme.colors.text} size={20} />
-          </IconButton>
-        </View>
-        <View style={styles.zoomCanvas}>
-          {source ? (
-            <GestureDetector gesture={composedGesture}>
-              <Animated.Image
-                onError={() => {
-                  setError("Nie udało się wczytać zdjęcia.");
-                  setLoading(false);
-                }}
-                onLoadEnd={() => setLoading(false)}
-                onLoadStart={() => setLoading(true)}
-                resizeMode="contain"
-                source={source}
-                style={[
-                  styles.zoomImage,
-                  {
-                    height: height * 0.78,
-                    width,
-                  },
-                  animatedStyle,
-                ]}
-              />
-            </GestureDetector>
-          ) : null}
-          {loading ? (
-            <View style={styles.zoomLoader}>
-              <ActivityIndicator color={theme.colors.primary} />
-            </View>
-          ) : null}
-          {error ? <InlineAlert tone="error" text={error} /> : null}
-        </View>
-        <Text style={styles.zoomHint}>Uszczypnij, przesuń albo stuknij dwa razy.</Text>
         </View>
       </GestureHandlerRootView>
     </Modal>
@@ -1563,7 +1992,14 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
   const householdPermission = useModulePermission("household_members");
   const router = useRouter();
   const theme = useAppTheme();
-  const { accent, fontScale, setAccent, setFontScale, setThemeMode, themeMode } = useThemePreferences();
+  const {
+    accent,
+    fontScale,
+    setAccent,
+    setFontScale,
+    setThemeMode,
+    themeMode,
+  } = useThemePreferences();
   const styles = createStyles(theme.colors);
   const accessToken = session?.accessToken;
   const [settingsVisible, setSettingsVisible] = useState(false);
@@ -1571,7 +2007,8 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
   const [notificationsVisible, setNotificationsVisible] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [homeName, setHomeName] = useState("");
-  const [currencyCode, setCurrencyCode] = useState<SupportedCurrencyCode>("PLN");
+  const [currencyCode, setCurrencyCode] =
+    useState<SupportedCurrencyCode>("PLN");
   const [mealSlotsPerDay, setMealSlotsPerDay] = useState("4");
   const [memberInviteEmail, setMemberInviteEmail] = useState("");
   const [toast, setToast] = useState<string | null>(null);
@@ -1637,7 +2074,11 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
     },
   });
   const inviteMemberMutation = useMutation({
-    mutationFn: () => inviteHouseholdMember({ email: memberInviteEmail.trim() }, { accessToken }),
+    mutationFn: () =>
+      inviteHouseholdMember(
+        { email: memberInviteEmail.trim() },
+        { accessToken },
+      ),
     onSuccess: async (invitation) => {
       setMemberInviteEmail("");
       showToast(
@@ -1649,7 +2090,8 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
     },
   });
   const removeMemberMutation = useMutation({
-    mutationFn: (memberId: string) => removeHouseholdMember(memberId, { accessToken }),
+    mutationFn: (memberId: string) =>
+      removeHouseholdMember(memberId, { accessToken }),
     onSuccess: async () => {
       showToast("Domownik usunięty");
       await queryClient.invalidateQueries({ queryKey: queryKeys.household });
@@ -1664,7 +2106,9 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
       return registerForPushNotifications(accessToken);
     },
     onSuccess: (token) => {
-      showToast(token ? "Powiadomienia włączone" : "Nie udało się pobrać tokenu push");
+      showToast(
+        token ? "Powiadomienia włączone" : "Nie udało się pobrać tokenu push",
+      );
     },
   });
   const testPushMutation = useMutation({
@@ -1724,9 +2168,14 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
     await logout();
   }
 
-  function toggleNotificationPreference(eventType: RealtimeEventType, enabled: boolean) {
+  function toggleNotificationPreference(
+    eventType: RealtimeEventType,
+    enabled: boolean,
+  ) {
     const next = notificationPreferences.map((preference) =>
-      preference.eventType === eventType ? { ...preference, enabled } : preference,
+      preference.eventType === eventType
+        ? { ...preference, enabled }
+        : preference,
     );
 
     notificationPreferencesMutation.mutate(next);
@@ -1761,7 +2210,9 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
     Boolean(memberInviteEmail.trim()) &&
     !inviteMemberMutation.isPending;
   const selectedAccent = normalizeHexAccent(accent) ?? "#B56CFF";
-  const themeModeLabel = themeModeOptions.find((option) => option.value === themeMode)?.label ?? "System";
+  const themeModeLabel =
+    themeModeOptions.find((option) => option.value === themeMode)?.label ??
+    "System";
   const settingsTitle =
     settingsView === "appearance"
       ? "Wygląd aplikacji"
@@ -1777,459 +2228,549 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
 
   return (
     <>
-    <IconButton accessibilityLabel="Otwórz ustawienia i konto" onPress={openSettings}>
-      <Cog color={theme.colors.text} size={19} />
-    </IconButton>
-    <FormModal
-      footer={
-        <View style={styles.modalFooter}>
-          {settingsView === "main" ? (
-            <ActionButton
-              labelStyle={styles.logoutButtonLabel}
-              onPress={handleLogout}
-              style={[styles.modalFooterButton, styles.logoutButton]}
-              title="Wyloguj się"
-              variant="secondary"
-            />
-          ) : (
-            <ActionButton
-              onPress={() => setSettingsView("main")}
-              style={styles.modalFooterButton}
-              title="Wróć"
-              variant="secondary"
-            />
-          )}
-          <ActionButton
-            onPress={closeSettings}
-            style={styles.modalFooterButton}
-            title="Zamknij"
-            variant="secondary"
-          />
-        </View>
-      }
-      onClose={closeSettings}
-      subtitle={settingsSubtitle}
-      title={settingsTitle}
-      visible={settingsVisible}
-    >
-      {toast ? (
-        <View style={styles.settingsToast}>
-          <Text style={styles.settingsToastText}>{toast}</Text>
-        </View>
-      ) : null}
-      <View style={styles.settingsPanel}>
-        {settingsView === "main" ? (
-          <View style={styles.settingsPanelRow}>
-          <Text style={styles.settingsPanelTitle}>Dom</Text>
-          <Text style={styles.settingsPanelMeta}>
-            Nazwa domu, waluta i liczba posiłków dziennie.
-          </Text>
-          <TextInput
-            editable={householdPermission.canUpdate}
-            onChangeText={setHomeName}
-            placeholder="Nazwa domu"
-            placeholderTextColor={theme.colors.textSubtle}
-            style={styles.input}
-            value={homeName}
-          />
-          <View style={styles.formRow}>
-            <View style={styles.flexInput}>
-              <Text style={styles.inputLabel}>Waluta</Text>
-              <SegmentedControl
-                onChange={setCurrencyCode}
-                options={currencyOptions.map((option) => ({
-                  label: option.label,
-                  value: option.value,
-                }))}
-                value={currencyCode}
+      <IconButton
+        accessibilityLabel="Otwórz ustawienia i konto"
+        onPress={openSettings}
+      >
+        <Cog color={theme.colors.text} size={19} />
+      </IconButton>
+      <FormModal
+        footer={
+          <View style={styles.modalFooter}>
+            {settingsView === "main" ? (
+              <ActionButton
+                labelStyle={styles.logoutButtonLabel}
+                onPress={handleLogout}
+                style={[styles.modalFooterButton, styles.logoutButton]}
+                title="Wyloguj się"
+                variant="secondary"
               />
-            </View>
-            <View style={styles.mealSlotsField}>
-              <Text style={styles.inputLabel}>Posiłków dziennie</Text>
+            ) : (
+              <ActionButton
+                onPress={() => setSettingsView("main")}
+                style={styles.modalFooterButton}
+                title="Wróć"
+                variant="secondary"
+              />
+            )}
+            <ActionButton
+              onPress={closeSettings}
+              style={styles.modalFooterButton}
+              title="Zamknij"
+              variant="secondary"
+            />
+          </View>
+        }
+        onClose={closeSettings}
+        subtitle={settingsSubtitle}
+        title={settingsTitle}
+        visible={settingsVisible}
+      >
+        {toast ? (
+          <View style={styles.settingsToast}>
+            <Text style={styles.settingsToastText}>{toast}</Text>
+          </View>
+        ) : null}
+        <View style={styles.settingsPanel}>
+          {settingsView === "main" ? (
+            <View style={styles.settingsPanelRow}>
+              <Text style={styles.settingsPanelTitle}>Dom</Text>
+              <Text style={styles.settingsPanelMeta}>
+                Nazwa domu, waluta i liczba posiłków dziennie.
+              </Text>
               <TextInput
                 editable={householdPermission.canUpdate}
-                keyboardType="number-pad"
-                maxLength={1}
-                onChangeText={(value) => setMealSlotsPerDay(value.replace(/\D/g, "").slice(0, 1))}
-                placeholder="4"
+                onChangeText={setHomeName}
+                placeholder="Nazwa domu"
                 placeholderTextColor={theme.colors.textSubtle}
                 style={styles.input}
-                value={mealSlotsPerDay}
+                value={homeName}
+              />
+              <View style={styles.formRow}>
+                <View style={styles.flexInput}>
+                  <Text style={styles.inputLabel}>Waluta</Text>
+                  <SegmentedControl
+                    onChange={setCurrencyCode}
+                    options={currencyOptions.map((option) => ({
+                      label: option.label,
+                      value: option.value,
+                    }))}
+                    value={currencyCode}
+                  />
+                </View>
+                <View style={styles.mealSlotsField}>
+                  <Text style={styles.inputLabel}>Posiłków dziennie</Text>
+                  <TextInput
+                    editable={householdPermission.canUpdate}
+                    keyboardType="number-pad"
+                    maxLength={1}
+                    onChangeText={(value) =>
+                      setMealSlotsPerDay(value.replace(/\D/g, "").slice(0, 1))
+                    }
+                    placeholder="4"
+                    placeholderTextColor={theme.colors.textSubtle}
+                    style={styles.input}
+                    value={mealSlotsPerDay}
+                  />
+                </View>
+              </View>
+              <ActionButton
+                disabled={
+                  !householdPermission.canUpdate ||
+                  !homeName.trim() ||
+                  Number(mealSlotsPerDay) < 1 ||
+                  Number(mealSlotsPerDay) > 8
+                }
+                loading={updateHouseholdMutation.isPending}
+                onPress={() => updateHouseholdMutation.mutate()}
+                title="Zapisz ustawienia domu"
+                variant="secondary"
+              />
+              {updateHouseholdMutation.error ? (
+                <InlineAlert
+                  tone="error"
+                  text="Nie udało się zapisać ustawień domu."
+                />
+              ) : null}
+            </View>
+          ) : null}
+          {settingsView === "main" && householdPermission.canRead ? (
+            <View style={styles.settingsPanelRow}>
+              <View style={styles.settingsMembersHeader}>
+                <View
+                  style={[
+                    styles.moduleIcon,
+                    { backgroundColor: theme.colors.softBlue },
+                  ]}
+                >
+                  <Users color={theme.colors.calendar} size={22} />
+                </View>
+                <View style={styles.itemText}>
+                  <Text style={styles.settingsPanelTitle}>
+                    Członkowie i zaproszenia
+                  </Text>
+                  <Text style={styles.settingsPanelMeta}>
+                    {householdQuery.data?.name ?? "Dom"} / {members.length} osób
+                  </Text>
+                </View>
+                <View style={styles.memberAvatars}>
+                  {members.slice(0, 3).map((member) => (
+                    <MiniAvatar key={member.id} member={member} />
+                  ))}
+                </View>
+              </View>
+              <ActionButton
+                onPress={() => setSettingsView("members")}
+                title="Zarządzaj domownikami"
+                variant="secondary"
               />
             </View>
-          </View>
-          <ActionButton
-            disabled={
-              !householdPermission.canUpdate ||
-              !homeName.trim() ||
-              Number(mealSlotsPerDay) < 1 ||
-              Number(mealSlotsPerDay) > 8
-            }
-            loading={updateHouseholdMutation.isPending}
-            onPress={() => updateHouseholdMutation.mutate()}
-            title="Zapisz ustawienia domu"
-            variant="secondary"
-          />
-          {updateHouseholdMutation.error ? (
-            <InlineAlert tone="error" text="Nie udało się zapisać ustawień domu." />
           ) : null}
-        </View>
-        ) : null}
-        {settingsView === "main" && householdPermission.canRead ? (
-          <View style={styles.settingsPanelRow}>
-            <View style={styles.settingsMembersHeader}>
-              <View style={[styles.moduleIcon, { backgroundColor: theme.colors.softBlue }]}>
-                <Users color={theme.colors.calendar} size={22} />
-              </View>
-              <View style={styles.itemText}>
-                <Text style={styles.settingsPanelTitle}>Członkowie i zaproszenia</Text>
-                <Text style={styles.settingsPanelMeta}>
-                  {householdQuery.data?.name ?? "Dom"} / {members.length} osób
-                </Text>
-              </View>
-              <View style={styles.memberAvatars}>
-                {members.slice(0, 3).map((member) => (
-                  <MiniAvatar key={member.id} member={member} />
-                ))}
-              </View>
-            </View>
-            <ActionButton
-              onPress={() => setSettingsView("members")}
-              title="Zarządzaj domownikami"
-              variant="secondary"
-            />
-          </View>
-        ) : null}
-        {settingsView === "main" ? (
-          <View style={styles.settingsPanelRow}>
-            <View style={styles.settingsMembersHeader}>
-              <View style={[styles.moduleIcon, { backgroundColor: selectedAccent }]}>
-                <Pencil color={getReadableSwatchText(selectedAccent)} size={21} />
-              </View>
-              <View style={styles.itemText}>
-                <Text style={styles.settingsPanelTitle}>Wygląd aplikacji</Text>
-                <Text style={styles.settingsPanelMeta}>
-                  {themeModeLabel} / {selectedAccent} / {Math.round(fontScale * 100)}%
-                </Text>
-              </View>
-              <View style={[styles.accentPalettePreview, { backgroundColor: selectedAccent }]} />
-            </View>
-            <ActionButton
-              onPress={() => setSettingsView("appearance")}
-              title="Zmień wygląd"
-              variant="secondary"
-            />
-          </View>
-        ) : null}
-        {settingsView === "members" && householdPermission.canRead ? (
-          <View style={styles.settingsPanelRow}>
-            <View style={styles.settingsMembersHeader}>
-              <View style={[styles.moduleIcon, { backgroundColor: theme.colors.softBlue }]}>
-                <Users color={theme.colors.calendar} size={22} />
-              </View>
-              <View style={styles.itemText}>
-                <Text style={styles.settingsPanelTitle}>Członkowie domu</Text>
-                <Text style={styles.settingsPanelMeta}>
-                  {householdQuery.data?.name ?? "Dom"} / {members.length} osób
-                </Text>
-              </View>
-              <View style={styles.memberAvatars}>
-                {members.slice(0, 3).map((member) => (
-                  <MiniAvatar key={member.id} member={member} />
-                ))}
-              </View>
-            </View>
-            <QueryState
-              error={membersQuery.error}
-              isLoading={membersQuery.isLoading}
-            />
-            {householdPermission.canCreate ? (
-              <View style={styles.inviteSection}>
-                <View style={styles.settingsMembersHeader}>
-                  <View style={[styles.moduleIcon, { backgroundColor: theme.colors.primarySoft }]}>
-                    <MailPlus color={theme.colors.primaryDark} size={21} />
-                  </View>
-                  <View style={styles.itemText}>
-                    <Text style={styles.itemName}>Zaproszenie do domu</Text>
-                    <Text style={styles.itemMeta}>Wyślij zaproszenie na adres e-mail.</Text>
-                  </View>
-                </View>
-                <View style={styles.formRow}>
-                  <TextInput
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                    onChangeText={setMemberInviteEmail}
-                    placeholder="email@dom.pl"
-                    placeholderTextColor={theme.colors.textSubtle}
-                    style={[styles.input, styles.flexInput]}
-                    value={memberInviteEmail}
-                  />
-                  <ActionButton
-                    disabled={!canInviteMember}
-                    loading={inviteMemberMutation.isPending}
-                    onPress={() => inviteMemberMutation.mutate()}
-                    title="Zaproś"
-                    variant="secondary"
+          {settingsView === "main" ? (
+            <View style={styles.settingsPanelRow}>
+              <View style={styles.settingsMembersHeader}>
+                <View
+                  style={[
+                    styles.moduleIcon,
+                    { backgroundColor: selectedAccent },
+                  ]}
+                >
+                  <Pencil
+                    color={getReadableSwatchText(selectedAccent)}
+                    size={21}
                   />
                 </View>
+                <View style={styles.itemText}>
+                  <Text style={styles.settingsPanelTitle}>
+                    Wygląd aplikacji
+                  </Text>
+                  <Text style={styles.settingsPanelMeta}>
+                    {themeModeLabel} / {selectedAccent} /{" "}
+                    {Math.round(fontScale * 100)}%
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.accentPalettePreview,
+                    { backgroundColor: selectedAccent },
+                  ]}
+                />
               </View>
-            ) : null}
-            <View style={styles.itemList}>
-              {members.map((member) => (
-                <View key={member.id} style={styles.memberDeleteRow}>
-                  <Pressable
-                    accessibilityLabel={`Otwórz uprawnienia: ${member.displayName}`}
-                    accessibilityRole="button"
-                    onPress={() => openMemberPermissions(member)}
-                    style={({ pressed }) => [
-                      styles.memberOpenArea,
-                      pressed && styles.pressed,
-                    ]}
-                  >
+              <ActionButton
+                onPress={() => setSettingsView("appearance")}
+                title="Zmień wygląd"
+                variant="secondary"
+              />
+            </View>
+          ) : null}
+          {settingsView === "members" && householdPermission.canRead ? (
+            <View style={styles.settingsPanelRow}>
+              <View style={styles.settingsMembersHeader}>
+                <View
+                  style={[
+                    styles.moduleIcon,
+                    { backgroundColor: theme.colors.softBlue },
+                  ]}
+                >
+                  <Users color={theme.colors.calendar} size={22} />
+                </View>
+                <View style={styles.itemText}>
+                  <Text style={styles.settingsPanelTitle}>Członkowie domu</Text>
+                  <Text style={styles.settingsPanelMeta}>
+                    {householdQuery.data?.name ?? "Dom"} / {members.length} osób
+                  </Text>
+                </View>
+                <View style={styles.memberAvatars}>
+                  {members.slice(0, 3).map((member) => (
+                    <MiniAvatar key={member.id} member={member} />
+                  ))}
+                </View>
+              </View>
+              <QueryState
+                error={membersQuery.error}
+                isLoading={membersQuery.isLoading}
+              />
+              {householdPermission.canCreate ? (
+                <View style={styles.inviteSection}>
+                  <View style={styles.settingsMembersHeader}>
+                    <View
+                      style={[
+                        styles.moduleIcon,
+                        { backgroundColor: theme.colors.primarySoft },
+                      ]}
+                    >
+                      <MailPlus color={theme.colors.primaryDark} size={21} />
+                    </View>
                     <View style={styles.itemText}>
-                      <Text style={styles.itemName}>{member.displayName}</Text>
+                      <Text style={styles.itemName}>Zaproszenie do domu</Text>
                       <Text style={styles.itemMeta}>
-                        {[member.email, member.role === "owner" ? "właściciel" : "domownik"]
-                          .filter(Boolean)
-                          .join(" / ")}
+                        Wyślij zaproszenie na adres e-mail.
                       </Text>
                     </View>
-                    <ChevronRight color={theme.colors.textSubtle} size={20} />
-                  </Pressable>
-                  <View style={styles.memberActions}>
-                    {householdPermission.canDelete && member.role !== "owner" ? (
-                      <IconButton
-                        disabled={removeMemberMutation.isPending}
-                        onPress={() => removeMemberMutation.mutate(member.id)}
-                      >
-                        <Trash2 color={theme.colors.danger} size={17} />
-                      </IconButton>
-                    ) : null}
+                  </View>
+                  <View style={styles.formRow}>
+                    <TextInput
+                      autoCapitalize="none"
+                      keyboardType="email-address"
+                      onChangeText={setMemberInviteEmail}
+                      placeholder="email@dom.pl"
+                      placeholderTextColor={theme.colors.textSubtle}
+                      style={[styles.input, styles.flexInput]}
+                      value={memberInviteEmail}
+                    />
+                    <ActionButton
+                      disabled={!canInviteMember}
+                      loading={inviteMemberMutation.isPending}
+                      onPress={() => inviteMemberMutation.mutate()}
+                      title="Zaproś"
+                      variant="secondary"
+                    />
                   </View>
                 </View>
-              ))}
+              ) : null}
+              <View style={styles.itemList}>
+                {members.map((member) => (
+                  <View key={member.id} style={styles.memberDeleteRow}>
+                    <Pressable
+                      accessibilityLabel={`Otwórz uprawnienia: ${member.displayName}`}
+                      accessibilityRole="button"
+                      onPress={() => openMemberPermissions(member)}
+                      style={({ pressed }) => [
+                        styles.memberOpenArea,
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <View style={styles.itemText}>
+                        <Text style={styles.itemName}>
+                          {member.displayName}
+                        </Text>
+                        <Text style={styles.itemMeta}>
+                          {[
+                            member.email,
+                            member.role === "owner" ? "właściciel" : "domownik",
+                          ]
+                            .filter(Boolean)
+                            .join(" / ")}
+                        </Text>
+                      </View>
+                      <ChevronRight color={theme.colors.textSubtle} size={20} />
+                    </Pressable>
+                    <View style={styles.memberActions}>
+                      {householdPermission.canDelete &&
+                      member.role !== "owner" ? (
+                        <IconButton
+                          disabled={removeMemberMutation.isPending}
+                          onPress={() => removeMemberMutation.mutate(member.id)}
+                        >
+                          <Trash2 color={theme.colors.danger} size={17} />
+                        </IconButton>
+                      ) : null}
+                    </View>
+                  </View>
+                ))}
+              </View>
+              {inviteMemberMutation.error ? (
+                <InlineAlert
+                  tone="error"
+                  text={
+                    inviteMemberMutation.error instanceof Error
+                      ? inviteMemberMutation.error.message
+                      : "Nie udało się zaprosić osoby."
+                  }
+                />
+              ) : null}
+              {removeMemberMutation.error ? (
+                <InlineAlert
+                  tone="error"
+                  text="Nie udało się usunąć domownika."
+                />
+              ) : null}
             </View>
-            {inviteMemberMutation.error ? (
-              <InlineAlert
-                tone="error"
-                text={
-                  inviteMemberMutation.error instanceof Error
-                    ? inviteMemberMutation.error.message
-                    : "Nie udało się zaprosić osoby."
-                }
-              />
-            ) : null}
-            {removeMemberMutation.error ? (
-              <InlineAlert tone="error" text="Nie udało się usunąć domownika." />
-            ) : null}
-          </View>
-        ) : null}
-        {settingsView === "members" && !householdPermission.canRead ? (
-          <InlineAlert tone="error" text="Nie masz uprawnień do podglądu domowników." />
-        ) : null}
-        {settingsView === "appearance" ? (
-          <>
-            <View style={styles.settingsPanelRow}>
-              <Text style={styles.settingsPanelTitle}>Tryb</Text>
-              <Text style={styles.settingsPanelMeta}>
-                Wybierz jasny, ciemny albo systemowy wygląd aplikacji.
-              </Text>
-              <SegmentedControl
-                onChange={handleThemeModeChange}
-                options={themeModeOptions}
-                value={themeMode}
-              />
-            </View>
-            <View style={styles.settingsPanelRow}>
-              <Text style={styles.settingsPanelTitle}>Rozmiar tekstu</Text>
-              <Text style={styles.settingsPanelMeta}>
-                Przesuń suwak, żeby zwiększyć albo zmniejszyć czcionkę w aplikacji.
-              </Text>
-              <FontScaleControl value={fontScale} onChange={setFontScale} />
-            </View>
-            <View style={styles.settingsPanelRow}>
-              <Text style={styles.settingsPanelTitle}>Kolor</Text>
-              <Text style={styles.settingsPanelMeta}>Kolor akcentu aplikacji.</Text>
-              <AccentPalettePicker accent={accent} onChange={handleAccentChange} />
-            </View>
-          </>
-        ) : null}
-        {settingsView === "main" ? (
-          <>
-        <View style={styles.settingsPanelRow}>
-          <Text style={styles.settingsPanelTitle}>Powiadomienia konfiguracja</Text>
-          <Text style={styles.settingsPanelMeta}>
-            Token telefonu, test push i typy zdarzeń w jednym miejscu.
-          </Text>
-          <ActionButton
-            onPress={openNotificationConfiguration}
-            title="Otwórz konfigurację"
-            variant="secondary"
-          />
-        </View>
-        <View style={[styles.settingsPanelRow, styles.dangerPanel]}>
-          <Text style={styles.settingsPanelTitle}>Usuwanie konta</Text>
-          <Text style={styles.settingsPanelMeta}>
-            Konto zostanie wylogowane, tokeny powiadomień zostaną wyłączone, a adres e-mail odłączony od profilu.
-          </Text>
-          <ActionButton
-            disabled={!accessToken}
-            onPress={() => setDeleteConfirmVisible(true)}
-            style={styles.dangerButton}
-            title="Usuń konto"
-          />
-          {deleteAccountMutation.error ? (
+          ) : null}
+          {settingsView === "members" && !householdPermission.canRead ? (
             <InlineAlert
               tone="error"
-              text={
-                deleteAccountMutation.error instanceof Error
-                  ? deleteAccountMutation.error.message
-                  : "Nie udało się usunąć konta."
-              }
+              text="Nie masz uprawnień do podglądu domowników."
             />
           ) : null}
+          {settingsView === "appearance" ? (
+            <>
+              <View style={styles.settingsPanelRow}>
+                <Text style={styles.settingsPanelTitle}>Tryb</Text>
+                <Text style={styles.settingsPanelMeta}>
+                  Wybierz jasny, ciemny albo systemowy wygląd aplikacji.
+                </Text>
+                <SegmentedControl
+                  onChange={handleThemeModeChange}
+                  options={themeModeOptions}
+                  value={themeMode}
+                />
+              </View>
+              <View style={styles.settingsPanelRow}>
+                <Text style={styles.settingsPanelTitle}>Rozmiar tekstu</Text>
+                <Text style={styles.settingsPanelMeta}>
+                  Przesuń suwak, żeby zwiększyć albo zmniejszyć czcionkę w
+                  aplikacji.
+                </Text>
+                <FontScaleControl value={fontScale} onChange={setFontScale} />
+              </View>
+              <View style={styles.settingsPanelRow}>
+                <Text style={styles.settingsPanelTitle}>Kolor</Text>
+                <Text style={styles.settingsPanelMeta}>
+                  Kolor akcentu aplikacji.
+                </Text>
+                <AccentPalettePicker
+                  accent={accent}
+                  onChange={handleAccentChange}
+                />
+              </View>
+            </>
+          ) : null}
+          {settingsView === "main" ? (
+            <>
+              <View style={styles.settingsPanelRow}>
+                <Text style={styles.settingsPanelTitle}>
+                  Powiadomienia konfiguracja
+                </Text>
+                <Text style={styles.settingsPanelMeta}>
+                  Token telefonu, test push i typy zdarzeń w jednym miejscu.
+                </Text>
+                <ActionButton
+                  onPress={openNotificationConfiguration}
+                  title="Otwórz konfigurację"
+                  variant="secondary"
+                />
+              </View>
+              <View style={[styles.settingsPanelRow, styles.dangerPanel]}>
+                <Text style={styles.settingsPanelTitle}>Usuwanie konta</Text>
+                <Text style={styles.settingsPanelMeta}>
+                  Konto zostanie wylogowane, tokeny powiadomień zostaną
+                  wyłączone, a adres e-mail odłączony od profilu.
+                </Text>
+                <ActionButton
+                  disabled={!accessToken}
+                  onPress={() => setDeleteConfirmVisible(true)}
+                  style={styles.dangerButton}
+                  title="Usuń konto"
+                />
+                {deleteAccountMutation.error ? (
+                  <InlineAlert
+                    tone="error"
+                    text={
+                      deleteAccountMutation.error instanceof Error
+                        ? deleteAccountMutation.error.message
+                        : "Nie udało się usunąć konta."
+                    }
+                  />
+                ) : null}
+              </View>
+            </>
+          ) : null}
         </View>
-          </>
-        ) : null}
-      </View>
-    </FormModal>
-    <Modal
-      animationType="slide"
-      onRequestClose={() => setNotificationsVisible(false)}
-      visible={notificationsVisible}
-    >
-      <AppScreen
-        actions={
-          <IconButton accessibilityLabel="Zamknij powiadomienia" onPress={() => setNotificationsVisible(false)}>
-            <Close color={theme.colors.textMuted} size={18} />
-          </IconButton>
-        }
-        subtitle="Token, test push i typy zdarzeń."
-        title="Powiadomienia"
+      </FormModal>
+      <Modal
+        animationType="slide"
+        onRequestClose={() => setNotificationsVisible(false)}
+        visible={notificationsVisible}
       >
-      {toast ? (
-        <View style={styles.settingsToast}>
-          <Text style={styles.settingsToastText}>{toast}</Text>
-        </View>
-      ) : null}
-      <View style={styles.settingsPanel}>
-        <View style={styles.settingsPanelRow}>
-          <Text style={styles.settingsPanelTitle}>Telefon</Text>
-          <Text style={styles.settingsPanelMeta}>
-            Włącz albo odśwież token push dla tego telefonu.
-          </Text>
-          <ActionButton
-            disabled={!accessToken}
-            loading={registerPushMutation.isPending}
-            onPress={() => registerPushMutation.mutate()}
-            title="Włącz / odśwież powiadomienia"
-            variant="secondary"
-          />
-          {registerPushMutation.data === null ? (
-            <InlineAlert tone="error" text="Nie udało się pobrać tokenu push dla tego telefonu." />
+        <AppScreen
+          actions={
+            <IconButton
+              accessibilityLabel="Zamknij powiadomienia"
+              onPress={() => setNotificationsVisible(false)}
+            >
+              <Close color={theme.colors.textMuted} size={18} />
+            </IconButton>
+          }
+          subtitle="Token, test push i typy zdarzeń."
+          title="Powiadomienia"
+        >
+          {toast ? (
+            <View style={styles.settingsToast}>
+              <Text style={styles.settingsToastText}>{toast}</Text>
+            </View>
           ) : null}
-          {registerPushMutation.error ? (
-            <InlineAlert tone="error" text="Rejestracja powiadomień nie powiodła się." />
-          ) : null}
-        </View>
-        <View style={styles.settingsPanelRow}>
-          <Text style={styles.settingsPanelTitle}>Test</Text>
-          <Text style={styles.settingsPanelMeta}>
-            Wyślij test, żeby potwierdzić, że powiadomienia działają.
-          </Text>
-          <ActionButton
-            disabled={!accessToken}
-            loading={testPushMutation.isPending}
-            onPress={() => testPushMutation.mutate()}
-            title="Wyślij test push"
-            variant="secondary"
-          />
-          {testPushMutation.error ? (
-            <InlineAlert tone="error" text="Nie udało się wysłać testowego powiadomienia." />
-          ) : null}
-        </View>
-        <View style={styles.settingsPanelRow}>
-          <Text style={styles.settingsPanelTitle}>Typy powiadomień</Text>
-          <Text style={styles.settingsPanelMeta}>
-            Wybierz, kiedy zmiany innych domowników mają wysyłać powiadomienie.
-          </Text>
-          <QueryState
-            error={notificationPreferencesQuery.error}
-            isLoading={notificationPreferencesQuery.isLoading}
-          />
-          <View style={styles.notificationPreferenceList}>
-            {notificationPreferences
-              .map((preference) => {
-                const copy = notificationPreferenceLabels[preference.eventType];
+          <View style={styles.settingsPanel}>
+            <View style={styles.settingsPanelRow}>
+              <Text style={styles.settingsPanelTitle}>Telefon</Text>
+              <Text style={styles.settingsPanelMeta}>
+                Włącz albo odśwież token push dla tego telefonu.
+              </Text>
+              <ActionButton
+                disabled={!accessToken}
+                loading={registerPushMutation.isPending}
+                onPress={() => registerPushMutation.mutate()}
+                title="Włącz / odśwież powiadomienia"
+                variant="secondary"
+              />
+              {registerPushMutation.data === null ? (
+                <InlineAlert
+                  tone="error"
+                  text="Nie udało się pobrać tokenu push dla tego telefonu."
+                />
+              ) : null}
+              {registerPushMutation.error ? (
+                <InlineAlert
+                  tone="error"
+                  text="Rejestracja powiadomień nie powiodła się."
+                />
+              ) : null}
+            </View>
+            <View style={styles.settingsPanelRow}>
+              <Text style={styles.settingsPanelTitle}>Test</Text>
+              <Text style={styles.settingsPanelMeta}>
+                Wyślij test, żeby potwierdzić, że powiadomienia działają.
+              </Text>
+              <ActionButton
+                disabled={!accessToken}
+                loading={testPushMutation.isPending}
+                onPress={() => testPushMutation.mutate()}
+                title="Wyślij test push"
+                variant="secondary"
+              />
+              {testPushMutation.error ? (
+                <InlineAlert
+                  tone="error"
+                  text="Nie udało się wysłać testowego powiadomienia."
+                />
+              ) : null}
+            </View>
+            <View style={styles.settingsPanelRow}>
+              <Text style={styles.settingsPanelTitle}>Typy powiadomień</Text>
+              <Text style={styles.settingsPanelMeta}>
+                Wybierz, kiedy zmiany innych domowników mają wysyłać
+                powiadomienie.
+              </Text>
+              <QueryState
+                error={notificationPreferencesQuery.error}
+                isLoading={notificationPreferencesQuery.isLoading}
+              />
+              <View style={styles.notificationPreferenceList}>
+                {notificationPreferences.map((preference) => {
+                  const copy =
+                    notificationPreferenceLabels[preference.eventType];
 
-                return (
-                  <View key={preference.eventType} style={styles.notificationPreferenceRow}>
-                    <View style={styles.notificationPreferenceText}>
-                      <Text style={styles.itemName}>{copy.label}</Text>
-                      <Text style={styles.itemMeta}>{copy.meta}</Text>
-                    </View>
-                    <View style={styles.notificationPreferenceSwitch}>
-                      <Text style={styles.preferenceToggleLabel}>
-                        {preference.enabled ? "Włączone" : "Wyłączone"}
-                      </Text>
-                      <Pressable
-                        accessibilityRole="switch"
-                        accessibilityState={{ checked: preference.enabled }}
-                        disabled={notificationPreferencesMutation.isPending}
-                        onPress={() => toggleNotificationPreference(preference.eventType, !preference.enabled)}
-                        style={[
-                          styles.preferenceToggle,
-                          preference.enabled && styles.preferenceToggleActive,
-                          notificationPreferencesMutation.isPending && styles.preferenceToggleDisabled,
-                        ]}
-                      >
-                        <View
+                  return (
+                    <View
+                      key={preference.eventType}
+                      style={styles.notificationPreferenceRow}
+                    >
+                      <View style={styles.notificationPreferenceText}>
+                        <Text style={styles.itemName}>{copy.label}</Text>
+                        <Text style={styles.itemMeta}>{copy.meta}</Text>
+                      </View>
+                      <View style={styles.notificationPreferenceSwitch}>
+                        <Text style={styles.preferenceToggleLabel}>
+                          {preference.enabled ? "Włączone" : "Wyłączone"}
+                        </Text>
+                        <Pressable
+                          accessibilityRole="switch"
+                          accessibilityState={{ checked: preference.enabled }}
+                          disabled={notificationPreferencesMutation.isPending}
+                          onPress={() =>
+                            toggleNotificationPreference(
+                              preference.eventType,
+                              !preference.enabled,
+                            )
+                          }
                           style={[
-                            styles.preferenceToggleThumb,
-                            preference.enabled && styles.preferenceToggleThumbActive,
+                            styles.preferenceToggle,
+                            preference.enabled && styles.preferenceToggleActive,
+                            notificationPreferencesMutation.isPending &&
+                              styles.preferenceToggleDisabled,
                           ]}
-                        />
-                      </Pressable>
+                        >
+                          <View
+                            style={[
+                              styles.preferenceToggleThumb,
+                              preference.enabled &&
+                                styles.preferenceToggleThumbActive,
+                            ]}
+                          />
+                        </Pressable>
+                      </View>
                     </View>
-                  </View>
-                );
-              })}
+                  );
+                })}
+              </View>
+              {notificationPreferencesMutation.error ? (
+                <InlineAlert
+                  tone="error"
+                  text="Nie udało się zapisać ustawień powiadomień."
+                />
+              ) : null}
+            </View>
           </View>
-          {notificationPreferencesMutation.error ? (
-            <InlineAlert tone="error" text="Nie udało się zapisać ustawień powiadomień." />
-          ) : null}
-        </View>
-      </View>
-      </AppScreen>
-    </Modal>
-    <FormModal
-      footer={
-        <View style={styles.modalFooter}>
-          <ActionButton
-            onPress={() => setDeleteConfirmVisible(false)}
-            style={styles.modalFooterButton}
-            title="Anuluj"
-            variant="secondary"
-          />
-          <ActionButton
-            disabled={!accessToken}
-            loading={deleteAccountMutation.isPending}
-            onPress={() => deleteAccountMutation.mutate()}
-            style={[styles.modalFooterButton, styles.dangerButton]}
-            title="Usuń konto"
-          />
-        </View>
-      }
-      onClose={() => setDeleteConfirmVisible(false)}
-      subtitle="Tej akcji nie da się cofnąć z aplikacji."
-      title="Usuń konto"
-      visible={deleteConfirmVisible}
-    >
-      <InlineAlert
-        tone="error"
-        text="Jeśli jesteś właścicielem domu z innymi domownikami, backend zatrzyma usuwanie konta, żeby nie zostawić domu bez właściciela."
-      />
-    </FormModal>
+        </AppScreen>
+      </Modal>
+      <FormModal
+        footer={
+          <View style={styles.modalFooter}>
+            <ActionButton
+              onPress={() => setDeleteConfirmVisible(false)}
+              style={styles.modalFooterButton}
+              title="Anuluj"
+              variant="secondary"
+            />
+            <ActionButton
+              disabled={!accessToken}
+              loading={deleteAccountMutation.isPending}
+              onPress={() => deleteAccountMutation.mutate()}
+              style={[styles.modalFooterButton, styles.dangerButton]}
+              title="Usuń konto"
+            />
+          </View>
+        }
+        onClose={() => setDeleteConfirmVisible(false)}
+        subtitle="Tej akcji nie da się cofnąć z aplikacji."
+        title="Usuń konto"
+        visible={deleteConfirmVisible}
+      >
+        <InlineAlert
+          tone="error"
+          text="Jeśli jesteś właścicielem domu z innymi domownikami, backend zatrzyma usuwanie konta, żeby nie zostawić domu bez właściciela."
+        />
+      </FormModal>
     </>
   );
 }
@@ -2244,8 +2785,12 @@ function AccentPalettePicker({
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
   const selectedAccent = normalizeHexAccent(accent) ?? "#B56CFF";
-  const colorOptions = accentColorOptions.filter((option) => !neutralAccentValues.has(option.value));
-  const neutralOptions = accentColorOptions.filter((option) => neutralAccentValues.has(option.value));
+  const colorOptions = accentColorOptions.filter(
+    (option) => !neutralAccentValues.has(option.value),
+  );
+  const neutralOptions = accentColorOptions.filter((option) =>
+    neutralAccentValues.has(option.value),
+  );
   const renderSwatch = (option: (typeof accentColorOptions)[number]) => {
     const optionColor = normalizeHexAccent(option.value) ?? option.color;
     const active = optionColor === selectedAccent;
@@ -2264,7 +2809,9 @@ function AccentPalettePicker({
           pressed && styles.pressed,
         ]}
       >
-        {active ? <Check color={getReadableSwatchText(optionColor)} size={13} /> : null}
+        {active ? (
+          <Check color={getReadableSwatchText(optionColor)} size={13} />
+        ) : null}
       </Pressable>
     );
   };
@@ -2273,14 +2820,23 @@ function AccentPalettePicker({
     <View style={styles.accentPaletteCard}>
       <View style={styles.accentPaletteSection}>
         <Text style={styles.accentPaletteTitle}>Kolory</Text>
-        <View style={styles.accentSwatchGrid}>{colorOptions.map(renderSwatch)}</View>
+        <View style={styles.accentSwatchGrid}>
+          {colorOptions.map(renderSwatch)}
+        </View>
       </View>
       <View style={styles.accentPaletteSection}>
         <Text style={styles.accentPaletteTitle}>Neutralne i ziemiste</Text>
-        <View style={styles.accentSwatchGrid}>{neutralOptions.map(renderSwatch)}</View>
+        <View style={styles.accentSwatchGrid}>
+          {neutralOptions.map(renderSwatch)}
+        </View>
       </View>
       <View style={styles.accentPalettePreviewRow}>
-        <View style={[styles.accentPalettePreview, { backgroundColor: selectedAccent }]} />
+        <View
+          style={[
+            styles.accentPalettePreview,
+            { backgroundColor: selectedAccent },
+          ]}
+        />
         <Text style={styles.settingsPanelMeta}>{selectedAccent}</Text>
       </View>
     </View>
@@ -2298,7 +2854,9 @@ function FontScaleControl({
   const styles = createStyles(theme.colors);
   const [trackWidth, setTrackWidth] = useState(1);
   const normalizedValue = clampFontScale(value);
-  const progress = (normalizedValue - fontScaleSliderMin) / (fontScaleSliderMax - fontScaleSliderMin);
+  const progress =
+    (normalizedValue - fontScaleSliderMin) /
+    (fontScaleSliderMax - fontScaleSliderMin);
   const progressWidth = Math.round(trackWidth * progress);
 
   function handleTrackLayout(event: LayoutChangeEvent) {
@@ -2307,7 +2865,8 @@ function FontScaleControl({
 
   function updateFromTrack(locationX: number) {
     const ratio = Math.min(1, Math.max(0, locationX / trackWidth));
-    const nextValue = fontScaleSliderMin + (fontScaleSliderMax - fontScaleSliderMin) * ratio;
+    const nextValue =
+      fontScaleSliderMin + (fontScaleSliderMax - fontScaleSliderMin) * ratio;
 
     onChange(clampFontScale(nextValue));
   }
@@ -2317,7 +2876,9 @@ function FontScaleControl({
       <View style={styles.fontScalePreview}>
         <Text style={styles.fontScalePreviewSmall}>Mały</Text>
         <Text style={styles.fontScalePreviewLarge}>Duży tekst</Text>
-        <Text style={styles.fontScaleValue}>{Math.round(normalizedValue * 100)}%</Text>
+        <Text style={styles.fontScaleValue}>
+          {Math.round(normalizedValue * 100)}%
+        </Text>
       </View>
       <View
         accessibilityLabel="Rozmiar czcionki"
@@ -2325,8 +2886,12 @@ function FontScaleControl({
         accessible
         onLayout={handleTrackLayout}
         onMoveShouldSetResponder={() => true}
-        onResponderGrant={(event) => updateFromTrack(event.nativeEvent.locationX)}
-        onResponderMove={(event) => updateFromTrack(event.nativeEvent.locationX)}
+        onResponderGrant={(event) =>
+          updateFromTrack(event.nativeEvent.locationX)
+        }
+        onResponderMove={(event) =>
+          updateFromTrack(event.nativeEvent.locationX)
+        }
         onStartShouldSetResponder={() => true}
         style={styles.fontScaleTrack}
       >
@@ -2348,7 +2913,10 @@ function mergeNotificationPreferences(
   preferences: NotificationPreference[] | undefined,
 ): NotificationPreference[] {
   const preferencesByType = new Map(
-    preferences?.map((preference) => [preference.eventType, preference.enabled]) ?? [],
+    preferences?.map((preference) => [
+      preference.eventType,
+      preference.enabled,
+    ]) ?? [],
   );
 
   return visibleNotificationEventTypes.map((eventType) => ({
@@ -2383,9 +2951,7 @@ function ModulePanel({
           <Text style={styles.panelTitle}>{title}</Text>
           <Text style={styles.panelSubtitle}>{subtitle}</Text>
         </View>
-        <View style={styles.panelActions}>
-          {action}
-        </View>
+        <View style={styles.panelActions}>{action}</View>
       </View>
       {children}
     </View>
@@ -2415,32 +2981,99 @@ function CleaningRow({
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
+  const daysRemaining = daysUntilIsoDate(task.nextDueAt);
+  const canCompleteNow = daysRemaining < 7;
+  const isInactive = !canCompleteNow;
+  const isDueSoon = daysRemaining < 1;
+  const isActionPending = completing || deleting;
+  const markerColor =
+    task.isOverdue || isDueSoon
+      ? theme.colors.danger
+      : canCompleteNow
+        ? accent.color
+        : theme.colors.textSubtle;
+  const rowOpacity = useSharedValue(isInactive ? 0.72 : 1);
+  const rowScale = useSharedValue(1);
+  const animatedRowStyle = useAnimatedStyle(() => ({
+    opacity: rowOpacity.value,
+    transform: [{ scale: rowScale.value }],
+  }));
+
+  useEffect(() => {
+    rowOpacity.value = withTiming(isInactive ? 0.72 : 1, { duration: 180 });
+    rowScale.value = withTiming(isActionPending ? 0.985 : 1, { duration: 160 });
+  }, [isActionPending, isInactive, rowOpacity, rowScale]);
 
   return (
-    <View style={[styles.itemRow, task.isOverdue && styles.warningRow]}>
-      <View style={[styles.itemMarker, { backgroundColor: task.isOverdue ? theme.colors.danger : accent.color }]} />
+    <Animated.View
+      style={[
+        styles.itemRow,
+        styles.cleaningRow,
+        isInactive && styles.inactiveCleaningRow,
+        (task.isOverdue || isDueSoon) && styles.warningRow,
+        animatedRowStyle,
+      ]}
+    >
+      <View style={[styles.itemMarker, { backgroundColor: markerColor }]} />
       <View style={styles.itemText}>
-        <Text style={styles.itemName}>{task.name}</Text>
-        <Text style={styles.itemMeta}>Termin: {task.nextDueAt} / co {task.frequencyDays} dni{task.location ? ` • ${task.location}` : ""}</Text>
+        <View style={styles.cleaningTitleRow}>
+          <Text numberOfLines={2} style={styles.itemName}>
+            {task.name}
+          </Text>
+          <View
+            style={[
+              styles.cleaningStatusPill,
+              isInactive && styles.cleaningStatusPillMuted,
+              isDueSoon && styles.cleaningStatusPillDanger,
+            ]}
+          >
+            <Text
+              style={[
+                styles.cleaningStatusText,
+                isDueSoon && styles.cleaningStatusTextDanger,
+              ]}
+            >
+              {formatCleaningStatus(daysRemaining)}
+            </Text>
+          </View>
+        </View>
+        {task.location ? (
+          <View style={styles.cleaningLocationBadge}>
+            <MapPin color={theme.colors.primaryDark} size={14} />
+            <Text numberOfLines={1} style={styles.cleaningLocationText}>
+              {task.location}
+            </Text>
+          </View>
+        ) : null}
+        <Text style={styles.itemMeta}>
+          Termin: {formatDateFull(task.nextDueAt)} / co {task.frequencyDays} dni
+        </Text>
       </View>
-      <ActionButton
-        disabled={!canUpdate || completing}
-        onPress={onComplete}
-        size="small"
-        title="Wykonane"
-        variant="secondary"
-      />
+      {canCompleteNow ? (
+        <ActionButton
+          disabled={!canUpdate}
+          loading={completing}
+          onPress={onComplete}
+          size="small"
+          title="Wykonane"
+          variant="secondary"
+        />
+      ) : null}
       {canUpdate ? (
         <IconButton accessibilityLabel="Edytuj sprzątanie" onPress={onEdit}>
           <Pencil color={theme.colors.primary} size={17} />
         </IconButton>
       ) : null}
       {canDelete ? (
-        <IconButton accessibilityLabel="Usuń sprzątanie" disabled={deleting} onPress={onDelete}>
+        <IconButton
+          accessibilityLabel="Usuń sprzątanie"
+          disabled={deleting}
+          onPress={onDelete}
+        >
           <Trash2 color={theme.colors.danger} size={17} />
         </IconButton>
       ) : null}
-    </View>
+    </Animated.View>
   );
 }
 
@@ -2469,7 +3102,9 @@ function CostRow({
       <View style={[styles.itemMarker, { backgroundColor: accent.color }]} />
       <View style={styles.itemText}>
         <Text style={styles.itemName}>{cost.name}</Text>
-        <Text style={styles.itemMeta}>{cost.nextDueDate} / {formatMoney(cost.defaultAmount, currencyCode)}</Text>
+        <Text style={styles.itemMeta}>
+          {cost.nextDueDate} / {formatMoney(cost.defaultAmount, currencyCode)}
+        </Text>
       </View>
       {paidThisYear ? (
         <View style={styles.paidBadge}>
@@ -2509,7 +3144,9 @@ function DataRow({
       <View style={[styles.itemMarker, { backgroundColor: accent.color }]} />
       <View style={styles.itemText}>
         <Text style={styles.itemName}>{entry.title}</Text>
-        <Text numberOfLines={2} style={styles.itemMeta}>{entry.value}</Text>
+        <Text numberOfLines={2} style={styles.itemMeta}>
+          {entry.value}
+        </Text>
       </View>
       {canDelete ? (
         <IconButton disabled={deleting} onPress={onDelete}>
@@ -2561,7 +3198,10 @@ function AttachmentRow({
         accessibilityLabel={`Podgląd pliku ${attachment.fileName}`}
         accessibilityRole="button"
         onPress={onPreview}
-        style={({ pressed }) => [styles.attachmentPreviewArea, pressed && styles.pressed]}
+        style={({ pressed }) => [
+          styles.attachmentPreviewArea,
+          pressed && styles.pressed,
+        ]}
       >
         {isImage && !thumbError ? (
           <Image
@@ -2581,7 +3221,11 @@ function AttachmentRow({
           </Text>
         </View>
       </Pressable>
-      <IconButton accessibilityLabel={`Pobierz plik ${attachment.fileName}`} disabled={downloading} onPress={onDownload}>
+      <IconButton
+        accessibilityLabel={`Pobierz plik ${attachment.fileName}`}
+        disabled={downloading}
+        onPress={onDownload}
+      >
         <Download color={theme.colors.primary} size={17} />
       </IconButton>
       {canUpdate ? (
@@ -2600,7 +3244,9 @@ function AttachmentRow({
 
 function MiniAvatar({ member }: { member: HouseholdMember }) {
   const styles = createStyles(useAppTheme().colors);
-  const initial = (member.displayName || member.email || "?").slice(0, 1).toUpperCase();
+  const initial = (member.displayName || member.email || "?")
+    .slice(0, 1)
+    .toUpperCase();
 
   return (
     <View style={styles.miniAvatar}>
@@ -2620,7 +3266,11 @@ function getSegmentAccent(colors: AppPalette, segment: HomeSegment): Accent {
   return accents[segment];
 }
 
-function getSegmentIcon(segment: HomeSegment, color: string, size: number): ReactNode {
+function getSegmentIcon(
+  segment: HomeSegment,
+  color: string,
+  size: number,
+): ReactNode {
   if (segment === "cleaning") {
     return <Broom color={color} size={size} />;
   }
@@ -2636,12 +3286,17 @@ function getSegmentIcon(segment: HomeSegment, color: string, size: number): Reac
   return <Folder color={color} size={size} />;
 }
 
-function normalizePickedPhoto(asset: ImagePicker.ImagePickerAsset | undefined): PickedAttachmentPhoto | null {
+function normalizePickedPhoto(
+  asset: ImagePicker.ImagePickerAsset | undefined,
+): PickedAttachmentPhoto | null {
   if (!asset?.uri) {
     return null;
   }
 
-  const mimeType = normalizePickedImageMimeType(asset.mimeType, asset.fileName ?? asset.uri);
+  const mimeType = normalizePickedImageMimeType(
+    asset.mimeType,
+    asset.fileName ?? asset.uri,
+  );
 
   if (!mimeType) {
     return null;
@@ -2659,7 +3314,10 @@ function normalizePickedImageMimeType(
   mimeType: string | null | undefined,
   nameOrUri: string,
 ): ImageAttachmentMimeType | null {
-  if (mimeType && imageAttachmentMimeTypes.includes(mimeType as ImageAttachmentMimeType)) {
+  if (
+    mimeType &&
+    imageAttachmentMimeTypes.includes(mimeType as ImageAttachmentMimeType)
+  ) {
     return mimeType as ImageAttachmentMimeType;
   }
 
@@ -2737,7 +3395,8 @@ function getCalendarDays(month: Date) {
   const firstOffset = (firstDay.getDay() + 6) % 7;
   const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
   const daysInPreviousMonth = new Date(year, monthIndex, 0).getDate();
-  const days: Array<{ inMonth: boolean; iso: string | null; label: number }> = [];
+  const days: Array<{ inMonth: boolean; iso: string | null; label: number }> =
+    [];
 
   for (let index = firstOffset - 1; index >= 0; index -= 1) {
     days.push({
@@ -2787,6 +3446,109 @@ function formatDateFull(value: string): string {
   }).format(parseIsoDate(value));
 }
 
+function addDaysIsoDate(value: string, amount: number): string {
+  const date = parseIsoDate(value);
+  date.setDate(date.getDate() + amount);
+
+  return isoFromParts(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function addYearsIsoDate(value: string, amount: number): string {
+  const date = parseIsoDate(value);
+  date.setFullYear(date.getFullYear() + amount);
+
+  return isoFromParts(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function daysUntilIsoDate(value: string): number {
+  const millisecondsInDay = 24 * 60 * 60 * 1000;
+
+  return Math.round(
+    (parseIsoDate(value).getTime() - parseIsoDate(todayIso()).getTime()) /
+      millisecondsInDay,
+  );
+}
+
+function formatCleaningStatus(daysRemaining: number): string {
+  if (daysRemaining < 0) {
+    return "Po terminie";
+  }
+
+  if (daysRemaining < 1) {
+    return "Dzisiaj";
+  }
+
+  if (daysRemaining === 1) {
+    return "Jutro";
+  }
+
+  return `Za ${daysRemaining} dni`;
+}
+
+function sortCleaningTasksForDisplay(tasks: CleaningTask[]): CleaningTask[] {
+  return [...tasks].sort((left, right) => {
+    const overdueOrder = Number(right.isOverdue) - Number(left.isOverdue);
+
+    if (overdueOrder !== 0) {
+      return overdueOrder;
+    }
+
+    const dueOrder =
+      parseIsoDate(left.nextDueAt).getTime() -
+      parseIsoDate(right.nextDueAt).getTime();
+
+    if (dueOrder !== 0) {
+      return dueOrder;
+    }
+
+    return left.name.localeCompare(right.name, "pl");
+  });
+}
+
+function sortAnnualCostsForDisplay(costs: AnnualCost[]): AnnualCost[] {
+  return [...costs].sort((left, right) => {
+    const dueOrder =
+      parseIsoDate(left.nextDueDate).getTime() -
+      parseIsoDate(right.nextDueDate).getTime();
+
+    if (dueOrder !== 0) {
+      return dueOrder;
+    }
+
+    return left.name.localeCompare(right.name, "pl");
+  });
+}
+
+function sortAnnualCostHistoryForDisplay(
+  history: AnnualCostHistory[],
+): AnnualCostHistory[] {
+  return [...history].sort((left, right) => {
+    const dateOrder =
+      parseIsoDate(right.executedAt).getTime() -
+      parseIsoDate(left.executedAt).getTime();
+
+    if (dateOrder !== 0) {
+      return dateOrder;
+    }
+
+    return left.annualCostName.localeCompare(right.annualCostName, "pl");
+  });
+}
+
+function sortDataEntriesForDisplay(entries: DataEntry[]): DataEntry[] {
+  return [...entries].sort(
+    (left, right) =>
+      new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime(),
+  );
+}
+
+function sortAttachmentsForDisplay(attachments: Attachment[]): Attachment[] {
+  return [...attachments].sort(
+    (left, right) =>
+      new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+  );
+}
+
 function parseOptionalNumber(value: string): number | null {
   const normalized = value.replace(",", ".").trim();
 
@@ -2818,8 +3580,12 @@ function formatBytes(value: number): string {
   return `${(value / (1024 * 1024)).toFixed(1).replace(".", ",")} MB`;
 }
 
-async function shareAttachmentFile(attachment: Attachment, accessToken?: string | null): Promise<void> {
-  const cacheDirectory = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
+async function shareAttachmentFile(
+  attachment: Attachment,
+  accessToken?: string | null,
+): Promise<void> {
+  const cacheDirectory =
+    FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
 
   if (!cacheDirectory) {
     throw new Error("File cache is unavailable");
@@ -2851,7 +3617,8 @@ async function downloadAttachmentFile(
   attachment: Attachment,
   accessToken?: string | null,
 ): Promise<"app" | "gallery"> {
-  const cacheDirectory = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
+  const cacheDirectory =
+    FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
 
   if (!cacheDirectory) {
     throw new Error("File cache is unavailable");
@@ -2875,7 +3642,9 @@ async function downloadAttachmentFile(
       throw new Error("Media library is unavailable");
     }
 
-    const permissions = await MediaLibrary.requestPermissionsAsync(true, ["photo"]);
+    const permissions = await MediaLibrary.requestPermissionsAsync(true, [
+      "photo",
+    ]);
 
     if (!hasFullPhotoLibraryAccess(permissions)) {
       throw new PhotoLibraryPermissionError(
@@ -2897,7 +3666,9 @@ async function downloadAttachmentFile(
   }
 
   const downloadsDirectory = `${documentsDirectory}downloads/`;
-  await FileSystem.makeDirectoryAsync(downloadsDirectory, { intermediates: true });
+  await FileSystem.makeDirectoryAsync(downloadsDirectory, {
+    intermediates: true,
+  });
   await FileSystem.copyAsync({
     from: result.uri,
     to: `${downloadsDirectory}${attachment.id}-${fileName}`,
@@ -2913,8 +3684,15 @@ class PhotoLibraryPermissionError extends Error {
   }
 }
 
-function hasFullPhotoLibraryAccess(permission: { accessPrivileges?: string | null; granted: boolean }): boolean {
-  return permission.granted && permission.accessPrivileges !== "limited" && permission.accessPrivileges !== "none";
+function hasFullPhotoLibraryAccess(permission: {
+  accessPrivileges?: string | null;
+  granted: boolean;
+}): boolean {
+  return (
+    permission.granted &&
+    permission.accessPrivileges !== "limited" &&
+    permission.accessPrivileges !== "none"
+  );
 }
 
 function sanitizeCacheFileName(fileName: string): string {
@@ -2930,14 +3708,17 @@ function getReadableSwatchText(color: string): string {
     return "#FFFFFF";
   }
 
-  const luminance = (rgb.red * 0.299 + rgb.green * 0.587 + rgb.blue * 0.114) / 255;
+  const luminance =
+    (rgb.red * 0.299 + rgb.green * 0.587 + rgb.blue * 0.114) / 255;
 
   return luminance > 0.62 ? "#111827" : "#FFFFFF";
 }
 
 function normalizeHexAccent(value: string): string | null {
   const trimmed = value.trim();
-  const hex = trimmed.startsWith("#") ? trimmed.toUpperCase() : `#${trimmed.toUpperCase()}`;
+  const hex = trimmed.startsWith("#")
+    ? trimmed.toUpperCase()
+    : `#${trimmed.toUpperCase()}`;
 
   return /^#[0-9A-F]{6}$/.test(hex) ? hex : null;
 }
@@ -2947,12 +3728,17 @@ function clampFontScale(value: number): number {
     return 1;
   }
 
-  const clamped = Math.min(fontScaleSliderMax, Math.max(fontScaleSliderMin, value));
+  const clamped = Math.min(
+    fontScaleSliderMax,
+    Math.max(fontScaleSliderMin, value),
+  );
 
   return Math.round(clamped * 20) / 20;
 }
 
-function parseHexColor(color: string): { blue: number; green: number; red: number } | null {
+function parseHexColor(
+  color: string,
+): { blue: number; green: number; red: number } | null {
   if (!/^#[0-9A-F]{6}$/i.test(color)) {
     return null;
   }
@@ -3056,6 +3842,66 @@ function createStyles(colors: AppPalette) {
       justifyContent: "center",
       padding: spacing.lg,
     },
+    cleaningLocationBadge: {
+      alignItems: "center",
+      alignSelf: "flex-start",
+      backgroundColor: colors.card,
+      borderColor: `${colors.primary}44`,
+      borderRadius: 999,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: spacing.xs,
+      maxWidth: "100%",
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 4,
+    },
+    cleaningLocationText: {
+      color: colors.primaryDark,
+      flexShrink: 1,
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 0,
+      lineHeight: 16,
+    },
+    cleaningRow: {
+      alignItems: "center",
+    },
+    cleaningStatusPill: {
+      alignItems: "center",
+      alignSelf: "flex-start",
+      backgroundColor: colors.primarySoft,
+      borderColor: `${colors.primary}33`,
+      borderRadius: 999,
+      borderWidth: 1,
+      flexShrink: 0,
+      justifyContent: "center",
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 3,
+    },
+    cleaningStatusPillDanger: {
+      backgroundColor: colors.dangerSoft,
+      borderColor: `${colors.danger}55`,
+    },
+    cleaningStatusPillMuted: {
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+    },
+    cleaningStatusText: {
+      color: colors.primaryDark,
+      fontSize: 11,
+      fontWeight: "900",
+      letterSpacing: 0,
+      lineHeight: 14,
+    },
+    cleaningStatusTextDanger: {
+      color: colors.danger,
+    },
+    cleaningTitleRow: {
+      alignItems: "flex-start",
+      flexDirection: "row",
+      gap: spacing.sm,
+      justifyContent: "space-between",
+    },
     dateInput: {
       minWidth: 132,
     },
@@ -3152,6 +3998,10 @@ function createStyles(colors: AppPalette) {
     },
     hidden: {
       display: "none",
+    },
+    inactiveCleaningRow: {
+      backgroundColor: colors.card,
+      borderColor: colors.border,
     },
     input: {
       backgroundColor: colors.field,

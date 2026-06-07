@@ -1,223 +1,276 @@
-import { BadRequestException } from '@nestjs/common';
-import { describe, expect, it, vi } from 'vitest';
-import { AnnualCostsService } from './annual-costs/annual-costs.service';
-import { CleaningService } from './cleaning/cleaning.service';
-import { BudgetItemsService } from './finance/services/budget-items.service';
-import { ExpensesService } from './finance/services/expenses.service';
-import { FinanceSavingsService } from './finance/services/finance-savings.service';
-import { MealPlannerService } from './meal-planner/meal-planner.service';
+import { BadRequestException } from "@nestjs/common";
+import { describe, expect, it, vi } from "vitest";
+import { AnnualCostsService } from "./annual-costs/annual-costs.service";
+import { CleaningService } from "./cleaning/cleaning.service";
+import { BudgetItemsService } from "./finance/services/budget-items.service";
+import { ExpensesService } from "./finance/services/expenses.service";
+import { FinanceSavingsService } from "./finance/services/finance-savings.service";
+import { MealPlannerService } from "./meal-planner/meal-planner.service";
 
 function queryResult(rows: unknown[] = []) {
   return {
     rowCount: rows.length,
-    rows
+    rows,
   };
 }
 
 function createRealtime() {
   return {
-    publish: vi.fn()
+    publish: vi.fn(),
   };
 }
 
-function createTransactionDatabase(client: { query: ReturnType<typeof vi.fn> }) {
+function createTransactionDatabase(client: {
+  query: ReturnType<typeof vi.fn>;
+}) {
   return {
     query: vi.fn(),
-    transaction: vi.fn((callback: (transactionClient: typeof client) => Promise<unknown>) =>
-      callback(client)
-    )
+    transaction: vi.fn(
+      (callback: (transactionClient: typeof client) => Promise<unknown>) =>
+        callback(client),
+    ),
   };
 }
 
-describe('household isolation guards in services', () => {
-  it('does not create an expense for a budget item outside the current household', async () => {
+describe("household isolation guards in services", () => {
+  it("does not create an expense for a budget item outside the current household", async () => {
     const database = {
-      query: vi.fn().mockResolvedValueOnce(queryResult())
+      query: vi.fn().mockResolvedValueOnce(queryResult()),
     };
     const realtime = createRealtime();
     const service = new ExpensesService(database as never, realtime as never);
 
     await expect(
-      service.createExpense('household-b', {
+      service.createExpense("household-b", {
         amount: 10,
-        budgetItemId: 'budget-item-a'
-      })
+        budgetItemId: "budget-item-a",
+      }),
     ).rejects.toThrow(BadRequestException);
 
     expect(database.query).toHaveBeenCalledTimes(1);
-    expect(database.query.mock.calls[0]?.[0]).toContain('bm.household_id = $1');
-    expect(database.query.mock.calls[0]?.[1]).toEqual(['household-b', 'budget-item-a']);
+    expect(database.query.mock.calls[0]?.[0]).toContain("bm.household_id = $1");
+    expect(database.query.mock.calls[0]?.[1]).toEqual([
+      "household-b",
+      "budget-item-a",
+    ]);
     expect(realtime.publish).not.toHaveBeenCalled();
   });
 
-  it('does not soft-delete a budget item when the ownership lookup misses', async () => {
+  it("does not soft-delete a budget item when the ownership lookup misses", async () => {
     const database = {
-      query: vi.fn().mockResolvedValueOnce(queryResult())
+      query: vi.fn().mockResolvedValueOnce(queryResult()),
     };
     const realtime = createRealtime();
-    const service = new BudgetItemsService(database as never, realtime as never);
+    const service = new BudgetItemsService(
+      database as never,
+      realtime as never,
+    );
 
-    await expect(service.deleteBudgetItem('household-b', 'budget-item-a')).resolves.toBe(false);
+    await expect(
+      service.deleteBudgetItem("household-b", "budget-item-a"),
+    ).resolves.toBe(false);
 
     expect(database.query).toHaveBeenCalledTimes(1);
-    expect(database.query.mock.calls[0]?.[0]).toContain('bm.household_id = $1');
+    expect(database.query.mock.calls[0]?.[0]).toContain("bm.household_id = $1");
     expect(realtime.publish).not.toHaveBeenCalled();
   });
 
-  it('allows creating a budget item in any month that belongs to the household', async () => {
+  it("allows creating a budget item in any month that belongs to the household", async () => {
     const database = {
       query: vi
         .fn()
-        .mockResolvedValueOnce(queryResult([{ id: 'archived-month' }]))
-        .mockResolvedValueOnce(queryResult([{ id: 'member-b' }]))
-        .mockResolvedValueOnce(queryResult([{ id: 'category-b' }]))
+        .mockResolvedValueOnce(queryResult([{ id: "archived-month" }]))
+        .mockResolvedValueOnce(queryResult([{ id: "member-b" }]))
+        .mockResolvedValueOnce(queryResult([{ id: "category-b" }]))
         .mockResolvedValueOnce(queryResult([{ next_display_order: 0 }]))
         .mockResolvedValueOnce(
           queryResult([
             {
-              budget_amount: '10.00',
-              budget_month_id: 'archived-month',
-              category_id: 'category-b',
-              created_at: '2026-06-01T00:00:00.000Z',
+              budget_amount: "10.00",
+              budget_month_id: "archived-month",
+              category_id: "category-b",
+              created_at: "2026-06-01T00:00:00.000Z",
               display_order: 0,
-              id: 'budget-item-b',
+              id: "budget-item-b",
               is_deleted: false,
-              name: 'Archiwalna pozycja',
-              owner_member_id: 'member-b',
-              updated_at: '2026-06-01T00:00:00.000Z'
-            }
-          ])
-        )
+              name: "Archiwalna pozycja",
+              owner_member_id: "member-b",
+              updated_at: "2026-06-01T00:00:00.000Z",
+            },
+          ]),
+        ),
     };
     const realtime = createRealtime();
-    const service = new BudgetItemsService(database as never, realtime as never);
+    const service = new BudgetItemsService(
+      database as never,
+      realtime as never,
+    );
 
     await expect(
-      service.createBudgetItem('household-b', {
+      service.createBudgetItem("household-b", {
         budgetAmount: 10,
-        budgetMonthId: 'archived-month',
-        categoryId: 'category-b',
-        name: 'Archiwalna pozycja',
-        ownerMemberId: 'member-b'
-      })
+        budgetMonthId: "archived-month",
+        categoryId: "category-b",
+        name: "Archiwalna pozycja",
+        ownerMemberId: "member-b",
+      }),
     ).resolves.toMatchObject({
-      budgetMonthId: 'archived-month',
-      id: 'budget-item-b'
+      budgetMonthId: "archived-month",
+      id: "budget-item-b",
     });
 
-    expect(database.query.mock.calls[0]?.[0]).toContain('where household_id = $1');
-    expect(database.query.mock.calls[0]?.[0]).not.toContain('is_current = true');
+    expect(database.query.mock.calls[0]?.[0]).toContain(
+      "where household_id = $1",
+    );
+    expect(database.query.mock.calls[0]?.[0]).not.toContain(
+      "is_current = true",
+    );
   });
 
-  it('allows adding an expense to an archived month item in the same household', async () => {
+  it("allows adding an expense to an archived month item in the same household", async () => {
     const database = {
       query: vi
         .fn()
-        .mockResolvedValueOnce(queryResult([{ id: 'budget-item-b' }]))
+        .mockResolvedValueOnce(queryResult([{ id: "budget-item-b" }]))
         .mockResolvedValueOnce(
           queryResult([
             {
-              amount: '25.00',
-              budget_item_id: 'budget-item-b',
-              created_at: '2026-06-01T00:00:00.000Z',
-              id: 'expense-b',
-              updated_at: '2026-06-01T00:00:00.000Z'
-            }
-          ])
-        )
+              amount: "25.00",
+              budget_item_id: "budget-item-b",
+              created_at: "2026-06-01T00:00:00.000Z",
+              id: "expense-b",
+              updated_at: "2026-06-01T00:00:00.000Z",
+            },
+          ]),
+        ),
     };
     const realtime = createRealtime();
     const service = new ExpensesService(database as never, realtime as never);
 
     await expect(
-      service.createExpense('household-b', {
+      service.createExpense("household-b", {
         amount: 25,
-        budgetItemId: 'budget-item-b'
-      })
+        budgetItemId: "budget-item-b",
+      }),
     ).resolves.toMatchObject({
-      budgetItemId: 'budget-item-b',
-      id: 'expense-b'
+      budgetItemId: "budget-item-b",
+      id: "expense-b",
     });
 
-    expect(database.query.mock.calls[0]?.[0]).toContain('bm.household_id = $1');
-    expect(database.query.mock.calls[0]?.[0]).not.toContain('bm.is_current = true');
+    expect(database.query.mock.calls[0]?.[0]).toContain("bm.household_id = $1");
+    expect(database.query.mock.calls[0]?.[0]).not.toContain(
+      "bm.is_current = true",
+    );
   });
 
-  it('does not create a savings transaction for an account outside the current household', async () => {
+  it("does not create a savings transaction for an account outside the current household", async () => {
     const client = {
-      query: vi.fn().mockResolvedValueOnce(queryResult())
+      query: vi.fn().mockResolvedValueOnce(queryResult()),
     };
     const database = createTransactionDatabase(client);
     const realtime = createRealtime();
-    const service = new FinanceSavingsService(database as never, realtime as never);
+    const service = new FinanceSavingsService(
+      database as never,
+      realtime as never,
+    );
 
     await expect(
-      service.createTransaction('household-b', 'savings-account-a', {
+      service.createTransaction("household-b", "savings-account-a", {
         amount: 50,
-        direction: 'add'
-      })
+        direction: "add",
+      }),
     ).resolves.toBeNull();
 
     expect(client.query).toHaveBeenCalledTimes(1);
-    expect(client.query.mock.calls[0]?.[0]).toContain('where household_id = $1');
-    expect(client.query.mock.calls[0]?.[1]).toEqual(['household-b', 'savings-account-a']);
+    expect(client.query.mock.calls[0]?.[0]).toContain(
+      "where household_id = $1",
+    );
+    expect(client.query.mock.calls[0]?.[1]).toEqual([
+      "household-b",
+      "savings-account-a",
+    ]);
     expect(realtime.publish).not.toHaveBeenCalled();
   });
 
-  it('does not load meal plan entries if the week is not in the current household', async () => {
+  it("does not load meal plan entries if the week is not in the current household", async () => {
     const database = {
-      query: vi.fn().mockResolvedValueOnce(queryResult())
+      query: vi.fn().mockResolvedValueOnce(queryResult()),
     };
     const realtime = createRealtime();
-    const service = new MealPlannerService(database as never, realtime as never);
+    const service = new MealPlannerService(
+      database as never,
+      realtime as never,
+    );
 
-    await expect(service.getPlan('household-b', 'meal-plan-a')).resolves.toBeNull();
+    await expect(
+      service.getPlan("household-b", "meal-plan-a"),
+    ).resolves.toBeNull();
 
     expect(database.query).toHaveBeenCalledTimes(1);
-    expect(database.query.mock.calls[0]?.[0]).toContain('where household_id = $1');
-    expect(database.query.mock.calls[0]?.[1]).toEqual(['household-b', 'meal-plan-a']);
+    expect(database.query.mock.calls[0]?.[0]).toContain(
+      "where household_id = $1",
+    );
+    expect(database.query.mock.calls[0]?.[1]).toEqual([
+      "household-b",
+      "meal-plan-a",
+    ]);
     expect(realtime.publish).not.toHaveBeenCalled();
   });
 
-  it('does not complete a cleaning task outside the current household', async () => {
+  it("does not complete a cleaning task outside the current household", async () => {
     const client = {
-      query: vi.fn().mockResolvedValueOnce(queryResult())
+      query: vi.fn().mockResolvedValueOnce(queryResult()),
     };
     const database = createTransactionDatabase(client);
     const realtime = createRealtime();
-    const service = new CleaningService(database as never, realtime as never);
+    const notifications = { sendCleaningTaskReminder: vi.fn() };
+    const service = new CleaningService(
+      database as never,
+      realtime as never,
+      notifications as never,
+    );
 
     await expect(
-      service.completeTask('household-b', 'member-b', 'task-a', {
-        completedAt: '2026-05-30'
-      })
+      service.completeTask("household-b", "member-b", "task-a", {
+        completedAt: "2026-05-30",
+      }),
     ).resolves.toBeNull();
 
     expect(client.query).toHaveBeenCalledTimes(1);
-    expect(client.query.mock.calls[0]?.[0]).toContain('where household_id = $1');
+    expect(client.query.mock.calls[0]?.[0]).toContain(
+      "where household_id = $1",
+    );
     expect(realtime.publish).not.toHaveBeenCalled();
   });
 
-  it('does not insert annual cost history when the cost is outside the current household', async () => {
+  it("does not insert annual cost history when the cost is outside the current household", async () => {
     const client = {
-      query: vi.fn().mockResolvedValueOnce(queryResult()).mockResolvedValueOnce(queryResult())
+      query: vi
+        .fn()
+        .mockResolvedValueOnce(queryResult())
+        .mockResolvedValueOnce(queryResult()),
     };
     const database = createTransactionDatabase(client);
     const realtime = createRealtime();
-    const service = new AnnualCostsService(database as never, realtime as never);
+    const service = new AnnualCostsService(
+      database as never,
+      realtime as never,
+    );
 
     await expect(
-      service.completeCost('household-b', 'annual-cost-a', {
+      service.completeCost("household-b", "annual-cost-a", {
         amount: 120,
-        executedAt: '2026-05-30'
-      })
+        executedAt: "2026-05-30",
+      }),
     ).resolves.toBeNull();
 
-    const executedSql = client.query.mock.calls.map(([sql]) => String(sql)).join('\n');
+    const executedSql = client.query.mock.calls
+      .map(([sql]) => String(sql))
+      .join("\n");
 
     expect(client.query).toHaveBeenCalledTimes(2);
-    expect(executedSql).toContain('ac.household_id = $1');
-    expect(executedSql).not.toContain('insert into annual_cost_history');
+    expect(executedSql).toContain("ac.household_id = $1");
+    expect(executedSql).not.toContain("insert into annual_cost_history");
     expect(realtime.publish).not.toHaveBeenCalled();
   });
 });

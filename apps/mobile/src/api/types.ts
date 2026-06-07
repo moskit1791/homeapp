@@ -735,6 +735,7 @@ export interface CleaningTask {
   location: string | null;
   name: string;
   nextDueAt: string;
+  reminderSentAt: string | null;
   updatedAt: string;
 }
 
