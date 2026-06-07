@@ -760,46 +760,42 @@ export class MealPlannerService {
 
   async generateAiPrompt(householdId: string): Promise<{ prompt: string }> {
     const mealSlotsPerDay = await this.getMealSlotsPerDay(householdId);
-    
-    const historyResult = await this.database.query(
+
+    const historyResult = await this.database.query<MealPromptHistoryRow>(
       `
-        with recent_weeks as (
-          select id, week_start_date
-          from meal_plan_weeks
-          where household_id = $1
-          order by week_start_date desc
-          limit 10
-        )
         select
-          rw.week_start_date,
+          mpe.meal_name,
+          mpe.link_url,
+          mpe.note,
           mpe.weekday,
           mpe.slot_index,
-          mpe.meal_name
+          mpw.week_start_date,
+          (mpw.week_start_date + ((mpe.weekday - 1) * interval '1 day'))::date as served_on
         from meal_plan_entries mpe
-        join recent_weeks rw on rw.id = mpe.meal_plan_week_id
-        order by rw.week_start_date desc, mpe.weekday asc, mpe.slot_index asc
+        join meal_plan_weeks mpw on mpw.id = mpe.meal_plan_week_id
+        where mpw.household_id = $1
+          and btrim(mpe.meal_name) <> ''
+          and (mpw.week_start_date + ((mpe.weekday - 1) * interval '1 day'))::date <= current_date
+        order by served_on desc, mpe.weekday asc, mpe.slot_index asc
+        limit 1500
       `,
       [householdId]
     );
 
-    const historyByWeek: Record<string, Array<{ weekday: number; slotIndex: number; mealName: string }>> = {};
-    for (const row of historyResult.rows) {
-      const dateKey = this.formatDateOnly(row.week_start_date);
-      if (!historyByWeek[dateKey]) {
-        historyByWeek[dateKey] = [];
-      }
-      historyByWeek[dateKey].push({
-        weekday: row.weekday,
-        slotIndex: row.slot_index,
-        mealName: row.meal_name
-      });
-    }
-
-    const latestWeeks = Object.entries(historyByWeek)
-      .map(([week, entries]) => ({ week, entries }));
-
-    const historyJson = JSON.stringify(latestWeeks, null, 2);
-    const prompt = `Przygotuj listę posiłków o strukturze ${mealSlotsPerDay} posiłków dziennie. Biorąc pod uwagę posiłki głównie z historii a o to historia:\n${historyJson}\nNastępnie każ AI złapać zależności w tych posiłkach więc trzeba je przeanalizować bardzo dogłębnie. Np. że w każdy wtorek są kanapki. Ważne: posiłki 1 to śniadanie i nie mieszaj go z pozostałymi posiłkami.`;
+    const history = historyResult.rows.map((row): MealPromptHistoryEntry => ({
+      linkUrl: row.link_url,
+      mealName: row.meal_name,
+      note: row.note,
+      servedOn: this.formatDateOnly(row.served_on),
+      slotIndex: row.slot_index,
+      sourceHint: inferMealPromptSource(row.meal_name, row.note),
+      weekday: row.weekday,
+      weekStartDate: this.formatDateOnly(row.week_start_date)
+    }));
+    const prompt = buildMealAiCopyPrompt({
+      history,
+      mealSlotsPerDay
+    });
 
     return { prompt };
   }
@@ -904,4 +900,395 @@ export interface MealRandomizeResult {
   excludedRecentWeeks: number;
   suggestions: MealRandomizeSuggestion[];
   targetWeekStartDate: string;
+}
+
+function buildMealAiCopyPrompt(input: {
+  history: MealPromptHistoryEntry[];
+  mealSlotsPerDay: number;
+}): string {
+  const payload = buildMealPromptPayload(input.history, input.mealSlotsPerDay);
+
+  return [
+    'Jestes AI pomagajacym ukladac jedzenie dla konkretnego domu.',
+    'To jest prompt uniwersalny: nie zakladaj, ze kazdy dom je tak samo. Styl domu wywnioskuj z danych historycznych doklejonych na koncu.',
+    '',
+    'Cel:',
+    `- Przygotuj propozycje planu jedzenia na tydzien ${payload.summary.suggestedTargetWeekStartDate ?? 'nastepny po ostatnim tygodniu z historii'}.`,
+    `- Dom ma ${input.mealSlotsPerDay} sloty posilkow dziennie. Sloty sa zapisane jako slotIndex 0..${Math.max(input.mealSlotsPerDay - 1, 0)}, ale w odpowiedzi pokazuj je jako Posilek 1..${input.mealSlotsPerDay}.`,
+    '- Najpierw podaj krotkie wnioski z historii, potem plan tygodnia.',
+    '',
+    'Jak analizowac dom:',
+    '- Najpierw rozpoznaj, co oznacza kazdy slot. Nie zakladaj z gory, ze slot 0 zawsze jest sniadaniem, a slot 1 obiadem; potwierdz to historia. Jesli profil slotu jest mieszany, napisz to i dobierz ostroznie.',
+    '- Oddziel wzorce slotow: sniadania nie mieszaj z obiadami, obiadami nie z dodatkowymi zupami/kolacjami, chyba ze historia pokazuje taki sposob uzycia.',
+    '- Zlap rytm dni tygodnia: poniedzialki, wtorki itd. moga miec inne stale posilki niz weekend.',
+    '- Rozpoznaj posilki powtarzalne przez kilka dni, resztki, wyjazdy, prace, rodzinne obiady i jedzenie poza domem. Nie zamieniaj kontekstu typu "praca", "knajpa", "Sanok" w przepis, jesli to raczej informacja organizacyjna.',
+    '- Historia jest modelem preferencji, nie lista do bezmyslnego kopiowania. Mieszaj sprawdzone ulubione dania z podobnymi nowymi propozycjami.',
+    '- Nie proponuj bardzo podobnych posilkow z ostatnich 30 dni historii, chyba ze historia pokazuje celowe powtarzanie albo uzytkownik o to prosi.',
+    '- Dbaj o praktycznosc: czesc dan moze sie powtarzac jako resztki, ciezsze gotowanie dawaj wtedy, gdy historia domu zwykle je znosi, a szybkie posilki tam, gdzie dom je czesto stosuje.',
+    '- Zwracaj uwage na zrodla i skroty: C/Cookidoo, KS/Kwestia Smaku, AG/AniaGotuje, IG/Instagram, Knorr, MW/Moje Wypieki, Rozkoszny. Jesli proponujesz linki, dawaj tylko realne URL-e do konkretnych przepisow; nie wymyslaj adresow.',
+    '- Jesli w historii brakuje linkow, nadal mozesz zaproponowac posilki bez linku i oznaczyc preferowane zrodlo.',
+    '',
+    'Format odpowiedzi:',
+    '1. "Wnioski z historii" - maksymalnie 8 punktow: sloty, dni tygodnia, ulubione typy dan, zrodla, ostatnio jedzone rzeczy do omijania.',
+    '2. "Plan tygodnia" - tabela: dzien, Posilek 1, Posilek 2, Posilek 3... wedlug liczby slotow domu.',
+    '3. Przy kazdej mniej oczywistej propozycji dodaj bardzo krotkie uzasadnienie w nawiasie, np. "pasuje do piatkowych tortilli" albo "alternatywa do Cookidoo".',
+    '4. Na koncu wypisz "Nie dawaj teraz ponownie" z najwazniejszymi posilkami z ostatnich 30 dni historii.',
+    '',
+    'DANE DOMU I HISTORIA (JSON do analizy):',
+    JSON.stringify(payload, null, 2)
+  ].join('\n');
+}
+
+function buildMealPromptPayload(
+  history: MealPromptHistoryEntry[],
+  mealSlotsPerDay: number
+) {
+  const weekDates = [...new Set(history.map((entry) => entry.weekStartDate))].sort();
+  const servedDates = [...new Set(history.map((entry) => entry.servedOn))].sort();
+  const firstServedOn = servedDates[0] ?? null;
+  const lastServedOn = servedDates[servedDates.length - 1] ?? null;
+  const latestWeekStartDate = weekDates[weekDates.length - 1] ?? null;
+
+  return {
+    summary: {
+      entriesCount: history.length,
+      firstServedOn,
+      lastServedOn,
+      latestWeekStartDate,
+      mealSlotsPerDay,
+      suggestedTargetWeekStartDate: addDateDays(latestWeekStartDate, 7),
+      weeksCount: weekDates.length
+    },
+    sourcePreferences: buildMealPromptSourcePreferences(history),
+    slotProfiles: buildMealPromptSlotProfiles(history, mealSlotsPerDay),
+    weekdaySlotPatterns: buildMealPromptWeekdaySlotPatterns(history, mealSlotsPerDay),
+    frequentMeals: buildMealPromptFrequency(history).slice(0, 120),
+    recentMealsLast30Days: buildRecentMealPromptEntries(history, lastServedOn).slice(0, 120),
+    recentWeeks: buildRecentMealPromptWeeks(history, 12)
+  };
+}
+
+function buildMealPromptSourcePreferences(history: MealPromptHistoryEntry[]) {
+  const counts = new Map<string, number>();
+
+  for (const entry of history) {
+    if (!entry.sourceHint) {
+      continue;
+    }
+
+    counts.set(entry.sourceHint, (counts.get(entry.sourceHint) ?? 0) + 1);
+  }
+
+  return [...counts.entries()]
+    .map(([source, count]) => ({ count, source }))
+    .sort((left, right) => right.count - left.count || left.source.localeCompare(right.source));
+}
+
+function buildMealPromptSlotProfiles(
+  history: MealPromptHistoryEntry[],
+  mealSlotsPerDay: number
+) {
+  return Array.from({ length: mealSlotsPerDay }, (_, slotIndex) => {
+    const entries = history.filter((entry) => entry.slotIndex === slotIndex);
+    const breakfastLikeCount = entries.filter((entry) => isBreakfastLike(entry.mealName)).length;
+    const mainMealLikeCount = entries.filter((entry) => isMainMealLike(entry.mealName)).length;
+    const count = entries.length;
+
+    return {
+      breakfastLikeCount,
+      count,
+      detectedRole: detectSlotRole(count, breakfastLikeCount, mainMealLikeCount),
+      mainMealLikeCount,
+      slotIndex,
+      topMeals: buildMealPromptFrequency(entries).slice(0, 15)
+    };
+  });
+}
+
+function buildMealPromptWeekdaySlotPatterns(
+  history: MealPromptHistoryEntry[],
+  mealSlotsPerDay: number
+) {
+  const patterns: Array<{
+    observedCount: number;
+    slotIndex: number;
+    topMeals: MealPromptFrequency[];
+    weekday: number;
+    weekdayName: string;
+  }> = [];
+
+  for (let weekday = 1; weekday <= 7; weekday += 1) {
+    for (let slotIndex = 0; slotIndex < mealSlotsPerDay; slotIndex += 1) {
+      const entries = history.filter(
+        (entry) => entry.weekday === weekday && entry.slotIndex === slotIndex
+      );
+
+      patterns.push({
+        observedCount: entries.length,
+        slotIndex,
+        topMeals: buildMealPromptFrequency(entries).slice(0, 7),
+        weekday,
+        weekdayName: getWeekdayName(weekday)
+      });
+    }
+  }
+
+  return patterns;
+}
+
+function buildMealPromptFrequency(history: MealPromptHistoryEntry[]): MealPromptFrequency[] {
+  const groups = new Map<string, MealPromptFrequency>();
+
+  for (const entry of history) {
+    const key = normalizeMealPromptText(entry.mealName);
+
+    if (!key) {
+      continue;
+    }
+
+    const current = groups.get(key);
+
+    if (!current) {
+      groups.set(key, {
+        count: 1,
+        lastServedOn: entry.servedOn,
+        mealName: entry.mealName,
+        slotIndexes: [entry.slotIndex],
+        sourceHints: entry.sourceHint ? [entry.sourceHint] : [],
+        weekdays: [entry.weekday]
+      });
+      continue;
+    }
+
+    current.count += 1;
+    current.lastServedOn = current.lastServedOn > entry.servedOn
+      ? current.lastServedOn
+      : entry.servedOn;
+
+    if (!current.weekdays.includes(entry.weekday)) {
+      current.weekdays.push(entry.weekday);
+    }
+
+    if (!current.slotIndexes.includes(entry.slotIndex)) {
+      current.slotIndexes.push(entry.slotIndex);
+    }
+
+    if (entry.sourceHint && !current.sourceHints.includes(entry.sourceHint)) {
+      current.sourceHints.push(entry.sourceHint);
+    }
+  }
+
+  return [...groups.values()]
+    .map((item) => ({
+      ...item,
+      slotIndexes: item.slotIndexes.sort((left, right) => left - right),
+      sourceHints: item.sourceHints.sort(),
+      weekdays: item.weekdays.sort((left, right) => left - right)
+    }))
+    .sort(
+      (left, right) =>
+        right.count - left.count ||
+        right.lastServedOn.localeCompare(left.lastServedOn) ||
+        left.mealName.localeCompare(right.mealName)
+    );
+}
+
+function buildRecentMealPromptEntries(
+  history: MealPromptHistoryEntry[],
+  lastServedOn: string | null
+) {
+  const cutoff = addDateDays(lastServedOn, -30);
+
+  if (!cutoff) {
+    return [];
+  }
+
+  return history
+    .filter((entry) => entry.servedOn >= cutoff)
+    .sort(
+      (left, right) =>
+        right.servedOn.localeCompare(left.servedOn) ||
+        left.weekday - right.weekday ||
+        left.slotIndex - right.slotIndex
+    )
+    .map(toMealPromptHistoryPayloadEntry);
+}
+
+function buildRecentMealPromptWeeks(history: MealPromptHistoryEntry[], limit: number) {
+  const weeks = new Map<string, MealPromptHistoryEntry[]>();
+
+  for (const entry of history) {
+    const current = weeks.get(entry.weekStartDate) ?? [];
+    current.push(entry);
+    weeks.set(entry.weekStartDate, current);
+  }
+
+  return [...weeks.entries()]
+    .sort(([left], [right]) => right.localeCompare(left))
+    .slice(0, limit)
+    .map(([weekStartDate, entries]) => ({
+      entries: entries
+        .sort(
+          (left, right) =>
+            left.weekday - right.weekday || left.slotIndex - right.slotIndex
+        )
+        .map(toMealPromptHistoryPayloadEntry),
+      weekStartDate
+    }));
+}
+
+function toMealPromptHistoryPayloadEntry(entry: MealPromptHistoryEntry) {
+  return {
+    linkUrl: entry.linkUrl ?? '',
+    mealName: entry.mealName,
+    note: entry.note ?? '',
+    servedOn: entry.servedOn,
+    slotIndex: entry.slotIndex,
+    sourceHint: entry.sourceHint ?? '',
+    weekday: entry.weekday
+  };
+}
+
+function detectSlotRole(
+  count: number,
+  breakfastLikeCount: number,
+  mainMealLikeCount: number
+): string {
+  if (count === 0) {
+    return 'brak danych';
+  }
+
+  if (breakfastLikeCount / count >= 0.55) {
+    return 'prawdopodobnie sniadanie';
+  }
+
+  if (mainMealLikeCount / count >= 0.45) {
+    return 'prawdopodobnie obiad lub danie glowne';
+  }
+
+  return 'mieszany slot - analizuj ostroznie';
+}
+
+function isBreakfastLike(mealName: string): boolean {
+  return /(angielsk|burrat|crumble|dutch|gofr|jajeczn|jaglank|kanapk|kasza manna|nales|omlet|owsiank|pancake|parow|plack|smoothie|szakszuk|tortill|tost|twaroz|twaro|ryz z jabl)/.test(
+    normalizeMealPromptText(mealName)
+  );
+}
+
+function isMainMealLike(mealName: string): boolean {
+  return /(bigos|carbonar|chinczyk|dorsz|fasolk|gnocci|gulasz|grill|klopsik|kurczak|leczo|makaron|paluszk|peczak|pierog|pizza|placki ziemniaczane|pomidorow|risotto|rosol|ryz|schab|schabow|spaghetti|tofu|zapiek|ziemniak|zupa)/.test(
+    normalizeMealPromptText(mealName)
+  );
+}
+
+function inferMealPromptSource(mealName: string, note: string | null): string | null {
+  const normalizedMeal = normalizeMealPromptText(mealName);
+  const normalizedNote = normalizeMealPromptText(note ?? '');
+  const combined = `${normalizedNote} ${normalizedMeal}`;
+
+  if (combined.includes('cookidoo') || /(^|[+\s])(c|cookidoo)(?=[+\s]|$)/.test(normalizedMeal)) {
+    return 'Cookidoo';
+  }
+
+  if (
+    combined.includes('kwestia smaku') ||
+    /(^|[+\s])(ks|kwestia smaku)(?=[+\s]|$)/.test(normalizedMeal)
+  ) {
+    return 'Kwestia Smaku';
+  }
+
+  if (combined.includes('ania gotuje') || combined.includes('aniagotuje')) {
+    return 'AniaGotuje';
+  }
+
+  if (combined.includes('instagram') || /(^|[+\s])(ig|insta)(?=[+\s]|$)/.test(normalizedMeal)) {
+    return 'Instagram';
+  }
+
+  if (combined.includes('knorr')) {
+    return 'Knorr';
+  }
+
+  if (combined.includes('moje wypieki')) {
+    return 'Moje Wypieki';
+  }
+
+  if (combined.includes('rozkoszny')) {
+    return 'Rozkoszny';
+  }
+
+  return null;
+}
+
+function normalizeMealPromptText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/\u0142/g, 'l')
+    .replace(/\u0141/g, 'l')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9+\s]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .join(' ');
+}
+
+function addDateDays(date: string | null, days: number): string | null {
+  if (!date) {
+    return null;
+  }
+
+  const parsed = new Date(`${date}T00:00:00.000Z`);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  parsed.setUTCDate(parsed.getUTCDate() + days);
+
+  return parsed.toISOString().slice(0, 10);
+}
+
+function getWeekdayName(weekday: number): string {
+  return (
+    [
+      'poniedzialek',
+      'wtorek',
+      'sroda',
+      'czwartek',
+      'piatek',
+      'sobota',
+      'niedziela'
+    ][weekday - 1] ?? `dzien ${weekday}`
+  );
+}
+
+interface MealPromptHistoryRow {
+  link_url: string | null;
+  meal_name: string;
+  note: string | null;
+  served_on: Date | string;
+  slot_index: number;
+  weekday: number;
+  week_start_date: Date | string;
+}
+
+interface MealPromptHistoryEntry {
+  linkUrl: string | null;
+  mealName: string;
+  note: string | null;
+  servedOn: string;
+  slotIndex: number;
+  sourceHint: string | null;
+  weekday: number;
+  weekStartDate: string;
+}
+
+interface MealPromptFrequency {
+  count: number;
+  lastServedOn: string;
+  mealName: string;
+  slotIndexes: number[];
+  sourceHints: string[];
+  weekdays: number[];
 }

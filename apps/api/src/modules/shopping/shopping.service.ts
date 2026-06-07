@@ -218,7 +218,39 @@ export class ShoppingService {
   }
 
   async checkItem(householdId: string, id: string): Promise<ShoppingItemRecord | null> {
-    return this.toggleItem(householdId, id);
+    const result = await this.database.query<ShoppingItemRow>(
+      `
+        update shopping_list_items sli
+        set
+          is_checked = true,
+          checked_at = coalesce(sli.checked_at, now())
+        from shopping_lists sl
+        where sl.id = sli.shopping_list_id
+          and sl.household_id = $1
+          and sli.id = $2
+        returning
+          sli.id,
+          sli.shopping_list_id,
+          sl.household_id,
+          sl.type,
+          sli.name,
+          sli.quantity,
+          sli.category,
+          sli.is_checked,
+          sli.checked_at,
+          sli.display_order,
+          sli.created_at,
+          sli.updated_at
+      `,
+      [householdId, id]
+    );
+    const item = result.rows[0] ? this.mapItem(result.rows[0]) : null;
+
+    if (item) {
+      this.realtime.publish(householdId, 'shopping.changed', item.id);
+    }
+
+    return item;
   }
 
   async toggleItem(householdId: string, id: string): Promise<ShoppingItemRecord | null> {

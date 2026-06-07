@@ -1,5 +1,5 @@
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const defaultDelayMs = 2000;
 
@@ -48,6 +48,7 @@ export function useDebouncedOptimisticToggle<TItem>({
   const mountedRef = useRef(true);
   const pendingRef = useRef(new Map<string, PendingToggle>());
   const flushRef = useRef<(id: string) => Promise<void>>(async () => undefined);
+  const queryKeyHash = useMemo(() => JSON.stringify(queryKey), [queryKey]);
   const [syncingIds, setSyncingIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -92,6 +93,55 @@ export function useDebouncedOptimisticToggle<TItem>({
     },
     [getId, queryClient, queryKey, setValue],
   );
+
+  const applyPendingValues = useCallback(
+    (items: TItem[]): TItem[] => {
+      if (pendingRef.current.size === 0) {
+        return items;
+      }
+
+      let changed = false;
+      const next = items.map((item) => {
+        const entry = pendingRef.current.get(getId(item));
+
+        if (!entry || getValue(item) === entry.desiredValue) {
+          return item;
+        }
+
+        changed = true;
+        return setValue(item, entry.desiredValue);
+      });
+
+      return changed ? next : items;
+    },
+    [getId, getValue, setValue],
+  );
+
+  const reapplyPendingValues = useCallback(() => {
+    queryClient.setQueryData<TItem[]>(queryKey, (current) => {
+      if (!current) {
+        return current;
+      }
+
+      return applyPendingValues(current);
+    });
+  }, [applyPendingValues, queryClient, queryKey]);
+
+  useEffect(() => {
+    const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
+      if (
+        pendingRef.current.size === 0 ||
+        !event.query ||
+        JSON.stringify(event.query.queryKey) !== queryKeyHash
+      ) {
+        return;
+      }
+
+      reapplyPendingValues();
+    });
+
+    return unsubscribe;
+  }, [queryClient, queryKeyHash, reapplyPendingValues]);
 
   const cancel = useCallback(
     (id: string) => {
