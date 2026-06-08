@@ -37,7 +37,6 @@ import {
   QueryState,
 } from "../../src/ui";
 import {
-  AccountCircle,
   Bell,
   CalendarDays,
   CartPlus,
@@ -237,11 +236,6 @@ export default function DzisiajScreen() {
           </IconButton>
         </View>
       }
-      leading={
-        <View style={styles.avatar}>
-          <AccountCircle color={theme.colors.text} size={27} />
-        </View>
-      }
       title="Dzisiaj"
       titleAlign="center"
     >
@@ -384,7 +378,8 @@ function resolveStoredNotificationTarget(
   notification: StoredNotification,
 ): StoredNotificationTarget | null {
   const eventType =
-    notification.data?.eventType ?? eventTypeFromNotificationTitle(notification.title);
+    notification.data?.eventType ??
+    eventTypeFromNotificationTitle(notification.title);
 
   if (!eventType) {
     return null;
@@ -444,16 +439,16 @@ function eventTypeFromNotificationTitle(title: string): string | null {
   }
 
   const titleMap: Record<string, string> = {
-    "dane": "data.changed",
+    dane: "data.changed",
     "do zrobienia": "todo.changed",
-    "dom": "household.changed",
-    "kalendarz": "calendar.changed",
+    dom: "household.changed",
+    kalendarz: "calendar.changed",
     "koszty roczne": "annual_cost.changed",
     "plan posiłków": "meal.changed",
-    "pliki": "attachment.changed",
-    "sprzątanie": "cleaning.changed",
-    "uprawnienia": "permissions.changed",
-    "zakupy": "shopping.changed",
+    pliki: "attachment.changed",
+    sprzątanie: "cleaning.changed",
+    uprawnienia: "permissions.changed",
+    zakupy: "shopping.changed",
   };
 
   return titleMap[normalized] ?? null;
@@ -597,7 +592,9 @@ function StoredNotificationRow({
           {formatDateTime(item.receivedAt)}
         </Text>
       </View>
-      {isNavigable ? <ChevronRight color={theme.colors.textMuted} size={20} /> : null}
+      {isNavigable ? (
+        <ChevronRight color={theme.colors.textMuted} size={20} />
+      ) : null}
     </Pressable>
   );
 }
@@ -760,7 +757,10 @@ function MiniTodayCard({
       <Text numberOfLines={2} style={styles.miniTodayTitle}>
         {title}
       </Text>
-      <Text numberOfLines={2} style={[styles.miniTodayCaption, { color: accent }]}>
+      <Text
+        numberOfLines={2}
+        style={[styles.miniTodayCaption, { color: accent }]}
+      >
         {caption}
       </Text>
     </Pressable>
@@ -894,7 +894,7 @@ function formatDateTime(value: string): string {
 }
 
 function createStyles(colors: AppPalette) {
-  const isDark = colors.background === "#0C1220";
+  const isDark = colors.background === "#0F141B";
   const todayPanelBackground = isDark ? colors.card : "#FFF9EF";
   const todayPanelBorder = isDark ? colors.border : "#E8DDCE";
   const todayPanelText = isDark ? colors.text : "#1E1B16";
@@ -903,15 +903,6 @@ function createStyles(colors: AppPalette) {
   const todayPanelShadowOpacity = isDark ? 0.18 : 0.08;
 
   return StyleSheet.create({
-    avatar: {
-      alignItems: "center",
-      backgroundColor: colors.cardMuted,
-      borderRadius: 999,
-      height: 34,
-      justifyContent: "center",
-      overflow: "hidden",
-      width: 34,
-    },
     bellDot: {
       backgroundColor: colors.warning,
       borderColor: colors.card,

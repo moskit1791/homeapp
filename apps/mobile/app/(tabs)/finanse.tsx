@@ -33,11 +33,9 @@ import {
   ReceiptText,
   ShoppingCart,
   Smartphone,
-  TableLarge,
   Trash2,
   Users,
   Utensils,
-  ViewGrid,
   WalletCards,
 } from "../../src/ui/icon";
 import {
@@ -1079,10 +1077,6 @@ export default function FinanseScreen() {
     setFinanceFilters((current) => ({ ...current, ...nextFilters }));
   }
 
-  function toggleBudgetLayout() {
-    setBudgetLayout((current) => (current === "table" ? "cards" : "table"));
-  }
-
   function resetDebtForm() {
     setEditingDebt(null);
     setValue("debtAmount", "");
@@ -1265,21 +1259,6 @@ export default function FinanseScreen() {
                 />
               </IconButton>
             </View>
-            <IconButton
-              accessibilityLabel={
-                budgetLayout === "table"
-                  ? "Zmień widok budżetu na kafelki"
-                  : "Zmień widok budżetu na tabelę"
-              }
-              onPress={toggleBudgetLayout}
-              style={styles.budgetLayoutButton}
-            >
-              {budgetLayout === "table" ? (
-                <ViewGrid color={theme.colors.primaryDark} size={20} />
-              ) : (
-                <TableLarge color={theme.colors.primaryDark} size={20} />
-              )}
-            </IconButton>
             {canDelete ? (
               <IconButton
                 accessibilityLabel="Usuń wybrany miesiąc budżetu"
@@ -1379,7 +1358,7 @@ export default function FinanseScreen() {
 
           <FormModal
             onClose={closeFinanceModal}
-            title="Menu finansów"
+            title="Finanse"
             visible={financeModal === "menu"}
           >
             <View style={styles.financeMenu}>
@@ -1389,7 +1368,7 @@ export default function FinanseScreen() {
                   <View style={styles.actionPicker}>
                     <ActionButton
                       onPress={() => setFinanceModal("category")}
-                      title="Dodaj kategorię"
+                      title="Kategoria"
                       variant="secondary"
                     />
                     <ActionButton
@@ -1400,12 +1379,12 @@ export default function FinanseScreen() {
                         setValue("itemAmount", "");
                         setFinanceModal("item");
                       }}
-                      title="Dodaj pozycję budżetu"
+                      title="Pozycja budżetu"
                     />
                     <ActionButton
                       disabled={!canCreateVisibleExpense}
                       onPress={openExpenseModal}
-                      title="Dodaj wydatek"
+                      title="Wydatek"
                       variant="secondary"
                     />
                   </View>
@@ -1420,14 +1399,14 @@ export default function FinanseScreen() {
                       <ActionButton
                         disabled={!currentMonth?.id}
                         onPress={openGenerateMonthModal}
-                        title="Wygeneruj nowy miesiąc"
+                        title="Nowy miesiąc"
                       />
                     ) : null}
                     {canDelete ? (
                       <ActionButton
                         disabled={!canRemoveSelectedMonth}
                         onPress={() => setDeleteMonthConfirmVisible(true)}
-                        title="Usuń wybrany miesiąc"
+                        title="Usuń miesiąc"
                         variant="ghost"
                       />
                     ) : null}
@@ -1441,7 +1420,7 @@ export default function FinanseScreen() {
                   <View style={styles.actionPicker}>
                     <ActionButton
                       onPress={() => setFinanceModal("income")}
-                      title="Zmień dochód"
+                      title="Dochód"
                       variant="secondary"
                     />
                   </View>
@@ -2347,8 +2326,9 @@ function FinanceSummaryCard({
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
-  const ringBase = Math.max(incomeAmount, budgetAmount, spentAmount, 1);
-  const spentRatio = Math.max(0, Math.min(spentAmount / ringBase, 1));
+  const spentRatio =
+    budgetAmount > 0 ? Math.max(0, Math.min(spentAmount / budgetAmount, 1)) : 0;
+  const isOverBudget = budgetAmount > 0 && spentAmount > budgetAmount;
 
   return (
     <View style={styles.financeSummaryCard}>
@@ -2373,7 +2353,10 @@ function FinanceSummaryCard({
       </Pressable>
 
       <View style={styles.financeSummaryCenter}>
-        <FinanceSummaryRing spentRatio={spentRatio} />
+        <FinanceSummaryRing
+          isOverBudget={isOverBudget}
+          spentRatio={spentRatio}
+        />
         <View pointerEvents="none" style={styles.financeSummaryCenterText}>
           <Text
             numberOfLines={1}
@@ -2410,7 +2393,13 @@ function FinanceSummaryCard({
   );
 }
 
-function FinanceSummaryRing({ spentRatio }: { spentRatio: number }) {
+function FinanceSummaryRing({
+  isOverBudget,
+  spentRatio,
+}: {
+  isOverBudget: boolean;
+  spentRatio: number;
+}) {
   const styles = createStyles(useAppTheme().colors);
   const segmentCount = 28;
   const spentSegments = Math.round(spentRatio * segmentCount);
@@ -2427,7 +2416,11 @@ function FinanceSummaryRing({ spentRatio }: { spentRatio: number }) {
             style={[
               styles.financeSummaryRingSegment,
               {
-                backgroundColor: isSpent ? "#FFA45D" : "#79CDB0",
+                backgroundColor: isSpent
+                  ? isOverBudget
+                    ? "#FF7A90"
+                    : "#FFA45D"
+                  : "#79CDB0",
                 transform: [{ rotate: `${angle}deg` }, { translateY: -35 }],
               },
             ]}
@@ -2998,6 +2991,12 @@ function FinanceSheet({
                       <Pressable
                         accessibilityLabel={`Pokaż historię pozycji ${item.name}`}
                         accessibilityRole="button"
+                        accessibilityHint={
+                          canUpdate
+                            ? "Przytrzymaj, aby edytować pozycję budżetu."
+                            : undefined
+                        }
+                        onLongPress={canUpdate ? () => onEdit(item) : undefined}
                         onPress={() => onHistory(item)}
                         style={({ pressed }) => [
                           styles.sheetRowContent,
@@ -3050,15 +3049,6 @@ function FinanceSheet({
                               color={theme.colors.primaryDark}
                               size={15}
                             />
-                          </IconButton>
-                        ) : null}
-                        {canUpdate ? (
-                          <IconButton
-                            accessibilityLabel="Edytuj pozycję"
-                            onPress={() => onEdit(item)}
-                            style={styles.sheetActionButton}
-                          >
-                            <Pencil color={theme.colors.textMuted} size={15} />
                           </IconButton>
                         ) : null}
                       </View>
@@ -3269,7 +3259,13 @@ function FinanceCategoryCards({
               <Pressable
                 accessibilityLabel={`Pokaż historię pozycji ${item.name}`}
                 accessibilityRole="button"
+                accessibilityHint={
+                  canUpdate
+                    ? "Przytrzymaj, aby edytować pozycję budżetu."
+                    : undefined
+                }
                 key={item.id}
+                onLongPress={canUpdate ? () => onEdit(item) : undefined}
                 onPress={() => onHistory(item)}
                 style={({ pressed }) => [
                   styles.categoryDetailsRow,
@@ -3318,14 +3314,6 @@ function FinanceCategoryCards({
                       onPress={() => onAddExpense(item)}
                     >
                       <CartPlus color={theme.colors.primaryDark} size={15} />
-                    </IconButton>
-                  ) : null}
-                  {canUpdate ? (
-                    <IconButton
-                      accessibilityLabel="Edytuj pozycję"
-                      onPress={() => onEdit(item)}
-                    >
-                      <Pencil color={theme.colors.textMuted} size={15} />
                     </IconButton>
                   ) : null}
                 </View>
@@ -4925,12 +4913,6 @@ function createStyles(colors: AppPalette) {
       fontWeight: "900",
       letterSpacing: 0,
       textAlign: "center",
-    },
-    budgetLayoutButton: {
-      backgroundColor: colors.primarySoft,
-      borderColor: colors.primary,
-      height: 38,
-      width: 38,
     },
     monthNavButton: {
       backgroundColor: "transparent",

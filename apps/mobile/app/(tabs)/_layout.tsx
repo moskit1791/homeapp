@@ -55,7 +55,9 @@ export default function TabsLayout() {
         ]}
       >
         <ActivityIndicator color={theme.colors.primary} />
-        <Text style={[styles.authRedirectText, { color: theme.colors.textMuted }]}>
+        <Text
+          style={[styles.authRedirectText, { color: theme.colors.textMuted }]}
+        >
           Wracam do logowania...
         </Text>
       </View>
@@ -116,7 +118,11 @@ export default function TabsLayout() {
         options={{
           title: "Dzisiaj",
           tabBarIcon: ({ focused }) => (
-            <TabGlyph focused={focused} icon={(color) => <CheckCircle2 color={color} size={20} />} label="Dzisiaj" />
+            <TabGlyph
+              focused={focused}
+              icon={(color) => <CheckCircle2 color={color} size={20} />}
+              label="Dzisiaj"
+            />
           ),
         }}
       />
@@ -126,7 +132,11 @@ export default function TabsLayout() {
           href: shouldShow(["calendar"]) ? undefined : null,
           title: "Kalendarz",
           tabBarIcon: ({ focused }) => (
-            <TabGlyph focused={focused} icon={(color) => <CalendarDays color={color} size={20} />} label="Kalendarz" />
+            <TabGlyph
+              focused={focused}
+              icon={(color) => <CalendarDays color={color} size={20} />}
+              label="Kalendarz"
+            />
           ),
         }}
       />
@@ -136,7 +146,11 @@ export default function TabsLayout() {
           href: shouldShow(["finances"]) ? undefined : null,
           title: "Finanse",
           tabBarIcon: ({ focused }) => (
-            <TabGlyph focused={focused} icon={(color) => <WalletCards color={color} size={20} />} label="Finanse" />
+            <TabGlyph
+              focused={focused}
+              icon={(color) => <WalletCards color={color} size={20} />}
+              label="Finanse"
+            />
           ),
         }}
       />
@@ -146,7 +160,11 @@ export default function TabsLayout() {
           href: shouldShow(["shopping", "meal_planner"]) ? undefined : null,
           title: "Jedzenie",
           tabBarIcon: ({ focused }) => (
-            <TabGlyph focused={focused} icon={(color) => <Utensils color={color} size={20} />} label="Jedzenie" />
+            <TabGlyph
+              focused={focused}
+              icon={(color) => <Utensils color={color} size={20} />}
+              label="Jedzenie"
+            />
           ),
         }}
       />
@@ -156,7 +174,11 @@ export default function TabsLayout() {
           href: shouldShow(["notes", "todo"]) ? undefined : null,
           title: "Zadania",
           tabBarIcon: ({ focused }) => (
-            <TabGlyph focused={focused} icon={(color) => <NotebookText color={color} size={20} />} label="Zadania" />
+            <TabGlyph
+              focused={focused}
+              icon={(color) => <NotebookText color={color} size={20} />}
+              label="Zadania"
+            />
           ),
         }}
       />
@@ -166,7 +188,11 @@ export default function TabsLayout() {
           href: null,
           title: "Zakupy",
           tabBarIcon: ({ focused }) => (
-            <TabGlyph focused={focused} icon={(color) => <ShoppingCart color={color} size={18} />} label="Zakupy" />
+            <TabGlyph
+              focused={focused}
+              icon={(color) => <ShoppingCart color={color} size={18} />}
+              label="Zakupy"
+            />
           ),
         }}
       />
@@ -176,7 +202,11 @@ export default function TabsLayout() {
           href: null,
           title: "Plan",
           tabBarIcon: ({ focused }) => (
-            <TabGlyph focused={focused} icon={(color) => <Utensils color={color} size={18} />} label="Plan" />
+            <TabGlyph
+              focused={focused}
+              icon={(color) => <Utensils color={color} size={18} />}
+              label="Plan"
+            />
           ),
         }}
       />
@@ -193,7 +223,11 @@ export default function TabsLayout() {
             : null,
           title: "Dom",
           tabBarIcon: ({ focused }) => (
-            <TabGlyph focused={focused} icon={(color) => <Home color={color} size={20} />} label="Dom" />
+            <TabGlyph
+              focused={focused}
+              icon={(color) => <Home color={color} size={20} />}
+              label="Dom"
+            />
           ),
         }}
       />
@@ -223,20 +257,29 @@ function TabGlyph({
 
   return (
     <View
-      style={styles.tabGlyph}
+      style={[
+        styles.tabGlyph,
+        focused && styles.tabGlyphFocused,
+        focused && {
+          backgroundColor: theme.colors.primarySoft,
+          borderColor: theme.colors.primary,
+        },
+      ]}
     >
       <View style={styles.tabIconSlot}>{icon(color)}</View>
-      <Text
-        numberOfLines={1}
-        style={[
-          styles.tabGlyphLabel,
-          {
-            color,
-          },
-        ]}
-      >
-        {label}
-      </Text>
+      {focused ? (
+        <Text
+          numberOfLines={1}
+          style={[
+            styles.tabGlyphLabel,
+            {
+              color,
+            },
+          ]}
+        >
+          {label}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -256,17 +299,22 @@ const styles = StyleSheet.create({
   },
   tabGlyph: {
     alignItems: "center",
-    alignSelf: "stretch",
+    alignSelf: "center",
     borderColor: "transparent",
-    borderRadius: 18,
+    borderRadius: 999,
+    borderWidth: 1,
     elevation: 0,
-    flex: 1,
-    gap: 2,
+    flexDirection: "row",
+    gap: 5,
+    height: 44,
     justifyContent: "center",
     marginHorizontal: 1,
-    minHeight: 56,
-    paddingHorizontal: 2,
-    paddingVertical: 5,
+    minWidth: 42,
+    paddingHorizontal: 8,
+  },
+  tabGlyphFocused: {
+    minWidth: 78,
+    paddingHorizontal: 10,
   },
   tabGlyphLabel: {
     fontSize: 11,

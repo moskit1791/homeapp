@@ -72,11 +72,11 @@ const defaultFontScale = 1;
 const defaultThemeMode: ThemeMode = "system";
 const fontScaleMin = 0.9;
 const fontScaleMax = 1.3;
-const darkCard = "#262D43";
-const darkCardMuted = "#30384E";
-const darkField = "#1E2436";
-const darkModalSurface = "#121622";
-const darkOverlay = "#20273B";
+const darkCard = "#1A202B";
+const darkCardMuted = "#232B38";
+const darkField = "#131922";
+const darkModalSurface = "#171C25";
+const darkOverlay = "#191F2A";
 
 type StyleSheetCreate = typeof StyleSheet.create;
 
@@ -297,9 +297,9 @@ const lightPalette: Palette = {
 
 const darkPaletteBase: typeof lightPalette = {
   ...colors,
-  background: "#0C1220",
-  backgroundBottom: "#10182A",
-  backgroundTop: "#1B2032",
+  background: "#0F141B",
+  backgroundBottom: "#0F141B",
+  backgroundTop: "#0F141B",
   backdrop: "rgba(6, 9, 18, 0.68)",
   border: "rgba(238, 244, 255, 0.2)",
   calendar: "#38BDF8",
@@ -331,8 +331,8 @@ const darkPaletteBase: typeof lightPalette = {
   surface: darkCard,
   surfaceMuted: darkCardMuted,
   text: "#FFFFFF",
-  textMuted: "#E2E7F3",
-  textSubtle: "#B8C2D8",
+  textMuted: "#D5DCE8",
+  textSubtle: "#A9B4C4",
   warning: "#FFD977",
   warningSoft: solidDarkSoft("#FFD977"),
 };
@@ -539,7 +539,8 @@ function buildLightPalette(accentKey: DarkAccentKey): typeof lightPalette {
 
   return {
     ...lightPalette,
-    backgroundBottom: mixLightBottom(accent.primary),
+    backgroundBottom: lightPalette.background,
+    backgroundTop: lightPalette.background,
     info: accent.primary,
     infoSoft: accent.primarySoft,
     primary: accent.primary,
@@ -555,7 +556,8 @@ function buildDarkPalette(accentKey: DarkAccentKey): typeof lightPalette {
 
   return {
     ...darkPaletteBase,
-    backgroundBottom: mixDarkBottom(accent.primary),
+    backgroundBottom: darkPaletteBase.background,
+    backgroundTop: darkPaletteBase.background,
     info: accent.primary,
     infoSoft: accent.primarySoft,
     primary: accent.primary,
@@ -612,31 +614,6 @@ function createDarkAccentPalette(accentValue: string): AccentPalette {
 
 function solidDarkSoft(color: string): string {
   return mixHex(color, darkCard, 0.44);
-}
-
-function mixLightBottom(accent: string): string {
-  const rgb = hexToRgb(accent);
-
-  if (!rgb) {
-    return lightPalette.backgroundBottom;
-  }
-
-  return `rgba(${rgb.red}, ${rgb.green}, ${rgb.blue}, 0.04)`;
-}
-
-function mixDarkBottom(accent: string): string {
-  const base = hexToRgb(darkPaletteBase.backgroundBottom);
-  const rgb = hexToRgb(accent);
-
-  if (!base || !rgb) {
-    return darkPaletteBase.backgroundBottom;
-  }
-
-  return rgbToHex({
-    blue: Math.round(base.blue * 0.9 + rgb.blue * 0.1),
-    green: Math.round(base.green * 0.9 + rgb.green * 0.1),
-    red: Math.round(base.red * 0.9 + rgb.red * 0.1),
-  });
 }
 
 function normalizeAccentValue(value: string | null | undefined): string | null {

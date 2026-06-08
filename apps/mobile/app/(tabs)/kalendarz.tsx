@@ -58,6 +58,7 @@ import {
   ChevronRight,
   ExternalLink,
   Google,
+  MoreHorizontal,
   Pencil,
   Plus,
   Trash2,
@@ -171,7 +172,9 @@ export default function KalendarzScreen() {
               eventDate,
               eventTime: normalizeEventTime(eventTime),
               locationName: normalizeOptionalText(eventLocationName),
-              locationUrl: normalizeLocationUrlInput(eventLocationUrl || eventLocationName),
+              locationUrl: normalizeLocationUrlInput(
+                eventLocationUrl || eventLocationName,
+              ),
               note: eventNote.trim() || null,
               reminderOffsetMinutes: reminderValueToMinutes(eventReminder),
               scopeType: editingEvent.scopeType,
@@ -184,7 +187,9 @@ export default function KalendarzScreen() {
               eventDate,
               eventTime: normalizeEventTime(eventTime),
               locationName: normalizeOptionalText(eventLocationName),
-              locationUrl: normalizeLocationUrlInput(eventLocationUrl || eventLocationName),
+              locationUrl: normalizeLocationUrlInput(
+                eventLocationUrl || eventLocationName,
+              ),
               note: eventNote.trim() || null,
               reminderOffsetMinutes: reminderValueToMinutes(eventReminder),
               scopeType: "household",
@@ -851,6 +856,7 @@ function AgendaTimeline({
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
+  const [actionsEventId, setActionsEventId] = useState<string | null>(null);
   const sortedEvents = [...events].sort(compareCalendarEvents);
 
   if (isLoading || error) {
@@ -884,6 +890,7 @@ function AgendaTimeline({
           event.note?.trim() || formatTimelineHour(event.eventTime);
         const locationUrl = getCalendarEventMapsUrl(event);
         const locationLabel = getCalendarEventLocationLabel(event);
+        const actionsOpen = actionsEventId === event.id;
 
         return (
           <View key={event.id} style={styles.timelineRow}>
@@ -946,13 +953,35 @@ function AgendaTimeline({
                   ) : null}
                   <View style={styles.agendaFooterSpacer} />
                   {canDelete ? (
-                    <IconButton
-                      accessibilityLabel="Usuń wydarzenie"
-                      disabled={deleting}
-                      onPress={() => onDelete(event)}
-                    >
-                      <Trash2 color={theme.colors.danger} size={15} />
-                    </IconButton>
+                    <>
+                      <IconButton
+                        accessibilityLabel={
+                          actionsOpen
+                            ? "Ukryj akcje wydarzenia"
+                            : "Pokaż akcje wydarzenia"
+                        }
+                        onPress={() =>
+                          setActionsEventId(actionsOpen ? null : event.id)
+                        }
+                      >
+                        <MoreHorizontal
+                          color={theme.colors.textMuted}
+                          size={15}
+                        />
+                      </IconButton>
+                      {actionsOpen ? (
+                        <IconButton
+                          accessibilityLabel="Usuń wydarzenie"
+                          disabled={deleting}
+                          onPress={() => {
+                            setActionsEventId(null);
+                            onDelete(event);
+                          }}
+                        >
+                          <Trash2 color={theme.colors.danger} size={15} />
+                        </IconButton>
+                      ) : null}
+                    </>
                   ) : null}
                 </View>
               </View>
@@ -985,6 +1014,7 @@ function UpcomingEvents({
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
+  const [actionsEventId, setActionsEventId] = useState<string | null>(null);
 
   if (query.isLoading || query.error || events.length === 0) {
     return (
@@ -1010,6 +1040,7 @@ function UpcomingEvents({
         ]
           .filter(Boolean)
           .join(" · ");
+        const actionsOpen = actionsEventId === event.id;
 
         return (
           <View key={event.id} style={styles.eventPill}>
@@ -1017,7 +1048,12 @@ function UpcomingEvents({
               style={[styles.eventSourceDot, { backgroundColor: accent.color }]}
             />
             <CalendarDays color={accent.color} size={16} />
-            <View style={styles.eventPillText}>
+            <Pressable
+              accessibilityRole={canUpdate ? "button" : undefined}
+              disabled={!canUpdate}
+              onPress={() => onEdit(event)}
+              style={styles.eventPillText}
+            >
               <Text numberOfLines={1} style={styles.eventTitle}>
                 {event.title}
               </Text>
@@ -1035,22 +1071,29 @@ function UpcomingEvents({
                   </Text>
                 </Pressable>
               ) : null}
-            </View>
-            {canUpdate || canDelete ? (
+            </Pressable>
+            {canDelete ? (
               <View style={styles.eventPillActions}>
-                {canUpdate ? (
-                  <IconButton
-                    accessibilityLabel="Edytuj wydarzenie"
-                    onPress={() => onEdit(event)}
-                  >
-                    <Pencil color={theme.colors.textMuted} size={15} />
-                  </IconButton>
-                ) : null}
-                {canDelete ? (
+                <IconButton
+                  accessibilityLabel={
+                    actionsOpen
+                      ? "Ukryj akcje wydarzenia"
+                      : "Pokaż akcje wydarzenia"
+                  }
+                  onPress={() =>
+                    setActionsEventId(actionsOpen ? null : event.id)
+                  }
+                >
+                  <MoreHorizontal color={theme.colors.textMuted} size={15} />
+                </IconButton>
+                {actionsOpen ? (
                   <IconButton
                     accessibilityLabel="Usuń wydarzenie"
                     disabled={deleting}
-                    onPress={() => onDelete(event)}
+                    onPress={() => {
+                      setActionsEventId(null);
+                      onDelete(event);
+                    }}
                   >
                     <Trash2 color={theme.colors.danger} size={15} />
                   </IconButton>
