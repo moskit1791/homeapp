@@ -72,7 +72,7 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: theme.colors.primary,
+        tabBarActiveTintColor: theme.colors.finance,
         tabBarShowLabel: false,
         tabBarInactiveTintColor: theme.colors.textMuted,
         tabBarHideOnKeyboard: true,
@@ -120,8 +120,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <TabGlyph
               focused={focused}
-              icon={(color) => <CheckCircle2 color={color} size={20} />}
-              label="Dzisiaj"
+              icon={(color) => <CheckCircle2 color={color} size={27} />}
             />
           ),
         }}
@@ -134,8 +133,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <TabGlyph
               focused={focused}
-              icon={(color) => <CalendarDays color={color} size={20} />}
-              label="Kalendarz"
+              icon={(color) => <CalendarDays color={color} size={27} />}
             />
           ),
         }}
@@ -148,8 +146,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <TabGlyph
               focused={focused}
-              icon={(color) => <WalletCards color={color} size={20} />}
-              label="Finanse"
+              icon={(color) => <WalletCards color={color} size={27} />}
             />
           ),
         }}
@@ -162,8 +159,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <TabGlyph
               focused={focused}
-              icon={(color) => <Utensils color={color} size={20} />}
-              label="Jedzenie"
+              icon={(color) => <Utensils color={color} size={27} />}
             />
           ),
         }}
@@ -176,8 +172,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <TabGlyph
               focused={focused}
-              icon={(color) => <NotebookText color={color} size={20} />}
-              label="Zadania"
+              icon={(color) => <NotebookText color={color} size={27} />}
             />
           ),
         }}
@@ -190,8 +185,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <TabGlyph
               focused={focused}
-              icon={(color) => <ShoppingCart color={color} size={18} />}
-              label="Zakupy"
+              icon={(color) => <ShoppingCart color={color} size={27} />}
             />
           ),
         }}
@@ -204,8 +198,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <TabGlyph
               focused={focused}
-              icon={(color) => <Utensils color={color} size={18} />}
-              label="Plan"
+              icon={(color) => <Utensils color={color} size={27} />}
             />
           ),
         }}
@@ -225,8 +218,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <TabGlyph
               focused={focused}
-              icon={(color) => <Home color={color} size={20} />}
-              label="Dom"
+              icon={(color) => <Home color={color} size={27} />}
             />
           ),
         }}
@@ -236,7 +228,7 @@ export default function TabsLayout() {
         options={{
           href: null,
           title: "Więcej",
-          tabBarIcon: ({ color }) => <MoreHorizontal color={color} size={18} />,
+          tabBarIcon: ({ color }) => <MoreHorizontal color={color} size={27} />,
         }}
       />
     </Tabs>
@@ -246,40 +238,16 @@ export default function TabsLayout() {
 function TabGlyph({
   focused,
   icon,
-  label,
 }: {
   focused: boolean;
   icon: (color: string) => ReactNode;
-  label: string;
 }) {
   const theme = useAppTheme();
-  const color = focused ? theme.colors.primary : theme.colors.textMuted;
+  const color = focused ? theme.colors.finance : theme.colors.textMuted;
 
   return (
-    <View
-      style={[
-        styles.tabGlyph,
-        focused && styles.tabGlyphFocused,
-        focused && {
-          backgroundColor: theme.colors.primarySoft,
-          borderColor: theme.colors.primary,
-        },
-      ]}
-    >
+    <View style={styles.tabGlyph}>
       <View style={styles.tabIconSlot}>{icon(color)}</View>
-      {focused ? (
-        <Text
-          numberOfLines={1}
-          style={[
-            styles.tabGlyphLabel,
-            {
-              color,
-            },
-          ]}
-        >
-          {label}
-        </Text>
-      ) : null}
     </View>
   );
 }
@@ -299,34 +267,20 @@ const styles = StyleSheet.create({
   },
   tabGlyph: {
     alignItems: "center",
-    alignSelf: "center",
+    alignSelf: "stretch",
     borderColor: "transparent",
-    borderRadius: 999,
-    borderWidth: 1,
+    borderRadius: 18,
     elevation: 0,
-    flexDirection: "row",
-    gap: 5,
-    height: 44,
+    flex: 1,
     justifyContent: "center",
     marginHorizontal: 1,
-    minWidth: 42,
-    paddingHorizontal: 8,
-  },
-  tabGlyphFocused: {
-    minWidth: 78,
-    paddingHorizontal: 10,
-  },
-  tabGlyphLabel: {
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 0,
-    lineHeight: 14,
-    maxWidth: "100%",
-    textAlign: "center",
+    minHeight: 56,
+    paddingHorizontal: 2,
+    paddingVertical: 5,
   },
   tabIconSlot: {
     alignItems: "center",
-    height: 22,
+    height: 34,
     justifyContent: "center",
   },
 });

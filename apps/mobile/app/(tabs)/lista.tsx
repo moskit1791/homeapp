@@ -78,7 +78,6 @@ import {
   Check,
   ChevronRight,
   ExternalLink,
-  MoreHorizontal,
   Pencil,
   Plus,
   Sparkles,
@@ -345,7 +344,9 @@ export default function ListaScreen() {
           resetRequest={mealViewResetRequest}
         />
       ) : null}
-      {activeSegment === "pantry" ? <PantryBoard /> : null}
+      {activeSegment === "pantry" ? (
+        <PantryBoard />
+      ) : null}
     </AppScreen>
   );
 }
@@ -1119,9 +1120,7 @@ function MealsBoard({
         }
       }
 
-      const hasUserMessage = aiMessages.some(
-        (message) => message.role === "user",
-      );
+      const hasUserMessage = aiMessages.some((message) => message.role === "user");
       const finalizeResponse = hasUserMessage
         ? await finalizeMealPlanWithAi(
             {
@@ -1137,7 +1136,9 @@ function MealsBoard({
           };
 
       if (finalizeResponse.entries.length === 0) {
-        throw new Error("AI nie przygotowalo planu do zapisu.");
+        throw new Error(
+          "AI nie przygotowalo planu do zapisu.",
+        );
       }
 
       const targetPlan = await getOrCreateMealPlanForDate({
@@ -1830,11 +1831,7 @@ function ShoppingGroupCard({
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
-  const illustration = getShoppingGroupIllustration(
-    group.category,
-    group.title,
-  );
-  const [actionItemId, setActionItemId] = useState<string | null>(null);
+  const illustration = getShoppingGroupIllustration(group.category, group.title);
 
   return (
     <View style={styles.shoppingGroup}>
@@ -1846,101 +1843,58 @@ function ShoppingGroupCard({
       </View>
       <View style={styles.groupBody}>
         <View style={styles.groupItems}>
-          {group.items.map((item) => {
-            const actionsOpen = actionItemId === item.id;
-
-            return (
-              <View
-                key={item.id}
-                style={[styles.itemRow, styles.shoppingItemRow]}
+          {group.items.map((item) => (
+            <View key={item.id} style={[styles.itemRow, styles.shoppingItemRow]}>
+              <Pressable
+                disabled={!canUpdate || isUpdating(item.id)}
+                onPress={() => onCheck(item)}
+                style={[styles.checkBox, item.isChecked && styles.checkBoxDone]}
               >
-                <Pressable
-                  disabled={!canUpdate || isUpdating(item.id)}
-                  onPress={() => onCheck(item)}
-                  style={[
-                    styles.checkBox,
-                    item.isChecked && styles.checkBoxDone,
-                  ]}
+                {item.isChecked ? (
+                  <Check color={theme.colors.card} size={14} />
+                ) : null}
+              </Pressable>
+              <Pressable
+                disabled={!canUpdate || isUpdating(item.id)}
+                onPress={() => onCheck(item)}
+                style={styles.itemText}
+              >
+                <Text
+                  style={[styles.itemName, styles.shoppingItemName, item.isChecked && styles.shoppingItemDone]}
                 >
-                  {item.isChecked ? (
-                    <Check color={theme.colors.card} size={14} />
-                  ) : null}
-                </Pressable>
-                <Pressable
-                  disabled={!canUpdate || isUpdating(item.id)}
-                  onPress={() => onCheck(item)}
-                  style={styles.itemText}
-                >
-                  <Text
-                    style={[
-                      styles.itemName,
-                      styles.shoppingItemName,
-                      item.isChecked && styles.shoppingItemDone,
-                    ]}
-                  >
-                    {item.name}
+                  {item.name}
+                </Text>
+                {item.quantity ? (
+                  <Text numberOfLines={1} style={[styles.itemMeta, styles.shoppingItemMeta]}>
+                    {item.quantity}
                   </Text>
-                  {item.quantity ? (
-                    <Text
-                      numberOfLines={1}
-                      style={[styles.itemMeta, styles.shoppingItemMeta]}
-                    >
-                      {item.quantity}
-                    </Text>
-                  ) : null}
-                </Pressable>
-                {listType === "long_term" && canUpdate ? (
-                  <View style={styles.itemMoveActions}>
-                    <ActionButton
-                      disabled={moving}
-                      onPress={() => onMove(item, "daily")}
-                      size="small"
-                      title="Dziś"
-                      variant="secondary"
-                    />
-                    <ActionButton
-                      disabled={moving}
-                      onPress={() => onMove(item, "tomorrow")}
-                      size="small"
-                      title="Jutro"
-                      variant="secondary"
-                    />
-                  </View>
                 ) : null}
-                {canDelete ? (
-                  <View style={styles.itemMenuActions}>
-                    <IconButton
-                      accessibilityLabel={
-                        actionsOpen
-                          ? "Ukryj akcje produktu"
-                          : "Pokaż akcje produktu"
-                      }
-                      onPress={() =>
-                        setActionItemId(actionsOpen ? null : item.id)
-                      }
-                    >
-                      <MoreHorizontal
-                        color={theme.colors.textMuted}
-                        size={16}
-                      />
-                    </IconButton>
-                    {actionsOpen ? (
-                      <IconButton
-                        accessibilityLabel="Usuń produkt"
-                        disabled={deleting}
-                        onPress={() => {
-                          setActionItemId(null);
-                          onDelete(item);
-                        }}
-                      >
-                        <Trash2 color={theme.colors.danger} size={16} />
-                      </IconButton>
-                    ) : null}
-                  </View>
-                ) : null}
-              </View>
-            );
-          })}
+              </Pressable>
+              {listType === "long_term" && canUpdate ? (
+                <View style={styles.itemMoveActions}>
+                  <ActionButton
+                    disabled={moving}
+                    onPress={() => onMove(item, "daily")}
+                    size="small"
+                    title="Dziś"
+                    variant="secondary"
+                  />
+                  <ActionButton
+                    disabled={moving}
+                    onPress={() => onMove(item, "tomorrow")}
+                    size="small"
+                    title="Jutro"
+                    variant="secondary"
+                  />
+                </View>
+              ) : null}
+              {canDelete ? (
+                <IconButton disabled={deleting} onPress={() => onDelete(item)}>
+                  <Trash2 color={theme.colors.danger} size={16} />
+                </IconButton>
+              ) : null}
+            </View>
+          ))}
         </View>
         <View style={styles.groupIllustrationFrame}>
           <Image
@@ -2054,17 +2008,17 @@ const legacyShoppingCategoryMap: Record<string, ShoppingCategory> = {
   "Grill i ogrod": "Dom i ogród",
   "Mięso i ryby": "Mięso i wędliny",
   "Mieso i wedliny": "Mięso i wędliny",
-  Nabial: "Nabiał i jaja",
+  "Nabial": "Nabiał i jaja",
   "Nabiał i jajka": "Nabiał i jaja",
-  Napoje: "Woda i napoje",
-  Owoce: "Owoce, warzywa i zioła",
+  "Napoje": "Woda i napoje",
+  "Owoce": "Owoce, warzywa i zioła",
   "Owoce i warzywa": "Owoce, warzywa i zioła",
-  Pozostałe: "Inne",
+  "Pozostałe": "Inne",
   "Produkty suche i spizarnia": "Sypkie",
   "Przekaski i slodycze": "Słodycze i przekąski",
   "Sosy i dodatki": "Przyprawy, sosy i oleje",
-  Spiżarnia: "Sypkie",
-  Warzywa: "Owoce, warzywa i zioła",
+  "Spiżarnia": "Sypkie",
+  "Warzywa": "Owoce, warzywa i zioła",
 };
 
 function groupShoppingItems(items: ShoppingItem[]): ShoppingGroup[] {
@@ -2155,9 +2109,7 @@ function resolveShoppingCategory(item: ShoppingItem): ShoppingCategory {
     return item.category;
   }
 
-  return item.category
-    ? (legacyShoppingCategoryMap[item.category] ?? "Inne")
-    : "Inne";
+  return item.category ? (legacyShoppingCategoryMap[item.category] ?? "Inne") : "Inne";
 }
 
 function mealDraftKey(
@@ -2265,9 +2217,7 @@ function buildMarkedMealWeekDates(
         count: Number(count),
         weekday: Number(weekday),
       }))
-      .filter(
-        ({ count, weekday }) => count > 0 && weekday >= 1 && weekday <= 7,
-      );
+      .filter(({ count, weekday }) => count > 0 && weekday >= 1 && weekday <= 7);
 
     if (plannedWeekdays.length === 0 && week.entriesCount) {
       marked[week.weekStartDate] = {
@@ -2512,7 +2462,6 @@ function PantryBoard() {
   const queryClient = useQueryClient();
   const permission = useModulePermission("shopping");
   const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
   const accessToken = session?.accessToken;
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState("");
@@ -2535,14 +2484,7 @@ function PantryBoard() {
   const createMutation = useMutation({
     mutationFn: (data: { name: string; quantity: string }) =>
       createShoppingItem("pantry", data, { accessToken }),
-    onSuccess: (createdItem) => {
-      queryClient.setQueryData<ShoppingItem[]>(
-        pantryQueryKey,
-        (current = []) => [
-          createdItem,
-          ...current.filter((item) => item.id !== createdItem.id),
-        ],
-      );
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: pantryQueryKey });
       setName("");
       setQuantity("");
@@ -2553,43 +2495,16 @@ function PantryBoard() {
   const updateMutation = useMutation({
     mutationFn: (data: { id: string; quantity: string }) =>
       updateShoppingItem(data.id, { quantity: data.quantity }, { accessToken }),
-    onMutate: async (data) => {
-      await queryClient.cancelQueries({ queryKey: pantryQueryKey });
-      const previousItems =
-        queryClient.getQueryData<ShoppingItem[]>(pantryQueryKey);
-
-      queryClient.setQueryData<ShoppingItem[]>(pantryQueryKey, (current = []) =>
-        current.map((item) =>
-          item.id === data.id ? { ...item, quantity: data.quantity } : item,
-        ),
-      );
-
-      return { previousItems };
-    },
-    onError: (_error, _data, context) => {
-      if (context?.previousItems) {
-        queryClient.setQueryData(pantryQueryKey, context.previousItems);
-      }
-    },
-    onSuccess: (updatedItem) => {
-      queryClient.setQueryData<ShoppingItem[]>(pantryQueryKey, (current = []) =>
-        current.map((item) =>
-          item.id === updatedItem.id ? updatedItem : item,
-        ),
-      );
-      setEditItem(null);
-    },
-    onSettled: () => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: pantryQueryKey });
+      setEditItem(null);
     },
   });
 
   const isZeroQuantity = useCallback((qty: string | null | undefined) => {
     if (!qty) return false;
     const str = qty.trim().toLowerCase();
-    return (
-      str === "0" || str.startsWith("0 ") || str === "brak" || str === "0szt"
-    );
+    return str === "0" || str.startsWith("0 ") || str === "brak" || str === "0szt";
   }, []);
 
   const groupedItems = useMemo(() => {
@@ -2640,36 +2555,14 @@ function PantryBoard() {
   }
 
   return (
-    <View style={styles.pantryBoard}>
+    <View style={{ flex: 1 }}>
       <QueryState
-        emptyText="Spiżarnia jest pusta. Dodaj produkt, żeby mieć zapas pod ręką."
         error={pantryQuery.error}
-        isEmpty={
-          !pantryQuery.isLoading && (pantryQuery.data ?? []).length === 0
-        }
+        isEmpty={!pantryQuery.isLoading && (pantryQuery.data ?? []).length === 0}
         isLoading={pantryQuery.isLoading}
       />
 
-      <View style={styles.listHeader}>
-        <View>
-          <Text style={styles.sectionTitle}>Spiżarnia</Text>
-          <Text style={styles.sectionMeta}>
-            {(pantryQuery.data ?? []).length} produktów w domu
-          </Text>
-        </View>
-        {permission.canCreate ? (
-          <Pressable
-            accessibilityLabel="Dodaj produkt do spiżarni"
-            accessibilityRole="button"
-            onPress={() => setModalVisible(true)}
-            style={styles.fabInline}
-          >
-            <Plus color={theme.colors.card} size={22} />
-          </Pressable>
-        ) : null}
-      </View>
-
-      <View style={styles.groupList}>
+      <View style={{ gap: 16, padding: 16, paddingBottom: 100 }}>
         {groupedItems.map((group) => (
           <PantryGroupCard
             category={group.category}
@@ -2684,13 +2577,25 @@ function PantryBoard() {
         ))}
       </View>
 
+      {permission.canCreate ? (
+        <View style={{ bottom: 24, position: "absolute", right: 24 }}>
+          <IconButton
+            accessibilityLabel="Dodaj produkt do spiżarni"
+            onPress={() => setModalVisible(true)}
+            style={{ backgroundColor: theme.colors.primary, borderRadius: 32, elevation: 6, height: 64, width: 64, alignItems: "center", justifyContent: "center" }}
+          >
+            <Plus color="#FFFFFF" size={32} />
+          </IconButton>
+        </View>
+      ) : null}
+
       <FormModal
         onClose={() => setModalVisible(false)}
         footer={
-          <View style={styles.modalFooter}>
+          <View style={{ flexDirection: "row", gap: 12 }}>
             <ActionButton
               onPress={() => setModalVisible(false)}
-              style={styles.modalFooterButton}
+              style={{ flex: 1 }}
               title="Anuluj"
               variant="secondary"
             />
@@ -2701,7 +2606,7 @@ function PantryBoard() {
                   createMutation.mutate({ name, quantity });
                 }
               }}
-              style={styles.modalFooterButton}
+              style={{ flex: 1 }}
               title="Zapisz"
               variant="primary"
             />
@@ -2710,7 +2615,7 @@ function PantryBoard() {
         title="Dodaj do spiżarni"
         visible={modalVisible}
       >
-        <Text style={styles.inputLabel}>Co masz w spiżarni?</Text>
+        <Text style={{ color: theme.colors.text, fontSize: 14, fontWeight: "800", marginBottom: 8 }}>Co masz w spiżarni?</Text>
         <TextInput
           autoFocus
           onChangeText={setName}
@@ -2721,35 +2626,31 @@ function PantryBoard() {
           }}
           placeholder="np. Mąka pszenna"
           placeholderTextColor={theme.colors.textMuted}
-          style={styles.input}
+          style={{ backgroundColor: theme.colors.card, borderColor: theme.colors.border, borderRadius: 8, borderWidth: 1, color: theme.colors.text, fontSize: 16, minHeight: 48, paddingHorizontal: 16 }}
           value={name}
         />
         {suggestedCategory ? (
-          <Text style={styles.productCategoryHint}>
+          <Text style={{ color: theme.colors.textMuted, fontSize: 12, marginTop: 4 }}>
             Kategoria:{" "}
             {getShoppingCategoryMeta(suggestedCategory).title.toLowerCase()}
           </Text>
         ) : null}
 
         {productSuggestions.length > 0 ? (
-          <View style={styles.productSuggestions}>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
             {productSuggestions.map((suggestion) => (
               <Pressable
                 key={suggestion.name}
                 onPress={() => setName(suggestion.name)}
-                style={styles.productSuggestionChip}
+                style={{ backgroundColor: theme.colors.cardMuted, borderColor: theme.colors.border, borderRadius: 16, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 6 }}
               >
-                <Text style={styles.productSuggestionName}>
-                  {suggestion.name}
-                </Text>
+                <Text style={{ color: theme.colors.text, fontSize: 13, fontWeight: "700" }}>{suggestion.name}</Text>
               </Pressable>
             ))}
           </View>
         ) : null}
 
-        <Text style={styles.pantryInputLabel}>
-          Ile tego masz? (opcjonalnie)
-        </Text>
+        <Text style={{ color: theme.colors.text, fontSize: 14, fontWeight: "800", marginBottom: 8, marginTop: 24 }}>Ile tego masz? (opcjonalnie)</Text>
         <TextInput
           onChangeText={setQuantity}
           onSubmitEditing={() => {
@@ -2759,7 +2660,7 @@ function PantryBoard() {
           }}
           placeholder="np. 2 kg, 3 szt."
           placeholderTextColor={theme.colors.textMuted}
-          style={styles.input}
+          style={{ backgroundColor: theme.colors.card, borderColor: theme.colors.border, borderRadius: 8, borderWidth: 1, color: theme.colors.text, fontSize: 16, minHeight: 48, paddingHorizontal: 16 }}
           value={quantity}
         />
       </FormModal>
@@ -2767,10 +2668,10 @@ function PantryBoard() {
       <FormModal
         onClose={() => setEditItem(null)}
         footer={
-          <View style={styles.modalFooter}>
+          <View style={{ flexDirection: "row", gap: 12 }}>
             <ActionButton
               onPress={() => setEditItem(null)}
-              style={styles.modalFooterButton}
+              style={{ flex: 1 }}
               title="Anuluj"
               variant="secondary"
             />
@@ -2778,13 +2679,10 @@ function PantryBoard() {
               disabled={updateMutation.isPending}
               onPress={() => {
                 if (editItem) {
-                  updateMutation.mutate({
-                    id: editItem.id,
-                    quantity: editQuantity,
-                  });
+                  updateMutation.mutate({ id: editItem.id, quantity: editQuantity });
                 }
               }}
-              style={styles.modalFooterButton}
+              style={{ flex: 1 }}
               title="Zapisz"
               variant="primary"
             />
@@ -2793,29 +2691,22 @@ function PantryBoard() {
         title="Edytuj produkt"
         visible={!!editItem}
       >
-        <Text style={styles.inputLabel}>Ilość w spiżarni</Text>
+        <Text style={{ color: theme.colors.text, fontSize: 14, fontWeight: "800", marginBottom: 8 }}>Ilość w spiżarni</Text>
         <TextInput
           autoFocus
           onChangeText={setEditQuantity}
           onSubmitEditing={() => {
             if (editItem) {
-              updateMutation.mutate({
-                id: editItem.id,
-                quantity: editQuantity,
-              });
+              updateMutation.mutate({ id: editItem.id, quantity: editQuantity });
             }
           }}
           placeholder="np. 0, 2 kg, brak"
           placeholderTextColor={theme.colors.textMuted}
-          style={styles.input}
+          style={{ backgroundColor: theme.colors.card, borderColor: theme.colors.border, borderRadius: 8, borderWidth: 1, color: theme.colors.text, fontSize: 16, minHeight: 48, paddingHorizontal: 16 }}
           value={editQuantity}
         />
-        <View style={styles.pantryZeroAction}>
-          <ActionButton
-            onPress={() => setEditQuantity("0")}
-            title="Ustaw ilość na 0"
-            variant="secondary"
-          />
+        <View style={{ marginTop: 24 }}>
+          <ActionButton onPress={() => setEditQuantity("0")} title="Ustaw ilość na 0" variant="secondary" />
         </View>
       </FormModal>
     </View>
@@ -2839,39 +2730,34 @@ function PantryGroupCard({
   const isZeroQuantity = (qty: string | null | undefined) => {
     if (!qty) return false;
     const str = qty.trim().toLowerCase();
-    return (
-      str === "0" || str.startsWith("0 ") || str === "brak" || str === "0szt"
-    );
+    return str === "0" || str.startsWith("0 ") || str === "brak" || str === "0szt";
   };
 
   return (
     <View style={styles.shoppingGroup}>
-      <View style={styles.pantryGroupHeader}>
-        <View style={styles.pantryGroupIcon}>
+      <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
+        <View style={{ alignItems: "center", backgroundColor: theme.colors.cardMuted, borderRadius: 12, height: 48, justifyContent: "center", width: 48 }}>
           <Image
             resizeMode="contain"
             source={getShoppingGroupIllustration(category, meta.title)}
-            style={styles.pantryGroupImage}
+            style={{ bottom: -8, height: 58, position: "absolute", right: -8, width: 58 }}
           />
         </View>
         <Text style={styles.shoppingGroupTitle}>{meta.title}</Text>
       </View>
-      <View style={styles.pantryItems}>
+      <View style={{ gap: 0, marginTop: 12 }}>
         {items.map((item, index) => (
           <Pressable
             key={item.id}
             onPress={() => onItemPress(item)}
             style={[
               styles.shoppingItemRow,
-              styles.pantryItemRow,
-              index < items.length - 1 && {
-                borderBottomColor: theme.colors.border,
-                borderBottomWidth: 1,
-              },
-              isZeroQuantity(item.quantity) && { opacity: 0.5 },
+              { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+              index < items.length - 1 && { borderBottomColor: theme.colors.border, borderBottomWidth: 1 },
+              isZeroQuantity(item.quantity) && { opacity: 0.5 }
             ]}
           >
-            <View style={styles.pantryItemText}>
+            <View style={{ flex: 1, gap: 2, paddingVertical: 12 }}>
               <Text style={styles.shoppingItemName}>{item.name}</Text>
               {item.quantity ? (
                 <Text style={styles.shoppingItemMeta}>{item.quantity}</Text>
@@ -2886,7 +2772,7 @@ function PantryGroupCard({
 }
 
 function createStyles(colors: AppPalette) {
-  const isDark = colors.background === "#0F141B";
+  const isDark = colors.background === "#0C1220";
   const shoppingCardBackground = isDark ? colors.card : "#FFFFFF";
   const shoppingCardBorder = isDark ? colors.border : "#E8DDCE";
   const shoppingHeaderBackground = isDark ? colors.cardMuted : "#F5F0E6";
@@ -3219,12 +3105,6 @@ function createStyles(colors: AppPalette) {
       justifyContent: "center",
       maxWidth: 76,
     },
-    itemMenuActions: {
-      alignItems: "center",
-      flexDirection: "row",
-      flexShrink: 0,
-      gap: spacing.xs,
-    },
     itemText: {
       flex: 1,
       gap: 2,
@@ -3418,58 +3298,6 @@ function createStyles(colors: AppPalette) {
     },
     modalFooterButton: {
       flex: 1,
-    },
-    pantryBoard: {
-      gap: spacing.sm,
-    },
-    pantryGroupHeader: {
-      alignItems: "center",
-      flexDirection: "row",
-      gap: spacing.sm,
-    },
-    pantryGroupIcon: {
-      alignItems: "center",
-      backgroundColor: colors.cardMuted,
-      borderColor: colors.border,
-      borderRadius: radii.control,
-      borderWidth: 1,
-      height: 48,
-      justifyContent: "center",
-      overflow: "hidden",
-      width: 48,
-    },
-    pantryGroupImage: {
-      bottom: -8,
-      height: 58,
-      position: "absolute",
-      right: -8,
-      width: 58,
-    },
-    pantryInputLabel: {
-      color: colors.text,
-      fontSize: 12,
-      fontWeight: "900",
-      letterSpacing: 0,
-      marginBottom: -spacing.xs,
-      marginTop: spacing.md,
-    },
-    pantryItemRow: {
-      alignItems: "center",
-      flexDirection: "row",
-      justifyContent: "space-between",
-    },
-    pantryItems: {
-      gap: 0,
-      marginTop: spacing.xs,
-    },
-    pantryItemText: {
-      flex: 1,
-      gap: 2,
-      minWidth: 0,
-      paddingVertical: spacing.sm,
-    },
-    pantryZeroAction: {
-      marginTop: spacing.md,
     },
     pressed: {
       opacity: 0.78,

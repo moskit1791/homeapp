@@ -1,9 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+﻿import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import type { ReactNode, RefObject } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import {
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -18,21 +19,26 @@ import {
   Car,
   CartPlus,
   Check,
+  CheckCircle2,
+  CalendarDays,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
+  Filter,
   Gamepad2,
   Gift,
   Hammer,
   Heart,
   Home,
   Minus,
-  Pencil,
+  MoreHorizontal,
   PiggyBank,
   Plus,
   ReceiptText,
   ShoppingCart,
   Smartphone,
+  ShieldCheck,
   Trash2,
   Users,
   Utensils,
@@ -53,6 +59,7 @@ import {
   getBudgetMonth,
   getFinanceSummary,
   getMyHousehold,
+  listHouseholdMembers,
   listBudgetCategories,
   listBudgetMonths,
   listFinanceDebts,
@@ -66,6 +73,7 @@ import {
   type FinanceSavingsAccount,
   type FinanceSavingsDirection,
   type FinanceTotalSummary,
+  type HouseholdMember,
   type PersonFinanceSummary,
   upsertIncome,
 } from "../../src/api";
@@ -107,6 +115,8 @@ type FinanceFormValues = {
   savingsAmount: string;
   savingsName: string;
   savingsNote: string;
+  savingsTargetAmount: string;
+  savingsTargetDate: string;
   savingsTransactionAmount: string;
   savingsTransactionNote: string;
 };
@@ -136,9 +146,9 @@ type FinanceModal =
   | "debt"
   | "savingsAccount"
   | "savingsTransaction"
+  | "savingsDetails"
   | null;
 type FinanceView = "budget" | "debts" | "savings";
-type FinanceBudgetLayout = "table" | "cards";
 type FinanceSortKey =
   | "category"
   | "owner"
@@ -157,8 +167,26 @@ type FinanceFilters = {
   sortDirection: FinanceSortDirection;
 };
 
+type SavingsGoalView = FinanceSavingsAccount & {
+  currentAmountNumber: number;
+  isAchieved: boolean;
+  owner: HouseholdMember | null;
+  progressRatio: number;
+  targetAmountNumber: number | null;
+};
+
+type SavingsGoalGroup = {
+  accounts: SavingsGoalView[];
+  achievedCount: number;
+  currentTotal: number;
+  id: string;
+  label: string;
+  member: HouseholdMember | null;
+  targetTotal: number;
+  totalCount: number;
+};
+
 const financeFilterStorageKey = "homeapp.finance.filters.v1";
-const financeBudgetLayoutStorageKey = "homeapp.finance.budget-layout.v1";
 
 const defaultFinanceFilters: FinanceFilters = {
   categoryId: "",
@@ -185,7 +213,6 @@ export default function FinanseScreen() {
   const router = useRouter();
   const theme = useAppTheme();
   const styles = useMemo(() => createStyles(theme.colors), [theme.colors]);
-  const screenScrollRef = useRef<ScrollView>(null);
   const { canCreate, canDelete, canRead, canUpdate, permissionsQuery } =
     useModulePermission("finances");
   const accessToken = session?.accessToken;
@@ -204,6 +231,8 @@ export default function FinanseScreen() {
       savingsAmount: "",
       savingsName: "",
       savingsNote: "",
+      savingsTargetAmount: "",
+      savingsTargetDate: "",
       savingsTransactionAmount: "",
       savingsTransactionNote: "",
     },
@@ -222,6 +251,8 @@ export default function FinanseScreen() {
   const savingsAmount = watch("savingsAmount");
   const savingsName = watch("savingsName");
   const savingsNote = watch("savingsNote");
+  const savingsTargetAmount = watch("savingsTargetAmount");
+  const savingsTargetDate = watch("savingsTargetDate");
   const savingsTransactionAmount = watch("savingsTransactionAmount");
   const savingsTransactionNote = watch("savingsTransactionNote");
   const [selectedIncomeMemberId, setSelectedIncomeMemberId] = useState("");
@@ -231,6 +262,7 @@ export default function FinanseScreen() {
   const [selectedExpenseCategoryId, setSelectedExpenseCategoryId] =
     useState("");
   const [selectedExpenseItemId, setSelectedExpenseItemId] = useState("");
+  const [selectedSavingsOwnerId, setSelectedSavingsOwnerId] = useState("");
   const [expenseQuickItemId, setExpenseQuickItemId] = useState<string | null>(
     null,
   );
@@ -248,6 +280,7 @@ export default function FinanseScreen() {
   const [editingBudgetItem, setEditingBudgetItem] =
     useState<BudgetItemWithCategory | null>(null);
   const [editingDebt, setEditingDebt] = useState<FinanceDebt | null>(null);
+  const [debtIsSettled, setDebtIsSettled] = useState(false);
   const [selectedSavingsAccount, setSelectedSavingsAccount] =
     useState<FinanceSavingsAccount | null>(null);
   const [savingsDirection, setSavingsDirection] =
@@ -256,9 +289,6 @@ export default function FinanseScreen() {
   const [generateAmountInputs, setGenerateAmountInputs] = useState<
     Record<string, string>
   >({});
-  const [budgetLayout, setBudgetLayout] =
-    useState<FinanceBudgetLayout>("table");
-  const [budgetLayoutLoaded, setBudgetLayoutLoaded] = useState(false);
   const [financeFilters, setFinanceFilters] = useState<FinanceFilters>(
     defaultFinanceFilters,
   );
@@ -303,6 +333,11 @@ export default function FinanseScreen() {
     enabled: canRead && Boolean(accessToken),
     queryFn: () => listFinanceSavings({ accessToken }),
     queryKey: [...queryKeys.finances, "savings"],
+  });
+  const householdMembersQuery = useQuery({
+    enabled: canRead && Boolean(accessToken),
+    queryFn: () => listHouseholdMembers({ accessToken }),
+    queryKey: [...queryKeys.household, "members"],
   });
   const householdQuery = useQuery({
     enabled: Boolean(accessToken),
@@ -353,6 +388,7 @@ export default function FinanseScreen() {
     0,
   );
   const savings = savingsQuery.data ?? [];
+  const householdMembers = householdMembersQuery.data ?? [];
   const savingsTotal = savings.reduce(
     (sum, account) => sum + Number(account.currentAmount ?? 0),
     0,
@@ -469,6 +505,100 @@ export default function FinanseScreen() {
   const filteredCategories = useMemo(
     () => applyFinanceCategoryFilters(categories, financeFilters, filteredRows),
     [categories, financeFilters, filteredRows],
+  );
+  const householdMemberMap = useMemo(
+    () => new Map(householdMembers.map((member) => [member.id, member])),
+    [householdMembers],
+  );
+  const savingsGoals = useMemo<SavingsGoalView[]>(
+    () =>
+      savings.map((account) => {
+        const currentAmountNumber = Number(account.currentAmount ?? 0);
+        const targetAmountNumber =
+          account.targetAmount === null ? null : Number(account.targetAmount);
+        const owner = account.ownerMemberId
+          ? householdMemberMap.get(account.ownerMemberId) ?? null
+          : null;
+        const progressRatio =
+          targetAmountNumber && targetAmountNumber > 0
+            ? Math.max(0, Math.min(currentAmountNumber / targetAmountNumber, 1))
+            : 0;
+
+        return {
+          ...account,
+          currentAmountNumber,
+          isAchieved:
+            targetAmountNumber !== null &&
+            targetAmountNumber > 0 &&
+            currentAmountNumber >= targetAmountNumber,
+          owner,
+          progressRatio,
+          targetAmountNumber,
+        };
+      }),
+    [householdMemberMap, savings],
+  );
+  const savingsGroups = useMemo<SavingsGoalGroup[]>(
+    () => {
+      const grouped = new Map<string, SavingsGoalGroup>();
+
+      savingsGoals.forEach((goal) => {
+        const member = goal.owner;
+        const id = member?.id ?? goal.ownerMemberId ?? "unassigned";
+        const label =
+          member?.displayName ||
+          member?.email ||
+          (goal.ownerMemberId ? "Bez przypisania" : "Bez właściciela");
+        const current =
+          grouped.get(id) ??
+          ({
+            accounts: [],
+            achievedCount: 0,
+            currentTotal: 0,
+            id,
+            label,
+            member,
+            targetTotal: 0,
+            totalCount: 0,
+          } as SavingsGoalGroup);
+
+        current.accounts.push(goal);
+        current.currentTotal += goal.currentAmountNumber;
+        current.targetTotal += goal.targetAmountNumber ?? 0;
+        current.totalCount += 1;
+        if (goal.isAchieved) {
+          current.achievedCount += 1;
+        }
+
+        grouped.set(id, current);
+      });
+
+      return [...grouped.values()]
+        .map((group) => ({
+          ...group,
+          accounts: [...group.accounts].sort(compareSavingsGoals),
+        }))
+        .sort(
+          (left, right) =>
+            right.currentTotal - left.currentTotal ||
+            left.label.localeCompare(right.label, "pl-PL"),
+        );
+    },
+    [savingsGoals],
+  );
+  const savingsGoalsAchieved = savingsGoals.filter((goal) => goal.isAchieved).length;
+  const nextSavingsGoal = useMemo(
+    () =>
+      [...savingsGoals]
+        .sort(compareSavingsGoals)
+        .find((goal) => !goal.isAchieved) ?? savingsGoals[0] ?? null,
+    [savingsGoals],
+  );
+  const selectedSavingsGoal = useMemo(
+    () =>
+      savingsGoals.find((goal) => goal.id === selectedSavingsAccount?.id) ??
+      null,
+    [selectedSavingsAccount?.id, savingsGoals],
   );
 
   function selectAdjacentMonth(direction: -1 | 1) {
@@ -608,45 +738,6 @@ export default function FinanseScreen() {
   }, [financeFilters, financeFiltersLoaded]);
 
   useEffect(() => {
-    let isMounted = true;
-
-    loadStoredJson<{ layout?: FinanceBudgetLayout }>(
-      financeBudgetLayoutStorageKey,
-    )
-      .then((storedLayout) => {
-        if (!isMounted) {
-          return;
-        }
-
-        if (
-          storedLayout?.layout === "table" ||
-          storedLayout?.layout === "cards"
-        ) {
-          setBudgetLayout(storedLayout.layout);
-        }
-
-        setBudgetLayoutLoaded(true);
-      })
-      .catch(() => {
-        if (isMounted) {
-          setBudgetLayoutLoaded(true);
-        }
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!budgetLayoutLoaded) {
-      return;
-    }
-
-    saveStoredJson(financeBudgetLayoutStorageKey, { layout: budgetLayout });
-  }, [budgetLayout, budgetLayoutLoaded]);
-
-  useEffect(() => {
     if (!params.action) {
       setHandledRouteAction(null);
       return;
@@ -687,6 +778,18 @@ export default function FinanseScreen() {
       setSelectedItemCategoryId(firstCategoryId);
     }
   }, [categories, categoriesQuery.data, selectedItemCategoryId]);
+
+  useEffect(() => {
+    const ownerIds = new Set(householdMembers.map((member) => member.id));
+
+    if (ownerIds.size === 0) {
+      return;
+    }
+
+    if (!selectedSavingsOwnerId || !ownerIds.has(selectedSavingsOwnerId)) {
+      setSelectedSavingsOwnerId(householdMembers[0]?.id ?? "");
+    }
+  }, [householdMembers, selectedSavingsOwnerId]);
 
   useEffect(() => {
     if (financeModal !== "expense") {
@@ -862,7 +965,11 @@ export default function FinanseScreen() {
       };
 
       return editingDebt
-        ? updateFinanceDebt(editingDebt.id, input, { accessToken })
+        ? updateFinanceDebt(
+            editingDebt.id,
+            { ...input, isSettled: debtIsSettled },
+            { accessToken },
+          )
         : createFinanceDebt(input, { accessToken });
     },
     onSuccess: async () => {
@@ -871,20 +978,11 @@ export default function FinanseScreen() {
       await invalidateFinance();
     },
   });
-  const settleDebtMutation = useMutation({
-    mutationFn: (debt: FinanceDebt) =>
-      updateFinanceDebt(
-        debt.id,
-        { isSettled: !debt.isSettled },
-        { accessToken },
-      ),
-    onSuccess: async () => {
-      await invalidateFinance();
-    },
-  });
   const deleteDebtMutation = useMutation({
     mutationFn: (debtId: string) => deleteFinanceDebt(debtId, { accessToken }),
     onSuccess: async () => {
+      resetDebtForm();
+      setFinanceModal(null);
       await invalidateFinance();
     },
   });
@@ -894,13 +992,17 @@ export default function FinanseScreen() {
         {
           amount: parseMoney(savingsAmount),
           changedAt: todayIso(),
+          ownerMemberId: selectedSavingsOwnerId || null,
           name: savingsName.trim(),
           note: savingsNote.trim() || null,
+          targetAmount: parseMoney(savingsTargetAmount),
+          targetDate: savingsTargetDate.trim() || null,
         },
         { accessToken },
       ),
     onSuccess: async () => {
       resetSavingsAccountForm();
+      setSelectedSavingsOwnerId(householdMembers[0]?.id ?? "");
       setFinanceModal(null);
       await invalidateFinance();
     },
@@ -927,6 +1029,8 @@ export default function FinanseScreen() {
     mutationFn: (accountId: string) =>
       deleteFinanceSavingsAccount(accountId, { accessToken }),
     onSuccess: async () => {
+      setSelectedSavingsAccount(null);
+      setFinanceModal(null);
       await invalidateFinance();
     },
   });
@@ -1020,7 +1124,10 @@ export default function FinanseScreen() {
     setFinanceModal(null);
     setEditingBudgetItem(null);
     setEditingDebt(null);
+    setDebtIsSettled(false);
     setSelectedSavingsAccount(null);
+    resetSavingsAccountForm();
+    resetSavingsTransactionForm();
     setExpenseQuickItemId(null);
     setExpenseQuickCategoryId(null);
     setHistoryBudgetItemId(null);
@@ -1079,6 +1186,7 @@ export default function FinanseScreen() {
 
   function resetDebtForm() {
     setEditingDebt(null);
+    setDebtIsSettled(false);
     setValue("debtAmount", "");
     setValue("debtDueDate", "");
     setValue("debtLenderName", "");
@@ -1093,6 +1201,7 @@ export default function FinanseScreen() {
 
   function openEditDebt(debt: FinanceDebt) {
     setEditingDebt(debt);
+    setDebtIsSettled(debt.isSettled);
     setValue("debtAmount", formatMoneyInput(debt.amount));
     setValue("debtDueDate", debt.dueDate ?? "");
     setValue("debtLenderName", debt.lenderName);
@@ -1105,10 +1214,17 @@ export default function FinanseScreen() {
     setValue("savingsAmount", "");
     setValue("savingsName", "");
     setValue("savingsNote", "");
+    setValue("savingsTargetAmount", "");
+    setValue("savingsTargetDate", "");
   }
 
   function openCreateSavingsAccount() {
     resetSavingsAccountForm();
+    setSelectedSavingsOwnerId(
+      householdMembers.find((member) => member.id === selectedSavingsOwnerId)
+        ? selectedSavingsOwnerId
+        : householdMembers[0]?.id ?? "",
+    );
     setFinanceModal("savingsAccount");
   }
 
@@ -1128,6 +1244,11 @@ export default function FinanseScreen() {
     setValue("savingsTransactionAmount", "");
     setValue("savingsTransactionNote", "");
     setFinanceModal("savingsTransaction");
+  }
+
+  function openSavingsDetails(account: FinanceSavingsAccount) {
+    setSelectedSavingsAccount(account);
+    setFinanceModal("savingsDetails");
   }
 
   const canSaveIncome =
@@ -1163,7 +1284,12 @@ export default function FinanseScreen() {
     isPositiveMoney(debtAmount) &&
     (!debtDueDate.trim() || /^\d{4}-\d{2}-\d{2}$/.test(debtDueDate));
   const canSaveSavingsAccount =
-    canCreate && Boolean(savingsName.trim()) && isValidMoney(savingsAmount);
+    canCreate &&
+    Boolean(selectedSavingsOwnerId) &&
+    Boolean(savingsName.trim()) &&
+    isValidMoney(savingsAmount) &&
+    isPositiveMoney(savingsTargetAmount) &&
+    /^\d{4}-\d{2}-\d{2}$/.test(savingsTargetDate.trim());
   const canSaveSavingsTransaction =
     canUpdate &&
     Boolean(selectedSavingsAccount?.id) &&
@@ -1200,7 +1326,35 @@ export default function FinanseScreen() {
   }
 
   return (
-    <AppScreen scrollRef={screenScrollRef} title="Finanse">
+    <AppScreen
+      actions={
+        <IconButton
+          accessibilityLabel="Menu finansów"
+          onPress={() => setFinanceModal("menu")}
+          style={styles.financeHeaderMenuButton}
+        >
+          <MoreHorizontal color={theme.colors.text} size={28} />
+        </IconButton>
+      }
+      contentStyle={styles.financeScreenContent}
+      floatingAction={
+        activeFinanceView === "savings" && canCreate ? (
+          <Pressable
+            accessibilityLabel="Dodaj cel oszczędnościowy"
+            accessibilityRole="button"
+            onPress={openCreateSavingsAccount}
+            style={({ pressed }) => [
+              styles.financeFloatingAction,
+              pressed && styles.financeFloatingActionPressed,
+            ]}
+          >
+            <Plus color={theme.colors.inverseText} size={30} />
+          </Pressable>
+        ) : null
+      }
+      title="Finanse"
+      titleVariant="display"
+    >
       <QueryState
         emptyText="Brak danych finansowych."
         error={
@@ -1212,11 +1366,39 @@ export default function FinanseScreen() {
       />
 
       <SegmentedControl
+        accentColor={theme.colors.finance}
         onChange={(value) => setActiveFinanceView(value as FinanceView)}
         options={[
-          { label: "Budżet", value: "budget" },
-          { label: "Pożyczki/Debety", value: "debts" },
-          { label: "Oszczędności", value: "savings" },
+          {
+            icon: (active) => (
+              <WalletCards
+                color={active ? theme.colors.inverseText : theme.colors.textMuted}
+                size={16}
+              />
+            ),
+            label: "Budżet",
+            value: "budget",
+          },
+          {
+            icon: (active) => (
+              <ReceiptText
+                color={active ? theme.colors.inverseText : theme.colors.textMuted}
+                size={16}
+              />
+            ),
+            label: "Pożyczki/Debety",
+            value: "debts",
+          },
+          {
+            icon: (active) => (
+              <PiggyBank
+                color={active ? theme.colors.inverseText : theme.colors.textMuted}
+                size={16}
+              />
+            ),
+            label: "Oszczędności",
+            value: "savings",
+          },
         ]}
         value={activeFinanceView}
       />
@@ -1300,34 +1482,18 @@ export default function FinanseScreen() {
             totalCount={visibleFlatItems.length}
           />
 
-          {budgetLayout === "table" ? (
-            <FinanceSheet
-              canCreateExpense={canCreateVisibleExpense}
-              canCreateItem={canCreateVisibleBudgetItem}
-              canUpdate={canUpdateVisibleBudgetItem}
-              categories={filteredCategories}
-              currencyCode={currencyCode}
-              onAddCategoryItem={openItemModalForCategory}
-              onAddExpense={openExpenseModalForItem}
-              onEdit={openEditBudgetItem}
-              onHistory={openExpenseHistory}
-              rows={filteredRows}
-            />
-          ) : (
-            <FinanceCategoryCards
-              canCreateExpense={canCreateVisibleExpense}
-              canCreateItem={canCreateVisibleBudgetItem}
-              canUpdate={canUpdateVisibleBudgetItem}
-              categories={filteredCategories}
-              currencyCode={currencyCode}
-              onAddCategoryItem={openItemModalForCategory}
-              onAddExpense={openExpenseModalForItem}
-              onEdit={openEditBudgetItem}
-              onHistory={openExpenseHistory}
-              rows={filteredRows}
-              scrollRef={screenScrollRef}
-            />
-          )}
+          <FinanceCategoryCards
+            canCreateExpense={canCreateVisibleExpense}
+            canCreateItem={canCreateVisibleBudgetItem}
+            canUpdate={canUpdateVisibleBudgetItem}
+            categories={filteredCategories}
+            currencyCode={currencyCode}
+            onAddCategoryItem={openItemModalForCategory}
+            onAddExpense={openExpenseModalForItem}
+            onEdit={openEditBudgetItem}
+            onHistory={openExpenseHistory}
+            rows={filteredRows}
+          />
 
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>RAZEM</Text>
@@ -1358,7 +1524,7 @@ export default function FinanseScreen() {
 
           <FormModal
             onClose={closeFinanceModal}
-            title="Finanse"
+            title="Menu finansów"
             visible={financeModal === "menu"}
           >
             <View style={styles.financeMenu}>
@@ -1368,7 +1534,7 @@ export default function FinanseScreen() {
                   <View style={styles.actionPicker}>
                     <ActionButton
                       onPress={() => setFinanceModal("category")}
-                      title="Kategoria"
+                      title="Dodaj kategorię"
                       variant="secondary"
                     />
                     <ActionButton
@@ -1379,12 +1545,12 @@ export default function FinanseScreen() {
                         setValue("itemAmount", "");
                         setFinanceModal("item");
                       }}
-                      title="Pozycja budżetu"
+                      title="Dodaj pozycję budżetu"
                     />
                     <ActionButton
                       disabled={!canCreateVisibleExpense}
                       onPress={openExpenseModal}
-                      title="Wydatek"
+                      title="Dodaj wydatek"
                       variant="secondary"
                     />
                   </View>
@@ -1399,14 +1565,14 @@ export default function FinanseScreen() {
                       <ActionButton
                         disabled={!currentMonth?.id}
                         onPress={openGenerateMonthModal}
-                        title="Nowy miesiąc"
+                        title="Wygeneruj nowy miesiąc"
                       />
                     ) : null}
                     {canDelete ? (
                       <ActionButton
                         disabled={!canRemoveSelectedMonth}
                         onPress={() => setDeleteMonthConfirmVisible(true)}
-                        title="Usuń miesiąc"
+                        title="Usuń wybrany miesiąc"
                         variant="ghost"
                       />
                     ) : null}
@@ -1420,7 +1586,7 @@ export default function FinanseScreen() {
                   <View style={styles.actionPicker}>
                     <ActionButton
                       onPress={() => setFinanceModal("income")}
-                      title="Dochód"
+                      title="Zmień dochód"
                       variant="secondary"
                     />
                   </View>
@@ -2047,17 +2213,12 @@ export default function FinanseScreen() {
 
       {activeFinanceView === "debts" ? (
         <>
-          <View style={styles.debtSummary}>
-            <View>
-              <Text style={styles.debtSummaryLabel}>Do oddania</Text>
-              <Text style={styles.debtSummaryValue}>
-                {formatMoney(openDebtTotal, currencyCode)}
-              </Text>
-            </View>
-            <Text style={styles.debtSummaryMeta}>
-              {openDebts.length} aktywne / {settledDebts.length} spłacone
-            </Text>
-          </View>
+          <FinanceDebtOverview
+            activeCount={openDebts.length}
+            currencyCode={currencyCode}
+            openDebtTotal={openDebtTotal}
+            settledCount={settledDebts.length}
+          />
           <QueryState
             emptyText="Brak pożyczek i debetów."
             error={debtsQuery.error}
@@ -2065,15 +2226,10 @@ export default function FinanseScreen() {
             isLoading={debtsQuery.isLoading}
           />
           <FinanceDebtsList
-            canDelete={canDelete}
             canUpdate={canUpdate}
             currencyCode={currencyCode}
-            deleting={deleteDebtMutation.isPending}
             debts={debts}
-            onDelete={(debt) => deleteDebtMutation.mutate(debt.id)}
             onEdit={openEditDebt}
-            onToggleSettled={(debt) => settleDebtMutation.mutate(debt)}
-            updating={settleDebtMutation.isPending}
           />
           {canCreate ? (
             <Pressable onPress={openCreateDebt} style={styles.fab}>
@@ -2082,46 +2238,69 @@ export default function FinanseScreen() {
           ) : null}
           <FormModal
             footer={
-              <View style={styles.modalFooter}>
-                <ActionButton
-                  onPress={closeFinanceModal}
-                  style={styles.modalFooterButton}
-                  title="Anuluj"
-                  variant="secondary"
-                />
+              <View style={styles.debtModalFooter}>
                 <ActionButton
                   disabled={!canSaveDebt}
                   loading={saveDebtMutation.isPending}
                   onPress={() => saveDebtMutation.mutate()}
-                  style={styles.modalFooterButton}
-                  title={editingDebt ? "Zapisz" : "Dodaj"}
+                  style={styles.debtSaveButton}
+                  title={editingDebt ? "Zapisz zmiany" : "Dodaj pożyczkę"}
                 />
+                {editingDebt && canDelete ? (
+                  <IconButton
+                    accessibilityLabel="Usuń pożyczkę"
+                    disabled={deleteDebtMutation.isPending}
+                    onPress={() => deleteDebtMutation.mutate(editingDebt.id)}
+                    style={styles.debtDeleteButton}
+                  >
+                    <Trash2 color={theme.colors.danger} size={24} />
+                  </IconButton>
+                ) : null}
               </View>
             }
             onClose={closeFinanceModal}
-            subtitle="Ta lista jest poza miesięcznym budżetem i nie wpływa na podsumowania."
             title={editingDebt ? "Edytuj pożyczkę" : "Dodaj pożyczkę/debet"}
             visible={financeModal === "debt"}
           >
+            <View style={styles.debtEditorPreview}>
+              <View style={styles.debtEditorIcon}>
+                <WalletCards color={theme.colors.finance} size={22} />
+              </View>
+              <View style={styles.debtEditorPreviewText}>
+                <Text numberOfLines={1} style={styles.debtEditorPreviewTitle}>
+                  {debtPurpose.trim() || "Nowa pożyczka"}
+                </Text>
+                <Text numberOfLines={1} style={styles.debtEditorPreviewMeta}>
+                  {debtLenderName.trim() || "Od kogo"}
+                </Text>
+              </View>
+              <Text numberOfLines={1} style={styles.debtEditorPreviewAmount}>
+                {isValidMoney(debtAmount)
+                  ? formatMoney(parseMoney(debtAmount), currencyCode)
+                  : formatMoney(0, currencyCode)}
+              </Text>
+            </View>
             <TextField
               control={control}
-              keyboardType="decimal-pad"
-              label="Kwota"
-              name="debtAmount"
-              placeholder="0,00"
-            />
-            <TextField
-              control={control}
-              label="Od kogo"
-              name="debtLenderName"
-              placeholder="Np. rodzice, znajomy, bank"
-            />
-            <TextField
-              control={control}
-              label="Na co"
+              label="Nazwa"
               name="debtPurpose"
-              placeholder="Np. naprawa auta"
+              placeholder="Np. tineco odkurzacz"
             />
+            <View style={styles.debtFormGrid}>
+              <TextField
+                control={control}
+                label="Osoba"
+                name="debtLenderName"
+                placeholder="Np. Malwinka"
+              />
+              <TextField
+                control={control}
+                keyboardType="decimal-pad"
+                label="Kwota"
+                name="debtAmount"
+                placeholder="0,00"
+              />
+            </View>
             <TextField
               control={control}
               label="Termin oddania"
@@ -2134,10 +2313,29 @@ export default function FinanseScreen() {
               name="debtNote"
               placeholder="Opcjonalnie"
             />
+            {editingDebt ? (
+              <View style={styles.debtStatusGroup}>
+                <Text style={styles.selectorLabel}>Status</Text>
+                <SegmentedControl
+                  onChange={(value) => setDebtIsSettled(value === "settled")}
+                  options={[
+                    { label: "Aktywne", value: "active" },
+                    { label: "Spłacone", value: "settled" },
+                  ]}
+                  value={debtIsSettled ? "settled" : "active"}
+                />
+              </View>
+            ) : null}
             {saveDebtMutation.error ? (
               <InlineAlert
                 tone="error"
                 text="Nie udało się zapisać pożyczki."
+              />
+            ) : null}
+            {deleteDebtMutation.error ? (
+              <InlineAlert
+                tone="error"
+                text="Nie udało się usunąć pożyczki."
               />
             ) : null}
           </FormModal>
@@ -2146,145 +2344,363 @@ export default function FinanseScreen() {
 
       {activeFinanceView === "savings" ? (
         <>
-          <View style={styles.debtSummary}>
-            <View style={styles.savingsSummaryTitle}>
-              <PiggyBank color={theme.colors.primaryDark} size={20} />
-              <View>
-                <Text style={styles.debtSummaryLabel}>Oszczędności domu</Text>
-                <Text
-                  style={[styles.debtSummaryValue, styles.savingsSummaryValue]}
-                >
-                  {formatMoney(savingsTotal, currencyCode)}
-                </Text>
-              </View>
-            </View>
-            <Text style={styles.debtSummaryMeta}>{savings.length} pozycji</Text>
-          </View>
           <QueryState
-            emptyText="Brak zapisanych oszczędności."
+            emptyText="Brak zapisanych celów oszczędnościowych."
             error={savingsQuery.error}
-            isEmpty={!savingsQuery.isLoading && savings.length === 0}
+            isEmpty={!savingsQuery.isLoading && savingsGoals.length === 0}
             isLoading={savingsQuery.isLoading}
           />
-          <FinanceSavingsList
-            accounts={savings}
-            canDelete={canDelete}
-            canUpdate={canUpdate}
+          <SavingsOverview
             currencyCode={currencyCode}
-            deleting={deleteSavingsAccountMutation.isPending}
-            onDelete={(account) =>
-              deleteSavingsAccountMutation.mutate(account.id)
-            }
-            onTransaction={openSavingsTransaction}
-            updating={savingsTransactionMutation.isPending}
+            groups={savingsGroups}
+            nextGoal={nextSavingsGoal}
+            onOpenGoal={openSavingsDetails}
+            savingsTotal={savingsTotal}
+            totalAchieved={savingsGoalsAchieved}
+            totalGoals={savingsGoals.length}
           />
-          {canCreate ? (
-            <Pressable onPress={openCreateSavingsAccount} style={styles.fab}>
-              <Plus color={theme.colors.card} size={25} />
-            </Pressable>
-          ) : null}
-          <FormModal
-            footer={
-              <View style={styles.modalFooter}>
+        </>
+      ) : null}
+      <FormModal
+        footer={
+          <View style={styles.modalFooter}>
+            <ActionButton
+              onPress={closeFinanceModal}
+              style={styles.modalFooterButton}
+              title="Zamknij"
+              variant="secondary"
+            />
+          </View>
+        }
+        onClose={closeFinanceModal}
+        subtitle="Szybkie akcje dla finansów domu."
+        title="Menu finansów"
+        visible={financeModal === "menu"}
+      >
+        <View style={styles.financeMenuGrid}>
+          {activeFinanceView === "budget" ? (
+            <>
+              <ActionButton
+                onPress={() => {
+                  closeFinanceModal();
+                  openExpenseModal();
+                }}
+                title="Dodaj wydatek"
+              />
+              <ActionButton
+                onPress={() => {
+                  closeFinanceModal();
+                  const firstCategory = categories[0];
+
+                  if (firstCategory) {
+                    openItemModalForCategory(firstCategory);
+                  }
+                }}
+                title="Nowa pozycja"
+                variant="secondary"
+              />
+              <ActionButton
+                onPress={() => {
+                  closeFinanceModal();
+                  setFinanceModal("generateMonth");
+                }}
+                title="Generuj miesiąc"
+                variant="secondary"
+              />
+              {canDelete ? (
                 <ActionButton
-                  onPress={closeFinanceModal}
-                  style={styles.modalFooterButton}
-                  title="Anuluj"
+                  onPress={() => {
+                    closeFinanceModal();
+                    setDeleteMonthConfirmVisible(true);
+                  }}
+                  title="Usuń miesiąc"
+                  variant="ghost"
+                />
+              ) : null}
+            </>
+          ) : null}
+          {activeFinanceView === "debts" ? (
+            <ActionButton
+              onPress={() => {
+                closeFinanceModal();
+                openCreateDebt();
+              }}
+              title="Nowa pożyczka"
+            />
+          ) : null}
+          {activeFinanceView === "savings" ? (
+            <>
+              <ActionButton
+                onPress={() => {
+                  closeFinanceModal();
+                  openCreateSavingsAccount();
+                }}
+                title="Nowy cel"
+              />
+              {nextSavingsGoal ? (
+                <ActionButton
+                  onPress={() => {
+                    closeFinanceModal();
+                    openSavingsDetails(nextSavingsGoal);
+                  }}
+                  title="Najbliższy cel"
                   variant="secondary"
                 />
+              ) : null}
+            </>
+          ) : null}
+        </View>
+      </FormModal>
+      <FormModal
+        footer={
+          <View style={styles.modalFooter}>
+            <ActionButton
+              onPress={closeFinanceModal}
+              style={styles.modalFooterButton}
+              title="Anuluj"
+              variant="secondary"
+            />
+            <ActionButton
+              disabled={!canSaveSavingsAccount}
+              loading={savingsAccountMutation.isPending}
+              onPress={() => savingsAccountMutation.mutate()}
+              style={styles.modalFooterButton}
+              title="Dodaj"
+            />
+          </View>
+        }
+        onClose={closeFinanceModal}
+        subtitle="Cel będzie widoczny dla wszystkich domowników."
+        title="Dodaj oszczędności"
+        visible={financeModal === "savingsAccount"}
+      >
+        <ChoiceSelector
+          emptyText="Brak domowników do wyboru."
+          items={householdMembers.map((member) => ({
+            id: member.id,
+            label: member.displayName || member.email,
+          }))}
+          onSelect={setSelectedSavingsOwnerId}
+          selectedId={selectedSavingsOwnerId}
+        />
+        <TextField
+          control={control}
+          label="Nazwa"
+          name="savingsName"
+          placeholder="Np. Poduszka finansowa"
+        />
+        <TextField
+          control={control}
+          keyboardType="decimal-pad"
+          label="Kwota startowa"
+          name="savingsAmount"
+          placeholder="0,00"
+        />
+        <TextField
+          control={control}
+          keyboardType="decimal-pad"
+          label="Cel"
+          name="savingsTargetAmount"
+          placeholder="0,00"
+        />
+        <TextField
+          control={control}
+          label="Termin celu"
+          name="savingsTargetDate"
+          placeholder="YYYY-MM-DD"
+        />
+        <TextField
+          control={control}
+          label="Notatka"
+          name="savingsNote"
+          placeholder="Opcjonalnie"
+        />
+        {savingsAccountMutation.error ? (
+          <InlineAlert
+            tone="error"
+            text="Nie udało się dodać oszczędności."
+          />
+        ) : null}
+      </FormModal>
+      <FormModal
+        footer={
+          <View style={styles.modalFooter}>
+            <ActionButton
+              onPress={closeFinanceModal}
+              style={styles.modalFooterButton}
+              title="Zamknij"
+              variant="secondary"
+            />
+            {selectedSavingsGoal ? (
+              <>
                 <ActionButton
-                  disabled={!canSaveSavingsAccount}
-                  loading={savingsAccountMutation.isPending}
-                  onPress={() => savingsAccountMutation.mutate()}
+                  disabled={!canSaveSavingsTransaction}
+                  loading={savingsTransactionMutation.isPending}
+                  onPress={() => openSavingsTransaction(selectedSavingsGoal, "add")}
                   style={styles.modalFooterButton}
                   title="Dodaj"
-                />
-              </View>
-            }
-            onClose={closeFinanceModal}
-            subtitle="Pozycja będzie widoczna dla wszystkich domowników."
-            title="Dodaj oszczędności"
-            visible={financeModal === "savingsAccount"}
-          >
-            <TextField
-              control={control}
-              label="Nazwa"
-              name="savingsName"
-              placeholder="Np. Poduszka finansowa"
-            />
-            <TextField
-              control={control}
-              keyboardType="decimal-pad"
-              label="Kwota"
-              name="savingsAmount"
-              placeholder="0,00"
-            />
-            <TextField
-              control={control}
-              label="Notatka"
-              name="savingsNote"
-              placeholder="Opcjonalnie"
-            />
-            {savingsAccountMutation.error ? (
-              <InlineAlert
-                tone="error"
-                text="Nie udało się dodać oszczędności."
-              />
-            ) : null}
-          </FormModal>
-          <FormModal
-            footer={
-              <View style={styles.modalFooter}>
-                <ActionButton
-                  onPress={closeFinanceModal}
-                  style={styles.modalFooterButton}
-                  title="Anuluj"
-                  variant="secondary"
                 />
                 <ActionButton
                   disabled={!canSaveSavingsTransaction}
                   loading={savingsTransactionMutation.isPending}
-                  onPress={() => savingsTransactionMutation.mutate()}
+                  onPress={() =>
+                    openSavingsTransaction(selectedSavingsGoal, "subtract")
+                  }
                   style={styles.modalFooterButton}
-                  title={savingsDirection === "add" ? "Dodaj" : "Odejmij"}
+                  title="Odejmij"
+                  variant="secondary"
                 />
-              </View>
-            }
-            onClose={closeFinanceModal}
-            subtitle={
-              selectedSavingsAccount
-                ? `${selectedSavingsAccount.name} / obecnie ${formatMoney(selectedSavingsAccount.currentAmount, currencyCode)}`
-                : undefined
-            }
-            title={
-              savingsDirection === "add"
-                ? "Dodaj do oszczędności"
-                : "Odejmij z oszczędności"
-            }
-            visible={financeModal === "savingsTransaction"}
-          >
-            <TextField
-              control={control}
-              keyboardType="decimal-pad"
-              label="Kwota"
-              name="savingsTransactionAmount"
-              placeholder="0,00"
-            />
-            <TextField
-              control={control}
-              label="Notatka"
-              name="savingsTransactionNote"
-              placeholder="Opcjonalnie"
-            />
-            {savingsTransactionMutation.error ? (
-              <InlineAlert
-                tone="error"
-                text="Nie udało się zapisać zmiany oszczędności."
-              />
+                {canDelete ? (
+                  <ActionButton
+                    disabled={deleteSavingsAccountMutation.isPending}
+                    labelStyle={styles.dangerButtonLabel}
+                    loading={deleteSavingsAccountMutation.isPending}
+                    onPress={() =>
+                      deleteSavingsAccountMutation.mutate(selectedSavingsGoal.id)
+                    }
+                    style={[styles.modalFooterButton, styles.dangerButton]}
+                    title="Usuń"
+                    variant="secondary"
+                  />
+                ) : null}
+              </>
             ) : null}
-          </FormModal>
-        </>
-      ) : null}
+          </View>
+        }
+        onClose={closeFinanceModal}
+        subtitle={
+          selectedSavingsGoal
+            ? `${selectedSavingsGoal.owner?.displayName || selectedSavingsGoal.owner?.email || "Bez właściciela"} / cel ${selectedSavingsGoal.targetDate || "bez terminu"}`
+            : undefined
+        }
+        title={selectedSavingsGoal?.name ?? "Szczegóły celu"}
+        visible={financeModal === "savingsDetails"}
+      >
+        {selectedSavingsGoal ? (
+          <View style={styles.savingsDetailsCard}>
+            <View style={styles.savingsDetailsHeader}>
+              <View
+                style={[
+                  styles.savingsGoalIcon,
+                  styles.savingsDetailsIcon,
+                ]}
+              >
+                {getSavingsGoalIcon(selectedSavingsGoal.name, theme.colors.finance)}
+              </View>
+              <View style={styles.savingsDetailsText}>
+                <Text style={styles.savingsDetailsTitle}>
+                  {formatMoney(selectedSavingsGoal.currentAmountNumber, currencyCode)}
+                </Text>
+                <Text style={styles.savingsDetailsMeta}>
+                  Cel{" "}
+                  {selectedSavingsGoal.targetAmountNumber !== null
+                    ? formatMoney(selectedSavingsGoal.targetAmountNumber, currencyCode)
+                    : "bez limitu"}
+                </Text>
+                <Text style={styles.savingsDetailsMeta}>
+                  {selectedSavingsGoal.targetDate
+                    ? `Termin: ${formatDateFull(selectedSavingsGoal.targetDate)}`
+                    : "Brak terminu"}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.savingsGoalProgressTrack}>
+              <View
+                style={[
+                  styles.savingsGoalProgressFill,
+                  {
+                    width: `${Math.round(selectedSavingsGoal.progressRatio * 100)}%`,
+                    backgroundColor: theme.colors.finance,
+                  },
+                ]}
+              />
+            </View>
+            <Text style={styles.savingsDetailsMeta}>
+              {Math.round(selectedSavingsGoal.progressRatio * 100)}% wykonania
+            </Text>
+            {selectedSavingsGoal.transactions.length > 0 ? (
+              <View style={styles.savingsTransactionList}>
+                {selectedSavingsGoal.transactions.slice(0, 4).map((transaction) => (
+                  <View key={transaction.id} style={styles.savingsTransactionRow}>
+                    <Text
+                      style={[
+                        styles.savingsDelta,
+                        transaction.direction === "add"
+                          ? styles.savingsDeltaAdd
+                          : styles.savingsDeltaSubtract,
+                      ]}
+                    >
+                      {transaction.direction === "add" ? "+" : "-"}
+                      {formatMoney(transaction.amount, currencyCode)}
+                    </Text>
+                    <Text style={styles.savingsTransactionMeta}>
+                      {formatDateFull(transaction.changedAt)}
+                      {transaction.note ? ` / ${transaction.note}` : ""}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <InlineAlert text="Brak historii zmian." />
+            )}
+          </View>
+        ) : (
+          <InlineAlert text="Nie znaleziono wybranego celu." />
+        )}
+      </FormModal>
+      <FormModal
+        footer={
+          <View style={styles.modalFooter}>
+            <ActionButton
+              onPress={closeFinanceModal}
+              style={styles.modalFooterButton}
+              title="Anuluj"
+              variant="secondary"
+            />
+            <ActionButton
+              disabled={!canSaveSavingsTransaction}
+              loading={savingsTransactionMutation.isPending}
+              onPress={() => savingsTransactionMutation.mutate()}
+              style={styles.modalFooterButton}
+              title={savingsDirection === "add" ? "Dodaj" : "Odejmij"}
+            />
+          </View>
+        }
+        onClose={closeFinanceModal}
+        subtitle={
+          selectedSavingsGoal
+            ? `${selectedSavingsGoal.name} / obecnie ${formatMoney(selectedSavingsGoal.currentAmountNumber, currencyCode)}`
+            : selectedSavingsAccount
+              ? `${selectedSavingsAccount.name} / obecnie ${formatMoney(selectedSavingsAccount.currentAmount, currencyCode)}`
+              : undefined
+        }
+        title={
+          savingsDirection === "add"
+            ? "Dodaj do oszczędności"
+            : "Odejmij z oszczędności"
+        }
+        visible={financeModal === "savingsTransaction"}
+      >
+        <TextField
+          control={control}
+          keyboardType="decimal-pad"
+          label="Kwota"
+          name="savingsTransactionAmount"
+          placeholder="0,00"
+        />
+        <TextField
+          control={control}
+          label="Notatka"
+          name="savingsTransactionNote"
+          placeholder="Opcjonalnie"
+        />
+        {savingsTransactionMutation.error ? (
+          <InlineAlert
+            tone="error"
+            text="Nie udało się zapisać zmiany oszczędności."
+          />
+        ) : null}
+      </FormModal>
       <FormModal
         onClose={closeFinanceModal}
         subtitle="Podgląd dochodów i budżetu w wybranym miesiącu."
@@ -2328,7 +2744,13 @@ function FinanceSummaryCard({
   const styles = createStyles(theme.colors);
   const spentRatio =
     budgetAmount > 0 ? Math.max(0, Math.min(spentAmount / budgetAmount, 1)) : 0;
-  const isOverBudget = budgetAmount > 0 && spentAmount > budgetAmount;
+  const spentPercent =
+    budgetAmount > 0
+      ? Math.round((spentAmount / budgetAmount) * 100)
+      : spentAmount > 0
+        ? 100
+        : 0;
+  const isOverBudget = remainingAmount < 0;
 
   return (
     <View style={styles.financeSummaryCard}>
@@ -2353,21 +2775,35 @@ function FinanceSummaryCard({
       </Pressable>
 
       <View style={styles.financeSummaryCenter}>
-        <FinanceSummaryRing
-          isOverBudget={isOverBudget}
-          spentRatio={spentRatio}
-        />
+        <FinanceSummaryRing spentRatio={spentRatio} />
         <View pointerEvents="none" style={styles.financeSummaryCenterText}>
           <Text
             numberOfLines={1}
             style={[
               styles.financeSummaryRingValue,
-              remainingAmount < 0 && styles.dangerText,
+              isOverBudget && styles.dangerText,
             ]}
           >
-            {formatMoney(remainingAmount, currencyCode)}
+            {spentPercent}%
           </Text>
-          <Text style={styles.financeSummaryRingLabel}>zostało</Text>
+          <Text style={styles.financeSummaryRingLabel}>wykorzystane</Text>
+        </View>
+        <View style={styles.financeSummaryCenterMeta}>
+          <Text style={[styles.financeSummaryMetaLabel, isOverBudget && styles.dangerText]}>
+            {isOverBudget ? "Przekroczono o" : "Zostaje"}
+          </Text>
+          <Text
+            numberOfLines={1}
+            style={[
+              styles.financeSummaryMetaValue,
+              isOverBudget ? styles.dangerText : styles.positiveText,
+            ]}
+          >
+            {formatMoney(
+              isOverBudget ? Math.abs(remainingAmount) : remainingAmount,
+              currencyCode,
+            )}
+          </Text>
         </View>
       </View>
 
@@ -2381,6 +2817,15 @@ function FinanceSummaryCard({
         <Text numberOfLines={1} style={styles.financeSummaryValue}>
           {formatMoney(spentAmount, currencyCode)}
         </Text>
+        <Text
+          numberOfLines={1}
+          style={[
+            styles.financeSummarySideMeta,
+            isOverBudget ? styles.dangerText : styles.positiveText,
+          ]}
+        >
+          {formatMoney(remainingAmount, currencyCode)}
+        </Text>
       </View>
 
       <View style={styles.financeSummaryBudgetPill}>
@@ -2393,13 +2838,330 @@ function FinanceSummaryCard({
   );
 }
 
-function FinanceSummaryRing({
-  isOverBudget,
-  spentRatio,
+function SavingsOverview({
+  currencyCode,
+  groups,
+  nextGoal,
+  onOpenGoal,
+  savingsTotal,
+  totalAchieved,
+  totalGoals,
 }: {
-  isOverBudget: boolean;
-  spentRatio: number;
+  currencyCode: SupportedCurrencyCode;
+  groups: SavingsGoalGroup[];
+  nextGoal: SavingsGoalView | null;
+  onOpenGoal: (goal: SavingsGoalView) => void;
+  savingsTotal: number;
+  totalAchieved: number;
+  totalGoals: number;
 }) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+  const [expandedGroupIds, setExpandedGroupIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (groups.length === 0) {
+      setExpandedGroupIds([]);
+      return;
+    }
+
+    setExpandedGroupIds((current) => {
+      const available = new Set(groups.map((group) => group.id));
+      const next = current.filter((groupId) => available.has(groupId));
+
+      return next.length > 0 ? next : [groups[0]!.id];
+    });
+  }, [groups]);
+
+  const isExpanded = (groupId: string) => expandedGroupIds.includes(groupId);
+
+  function toggleGroup(groupId: string) {
+    setExpandedGroupIds((current) =>
+      current.includes(groupId)
+        ? current.filter((currentGroupId) => currentGroupId !== groupId)
+        : [...current, groupId],
+    );
+  }
+
+  return (
+    <View style={styles.savingsOverview}>
+      <View style={styles.savingsSummaryCard}>
+        <View style={styles.savingsSummaryHeader}>
+          <View style={styles.savingsSummaryIconWrap}>
+            <PiggyBank color={theme.colors.finance} size={34} />
+          </View>
+          <View style={styles.savingsSummaryText}>
+            <Text style={styles.savingsSummaryKicker}>OSZCZĘDNOŚCI</Text>
+            <Text style={styles.savingsSummaryValue}>
+              {formatMoney(savingsTotal, currencyCode)}
+            </Text>
+            <Text style={styles.savingsSummaryMeta}>
+              Suma wszystkich oszczędności
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.savingsSummaryStats}>
+          <View style={styles.savingsSummaryStat}>
+            <CalendarDays color={theme.colors.finance} size={20} />
+            <Text style={styles.savingsSummaryStatValue}>{totalGoals}</Text>
+            <Text style={styles.savingsSummaryStatLabel}>cele</Text>
+          </View>
+          <View style={styles.savingsSummaryStatDivider} />
+          <View style={styles.savingsSummaryStat}>
+            <CheckCircle2 color={theme.colors.finance} size={20} />
+            <Text style={styles.savingsSummaryStatValue}>{totalAchieved}</Text>
+            <Text style={styles.savingsSummaryStatLabel}>osiągnięte</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.savingsGroupList}>
+        {groups.map((group) => (
+          <SavingsGoalGroupCard
+            currencyCode={currencyCode}
+            expanded={isExpanded(group.id)}
+            group={group}
+            key={group.id}
+            onOpenGoal={onOpenGoal}
+            onToggle={() => toggleGroup(group.id)}
+          />
+        ))}
+      </View>
+
+      {nextGoal ? (
+        <View style={styles.savingsNextGoalCard}>
+          <View style={styles.savingsNextGoalIconWrap}>
+            <CalendarDays color={theme.colors.finance} size={24} />
+          </View>
+          <View style={styles.savingsNextGoalText}>
+            <Text style={styles.savingsNextGoalLabel}>Najbliższy cel</Text>
+            <Text numberOfLines={1} style={styles.savingsNextGoalTitle}>
+              {nextGoal.targetDate
+                ? `${formatDateFull(nextGoal.targetDate)} - ${nextGoal.name}`
+                : nextGoal.name}
+            </Text>
+            <Text numberOfLines={1} style={styles.savingsNextGoalMeta}>
+              {nextGoal.owner?.displayName ||
+                nextGoal.owner?.email ||
+                "Bez właściciela"}
+              {" / "}
+              {formatMoney(nextGoal.currentAmountNumber, currencyCode)}
+            </Text>
+          </View>
+          <ActionButton
+            labelStyle={styles.savingsNextGoalButtonLabel}
+            onPress={() => onOpenGoal(nextGoal)}
+            size="small"
+            style={styles.savingsNextGoalButton}
+            title="Zobacz cele"
+            variant="secondary"
+          />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function SavingsGoalGroupCard({
+  currencyCode,
+  expanded,
+  group,
+  onOpenGoal,
+  onToggle,
+}: {
+  currencyCode: SupportedCurrencyCode;
+  expanded: boolean;
+  group: SavingsGoalGroup;
+  onOpenGoal: (goal: SavingsGoalView) => void;
+  onToggle: () => void;
+}) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+  const accent = getMemberAccent(group.member?.displayName || group.label);
+
+  return (
+    <View style={styles.savingsGroupCard}>
+      <Pressable
+        accessibilityRole="button"
+        onPress={onToggle}
+        style={({ pressed }) => [
+          styles.savingsGroupHeader,
+          pressed && styles.pressedRow,
+        ]}
+      >
+        <View
+          style={[
+            styles.savingsGroupAvatar,
+            {
+              backgroundColor: accent.background,
+              borderColor: accent.border,
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.savingsGroupAvatarLabel,
+              { color: accent.text },
+            ]}
+          >
+            {getMemberInitial(group.member)}
+          </Text>
+        </View>
+        <View style={styles.savingsGroupText}>
+          <View style={styles.savingsGroupTitleRow}>
+            <Text numberOfLines={1} style={styles.savingsGroupTitle}>
+              {group.label}
+            </Text>
+            <View style={styles.savingsGroupCountBadge}>
+              <Text style={styles.savingsGroupCountText}>
+                {group.totalCount}
+              </Text>
+            </View>
+          </View>
+          <Text style={styles.savingsGroupMeta}>
+            {group.achievedCount}/{group.totalCount} osiągnięte
+          </Text>
+        </View>
+        <View style={styles.savingsGroupAmountBlock}>
+          <Text numberOfLines={1} style={styles.savingsGroupAmount}>
+            {formatMoney(group.currentTotal, currencyCode)}
+          </Text>
+          <Text style={styles.savingsGroupMeta}>
+            {group.targetTotal > 0
+              ? `${formatMoney(group.targetTotal, currencyCode)} celu`
+              : "Bez celu"}
+          </Text>
+        </View>
+        <View style={styles.savingsGroupChevron}>
+          {expanded ? (
+            <ChevronUp color={theme.colors.textMuted} size={24} />
+          ) : (
+            <ChevronDown color={theme.colors.textMuted} size={24} />
+          )}
+        </View>
+      </Pressable>
+
+      {expanded ? (
+        <View style={styles.savingsGoalList}>
+          {group.accounts.map((goal) => (
+            <SavingsGoalRow
+              currencyCode={currencyCode}
+              goal={goal}
+              key={goal.id}
+              onOpenGoal={onOpenGoal}
+            />
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function SavingsGoalRow({
+  currencyCode,
+  goal,
+  onOpenGoal,
+}: {
+  currencyCode: SupportedCurrencyCode;
+  goal: SavingsGoalView;
+  onOpenGoal: (goal: SavingsGoalView) => void;
+}) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+  const progressPercent = Math.round(goal.progressRatio * 100);
+  const progressColor = goal.isAchieved
+    ? theme.colors.finance
+    : progressPercent >= 50
+      ? theme.colors.finance
+      : theme.colors.warning;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => onOpenGoal(goal)}
+      style={({ pressed }) => [styles.savingsGoalRow, pressed && styles.pressedRow]}
+    >
+      <View style={styles.savingsGoalRing}>
+        <SavingsGoalRing progress={goal.progressRatio} />
+      </View>
+      <View style={styles.savingsGoalIcon}>
+        {getSavingsGoalIcon(goal.name, theme.colors.finance)}
+      </View>
+      <View style={styles.savingsGoalText}>
+        <Text numberOfLines={1} style={styles.savingsGoalTitle}>
+          {goal.name}
+        </Text>
+        <Text style={styles.savingsGoalMeta}>
+          {goal.targetDate ? `Cel: ${formatDateFull(goal.targetDate)}` : "Brak terminu"}
+        </Text>
+      </View>
+      <View style={styles.savingsGoalAmountBlock}>
+        <Text numberOfLines={1} style={styles.savingsGoalAmount}>
+          {goal.targetAmountNumber !== null
+            ? formatMoney(goal.targetAmountNumber, currencyCode)
+            : formatMoney(goal.currentAmountNumber, currencyCode)}
+        </Text>
+        <Text
+          style={[
+            styles.savingsGoalProgressLabel,
+            goal.isAchieved
+              ? styles.savingsGoalProgressLabelSuccess
+              : progressPercent >= 50
+                ? styles.savingsGoalProgressLabelNormal
+                : styles.savingsGoalProgressLabelWarning,
+          ]}
+        >
+          {progressPercent}%
+        </Text>
+        <View style={styles.savingsGoalProgressTrack}>
+          <View
+            style={[
+              styles.savingsGoalProgressFill,
+              {
+                backgroundColor: progressColor,
+                width: `${Math.min(progressPercent, 100)}%`,
+              },
+            ]}
+          />
+        </View>
+      </View>
+      <ChevronRight color={theme.colors.textMuted} size={22} />
+    </Pressable>
+  );
+}
+
+function SavingsGoalRing({ progress }: { progress: number }) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+  const segmentCount = 18;
+  const filledSegments = Math.round(progress * segmentCount);
+
+  return (
+    <View style={styles.savingsGoalRingOuter}>
+      {Array.from({ length: segmentCount }).map((_, index) => {
+        const angle = (360 / segmentCount) * index;
+        const isFilled = index < filledSegments;
+
+        return (
+          <View
+            key={index}
+            style={[
+              styles.savingsGoalRingSegment,
+              {
+                backgroundColor: isFilled ? theme.colors.finance : theme.colors.line,
+                transform: [{ rotate: `${angle}deg` }, { translateY: -12 }],
+              },
+            ]}
+          />
+        );
+      })}
+      <View style={styles.savingsGoalRingInner} />
+    </View>
+  );
+}
+
+function FinanceSummaryRing({ spentRatio }: { spentRatio: number }) {
   const styles = createStyles(useAppTheme().colors);
   const segmentCount = 28;
   const spentSegments = Math.round(spentRatio * segmentCount);
@@ -2416,11 +3178,7 @@ function FinanceSummaryRing({
             style={[
               styles.financeSummaryRingSegment,
               {
-                backgroundColor: isSpent
-                  ? isOverBudget
-                    ? "#FF7A90"
-                    : "#FFA45D"
-                  : "#79CDB0",
+                backgroundColor: isSpent ? "#FFA45D" : "#79CDB0",
                 transform: [{ rotate: `${angle}deg` }, { translateY: -35 }],
               },
             ]}
@@ -2490,104 +3248,239 @@ function IncomeBreakdownList({
   );
 }
 
-function FinanceDebtsList({
-  canDelete,
-  canUpdate,
+function FinanceDebtOverview({
+  activeCount,
   currencyCode,
-  debts,
-  deleting,
-  onDelete,
-  onEdit,
-  onToggleSettled,
-  updating,
+  openDebtTotal,
+  settledCount,
 }: {
-  canDelete: boolean;
-  canUpdate: boolean;
+  activeCount: number;
   currencyCode: SupportedCurrencyCode;
-  debts: FinanceDebt[];
-  deleting: boolean;
-  onDelete: (debt: FinanceDebt) => void;
-  onEdit: (debt: FinanceDebt) => void;
-  onToggleSettled: (debt: FinanceDebt) => void;
-  updating: boolean;
+  openDebtTotal: number;
+  settledCount: number;
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
+
+  return (
+    <View style={styles.debtOverviewCard}>
+      <View style={styles.debtOverviewIconWrap}>
+        <WalletCards color={theme.colors.finance} size={35} />
+      </View>
+      <View style={styles.debtOverviewMain}>
+        <Text style={styles.debtOverviewKicker}>DO ODDANIA</Text>
+        <Text numberOfLines={1} style={styles.debtOverviewAmount}>
+          {formatMoney(openDebtTotal, currencyCode)}
+        </Text>
+        <Text style={styles.debtOverviewMeta}>Suma wszystkich długów</Text>
+      </View>
+      <View style={styles.debtOverviewStats}>
+        <View style={styles.debtOverviewStat}>
+          <ReceiptText color={theme.colors.textMuted} size={22} />
+          <Text style={styles.debtOverviewStatValue}>{activeCount}</Text>
+          <Text style={styles.debtOverviewStatLabel}>aktywne</Text>
+        </View>
+        <View style={styles.debtOverviewDivider} />
+        <View style={styles.debtOverviewStat}>
+          <CheckCircle2 color={theme.colors.textMuted} size={22} />
+          <Text style={styles.debtOverviewStatValue}>{settledCount}</Text>
+          <Text style={styles.debtOverviewStatLabel}>spłacone</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+type FinanceDebtGroup = {
+  activeCount: number;
+  debts: FinanceDebt[];
+  id: string;
+  label: string;
+  settledCount: number;
+  totalCount: number;
+  totalOpen: number;
+};
+
+function FinanceDebtsList({
+  canUpdate,
+  currencyCode,
+  debts,
+  onEdit,
+}: {
+  canUpdate: boolean;
+  currencyCode: SupportedCurrencyCode;
+  debts: FinanceDebt[];
+  onEdit: (debt: FinanceDebt) => void;
+}) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+  const groups = useMemo(() => groupDebtsByLender(debts), [debts]);
+  const [expandedGroupIds, setExpandedGroupIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (groups.length === 0) {
+      setExpandedGroupIds([]);
+      return;
+    }
+
+    setExpandedGroupIds((current) => {
+      const available = new Set(groups.map((group) => group.id));
+      const next = current.filter((groupId) => available.has(groupId));
+
+      return next.length > 0 ? next : [groups[0]!.id];
+    });
+  }, [groups]);
 
   if (debts.length === 0) {
     return null;
   }
 
+  function toggleGroup(groupId: string) {
+    setExpandedGroupIds((current) =>
+      current.includes(groupId)
+        ? current.filter((currentGroupId) => currentGroupId !== groupId)
+        : [...current, groupId],
+    );
+  }
+
   return (
-    <View style={styles.debtList}>
-      {debts.map((debt) => (
-        <View
-          key={debt.id}
-          style={[styles.debtCard, debt.isSettled && styles.debtCardSettled]}
-        >
-          <View style={styles.debtCardText}>
-            <Text
-              numberOfLines={1}
-              style={[
-                styles.debtTitle,
-                debt.isSettled && styles.debtSettledText,
+    <View style={styles.debtGroupList}>
+      {groups.map((group) => {
+        const expanded = expandedGroupIds.includes(group.id);
+        const accent = getMemberAccent(group.label);
+
+        return (
+          <View key={group.id} style={styles.debtGroupCard}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => toggleGroup(group.id)}
+              style={({ pressed }) => [
+                styles.debtGroupHeader,
+                pressed && styles.pressedRow,
               ]}
             >
-              {debt.purpose}
-            </Text>
-            <Text style={styles.debtMeta}>
-              {debt.lenderName}
-              {debt.dueDate ? ` / do ${formatDateShort(debt.dueDate)}` : ""}
-            </Text>
-            {debt.note ? (
-              <Text style={styles.debtNote}>{debt.note}</Text>
+              <View
+                style={[
+                  styles.debtGroupAvatar,
+                  {
+                    backgroundColor: accent.background,
+                    borderColor: accent.border,
+                  },
+                ]}
+              >
+                <Text style={[styles.debtGroupAvatarText, { color: accent.text }]}>
+                  {getDebtGroupInitial(group.label)}
+                </Text>
+              </View>
+              <View style={styles.debtGroupText}>
+                <View style={styles.debtGroupTitleRow}>
+                  <Text numberOfLines={1} style={styles.debtGroupTitle}>
+                    {group.label}
+                  </Text>
+                  <View style={styles.debtGroupCountBadge}>
+                    <Text style={styles.debtGroupCountText}>
+                      {group.totalCount}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.debtGroupMeta}>
+                  {group.activeCount} aktywne / {group.settledCount} spłacone
+                </Text>
+              </View>
+              <Text numberOfLines={1} style={styles.debtGroupAmount}>
+                {formatMoney(group.totalOpen, currencyCode)}
+              </Text>
+              {expanded ? (
+                <ChevronUp color={theme.colors.textMuted} size={24} />
+              ) : (
+                <ChevronDown color={theme.colors.textMuted} size={24} />
+              )}
+            </Pressable>
+
+            {expanded ? (
+              <View style={styles.debtRows}>
+                {group.debts.map((debt) => (
+                  <Pressable
+                    accessibilityRole={canUpdate ? "button" : undefined}
+                    disabled={!canUpdate}
+                    key={debt.id}
+                    onPress={() => onEdit(debt)}
+                    style={({ pressed }) => [
+                      styles.debtRow,
+                      debt.isSettled && styles.debtRowSettled,
+                      pressed && styles.pressedRow,
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.debtStatusRing,
+                        debt.isSettled && styles.debtStatusRingDone,
+                      ]}
+                    >
+                      {debt.isSettled ? (
+                        <Check color={theme.colors.finance} size={16} />
+                      ) : null}
+                    </View>
+                    <View style={styles.debtRowIcon}>
+                      <Hammer color={theme.colors.finance} size={20} />
+                    </View>
+                    <View style={styles.debtRowText}>
+                      <Text
+                        numberOfLines={1}
+                        style={[
+                          styles.debtRowTitle,
+                          debt.isSettled && styles.debtSettledText,
+                        ]}
+                      >
+                        {debt.purpose}
+                      </Text>
+                      <Text numberOfLines={1} style={styles.debtRowMeta}>
+                        {debt.dueDate
+                          ? `Termin: ${formatDateFull(debt.dueDate)}`
+                          : "Bez terminu"}
+                      </Text>
+                    </View>
+                    <View style={styles.debtRowSide}>
+                      <Text
+                        numberOfLines={1}
+                        style={[
+                          styles.debtRowAmount,
+                          debt.isSettled && styles.debtSettledText,
+                        ]}
+                      >
+                        {formatMoney(debt.amount, currencyCode)}
+                      </Text>
+                      <View style={styles.debtStatusLine}>
+                        <View
+                          style={[
+                            styles.debtStatusDot,
+                            debt.isSettled && styles.debtStatusDotDone,
+                          ]}
+                        />
+                        <Text style={styles.debtStatusText}>
+                          {debt.isSettled ? "Spłacone" : "Aktywne"}
+                        </Text>
+                      </View>
+                    </View>
+                    <ChevronRight color={theme.colors.textMuted} size={22} />
+                  </Pressable>
+                ))}
+              </View>
             ) : null}
           </View>
-          <View style={styles.debtSide}>
-            <Text
-              style={[
-                styles.debtAmount,
-                debt.isSettled && styles.debtSettledText,
-              ]}
-            >
-              {formatMoney(debt.amount, currencyCode)}
-            </Text>
-            <View style={styles.debtActions}>
-              {canUpdate ? (
-                <ActionButton
-                  disabled={updating}
-                  onPress={() => onToggleSettled(debt)}
-                  size="small"
-                  title={debt.isSettled ? "Cofnij" : "Spłacone"}
-                  variant={debt.isSettled ? "secondary" : "primary"}
-                />
-              ) : null}
-              {canUpdate ? (
-                <IconButton
-                  accessibilityLabel="Edytuj pożyczkę"
-                  onPress={() => onEdit(debt)}
-                >
-                  <Pencil color={theme.colors.textMuted} size={15} />
-                </IconButton>
-              ) : null}
-              {canDelete ? (
-                <IconButton
-                  accessibilityLabel="Usuń pożyczkę"
-                  disabled={deleting}
-                  onPress={() => onDelete(debt)}
-                >
-                  <Trash2 color={theme.colors.danger} size={15} />
-                </IconButton>
-              ) : null}
-            </View>
-          </View>
-        </View>
-      ))}
+        );
+      })}
+      <View style={styles.debtSwipeHint}>
+        <MoreHorizontal color={theme.colors.textSubtle} size={20} />
+        <Text style={styles.debtSwipeHintText}>
+          Dotknij pozycję, aby edytować lub usunąć
+        </Text>
+      </View>
     </View>
   );
 }
 
-function FinanceSavingsList({
+function _FinanceSavingsList({
   accounts,
   canDelete,
   canUpdate,
@@ -2734,24 +3627,40 @@ function FinanceFiltersPanel({
 
   return (
     <View style={styles.filterPanel}>
-      <View style={styles.filterHeader}>
-        <Text style={styles.filterTitle}>Widok budżetu</Text>
-        <Text style={styles.filterCount}>
-          {resultCount}/{totalCount}
-        </Text>
-      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <View style={styles.filterOwnerRail}>
+          <FilterChip
+            active={!filters.ownerMemberId}
+            label="Wszystkie"
+            onPress={() => onChange({ ownerMemberId: "" })}
+          />
+          {owners.map((owner) => (
+            <FilterChip
+              active={filters.ownerMemberId === owner.id}
+              key={owner.id}
+              label={owner.label}
+              onPress={() => onChange({ ownerMemberId: owner.id })}
+            />
+          ))}
+        </View>
+      </ScrollView>
       <Pressable
         accessibilityRole="button"
         onPress={onToggleExpanded}
         style={styles.filterToggleButton}
       >
+        <Filter color={theme.colors.finance} size={18} />
         <Text numberOfLines={1} style={styles.filterSummary}>
           {summary}
         </Text>
-        <Text style={styles.filterToggle}>{expanded ? "Zwin" : "Rozwin"}</Text>
+        {expanded ? (
+          <ChevronUp color={theme.colors.finance} size={18} />
+        ) : (
+          <ChevronDown color={theme.colors.finance} size={18} />
+        )}
       </Pressable>
       {expanded ? (
-        <>
+        <View style={styles.filterDetails}>
           <TextInput
             onChangeText={(search) => onChange({ search })}
             placeholder="Szukaj pozycji"
@@ -2759,26 +3668,6 @@ function FinanceFiltersPanel({
             style={styles.filterInput}
             value={filters.search}
           />
-          <View style={styles.filterGroup}>
-            <Text style={styles.filterLabel}>Osoba</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={styles.filterChipRow}>
-                <FilterChip
-                  active={!filters.ownerMemberId}
-                  label="Wszyscy"
-                  onPress={() => onChange({ ownerMemberId: "" })}
-                />
-                {owners.map((owner) => (
-                  <FilterChip
-                    active={filters.ownerMemberId === owner.id}
-                    key={owner.id}
-                    label={owner.label}
-                    onPress={() => onChange({ ownerMemberId: owner.id })}
-                  />
-                ))}
-              </View>
-            </ScrollView>
-          </View>
           <View style={styles.filterGroup}>
             <Text style={styles.filterLabel}>Kategoria</Text>
             <View style={[styles.filterChipRow, styles.filterCategoryGrid]}>
@@ -2829,7 +3718,7 @@ function FinanceFiltersPanel({
               />
             </View>
           </View>
-        </>
+        </View>
       ) : null}
     </View>
   );
@@ -2868,225 +3757,6 @@ function FilterChip({
   );
 }
 
-function FinanceSheet({
-  canCreateExpense,
-  canCreateItem,
-  canUpdate,
-  categories,
-  currencyCode,
-  onAddCategoryItem,
-  onAddExpense,
-  onEdit,
-  onHistory,
-  rows,
-}: {
-  canCreateExpense: boolean;
-  canCreateItem: boolean;
-  canUpdate: boolean;
-  categories: BudgetCategoryWithItems[];
-  currencyCode: SupportedCurrencyCode;
-  onAddCategoryItem: (category: BudgetCategoryWithItems) => void;
-  onAddExpense: (item: BudgetItemWithCategory) => void;
-  onEdit: (item: BudgetItemWithCategory) => void;
-  onHistory: (item: BudgetItemWithCategory) => void;
-  rows: BudgetItemWithCategory[];
-}) {
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
-  const [collapsedCategoryIds, setCollapsedCategoryIds] = useState<Set<string>>(
-    () => new Set(),
-  );
-
-  if (rows.length === 0 && categories.length === 0) {
-    return <InlineAlert text="Brak pozycji pasujących do filtrów." />;
-  }
-
-  const groups = groupRowsByCategory(rows, categories);
-
-  function toggleCategory(categoryId: string) {
-    setCollapsedCategoryIds((current) => {
-      const next = new Set(current);
-
-      if (next.has(categoryId)) {
-        next.delete(categoryId);
-      } else {
-        next.add(categoryId);
-      }
-
-      return next;
-    });
-  }
-
-  return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      style={styles.sheetScroller}
-    >
-      <View style={styles.sheet}>
-        <View style={styles.sheetHeader}>
-          <Text style={[styles.headerCell, styles.personCell]}>Osoba</Text>
-          <Text style={[styles.headerCell, styles.categoryCell]}>Pozycja</Text>
-          <Text style={styles.amountHeaderCell}>Budżet</Text>
-          <Text style={styles.amountHeaderCell}>Wydano</Text>
-          <Text style={styles.amountHeaderCell}>Zostaje</Text>
-          <Text style={styles.actionHeaderCell}>Akcje</Text>
-        </View>
-        {groups.map((group, index) => {
-          const accent = getCategoryAccent(index);
-          const collapsed = collapsedCategoryIds.has(group.category.id);
-
-          return (
-            <View key={group.category.id}>
-              <View
-                style={[
-                  styles.categoryRow,
-                  {
-                    backgroundColor: theme.colors.cardMuted,
-                    borderTopColor: accent.border,
-                  },
-                ]}
-              >
-                <View style={styles.categoryRowMain}>
-                  <View
-                    style={[
-                      styles.categoryColorBar,
-                      { backgroundColor: accent.color },
-                    ]}
-                  />
-                  <View style={styles.categoryRowTitleBlock}>
-                    <Text
-                      style={[styles.categoryRowText, { color: accent.text }]}
-                    >
-                      {group.category.name.toUpperCase()}
-                    </Text>
-                    <Text style={styles.categoryRowMeta}>
-                      {group.items.length} pozycji /{" "}
-                      {formatMoney(group.spent, currencyCode)} z{" "}
-                      {formatMoney(group.planned, currencyCode)}
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.categoryToggleCell}>
-                  <Pressable
-                    accessibilityLabel={
-                      collapsed ? "Rozwiń kategorię" : "Zwiń kategorię"
-                    }
-                    accessibilityRole="button"
-                    onPress={() => toggleCategory(group.category.id)}
-                    style={styles.categoryCollapseButton}
-                  >
-                    {collapsed ? (
-                      <ChevronRight color={accent.text} size={20} />
-                    ) : (
-                      <ChevronDown color={accent.text} size={20} />
-                    )}
-                  </Pressable>
-                </View>
-              </View>
-              {collapsed ? null : (
-                <>
-                  {group.items.map((item) => (
-                    <View key={item.id} style={styles.sheetRow}>
-                      <Pressable
-                        accessibilityLabel={`Pokaż historię pozycji ${item.name}`}
-                        accessibilityRole="button"
-                        accessibilityHint={
-                          canUpdate
-                            ? "Przytrzymaj, aby edytować pozycję budżetu."
-                            : undefined
-                        }
-                        onLongPress={canUpdate ? () => onEdit(item) : undefined}
-                        onPress={() => onHistory(item)}
-                        style={({ pressed }) => [
-                          styles.sheetRowContent,
-                          pressed && styles.pressedRow,
-                        ]}
-                      >
-                        <Text
-                          numberOfLines={1}
-                          style={[styles.bodyCell, styles.personCell]}
-                        >
-                          {formatOwner(item.owner)}
-                        </Text>
-                        <Text
-                          numberOfLines={1}
-                          style={[styles.bodyCell, styles.categoryCell]}
-                        >
-                          {item.name}
-                        </Text>
-                        <Text style={styles.amountCell}>
-                          {formatMoney(item.budgetAmount, currencyCode)}
-                        </Text>
-                        <Text style={styles.amountCell}>
-                          {formatMoney(item.spentAmount, currencyCode)}
-                        </Text>
-                        <Text
-                          style={[
-                            styles.amountCell,
-                            Number(item.remainingAmount ?? 0) < 0 &&
-                              styles.dangerText,
-                            Number(item.remainingAmount ?? 0) >= 0 &&
-                              styles.positiveText,
-                          ]}
-                        >
-                          {item.budgetAmount
-                            ? formatMoney(
-                                item.remainingAmount ?? 0,
-                                currencyCode,
-                              )
-                            : "bez limitu"}
-                        </Text>
-                      </Pressable>
-                      <View style={styles.actionCell}>
-                        {canCreateExpense ? (
-                          <IconButton
-                            accessibilityLabel="Dodaj wydatek"
-                            onPress={() => onAddExpense(item)}
-                            style={styles.sheetActionButton}
-                          >
-                            <CartPlus
-                              color={theme.colors.primaryDark}
-                              size={15}
-                            />
-                          </IconButton>
-                        ) : null}
-                      </View>
-                    </View>
-                  ))}
-                  {canCreateItem ? (
-                    <View style={[styles.sheetRow, { paddingHorizontal: 12 }]}>
-                      <Pressable
-                        accessibilityLabel={`Dodaj pozycję w kategorii ${group.category.name}`}
-                        accessibilityRole="button"
-                        onPress={() => onAddCategoryItem(group.category)}
-                        style={{
-                          paddingVertical: 12,
-                          alignItems: "flex-start",
-                          width: "100%",
-                        }}
-                      >
-                        <Text
-                          style={{
-                            color: theme.colors.primaryDark,
-                            fontWeight: "600",
-                          }}
-                        >
-                          + Dodaj pozycję
-                        </Text>
-                      </Pressable>
-                    </View>
-                  ) : null}
-                </>
-              )}
-            </View>
-          );
-        })}
-      </View>
-    </ScrollView>
-  );
-}
-
 function FinanceCategoryCards({
   canCreateExpense,
   canCreateItem,
@@ -3098,7 +3768,6 @@ function FinanceCategoryCards({
   onEdit,
   onHistory,
   rows,
-  scrollRef,
 }: {
   canCreateExpense: boolean;
   canCreateItem: boolean;
@@ -3110,218 +3779,217 @@ function FinanceCategoryCards({
   onEdit: (item: BudgetItemWithCategory) => void;
   onHistory: (item: BudgetItemWithCategory) => void;
   rows: BudgetItemWithCategory[];
-  scrollRef: RefObject<ScrollView>;
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
-    null,
+  const groups = useMemo(
+    () => groupRowsByCategory(rows, categories),
+    [categories, rows],
   );
-  const [detailsY, setDetailsY] = useState<number | null>(null);
+  const [expandedCategoryIds, setExpandedCategoryIds] = useState<string[]>([]);
 
   useEffect(() => {
-    if (!selectedCategoryId) {
-      setDetailsY(null);
+    if (groups.length === 0) {
+      setExpandedCategoryIds([]);
       return;
     }
 
-    if (detailsY !== null) {
-      const timeout = setTimeout(() => {
-        scrollRef.current?.scrollTo({
-          animated: true,
-          y: Math.max(0, detailsY - 12),
-        });
-      }, 80);
+    setExpandedCategoryIds((current) => {
+      const available = new Set(groups.map((group) => group.category.id));
+      const next = current.filter((categoryId) => available.has(categoryId));
 
-      return () => clearTimeout(timeout);
-    }
-  }, [scrollRef, selectedCategoryId, detailsY]);
+      return next.length > 0 ? next : [groups[0]!.category.id];
+    });
+  }, [groups]);
 
   if (rows.length === 0 && categories.length === 0) {
     return <InlineAlert text="Brak pozycji pasujących do filtrów." />;
   }
 
-  const groups = groupRowsByCategory(rows, categories);
-  const selectedGroup = groups.find(
-    (group) => group.category.id === selectedCategoryId,
-  );
+  function toggleCategory(categoryId: string) {
+    setExpandedCategoryIds((current) =>
+      current.includes(categoryId)
+        ? current.filter((currentCategoryId) => currentCategoryId !== categoryId)
+        : [...current, categoryId],
+    );
+  }
 
   return (
     <View style={styles.categoryCardsSection}>
-      <View style={styles.categoryCardGrid}>
-        {groups.map((group, index) => {
-          const accent = getCategoryAccent(index);
-          const active = selectedCategoryId === group.category.id;
-          const spentProgress = getBudgetSpentProgress(group);
-          const remainingLabel =
-            group.remaining >= 0
-              ? formatMoney(group.remaining, currencyCode)
-              : `-${formatMoney(Math.abs(group.remaining), currencyCode)}`;
-          const progressText =
-            group.planned > 0
-              ? `${Math.round(spentProgress * 100)}%`
-              : "bez limitu";
+      {groups.map((group, index) => {
+        const accent = getCategoryAccent(index);
+        const expanded = expandedCategoryIds.includes(group.category.id);
+        const spentProgress = getBudgetSpentProgress(group);
+        const progressPercent =
+          group.planned > 0 ? Math.round(spentProgress * 100) : 0;
+        const remainingLabel =
+          group.remaining >= 0
+            ? formatMoney(group.remaining, currencyCode)
+            : formatMoney(group.remaining, currencyCode);
 
-          return (
+        return (
+          <View key={group.category.id} style={styles.budgetAccordionCard}>
             <Pressable
-              accessibilityLabel={`Pokaż pozycje kategorii ${group.category.name}`}
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-              key={group.category.id}
-              onPress={() =>
-                setSelectedCategoryId(active ? null : group.category.id)
+              accessibilityLabel={
+                expanded
+                  ? `Zwiń kategorię ${group.category.name}`
+                  : `Rozwiń kategorię ${group.category.name}`
               }
-              style={[
-                styles.categoryCard,
-                active && styles.categoryCardActive,
-                active && {
-                  borderColor: accent.color,
-                  shadowColor: accent.color,
-                },
+              accessibilityRole="button"
+              accessibilityState={{ expanded }}
+              onPress={() => toggleCategory(group.category.id)}
+              style={({ pressed }) => [
+                styles.budgetAccordionHeader,
+                pressed && styles.pressedRow,
               ]}
             >
               <View
-                style={[styles.categoryCardIcon, { borderColor: accent.color }]}
+                style={[
+                  styles.budgetAccordionIcon,
+                  { backgroundColor: accent.color },
+                ]}
               >
-                {getBudgetCategoryIcon(group.category.name, accent.color)}
+                {getBudgetCategoryIcon(group.category.name, accent.onColor)}
               </View>
-              <View style={styles.categoryCardContent}>
-                <View style={styles.categoryCardTopLine}>
-                  <Text numberOfLines={1} style={styles.categoryCardTitle}>
+              <View style={styles.budgetAccordionText}>
+                <View style={styles.budgetAccordionTitleRow}>
+                  <Text numberOfLines={1} style={styles.budgetAccordionTitle}>
                     {group.category.name}
                   </Text>
-                  <Text numberOfLines={1} style={styles.categoryCardBudget}>
-                    {formatMoney(group.planned, currencyCode)}
+                  <Text style={styles.budgetAccordionMeta}>
+                    {group.items.length} pozycje
                   </Text>
                 </View>
-                <View style={styles.categoryProgressTrack}>
+                <View style={styles.budgetProgressTrack}>
                   <View
                     style={[
-                      styles.categoryProgressFill,
+                      styles.budgetProgressFill,
                       {
                         backgroundColor: accent.color,
                         width: `${Math.min(spentProgress, 1) * 100}%`,
                       },
                     ]}
                   />
-                  <Text style={styles.categoryProgressValue}>
-                    {progressText}
-                  </Text>
                 </View>
               </View>
-              <View style={styles.categoryCardRemainingBlock}>
+              <View style={styles.budgetAccordionAmounts}>
+                <Text numberOfLines={1} style={styles.budgetAccordionSpent}>
+                  {formatMoney(group.spent, currencyCode)} /{" "}
+                  {formatMoney(group.planned, currencyCode)}
+                </Text>
                 <Text
                   numberOfLines={1}
                   style={[
-                    styles.categoryCardAmount,
+                    styles.budgetAccordionRemaining,
                     group.remaining < 0 && styles.dangerText,
+                    group.remaining >= 0 && styles.positiveText,
                   ]}
                 >
                   {remainingLabel}
                 </Text>
-                <Text style={styles.categoryCardMeta}>zostaje</Text>
+                <Text style={styles.budgetAccordionPercent}>
+                  {group.planned > 0 ? `${progressPercent}%` : "bez limitu"}
+                </Text>
               </View>
+              {expanded ? (
+                <ChevronUp color={theme.colors.textMuted} size={23} />
+              ) : (
+                <ChevronDown color={theme.colors.textMuted} size={23} />
+              )}
             </Pressable>
-          );
-        })}
-      </View>
 
-      {selectedGroup ? (
-        <View
-          onLayout={(e) => setDetailsY(e.nativeEvent.layout.y)}
-          style={styles.categoryDetails}
-        >
-          <View style={styles.categoryDetailsHeader}>
-            <View style={styles.categoryDetailsHeaderTop}>
-              <View style={styles.categoryDetailsTitleBlock}>
-                <Text style={styles.categoryDetailsTitle}>
-                  {selectedGroup.category.name}
-                </Text>
-                <Text style={styles.categoryDetailsMeta}>
-                  {selectedGroup.items.length} pozycji / zostaje{" "}
-                  {formatMoney(selectedGroup.remaining, currencyCode)}
-                </Text>
-              </View>
-              {canCreateItem ? (
-                <ActionButton
-                  onPress={() => onAddCategoryItem(selectedGroup.category)}
-                  size="small"
-                  title="Dodaj pozycję"
-                  variant="secondary"
-                />
-              ) : null}
-            </View>
-          </View>
-          {selectedGroup.items.length === 0 ? (
-            <InlineAlert text="Ta kategoria nie ma jeszcze pozycji. Dodaj nową pozycję, aby zarządzać wydatkami." />
-          ) : (
-            selectedGroup.items.map((item) => (
-              <Pressable
-                accessibilityLabel={`Pokaż historię pozycji ${item.name}`}
-                accessibilityRole="button"
-                accessibilityHint={
-                  canUpdate
-                    ? "Przytrzymaj, aby edytować pozycję budżetu."
-                    : undefined
-                }
-                key={item.id}
-                onLongPress={canUpdate ? () => onEdit(item) : undefined}
-                onPress={() => onHistory(item)}
-                style={({ pressed }) => [
-                  styles.categoryDetailsRow,
-                  pressed && styles.pressedRow,
-                ]}
-              >
-                <View style={styles.categoryDetailsText}>
-                  <Text
-                    numberOfLines={1}
-                    style={styles.categoryDetailsItemTitle}
-                  >
-                    {item.name}
-                  </Text>
-                  <Text
-                    numberOfLines={1}
-                    style={styles.categoryDetailsItemMeta}
-                  >
-                    {formatOwner(item.owner)}
-                  </Text>
-                </View>
-                <View style={styles.categoryDetailsAmounts}>
-                  <Text style={styles.categoryDetailsAmount}>
-                    {formatMoney(item.budgetAmount, currencyCode)}
-                  </Text>
-                  <Text style={styles.categoryDetailsSpent}>
-                    wydano {formatMoney(item.spentAmount, currencyCode)}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.categoryDetailsRemaining,
-                      Number(item.remainingAmount ?? 0) < 0 &&
-                        styles.dangerText,
-                      Number(item.remainingAmount ?? 0) >= 0 &&
-                        styles.positiveText,
+            {expanded ? (
+              <View style={styles.budgetAccordionBody}>
+                {group.items.length === 0 ? (
+                  <InlineAlert text="Ta kategoria nie ma jeszcze pozycji." />
+                ) : (
+                  group.items.map((item) => (
+                    <Pressable
+                      accessibilityLabel={`Pokaż historię pozycji ${item.name}`}
+                      accessibilityRole="button"
+                      key={item.id}
+                      onPress={() => onHistory(item)}
+                      style={({ pressed }) => [
+                        styles.budgetItemRow,
+                        pressed && styles.pressedRow,
+                      ]}
+                    >
+                      <View style={styles.budgetOwnerPill}>
+                        <Text numberOfLines={1} style={styles.budgetOwnerText}>
+                          {formatOwner(item.owner)}
+                        </Text>
+                      </View>
+                      <View style={styles.budgetItemText}>
+                        <Text numberOfLines={1} style={styles.budgetItemTitle}>
+                          {item.name}
+                        </Text>
+                        <Text numberOfLines={1} style={styles.budgetItemMeta}>
+                          wydano {formatMoney(item.spentAmount, currencyCode)}
+                        </Text>
+                      </View>
+                      <View style={styles.budgetItemAmounts}>
+                        <Text style={styles.budgetItemAmount}>
+                          {formatMoney(item.budgetAmount, currencyCode)}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.budgetItemRemaining,
+                            Number(item.remainingAmount ?? 0) < 0 &&
+                              styles.dangerText,
+                            Number(item.remainingAmount ?? 0) >= 0 &&
+                              styles.positiveText,
+                          ]}
+                        >
+                          {item.budgetAmount
+                            ? formatMoney(item.remainingAmount ?? 0, currencyCode)
+                            : "bez limitu"}
+                        </Text>
+                      </View>
+                      <View style={styles.budgetItemActions}>
+                        {canCreateExpense ? (
+                          <IconButton
+                            accessibilityLabel="Dodaj wydatek"
+                            onPress={() => onAddExpense(item)}
+                            style={styles.budgetItemIconButton}
+                          >
+                            <CartPlus color={theme.colors.finance} size={18} />
+                          </IconButton>
+                        ) : null}
+                        {canUpdate ? (
+                          <IconButton
+                            accessibilityLabel="Edytuj pozycję"
+                            onPress={() => onEdit(item)}
+                            style={styles.budgetItemIconButton}
+                          >
+                            <MoreHorizontal
+                              color={theme.colors.textMuted}
+                              size={20}
+                            />
+                          </IconButton>
+                        ) : null}
+                      </View>
+                    </Pressable>
+                  ))
+                )}
+                {canCreateItem ? (
+                  <Pressable
+                    accessibilityLabel={`Dodaj pozycję w kategorii ${group.category.name}`}
+                    accessibilityRole="button"
+                    onPress={() => onAddCategoryItem(group.category)}
+                    style={({ pressed }) => [
+                      styles.budgetAddItemRow,
+                      pressed && styles.pressedRow,
                     ]}
                   >
-                    {item.budgetAmount
-                      ? formatMoney(item.remainingAmount ?? 0, currencyCode)
-                      : "bez limitu"}
-                  </Text>
-                </View>
-                <View style={styles.categoryDetailsActions}>
-                  {canCreateExpense ? (
-                    <IconButton
-                      accessibilityLabel="Dodaj wydatek"
-                      onPress={() => onAddExpense(item)}
-                    >
-                      <CartPlus color={theme.colors.primaryDark} size={15} />
-                    </IconButton>
-                  ) : null}
-                </View>
-              </Pressable>
-            ))
-          )}
-        </View>
-      ) : null}
+                    <Plus color={theme.colors.finance} size={22} />
+                    <Text style={styles.budgetAddItemText}>Dodaj pozycję</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -3456,7 +4124,6 @@ function applyFinanceCategoryFilters(
     return true;
   });
 }
-
 function compareFinanceRows(
   left: BudgetItemWithCategory,
   right: BudgetItemWithCategory,
@@ -3558,6 +4225,75 @@ function groupRowsByCategory(
   });
 
   return [...groups.values()];
+}
+
+function groupDebtsByLender(debts: FinanceDebt[]): FinanceDebtGroup[] {
+  const groups = new Map<string, FinanceDebtGroup>();
+
+  debts.forEach((debt) => {
+    const label = debt.lenderName.trim() || "Bez nazwy";
+    const id = label.toLocaleLowerCase("pl-PL");
+    const group =
+      groups.get(id) ??
+      ({
+        activeCount: 0,
+        debts: [],
+        id,
+        label,
+        settledCount: 0,
+        totalCount: 0,
+        totalOpen: 0,
+      } satisfies FinanceDebtGroup);
+
+    group.debts.push(debt);
+    group.totalCount += 1;
+
+    if (debt.isSettled) {
+      group.settledCount += 1;
+    } else {
+      group.activeCount += 1;
+      group.totalOpen += Number(debt.amount ?? 0);
+    }
+
+    groups.set(id, group);
+  });
+
+  return [...groups.values()]
+    .map((group) => ({
+      ...group,
+      debts: [...group.debts].sort(compareFinanceDebts),
+    }))
+    .sort(
+      (left, right) =>
+        right.totalOpen - left.totalOpen ||
+        right.activeCount - left.activeCount ||
+        left.label.localeCompare(right.label, "pl-PL"),
+    );
+}
+
+function compareFinanceDebts(left: FinanceDebt, right: FinanceDebt): number {
+  if (left.isSettled !== right.isSettled) {
+    return left.isSettled ? 1 : -1;
+  }
+
+  const leftDate = left.dueDate
+    ? Date.parse(left.dueDate)
+    : Number.POSITIVE_INFINITY;
+  const rightDate = right.dueDate
+    ? Date.parse(right.dueDate)
+    : Number.POSITIVE_INFINITY;
+
+  if (leftDate !== rightDate) {
+    return leftDate - rightDate;
+  }
+
+  return left.purpose.localeCompare(right.purpose, "pl-PL");
+}
+
+function getDebtGroupInitial(label: string): string {
+  const initial = label.trim().charAt(0);
+
+  return initial ? initial.toUpperCase() : "?";
 }
 
 function getCategoryAccent(index: number): {
@@ -3692,6 +4428,80 @@ function formatOwner(owner: BudgetItem["owner"] | null | undefined): string {
   return owner?.displayName || owner?.email || "Brak właściciela";
 }
 
+function compareSavingsGoals(left: SavingsGoalView, right: SavingsGoalView): number {
+  const leftDate = left.targetDate ? Date.parse(left.targetDate) : Number.POSITIVE_INFINITY;
+  const rightDate = right.targetDate ? Date.parse(right.targetDate) : Number.POSITIVE_INFINITY;
+
+  if (leftDate !== rightDate) {
+    return leftDate - rightDate;
+  }
+
+  if (left.isAchieved !== right.isAchieved) {
+    return left.isAchieved ? 1 : -1;
+  }
+
+  return left.name.localeCompare(right.name, "pl-PL");
+}
+
+function getMemberInitial(member: HouseholdMember | null | undefined): string {
+  const source = member?.displayName || member?.email || "?";
+  const initial = source.trim().charAt(0);
+
+  return initial ? initial.toUpperCase() : "?";
+}
+
+function getMemberAccent(seed: string): {
+  background: string;
+  border: string;
+  text: string;
+} {
+  const accents = [
+    { background: "#EEF5E8", border: "#DCE9D1", text: "#4D6A2D" },
+    { background: "#EEF4FF", border: "#D8E3FF", text: "#355B9E" },
+    { background: "#FFF3E7", border: "#FFE0C0", text: "#A35B10" },
+    { background: "#F5EEFF", border: "#E2D7FF", text: "#7451B8" },
+    { background: "#EFF9F2", border: "#D5EEDB", text: "#3F7A4A" },
+  ];
+  const hash = [...seed].reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  const fallback = { background: "#EEF5E8", border: "#DCE9D1", text: "#4D6A2D" };
+
+  return accents[hash % accents.length] ?? fallback;
+}
+
+function getSavingsGoalIcon(goalName: string, color: string): ReactNode {
+  const normalized = goalName.toLocaleLowerCase("pl-PL");
+
+  if (/(wakacj|urlop|podr[oó]ż|podroz|wyjazd|travel)/.test(normalized)) {
+    return <Gift color={color} size={18} />;
+  }
+
+  if (/(bezpiec|podusz|awary|rezerwa)/.test(normalized)) {
+    return <ShieldCheck color={color} size={18} />;
+  }
+
+  if (/(telefon|smartfon|iphone|android|kom[oó]r)/.test(normalized)) {
+    return <Smartphone color={color} size={18} />;
+  }
+
+  if (/(dom|mieszkan|remont|mebl|ogr[oó]d)/.test(normalized)) {
+    return <Home color={color} size={18} />;
+  }
+
+  if (/(auto|samoch|car|warsztat)/.test(normalized)) {
+    return <Car color={color} size={18} />;
+  }
+
+  if (/(dzieci|rodzin|rodzina|wsp[oó]lne)/.test(normalized)) {
+    return <Users color={color} size={18} />;
+  }
+
+  if (/(prezent|święta|swieta|gift)/.test(normalized)) {
+    return <Heart color={color} size={18} />;
+  }
+
+  return <PiggyBank color={color} size={18} />;
+}
+
 function parseMoney(value: string): number {
   const normalized = value.replace(/\s/g, "").replace(",", ".").trim();
   const parsed = Number(normalized);
@@ -3722,14 +4532,6 @@ function formatMoneyInput(value: string | number | null | undefined): string {
   const amount = Number(value ?? 0);
 
   return Number.isFinite(amount) ? String(amount).replace(".", ",") : "";
-}
-
-function formatDateShort(value: string): string {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return value;
-  }
-
-  return `${value.slice(8, 10)}.${value.slice(5, 7)}`;
 }
 
 function formatDateFull(value: string): string {
@@ -3870,6 +4672,171 @@ function createStyles(colors: AppPalette) {
     },
     categoryCell: {
       width: 92,
+    },
+    budgetAccordionAmounts: {
+      alignItems: "flex-end",
+      gap: 2,
+      minWidth: 104,
+    },
+    budgetAccordionBody: {
+      backgroundColor: colors.card,
+      paddingBottom: spacing.sm,
+    },
+    budgetAccordionCard: {
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      overflow: "hidden",
+    },
+    budgetAccordionHeader: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.sm,
+      minHeight: 82,
+      padding: spacing.md,
+    },
+    budgetAccordionIcon: {
+      alignItems: "center",
+      borderRadius: 13,
+      height: 48,
+      justifyContent: "center",
+      width: 48,
+    },
+    budgetAccordionMeta: {
+      color: colors.textMuted,
+      fontSize: 11,
+      letterSpacing: 0,
+    },
+    budgetAccordionPercent: {
+      color: colors.textMuted,
+      fontSize: 11,
+      fontWeight: "800",
+      letterSpacing: 0,
+    },
+    budgetAccordionRemaining: {
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 0,
+      textAlign: "right",
+    },
+    budgetAccordionSpent: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: "900",
+      letterSpacing: 0,
+      textAlign: "right",
+    },
+    budgetAccordionText: {
+      flex: 1,
+      gap: spacing.sm,
+      minWidth: 0,
+    },
+    budgetAccordionTitle: {
+      color: colors.text,
+      flex: 1,
+      fontSize: 16,
+      fontWeight: "900",
+      letterSpacing: 0,
+      minWidth: 0,
+    },
+    budgetAccordionTitleRow: {
+      gap: 1,
+    },
+    budgetAddItemRow: {
+      alignItems: "center",
+      borderColor: colors.line,
+      borderTopWidth: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      minHeight: 48,
+      paddingHorizontal: spacing.md,
+    },
+    budgetAddItemText: {
+      color: colors.finance,
+      fontSize: 14,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    budgetItemActions: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: 2,
+    },
+    budgetItemAmount: {
+      color: colors.text,
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 0,
+      textAlign: "right",
+    },
+    budgetItemAmounts: {
+      alignItems: "flex-end",
+      gap: 2,
+      minWidth: 72,
+    },
+    budgetItemIconButton: {
+      height: 34,
+      width: 34,
+    },
+    budgetItemMeta: {
+      color: colors.textMuted,
+      fontSize: 11,
+      letterSpacing: 0,
+    },
+    budgetItemRemaining: {
+      fontSize: 11,
+      fontWeight: "900",
+      letterSpacing: 0,
+      textAlign: "right",
+    },
+    budgetItemRow: {
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderColor: colors.line,
+      borderTopWidth: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      minHeight: 58,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+    },
+    budgetItemText: {
+      flex: 1,
+      gap: 2,
+      minWidth: 0,
+    },
+    budgetItemTitle: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    budgetOwnerPill: {
+      alignItems: "center",
+      backgroundColor: colors.softGreen,
+      borderRadius: 999,
+      maxWidth: 82,
+      minHeight: 25,
+      paddingHorizontal: spacing.sm,
+    },
+    budgetOwnerText: {
+      color: colors.finance,
+      fontSize: 10,
+      fontWeight: "900",
+      letterSpacing: 0,
+      lineHeight: 25,
+    },
+    budgetProgressFill: {
+      borderRadius: 999,
+      height: "100%",
+    },
+    budgetProgressTrack: {
+      backgroundColor: colors.cardMuted,
+      borderRadius: 999,
+      height: 8,
+      overflow: "hidden",
+      width: "100%",
     },
     categoryCard: {
       alignItems: "center",
@@ -4169,37 +5136,129 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
       lineHeight: 19,
     },
+    debtDeleteButton: {
+      backgroundColor: colors.card,
+      borderColor: `${colors.danger}55`,
+      borderWidth: 1,
+      height: 52,
+      width: 62,
+    },
     debtActions: {
       alignItems: "center",
       flexDirection: "row",
       gap: spacing.xs,
       justifyContent: "flex-end",
     },
-    debtAmount: {
-      color: colors.text,
-      fontSize: 14,
-      fontWeight: "900",
-      letterSpacing: 0,
-      textAlign: "right",
-    },
-    debtCard: {
-      alignItems: "flex-start",
-      backgroundColor: colors.card,
-      borderColor: colors.border,
-      borderRadius: radii.card,
-      borderWidth: 1,
-      flexDirection: "row",
-      gap: spacing.sm,
-      padding: spacing.md,
-    },
-    debtCardSettled: {
-      backgroundColor: colors.cardMuted,
-      opacity: 0.82,
-    },
     debtCardText: {
       flex: 1,
       gap: 3,
       minWidth: 0,
+    },
+    debtEditorIcon: {
+      alignItems: "center",
+      backgroundColor: colors.softGreen,
+      borderColor: colors.line,
+      borderRadius: 12,
+      borderWidth: 1,
+      height: 42,
+      justifyContent: "center",
+      width: 42,
+    },
+    debtEditorPreview: {
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderColor: colors.line,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      padding: spacing.sm,
+    },
+    debtEditorPreviewAmount: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: "900",
+      letterSpacing: 0,
+      maxWidth: 104,
+      textAlign: "right",
+    },
+    debtEditorPreviewMeta: {
+      color: colors.textMuted,
+      fontSize: 11,
+      fontWeight: "800",
+      letterSpacing: 0,
+    },
+    debtEditorPreviewText: {
+      flex: 1,
+      gap: 2,
+      minWidth: 0,
+    },
+    debtEditorPreviewTitle: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    debtFormGrid: {
+      gap: spacing.sm,
+    },
+    debtGroupAmount: {
+      color: colors.finance,
+      fontSize: 18,
+      fontWeight: "900",
+      letterSpacing: 0,
+      maxWidth: 110,
+      textAlign: "right",
+    },
+    debtGroupAvatar: {
+      alignItems: "center",
+      borderRadius: 999,
+      borderWidth: 1,
+      height: 46,
+      justifyContent: "center",
+      width: 46,
+    },
+    debtGroupAvatarText: {
+      fontFamily: Platform.select({
+        android: "serif",
+        default: "Georgia",
+        ios: "Georgia",
+        web: "Georgia",
+      }),
+      fontSize: 20,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    debtGroupCard: {
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      overflow: "hidden",
+    },
+    debtGroupCountBadge: {
+      alignItems: "center",
+      backgroundColor: colors.softGreen,
+      borderRadius: 999,
+      minWidth: 24,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+    },
+    debtGroupCountText: {
+      color: colors.finance,
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    debtGroupHeader: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.sm,
+      minHeight: 76,
+      padding: spacing.md,
+    },
+    debtGroupList: {
+      gap: spacing.sm,
     },
     debtList: {
       gap: spacing.sm,
@@ -4209,20 +5268,218 @@ function createStyles(colors: AppPalette) {
       fontSize: 12,
       letterSpacing: 0,
     },
-    debtNote: {
+    debtGroupMeta: {
+      color: colors.textMuted,
+      fontSize: 11,
+      letterSpacing: 0,
+    },
+    debtGroupText: {
+      flex: 1,
+      gap: 3,
+      minWidth: 0,
+    },
+    debtGroupTitle: {
+      color: colors.text,
+      flex: 1,
+      fontFamily: Platform.select({
+        android: "serif",
+        default: "Georgia",
+        ios: "Georgia",
+        web: "Georgia",
+      }),
+      fontSize: 20,
+      fontWeight: "800",
+      letterSpacing: 0,
+      minWidth: 0,
+    },
+    debtGroupTitleRow: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.sm,
+    },
+    debtModalFooter: {
+      flexDirection: "row",
+      gap: spacing.sm,
+    },
+    debtOverviewAmount: {
+      color: colors.finance,
+      fontFamily: Platform.select({
+        android: "serif",
+        default: "Georgia",
+        ios: "Georgia",
+        web: "Georgia",
+      }),
+      fontSize: 34,
+      fontWeight: "900",
+      letterSpacing: 0,
+      lineHeight: 38,
+    },
+    debtOverviewCard: {
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: 16,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: spacing.md,
+      padding: spacing.md,
+    },
+    debtOverviewDivider: {
+      alignSelf: "stretch",
+      backgroundColor: colors.line,
+      width: 1,
+    },
+    debtOverviewIconWrap: {
+      alignItems: "center",
+      backgroundColor: colors.softGreen,
+      borderColor: colors.line,
+      borderRadius: 999,
+      borderWidth: 1,
+      height: 72,
+      justifyContent: "center",
+      width: 72,
+    },
+    debtOverviewKicker: {
+      color: colors.textMuted,
+      fontSize: 10,
+      fontWeight: "900",
+      letterSpacing: 0,
+      textTransform: "uppercase",
+    },
+    debtOverviewMain: {
+      flex: 1,
+      gap: 2,
+      minWidth: 0,
+    },
+    debtOverviewMeta: {
+      color: colors.textMuted,
+      fontSize: 11,
+      letterSpacing: 0,
+    },
+    debtOverviewStat: {
+      alignItems: "center",
+      flex: 1,
+      gap: 2,
+    },
+    debtOverviewStatLabel: {
+      color: colors.textMuted,
+      fontSize: 10,
+      fontWeight: "800",
+      letterSpacing: 0,
+    },
+    debtOverviewStats: {
+      alignItems: "center",
+      alignSelf: "stretch",
+      flexDirection: "row",
+      width: 126,
+    },
+    debtOverviewStatValue: {
+      color: colors.text,
+      fontSize: 18,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    debtRow: {
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderColor: colors.line,
+      borderTopWidth: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      minHeight: 72,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+    },
+    debtRowAmount: {
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: "900",
+      letterSpacing: 0,
+      textAlign: "right",
+    },
+    debtRowIcon: {
+      alignItems: "center",
+      backgroundColor: colors.softGreen,
+      borderColor: colors.line,
+      borderRadius: 13,
+      borderWidth: 1,
+      height: 42,
+      justifyContent: "center",
+      width: 42,
+    },
+    debtRowMeta: {
       color: colors.textMuted,
       fontSize: 12,
       letterSpacing: 0,
-      lineHeight: 17,
     },
-    debtSettledText: {
-      color: colors.textSubtle,
-      textDecorationLine: "line-through",
+    debtRowSettled: {
+      opacity: 0.62,
+    },
+    debtRows: {
+      backgroundColor: colors.card,
+    },
+    debtRowSide: {
+      alignItems: "flex-end",
+      gap: 2,
+      minWidth: 82,
     },
     debtSide: {
       alignItems: "flex-end",
       gap: spacing.sm,
       minWidth: 104,
+    },
+    debtRowText: {
+      flex: 1,
+      gap: 3,
+      minWidth: 0,
+    },
+    debtRowTitle: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    debtSaveButton: {
+      flex: 1,
+    },
+    debtSettledText: {
+      color: colors.textSubtle,
+      textDecorationLine: "line-through",
+    },
+    debtStatusDot: {
+      backgroundColor: colors.warning,
+      borderRadius: 999,
+      height: 8,
+      width: 8,
+    },
+    debtStatusDotDone: {
+      backgroundColor: colors.finance,
+    },
+    debtStatusGroup: {
+      gap: spacing.xs,
+    },
+    debtStatusLine: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: 5,
+    },
+    debtStatusRing: {
+      borderColor: colors.finance,
+      borderRadius: 999,
+      borderWidth: 2,
+      height: 32,
+      width: 32,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    debtStatusRingDone: {
+      backgroundColor: colors.softGreen,
+    },
+    debtStatusText: {
+      color: colors.textMuted,
+      fontSize: 11,
+      fontWeight: "800",
+      letterSpacing: 0,
     },
     debtSummary: {
       alignItems: "center",
@@ -4253,6 +5510,18 @@ function createStyles(colors: AppPalette) {
       color: colors.danger,
       fontSize: 20,
       fontWeight: "900",
+      letterSpacing: 0,
+    },
+    debtSwipeHint: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.sm,
+      justifyContent: "center",
+      paddingVertical: spacing.xs,
+    },
+    debtSwipeHintText: {
+      color: colors.textSubtle,
+      fontSize: 12,
       letterSpacing: 0,
     },
     debtTitle: {
@@ -4348,6 +5617,429 @@ function createStyles(colors: AppPalette) {
       fontWeight: "900",
       letterSpacing: 0,
     },
+    financeFloatingAction: {
+      alignItems: "center",
+      backgroundColor: colors.finance,
+      borderColor: colors.finance,
+      borderRadius: 999,
+      elevation: 8,
+      height: 58,
+      justifyContent: "center",
+      shadowColor: colors.finance,
+      shadowOffset: { height: 8, width: 0 },
+      shadowOpacity: 0.24,
+      shadowRadius: 18,
+      width: 58,
+    },
+    financeFloatingActionPressed: {
+      opacity: 0.86,
+    },
+    financeHeaderMenuButton: {
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: 999,
+      borderWidth: 1,
+      height: 42,
+      justifyContent: "center",
+      width: 42,
+    },
+    financeMenuGrid: {
+      gap: spacing.sm,
+    },
+    financeScreenContent: {
+      gap: spacing.lg,
+      paddingBottom: 160,
+      paddingTop: spacing.sm,
+    },
+    savingsDetailsCard: {
+      backgroundColor: colors.cardMuted,
+      borderColor: colors.line,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      gap: spacing.sm,
+      padding: spacing.md,
+    },
+    savingsDetailsHeader: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.md,
+    },
+    savingsDetailsIcon: {
+      backgroundColor: colors.softGreen,
+      height: 54,
+      width: 54,
+    },
+    savingsDetailsMeta: {
+      color: colors.textMuted,
+      fontSize: 12,
+      letterSpacing: 0,
+      lineHeight: 17,
+    },
+    savingsTransactionList: {
+      gap: spacing.xs,
+      marginTop: spacing.xs,
+    },
+    savingsDetailsText: {
+      flex: 1,
+      gap: 2,
+      minWidth: 0,
+    },
+    savingsDetailsTitle: {
+      color: colors.finance,
+      fontSize: 24,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    savingsGroupAmount: {
+      color: colors.finance,
+      fontSize: 18,
+      fontWeight: "900",
+      letterSpacing: 0,
+      textAlign: "right",
+    },
+    savingsGroupAmountBlock: {
+      alignItems: "flex-end",
+      gap: 2,
+      minWidth: 88,
+    },
+    savingsGroupAvatar: {
+      alignItems: "center",
+      borderRadius: 999,
+      borderWidth: 1,
+      height: 46,
+      justifyContent: "center",
+      width: 46,
+    },
+    savingsGroupAvatarLabel: {
+      fontSize: 17,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    savingsGroupCard: {
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      overflow: "hidden",
+    },
+    savingsGroupChevron: {
+      alignItems: "center",
+      justifyContent: "center",
+      width: 26,
+    },
+    savingsGroupCountBadge: {
+      alignItems: "center",
+      backgroundColor: colors.softGreen,
+      borderRadius: 999,
+      height: 22,
+      justifyContent: "center",
+      minWidth: 22,
+      paddingHorizontal: 7,
+    },
+    savingsGroupCountText: {
+      color: colors.finance,
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    savingsGroupHeader: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.sm,
+      padding: spacing.md,
+    },
+    savingsGroupList: {
+      gap: spacing.sm,
+    },
+    savingsGroupMeta: {
+      color: colors.textMuted,
+      fontSize: 11,
+      letterSpacing: 0,
+    },
+    savingsGroupText: {
+      flex: 1,
+      gap: 2,
+      minWidth: 0,
+    },
+    savingsGroupTitle: {
+      color: colors.text,
+      flex: 1,
+      fontFamily: Platform.select({
+        android: "serif",
+        default: "Georgia",
+        ios: "Georgia",
+        web: "Georgia",
+      }),
+      fontSize: 20,
+      fontWeight: "800",
+      letterSpacing: 0,
+      minWidth: 0,
+    },
+    savingsGroupTitleRow: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.sm,
+    },
+    savingsGoalAmount: {
+      color: colors.text,
+      fontSize: 17,
+      fontWeight: "900",
+      letterSpacing: 0,
+      textAlign: "right",
+    },
+    savingsGoalAmountBlock: {
+      alignItems: "flex-end",
+      gap: 2,
+      minWidth: 102,
+    },
+    savingsGoalIcon: {
+      alignItems: "center",
+      backgroundColor: colors.softGreen,
+      borderColor: colors.line,
+      borderRadius: 14,
+      borderWidth: 1,
+      height: 40,
+      justifyContent: "center",
+      width: 40,
+    },
+    savingsGoalList: {
+      gap: 0,
+      paddingBottom: spacing.sm,
+    },
+    savingsGoalMeta: {
+      color: colors.textMuted,
+      fontSize: 11,
+      letterSpacing: 0,
+    },
+    savingsGoalProgressFill: {
+      borderRadius: 999,
+      height: "100%",
+    },
+    savingsGoalProgressLabel: {
+      fontSize: 11,
+      fontWeight: "900",
+      letterSpacing: 0,
+      textAlign: "right",
+    },
+    savingsGoalProgressLabelNormal: {
+      color: colors.finance,
+    },
+    savingsGoalProgressLabelSuccess: {
+      color: colors.finance,
+    },
+    savingsGoalProgressLabelWarning: {
+      color: colors.warning,
+    },
+    savingsGoalProgressTrack: {
+      backgroundColor: colors.cardMuted,
+      borderRadius: 999,
+      height: 6,
+      overflow: "hidden",
+      width: "100%",
+    },
+    savingsGoalRing: {
+      alignItems: "center",
+      height: 30,
+      justifyContent: "center",
+      width: 30,
+    },
+    savingsGoalRingInner: {
+      backgroundColor: colors.card,
+      borderColor: colors.line,
+      borderRadius: 999,
+      borderWidth: 1,
+      height: 18,
+      position: "absolute",
+      width: 18,
+    },
+    savingsGoalRingOuter: {
+      alignItems: "center",
+      height: 30,
+      justifyContent: "center",
+      position: "relative",
+      width: 30,
+    },
+    savingsGoalRingSegment: {
+      borderRadius: 999,
+      height: 7,
+      left: 14,
+      position: "absolute",
+      top: 11,
+      width: 3,
+    },
+    savingsGoalRow: {
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderColor: colors.line,
+      borderTopWidth: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.md,
+    },
+    savingsGoalText: {
+      flex: 1,
+      gap: 2,
+      minWidth: 0,
+    },
+    savingsGoalTitle: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    savingsNextGoalCard: {
+      alignItems: "center",
+      backgroundColor: colors.softGreen,
+      borderColor: colors.line,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      padding: spacing.md,
+    },
+    savingsNextGoalButton: {
+      backgroundColor: colors.card,
+      borderColor: colors.finance,
+      minWidth: 106,
+    },
+    savingsNextGoalButtonLabel: {
+      color: colors.finance,
+    },
+    savingsNextGoalIconWrap: {
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderColor: colors.line,
+      borderRadius: 14,
+      borderWidth: 1,
+      height: 44,
+      justifyContent: "center",
+      width: 44,
+    },
+    savingsNextGoalLabel: {
+      color: colors.finance,
+      fontSize: 11,
+      fontWeight: "900",
+      letterSpacing: 0,
+      textTransform: "uppercase",
+    },
+    savingsNextGoalMeta: {
+      color: colors.text,
+      fontSize: 12,
+      fontWeight: "800",
+      letterSpacing: 0,
+    },
+    savingsNextGoalText: {
+      flex: 1,
+      gap: 2,
+      minWidth: 0,
+    },
+    savingsNextGoalTitle: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    savingsOverview: {
+      gap: spacing.md,
+    },
+    savingsSummaryCard: {
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: 16,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      padding: spacing.md,
+    },
+    savingsSummaryHeader: {
+      alignItems: "center",
+      flex: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      minWidth: 0,
+    },
+    savingsSummaryIconWrap: {
+      alignItems: "center",
+      backgroundColor: colors.softGreen,
+      borderColor: colors.line,
+      borderRadius: 999,
+      borderWidth: 1,
+      height: 58,
+      justifyContent: "center",
+      width: 58,
+    },
+    savingsSummaryKicker: {
+      color: colors.textMuted,
+      fontSize: 10,
+      fontWeight: "900",
+      letterSpacing: 0,
+      textTransform: "uppercase",
+    },
+    savingsSummaryMeta: {
+      color: colors.textMuted,
+      fontSize: 10,
+      letterSpacing: 0,
+      lineHeight: 14,
+    },
+    savingsSummaryStats: {
+      alignItems: "center",
+      alignSelf: "stretch",
+      flexDirection: "row",
+      justifyContent: "space-between",
+      paddingLeft: spacing.sm,
+      width: 130,
+    },
+    savingsSummaryStat: {
+      alignItems: "center",
+      flex: 1,
+      gap: 2,
+      justifyContent: "center",
+    },
+    savingsSummaryStatDivider: {
+      alignSelf: "stretch",
+      backgroundColor: colors.line,
+      width: 1,
+    },
+    savingsSummaryStatLabel: {
+      color: colors.textMuted,
+      fontSize: 10,
+      fontWeight: "800",
+      letterSpacing: 0,
+    },
+    savingsSummaryStatValue: {
+      color: colors.text,
+      fontSize: 17,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    savingsSummaryText: {
+      flex: 1,
+      gap: 2,
+      minWidth: 0,
+    },
+    dangerButton: {
+      borderColor: colors.danger,
+      backgroundColor: colors.card,
+    },
+    dangerButtonLabel: {
+      color: colors.danger,
+    },
+    savingsSummaryValue: {
+      color: colors.finance,
+      fontFamily: Platform.select({
+        android: "serif",
+        default: "Georgia",
+        ios: "Georgia",
+        web: "Georgia",
+      }),
+      fontSize: 30,
+      fontWeight: "900",
+      letterSpacing: 0,
+      lineHeight: 34,
+    },
     savingsAmount: {
       color: colors.primaryDark,
       fontSize: 15,
@@ -4396,9 +6088,6 @@ function createStyles(colors: AppPalette) {
       alignItems: "center",
       flexDirection: "row",
       gap: spacing.sm,
-    },
-    savingsSummaryValue: {
-      color: colors.primaryDark,
     },
     savingsTransactionMeta: {
       color: colors.textMuted,
@@ -4603,11 +6292,8 @@ function createStyles(colors: AppPalette) {
     filterChipTextActive: {
       color: colors.inverseText,
     },
-    filterCount: {
-      color: colors.textMuted,
-      fontSize: 11,
-      fontWeight: "900",
-      letterSpacing: 0,
+    filterDetails: {
+      gap: spacing.sm,
     },
     filterSummary: {
       color: colors.textMuted,
@@ -4635,13 +6321,13 @@ function createStyles(colors: AppPalette) {
       minHeight: 36,
       paddingHorizontal: spacing.sm,
     },
+    filterOwnerRail: {
+      flexDirection: "row",
+      gap: spacing.xs,
+      paddingRight: spacing.md,
+    },
     filterGroup: {
       gap: spacing.xs,
-    },
-    filterHeader: {
-      alignItems: "center",
-      flexDirection: "row",
-      justifyContent: "space-between",
     },
     filterInput: {
       backgroundColor: colors.field,
@@ -4667,12 +6353,6 @@ function createStyles(colors: AppPalette) {
       borderWidth: 1,
       gap: spacing.sm,
       padding: spacing.sm,
-    },
-    filterTitle: {
-      color: colors.text,
-      fontSize: 13,
-      fontWeight: "900",
-      letterSpacing: 0,
     },
     headerCell: {
       backgroundColor: colors.cardMuted,
@@ -4776,12 +6456,18 @@ function createStyles(colors: AppPalette) {
     },
     financeSummaryCenter: {
       alignItems: "center",
-      height: 84,
+      height: 102,
       justifyContent: "center",
-      width: 88,
+      width: 108,
     },
     financeSummaryCenterText: {
       alignItems: "center",
+      gap: 1,
+      position: "absolute",
+    },
+    financeSummaryCenterMeta: {
+      alignItems: "center",
+      bottom: -1,
       gap: 1,
       position: "absolute",
     },
@@ -4832,8 +6518,20 @@ function createStyles(colors: AppPalette) {
       fontSize: 13,
       fontWeight: "900",
       letterSpacing: 0,
-      maxWidth: 58,
+      maxWidth: 64,
       textAlign: "center",
+    },
+    financeSummaryMetaLabel: {
+      color: colors.textMuted,
+      fontSize: 9,
+      fontWeight: "900",
+      letterSpacing: 0,
+      textTransform: "uppercase",
+    },
+    financeSummaryMetaValue: {
+      fontSize: 11,
+      fontWeight: "900",
+      letterSpacing: 0,
     },
     financeSummarySide: {
       alignItems: "center",
@@ -4844,6 +6542,12 @@ function createStyles(colors: AppPalette) {
     financeSummaryValue: {
       color: colors.text,
       fontSize: 14,
+      fontWeight: "900",
+      letterSpacing: 0,
+      textAlign: "center",
+    },
+    financeSummarySideMeta: {
+      fontSize: 10,
       fontWeight: "900",
       letterSpacing: 0,
       textAlign: "center",
@@ -4913,6 +6617,12 @@ function createStyles(colors: AppPalette) {
       fontWeight: "900",
       letterSpacing: 0,
       textAlign: "center",
+    },
+    budgetLayoutButton: {
+      backgroundColor: colors.primarySoft,
+      borderColor: colors.primary,
+      height: 38,
+      width: 38,
     },
     monthNavButton: {
       backgroundColor: "transparent",

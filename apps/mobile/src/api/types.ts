@@ -463,7 +463,10 @@ export interface FinanceSavingsAccount {
   householdId: string;
   id: string;
   lastChangedAt: string;
+  ownerMemberId: string | null;
   name: string;
+  targetAmount: string | null;
+  targetDate: string | null;
   transactions: FinanceSavingsTransaction[];
   updatedAt: string;
 }
@@ -471,8 +474,11 @@ export interface FinanceSavingsAccount {
 export interface CreateFinanceSavingsAccountRequest {
   amount: number;
   changedAt?: string;
+  ownerMemberId?: string | null;
   name: string;
   note?: string | null;
+  targetAmount?: number | null;
+  targetDate?: string | null;
 }
 
 export interface CreateFinanceSavingsTransactionRequest {

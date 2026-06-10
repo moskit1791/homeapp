@@ -17,10 +17,22 @@ export class FinanceSavingsService {
   async listAccounts(householdId: string): Promise<FinanceSavingsAccountRecord[]> {
     const accounts = await this.database.query<FinanceSavingsAccountRow>(
       `
-        select id, household_id, name, current_amount, last_changed_at, created_at, updated_at
-        from finance_savings_accounts
-        where household_id = $1
-        order by name asc
+        select
+          fsa.id,
+          fsa.household_id,
+          fsa.owner_member_id,
+          fsa.name,
+          fsa.current_amount,
+          fsa.last_changed_at,
+          fsa.target_amount,
+          fsa.target_date,
+          fsa.created_at,
+          fsa.updated_at
+        from finance_savings_accounts fsa
+        left join household_members hm
+          on hm.id = fsa.owner_member_id
+        where fsa.household_id = $1
+        order by coalesce(hm.display_name, fsa.name) asc, fsa.name asc
       `,
       [householdId]
     );
@@ -30,22 +42,46 @@ export class FinanceSavingsService {
 
   async createAccount(
     householdId: string,
+    currentMemberId: string,
     dto: CreateFinanceSavingsAccountDto
   ): Promise<FinanceSavingsAccountRecord> {
     const created = await this.database.transaction(async (client) => {
       const changedAt = dto.changedAt ?? this.todayIso();
+      const ownerMemberId = dto.ownerMemberId ?? currentMemberId;
+      await this.ensureActiveMember(client, householdId, ownerMemberId);
       const account = await client.query<FinanceSavingsAccountRow>(
         `
           insert into finance_savings_accounts (
             household_id,
+            owner_member_id,
             name,
             current_amount,
-            last_changed_at
+            last_changed_at,
+            target_amount,
+            target_date
           )
-          values ($1, $2, $3, $4)
-          returning id, household_id, name, current_amount, last_changed_at, created_at, updated_at
+          values ($1, $2, $3, $4, $5, $6, $7)
+          returning
+            id,
+            household_id,
+            owner_member_id,
+            name,
+            current_amount,
+            last_changed_at,
+            target_amount,
+            target_date,
+            created_at,
+            updated_at
         `,
-        [householdId, this.normalizeText(dto.name, 'Savings name'), dto.amount, changedAt]
+        [
+          householdId,
+          ownerMemberId,
+          this.normalizeText(dto.name, 'Savings name'),
+          dto.amount,
+          changedAt,
+          dto.targetAmount ?? null,
+          dto.targetDate ?? null
+        ]
       );
 
       const row = this.mapAccountRowOrThrow(account.rows[0]);
@@ -75,7 +111,17 @@ export class FinanceSavingsService {
     const updated = await this.database.transaction(async (client) => {
       const account = await client.query<FinanceSavingsAccountRow>(
         `
-          select id, household_id, name, current_amount, last_changed_at, created_at, updated_at
+          select
+            id,
+            household_id,
+            owner_member_id,
+            name,
+            current_amount,
+            last_changed_at,
+            target_amount,
+            target_date,
+            created_at,
+            updated_at
           from finance_savings_accounts
           where household_id = $1
             and id = $2
@@ -113,7 +159,17 @@ export class FinanceSavingsService {
               last_changed_at = $4
           where household_id = $1
             and id = $2
-          returning id, household_id, name, current_amount, last_changed_at, created_at, updated_at
+          returning
+            id,
+            household_id,
+            owner_member_id,
+            name,
+            current_amount,
+            last_changed_at,
+            target_amount,
+            target_date,
+            created_at,
+            updated_at
         `,
         [householdId, accountId, nextAmount, changedAt]
       );
@@ -154,7 +210,17 @@ export class FinanceSavingsService {
   ): Promise<FinanceSavingsAccountRecord> {
     const result = await this.database.query<FinanceSavingsAccountRow>(
       `
-        select id, household_id, name, current_amount, last_changed_at, created_at, updated_at
+        select
+          id,
+          household_id,
+          owner_member_id,
+          name,
+          current_amount,
+          last_changed_at,
+          target_amount,
+          target_date,
+          created_at,
+          updated_at
         from finance_savings_accounts
         where household_id = $1
           and id = $2
@@ -256,6 +322,28 @@ export class FinanceSavingsService {
     return normalized ? normalized : null;
   }
 
+  private async ensureActiveMember(
+    client: PoolClient,
+    householdId: string,
+    memberId: string
+  ): Promise<void> {
+    const result = await client.query<{ id: string }>(
+      `
+        select id
+        from household_members
+        where household_id = $1
+          and id = $2
+          and is_active = true
+        limit 1
+      `,
+      [householdId, memberId]
+    );
+
+    if (!result.rows[0]) {
+      throw new BadRequestException('Savings owner must belong to the household');
+    }
+  }
+
   private todayIso(): string {
     return new Date().toISOString().slice(0, 10);
   }
@@ -271,7 +359,10 @@ export class FinanceSavingsService {
       householdId: row.household_id,
       id: row.id,
       lastChangedAt: this.formatDateOnly(row.last_changed_at),
+      ownerMemberId: row.owner_member_id,
       name: row.name,
+      targetAmount: row.target_amount === null ? null : String(row.target_amount),
+      targetDate: row.target_date === null ? null : this.formatDateOnly(row.target_date),
       transactions: [],
       updatedAt: row.updated_at
     };
@@ -304,7 +395,10 @@ interface FinanceSavingsAccountRow {
   household_id: string;
   id: string;
   last_changed_at: Date | string;
+  owner_member_id: string | null;
   name: string;
+  target_amount: string | null;
+  target_date: Date | string | null;
   updated_at: string;
 }
 
@@ -324,7 +418,10 @@ export interface FinanceSavingsAccountRecord {
   householdId: string;
   id: string;
   lastChangedAt: string;
+  ownerMemberId: string | null;
   name: string;
+  targetAmount: string | null;
+  targetDate: string | null;
   transactions: FinanceSavingsTransactionRecord[];
   updatedAt: string;
 }

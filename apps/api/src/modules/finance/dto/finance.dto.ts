@@ -263,6 +263,10 @@ export class CreateFinanceSavingsAccountDto {
   @IsDateString()
   changedAt?: string;
 
+  @IsOptional()
+  @IsUUID()
+  ownerMemberId?: string | null;
+
   @IsString()
   @Length(1, 160)
   name!: string;
@@ -271,6 +275,16 @@ export class CreateFinanceSavingsAccountDto {
   @IsString()
   @Length(0, 500)
   note?: string | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.01)
+  targetAmount?: number | null;
+
+  @IsOptional()
+  @IsDateString()
+  targetDate?: string | null;
 }
 
 export class CreateFinanceSavingsTransactionDto {

@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Image,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -42,10 +43,11 @@ import {
   CartPlus,
   ChevronRight,
   Close,
+  FileText,
   MoreHorizontal,
-  NotePlus,
   ReceiptText,
   ShoppingCart,
+  Sun,
 } from "../../src/ui/icon";
 import calendarCardImage from "../../assets/today-calendar-card.png";
 import mealCardImage from "../../assets/today-meal-card.png";
@@ -236,8 +238,10 @@ export default function DzisiajScreen() {
           </IconButton>
         </View>
       }
+      contentStyle={styles.todayContent}
       title="Dzisiaj"
       titleAlign="center"
+      titleVariant="display"
     >
       <AppToast offsetTop={74} text={toast} />
       <QueryState
@@ -264,19 +268,28 @@ export default function DzisiajScreen() {
         />
       ) : null}
 
-      <View style={styles.quickSection}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Szybkie akcje</Text>
-          <Text style={styles.sectionMeta}>{greetingTitle()}</Text>
+      <View style={styles.greetingBlock}>
+        <View style={styles.greetingTitleRow}>
+          <Text style={styles.greetingTitle}>{greetingTitle()}!</Text>
+          <Sun color={theme.colors.food} size={28} />
         </View>
+        <Text style={styles.greetingSubtitle}>
+          Masz dziś kilka planów do realizacji.
+        </Text>
+      </View>
+
+      <View style={styles.quickSection}>
         <View style={styles.quickGrid}>
           <QuickAction
+            accent={theme.colors.finance}
+            caption="Dodaj wydarzenie"
             icon={<CalendarDays color={theme.colors.calendar} size={29} />}
             label="Wydarzenie"
             onPress={() => openCalendarForDate(todayIso(), "create")}
-            showDivider
           />
           <QuickAction
+            accent={theme.colors.finance}
+            caption="Dodaj wydatek"
             icon={<ReceiptText color={theme.colors.finance} size={29} />}
             label="Wydatek"
             onPress={() =>
@@ -285,9 +298,10 @@ export default function DzisiajScreen() {
                 params: { action: "expense", intent: String(Date.now()) },
               } as never)
             }
-            showDivider
           />
           <QuickAction
+            accent={theme.colors.shopping}
+            caption="Dodaj do listy"
             icon={<CartPlus color={theme.colors.shopping} size={29} />}
             label="Zakupy"
             onPress={() =>
@@ -296,10 +310,11 @@ export default function DzisiajScreen() {
                 params: { action: "addShopping", segment: "shopping" },
               } as never)
             }
-            showDivider
           />
           <QuickAction
-            icon={<NotePlus color={theme.colors.primaryDark} size={29} />}
+            accent={theme.colors.warning}
+            caption="Zapisz notatkę"
+            icon={<FileText color={theme.colors.warning} size={29} />}
             label="Notatka"
             onPress={() =>
               router.push({
@@ -626,13 +641,20 @@ function NextEventCard({
       <Text style={styles.nextEventEyebrow}>PLAN DNIA</Text>
       <Text style={styles.nextEventTitle}>Najbliższe wydarzenie</Text>
       <View style={styles.nextEventBody}>
-        <View style={styles.nextEventText}>
+        <View style={styles.nextEventTimeRow}>
+          <CalendarDays color={theme.colors.text} size={18} />
           <Text numberOfLines={1} style={styles.nextEventTime}>
             {eventDateTime}
           </Text>
-          <Text numberOfLines={2} style={styles.nextEventDetails}>
-            {eventDetails}
+        </View>
+        <Text numberOfLines={2} style={styles.nextEventDetails}>
+          {eventDetails}
+        </Text>
+        <View style={styles.nextEventCta}>
+          <Text style={styles.nextEventCtaText}>
+            {event ? "Zobacz szczegóły" : "Dodaj wydarzenie"}
           </Text>
+          <ChevronRight color={theme.colors.finance} size={18} />
         </View>
       </View>
     </Pressable>
@@ -673,7 +695,12 @@ function TodayOverviewGrid({
         ]}
       >
         <View style={styles.todoCompactHeader}>
-          <Text style={styles.todoCompactTitle}>Do zrobienia</Text>
+          <View style={styles.todoTitleRow}>
+            <Text style={styles.todoCompactTitle}>Do zrobienia</Text>
+            <View style={styles.todoCountPill}>
+              <Text style={styles.todoCountText}>{tasks.length}</Text>
+            </View>
+          </View>
           <MoreHorizontal color={theme.colors.textMuted} size={20} />
         </View>
         <View style={styles.todoCompactList}>
@@ -736,7 +763,8 @@ function MiniTodayCard({
   onPress: () => void;
   title: string;
 }) {
-  const styles = createStyles(useAppTheme().colors);
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
 
   return (
     <Pressable
@@ -763,20 +791,25 @@ function MiniTodayCard({
       >
         {caption}
       </Text>
+      <View style={styles.miniTodayChevron}>
+        <ChevronRight color={theme.colors.text} size={22} />
+      </View>
     </Pressable>
   );
 }
 
 function QuickAction({
+  accent,
+  caption,
   icon,
   label,
   onPress,
-  showDivider = false,
 }: {
+  accent: string;
+  caption: string;
   icon: ReactNode;
   label: string;
   onPress: () => void;
-  showDivider?: boolean;
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
@@ -788,14 +821,21 @@ function QuickAction({
       onPress={onPress}
       style={({ pressed }) => [
         styles.quickAction,
-        showDivider && styles.quickActionDivider,
         pressed && styles.quickActionPressed,
       ]}
     >
-      <View style={styles.quickIcon}>{icon}</View>
-      <Text numberOfLines={2} style={styles.quickLabel}>
-        {label}
-      </Text>
+      <View style={[styles.quickIcon, { backgroundColor: `${accent}18` }]}>
+        {icon}
+      </View>
+      <View style={styles.quickText}>
+        <Text numberOfLines={1} style={styles.quickLabel}>
+          {label}
+        </Text>
+        <Text numberOfLines={1} style={styles.quickCaption}>
+          {caption}
+        </Text>
+      </View>
+      <ChevronRight color={theme.colors.textMuted} size={22} />
     </Pressable>
   );
 }
@@ -894,17 +934,21 @@ function formatDateTime(value: string): string {
 }
 
 function createStyles(colors: AppPalette) {
-  const isDark = colors.background === "#0F141B";
-  const todayPanelBackground = isDark ? colors.card : "#FFF9EF";
-  const todayPanelBorder = isDark ? colors.border : "#E8DDCE";
-  const todayPanelText = isDark ? colors.text : "#1E1B16";
-  const todayPanelMuted = isDark ? colors.textMuted : "#5F5B52";
-  const todayPanelEyebrow = isDark ? colors.calendar : "#2C4E90";
-  const todayPanelShadowOpacity = isDark ? 0.18 : 0.08;
+  const isDark = colors.background === "#0C1220";
+  const displayFontFamily = Platform.select({
+    android: "serif",
+    ios: "Georgia",
+  });
+  const todayPanelBackground = isDark ? colors.card : "#FFFDF8";
+  const todayPanelBorder = isDark ? colors.border : "#EDE7DC";
+  const todayPanelText = isDark ? colors.text : "#142017";
+  const todayPanelMuted = isDark ? colors.textMuted : "#5F635F";
+  const todayPanelEyebrow = isDark ? colors.finance : "#20A44A";
+  const todayPanelShadowOpacity = isDark ? 0.18 : 0.07;
 
   return StyleSheet.create({
     bellDot: {
-      backgroundColor: colors.warning,
+      backgroundColor: "#27D45B",
       borderColor: colors.card,
       borderRadius: 999,
       borderWidth: 2,
@@ -921,6 +965,33 @@ function createStyles(colors: AppPalette) {
       width: 34,
     },
     headerActions: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.xs,
+    },
+    todayContent: {
+      gap: spacing.lg,
+      paddingHorizontal: spacing.lg,
+    },
+    greetingBlock: {
+      gap: spacing.xs,
+      paddingTop: spacing.xs,
+    },
+    greetingSubtitle: {
+      color: todayPanelMuted,
+      fontSize: 15,
+      letterSpacing: 0,
+      lineHeight: 22,
+    },
+    greetingTitle: {
+      color: todayPanelText,
+      fontFamily: displayFontFamily,
+      fontSize: 26,
+      fontWeight: "900",
+      letterSpacing: 0,
+      lineHeight: 32,
+    },
+    greetingTitleRow: {
       alignItems: "center",
       flexDirection: "row",
       gap: spacing.xs,
@@ -950,33 +1021,48 @@ function createStyles(colors: AppPalette) {
       textAlign: "center",
     },
     nextEventBody: {
-      alignItems: "center",
-      flexDirection: "row",
+      alignItems: "flex-start",
       gap: spacing.md,
-      marginTop: spacing.sm,
-      paddingRight: 116,
+      marginTop: spacing.lg,
+      paddingRight: 145,
     },
     nextEventCard: {
       backgroundColor: todayPanelBackground,
       borderColor: todayPanelBorder,
-      borderRadius: 14,
+      borderRadius: 22,
       borderWidth: 1,
       elevation: 2,
-      marginTop: spacing.sm,
-      minHeight: 132,
+      minHeight: 178,
       overflow: "hidden",
-      padding: spacing.lg,
+      paddingHorizontal: spacing.xl,
+      paddingVertical: spacing.lg,
       shadowColor: "#000000",
       shadowOffset: { height: 12, width: 0 },
       shadowOpacity: todayPanelShadowOpacity,
       shadowRadius: 28,
     },
+    nextEventCta: {
+      alignItems: "center",
+      backgroundColor: isDark ? colors.cardMuted : colors.successSoft,
+      borderRadius: 999,
+      flexDirection: "row",
+      gap: spacing.xs,
+      minHeight: 38,
+      paddingLeft: spacing.md,
+      paddingRight: spacing.sm,
+    },
+    nextEventCtaText: {
+      color: colors.finance,
+      fontSize: 13,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
     nextEventDetails: {
       color: todayPanelMuted,
-      fontSize: 13,
+      fontSize: 15,
       fontWeight: "700",
       letterSpacing: 0,
-      lineHeight: 18,
+      lineHeight: 21,
     },
     nextEventEyebrow: {
       color: todayPanelEyebrow,
@@ -986,11 +1072,11 @@ function createStyles(colors: AppPalette) {
       textTransform: "uppercase",
     },
     nextEventImage: {
-      bottom: -12,
-      height: 132,
+      bottom: -10,
+      height: 166,
       position: "absolute",
-      right: -10,
-      width: 142,
+      right: -12,
+      width: 172,
     },
     nextEventIcon: {
       alignItems: "center",
@@ -1002,40 +1088,43 @@ function createStyles(colors: AppPalette) {
       justifyContent: "center",
       width: 48,
     },
-    nextEventText: {
-      flex: 1,
-      gap: 2,
-      minWidth: 0,
-    },
     nextEventTime: {
       color: todayPanelText,
-      fontSize: 18,
+      flex: 1,
+      fontSize: 17,
       fontWeight: "900",
       letterSpacing: 0,
       lineHeight: 23,
+      minWidth: 0,
+    },
+    nextEventTimeRow: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.sm,
+      maxWidth: "100%",
     },
     nextEventTitle: {
       color: todayPanelText,
-      fontSize: 18,
+      fontFamily: displayFontFamily,
+      fontSize: 24,
       fontWeight: "900",
       letterSpacing: 0,
-      lineHeight: 24,
-      marginTop: 4,
+      lineHeight: 30,
+      marginTop: spacing.sm,
     },
     miniTodayCard: {
       backgroundColor: todayPanelBackground,
       borderColor: todayPanelBorder,
-      borderRadius: 12,
+      borderRadius: 18,
       borderWidth: 1,
       elevation: 3,
       flexBasis: 0,
       flex: 1,
       justifyContent: "space-between",
-      minHeight: 98,
+      minHeight: 112,
       minWidth: 0,
       overflow: "hidden",
-      paddingHorizontal: 10,
-      paddingVertical: 10,
+      padding: spacing.lg,
       position: "relative",
       shadowColor: "#000000",
       shadowOffset: { height: 8, width: 0 },
@@ -1043,11 +1132,11 @@ function createStyles(colors: AppPalette) {
       shadowRadius: 16,
     },
     miniTodayImage: {
-      bottom: -8,
-      height: 82,
+      bottom: -6,
+      height: 92,
       position: "absolute",
-      right: -12,
-      width: 92,
+      right: 4,
+      width: 104,
     },
     miniTodayIcon: {
       alignItems: "center",
@@ -1069,12 +1158,18 @@ function createStyles(colors: AppPalette) {
       zIndex: 1,
     },
     miniTodayCaption: {
-      fontSize: 10,
-      fontWeight: "800",
+      fontSize: 15,
+      fontWeight: "900",
       letterSpacing: 0,
-      lineHeight: 13,
-      maxWidth: 62,
+      lineHeight: 20,
+      maxWidth: 82,
       zIndex: 1,
+    },
+    miniTodayChevron: {
+      bottom: spacing.md,
+      position: "absolute",
+      right: spacing.md,
+      zIndex: 2,
     },
     miniTodayMeta: {
       color: "#C8D2EA",
@@ -1095,45 +1190,45 @@ function createStyles(colors: AppPalette) {
     },
     miniTodayTitle: {
       color: todayPanelText,
-      fontSize: 11,
+      fontFamily: displayFontFamily,
+      fontSize: 17,
       fontWeight: "900",
       letterSpacing: 0,
-      lineHeight: 14,
-      maxWidth: 72,
+      lineHeight: 22,
+      maxWidth: 112,
       zIndex: 1,
     },
     todayMiniColumn: {
       flex: 1,
       flexBasis: 0,
-      gap: spacing.sm,
-      minWidth: 92,
+      gap: spacing.md,
+      minWidth: 126,
     },
     todayOverviewGrid: {
       alignItems: "stretch",
       flexDirection: "row",
-      gap: spacing.sm,
-      marginTop: spacing.sm,
+      gap: spacing.md,
     },
     todoCircle: {
       borderColor: colors.textSubtle,
       borderRadius: 999,
       borderWidth: 1.5,
-      height: 17,
-      width: 17,
+      height: 24,
+      width: 24,
     },
     todoCompactCard: {
       backgroundColor: todayPanelBackground,
-      borderColor: `${colors.primaryDark}7A`,
-      borderRadius: 12,
+      borderColor: todayPanelBorder,
+      borderRadius: 18,
       borderWidth: 1,
       elevation: 3,
-      flex: 3,
+      flex: 1.08,
       flexBasis: 0,
-      gap: spacing.sm,
+      gap: spacing.md,
       minWidth: 0,
-      minHeight: 204,
-      padding: spacing.sm,
-      shadowColor: colors.primaryDark,
+      minHeight: 236,
+      padding: spacing.lg,
+      shadowColor: "#000000",
       shadowOffset: { height: 8, width: 0 },
       shadowOpacity: isDark ? 0.18 : 0.09,
       shadowRadius: 16,
@@ -1151,7 +1246,7 @@ function createStyles(colors: AppPalette) {
       alignItems: "center",
       flexDirection: "row",
       gap: spacing.sm,
-      minHeight: 36,
+      minHeight: 44,
     },
     todoCompactRowDivider: {
       borderBottomColor: colors.border,
@@ -1160,7 +1255,7 @@ function createStyles(colors: AppPalette) {
     todoCompactText: {
       color: colors.text,
       flex: 1,
-      fontSize: 12,
+      fontSize: 13,
       fontWeight: "800",
       letterSpacing: 0,
       lineHeight: 16,
@@ -1168,7 +1263,23 @@ function createStyles(colors: AppPalette) {
     },
     todoCompactTitle: {
       color: todayPanelText,
-      fontSize: 14,
+      fontFamily: displayFontFamily,
+      fontSize: 18,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    todoCountPill: {
+      alignItems: "center",
+      backgroundColor: colors.successSoft,
+      borderRadius: 999,
+      height: 28,
+      justifyContent: "center",
+      minWidth: 28,
+      paddingHorizontal: spacing.xs,
+    },
+    todoCountText: {
+      color: colors.finance,
+      fontSize: 13,
       fontWeight: "900",
       letterSpacing: 0,
     },
@@ -1178,16 +1289,22 @@ function createStyles(colors: AppPalette) {
       borderRadius: 999,
       borderWidth: 1,
       flexDirection: "row",
-      gap: 3,
+      gap: spacing.xs,
       justifyContent: "center",
-      minHeight: 28,
-      paddingHorizontal: spacing.sm,
+      minHeight: 38,
+      paddingHorizontal: spacing.md,
     },
     todoSeeAllText: {
       color: colors.primaryDark,
-      fontSize: 10,
+      fontSize: 13,
       fontWeight: "900",
       letterSpacing: 0,
+    },
+    todoTitleRow: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.sm,
+      minWidth: 0,
     },
     dashboardIcon: {
       alignItems: "center",
@@ -1352,54 +1469,61 @@ function createStyles(colors: AppPalette) {
     },
     quickAction: {
       alignItems: "center",
-      backgroundColor: "transparent",
-      flex: 1,
-      gap: 6,
-      justifyContent: "center",
-      minHeight: 90,
-      minWidth: 0,
-      paddingHorizontal: spacing.xs,
-      paddingVertical: spacing.sm,
-    },
-    quickActionDivider: {
-      borderColor: colors.border,
-      borderRightWidth: 1,
+      backgroundColor: colors.overlay,
+      borderColor: todayPanelBorder,
+      borderRadius: 18,
+      borderWidth: 1,
+      elevation: 2,
+      flexBasis: "47.5%",
+      flexDirection: "row",
+      flexGrow: 1,
+      gap: spacing.md,
+      justifyContent: "space-between",
+      minHeight: 104,
+      minWidth: 140,
+      padding: spacing.md,
+      shadowColor: "#000000",
+      shadowOffset: { height: 8, width: 0 },
+      shadowOpacity: isDark ? 0.16 : 0.06,
+      shadowRadius: 18,
     },
     quickActionPressed: {
       backgroundColor: colors.cardMuted,
       opacity: 0.86,
     },
+    quickCaption: {
+      color: colors.finance,
+      fontSize: 13,
+      fontWeight: "700",
+      letterSpacing: 0,
+      lineHeight: 18,
+    },
     quickGrid: {
-      backgroundColor: colors.overlay,
-      borderColor: colors.border,
-      borderRadius: 20,
-      borderWidth: 1,
-      elevation: 0,
       flexDirection: "row",
-      gap: 0,
-      overflow: "hidden",
-      shadowColor: colors.text,
-      shadowOffset: { height: 8, width: 0 },
-      shadowOpacity: 0.06,
-      shadowRadius: 18,
+      flexWrap: "wrap",
+      gap: spacing.md,
     },
     quickIcon: {
       alignItems: "center",
-      elevation: 0,
-      height: 46,
+      borderRadius: 16,
+      height: 58,
       justifyContent: "center",
-      width: 46,
+      width: 58,
     },
     quickLabel: {
       color: colors.text,
-      fontSize: 12,
-      fontWeight: "800",
+      fontSize: 17,
+      fontWeight: "900",
       letterSpacing: 0,
-      lineHeight: 15,
-      textAlign: "center",
+      lineHeight: 22,
     },
     quickSection: {
-      gap: spacing.sm,
+      gap: spacing.md,
+    },
+    quickText: {
+      flex: 1,
+      gap: 2,
+      minWidth: 0,
     },
     sectionHeader: {
       alignItems: "flex-end",

@@ -291,7 +291,9 @@ export class FinanceController {
     @CurrentHousehold() household: HouseholdContext | undefined,
     @Body() dto: CreateFinanceSavingsAccountDto
   ) {
-    return this.financeSavingsService.createAccount(this.requireHousehold(household).householdId, dto);
+    const context = this.requireHousehold(household);
+
+    return this.financeSavingsService.createAccount(context.householdId, context.memberId, dto);
   }
 
   @Post('savings/:id/transactions')
