@@ -45,6 +45,7 @@ import { useAppTheme, type AppPalette } from "../../src/theme/use-app-theme";
 import {
   ActionButton,
   AppScreen,
+  DatePickerField,
   FormModal,
   IconButton,
   InlineAlert,
@@ -618,14 +619,12 @@ export default function KalendarzScreen() {
           style={styles.input}
           value={eventTitle}
         />
+        <DatePickerField
+          label="Data wydarzenia"
+          onChange={setEventDate}
+          value={eventDate}
+        />
         <View style={styles.formRow}>
-          <TextInput
-            onChangeText={setEventDate}
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor={theme.colors.textSubtle}
-            style={[styles.input, styles.flexInput]}
-            value={eventDate}
-          />
           <TextInput
             keyboardType="number-pad"
             maxLength={5}

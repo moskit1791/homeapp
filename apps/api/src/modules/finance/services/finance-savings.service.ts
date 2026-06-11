@@ -31,8 +31,10 @@ export class FinanceSavingsService {
         from finance_savings_accounts fsa
         left join household_members hm
           on hm.id = fsa.owner_member_id
+        left join users u
+          on u.id = hm.user_id
         where fsa.household_id = $1
-        order by coalesce(hm.display_name, fsa.name) asc, fsa.name asc
+        order by coalesce(u.display_name, fsa.name) asc, fsa.name asc
       `,
       [householdId]
     );

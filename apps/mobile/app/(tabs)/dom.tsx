@@ -96,6 +96,7 @@ import {
 import {
   ActionButton,
   AppScreen,
+  DatePickerField,
   FormModal,
   IconButton,
   InlineAlert,
@@ -1086,23 +1087,19 @@ function AnnualCostsPanel() {
           style={styles.input}
           value={name}
         />
-        <View style={styles.formRow}>
-          <TextInput
-            keyboardType="decimal-pad"
-            onChangeText={setAmount}
-            placeholder="Kwota"
-            placeholderTextColor={theme.colors.textSubtle}
-            style={[styles.input, styles.flexInput]}
-            value={amount}
-          />
-          <TextInput
-            onChangeText={setNextDueDate}
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor={theme.colors.textSubtle}
-            style={[styles.input, styles.dateInput]}
-            value={nextDueDate}
-          />
-        </View>
+        <TextInput
+          keyboardType="decimal-pad"
+          onChangeText={setAmount}
+          placeholder="Kwota"
+          placeholderTextColor={theme.colors.textSubtle}
+          style={styles.input}
+          value={amount}
+        />
+        <DatePickerField
+          label="Następny termin"
+          onChange={setNextDueDate}
+          value={nextDueDate}
+        />
         {createMutation.error ? (
           <InlineAlert tone="error" text="Nie udało się dodać kosztu." />
         ) : null}
@@ -1130,23 +1127,19 @@ function AnnualCostsPanel() {
         title={paymentCost?.name ?? "Opłać koszt"}
         visible={Boolean(paymentCost)}
       >
-        <View style={styles.formRow}>
-          <TextInput
-            keyboardType="decimal-pad"
-            onChangeText={setPaymentAmount}
-            placeholder="Kwota"
-            placeholderTextColor={theme.colors.textSubtle}
-            style={[styles.input, styles.flexInput]}
-            value={paymentAmount}
-          />
-          <TextInput
-            onChangeText={setPaymentDate}
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor={theme.colors.textSubtle}
-            style={[styles.input, styles.dateInput]}
-            value={paymentDate}
-          />
-        </View>
+        <TextInput
+          keyboardType="decimal-pad"
+          onChangeText={setPaymentAmount}
+          placeholder="Kwota"
+          placeholderTextColor={theme.colors.textSubtle}
+          style={styles.input}
+          value={paymentAmount}
+        />
+        <DatePickerField
+          label="Data opłacenia"
+          onChange={setPaymentDate}
+          value={paymentDate}
+        />
         {completeMutation.error ? (
           <InlineAlert
             tone="error"

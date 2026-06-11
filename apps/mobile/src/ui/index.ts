@@ -2,6 +2,7 @@ export { ActionButton } from "./action-button";
 export { AppScreen } from "./app-screen";
 export { AuthTextField } from "./auth-text-field";
 export { EmptyState } from "./empty-state";
+export { DatePickerField } from "./date-picker-field";
 export { FormModal } from "./form-modal";
 export { IconButton } from "./icon-button";
 export { InlineAlert } from "./inline-alert";

@@ -54,6 +54,7 @@ import { useDebouncedOptimisticToggle } from "../../src/utils/use-debounced-opti
 import {
   ActionButton,
   AppScreen,
+  DatePickerField,
   FormModal,
   IconButton,
   InlineAlert,
@@ -615,11 +616,9 @@ function FoodSegment({
       {canCreate ? (
         <SectionCard title="Historia">
           <View style={styles.weekPicker}>
-            <TextInput
-              onChangeText={setWeekStartInput}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={theme.colors.textSubtle}
-              style={[styles.input, styles.weekInput]}
+            <DatePickerField
+              label="Tydzień planu"
+              onChange={setWeekStartInput}
               value={weekStartInput}
             />
             <ActionButton
@@ -790,14 +789,12 @@ function CalendarSegment({
           style={styles.input}
           value={title}
         />
+        <DatePickerField
+          label="Data wydarzenia"
+          onChange={setEventDate}
+          value={eventDate}
+        />
         <View style={styles.formRow}>
-          <TextInput
-            onChangeText={setEventDate}
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor={theme.colors.textSubtle}
-            style={[styles.input, styles.flex]}
-            value={eventDate}
-          />
           <TextInput
             keyboardType="number-pad"
             maxLength={5}

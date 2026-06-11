@@ -92,6 +92,7 @@ import {
 import {
   ActionButton,
   AppScreen,
+  DatePickerField,
   FormModal,
   IconButton,
   InlineAlert,
@@ -2268,12 +2269,11 @@ export default function FinanseScreen() {
                 placeholder="0,00"
               />
             </View>
-            <TextField
-              control={control}
-              inputStyle={styles.debtFormInput}
+            <DatePickerField
+              allowClear
               label="Termin oddania"
-              name="debtDueDate"
-              placeholder="YYYY-MM-DD, opcjonalnie"
+              onChange={(date) => setValue("debtDueDate", date)}
+              value={debtDueDate}
             />
             <TextField
               control={control}
@@ -2474,11 +2474,10 @@ export default function FinanseScreen() {
           name="savingsTargetAmount"
           placeholder="0,00"
         />
-        <TextField
-          control={control}
+        <DatePickerField
           label="Termin celu"
-          name="savingsTargetDate"
-          placeholder="YYYY-MM-DD"
+          onChange={(date) => setValue("savingsTargetDate", date)}
+          value={savingsTargetDate}
         />
         <TextField
           control={control}

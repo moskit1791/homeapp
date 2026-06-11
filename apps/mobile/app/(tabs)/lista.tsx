@@ -69,6 +69,7 @@ import { useDebouncedOptimisticToggle } from "../../src/utils/use-debounced-opti
 import {
   ActionButton,
   AppScreen,
+  DatePickerField,
   FormModal,
   IconButton,
   InlineAlert,
@@ -3256,17 +3257,12 @@ function PantryDashboardBoard() {
           placeholder="np. 500 g, 2 szt."
           value={quantity}
         />
-        <PantryEditorField
+        <DatePickerField
+          allowClear
           label="Data ważności"
-          onChangeText={setExpirationDate}
-          placeholder="RRRR-MM-DD"
+          onChange={setExpirationDate}
           value={expirationDate}
         />
-        {!isValidOptionalIsoDate(expirationDate) ? (
-          <Text style={styles.pantryDateError}>
-            Wpisz datę w formacie RRRR-MM-DD.
-          </Text>
-        ) : null}
         <Text style={styles.pantryEditorLabel}>Kategoria</Text>
         <View style={styles.pantryEditorCategories}>
           {pantryDashboardGroups.map((group) => {
