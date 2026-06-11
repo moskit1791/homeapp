@@ -4,11 +4,11 @@ import { useEffect, type ReactNode } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import {
   CalendarDays,
-  CheckCircle2,
+  CheckSquare,
   Home,
   MoreHorizontal,
-  NotebookText,
   ShoppingCart,
+  Sun,
   Utensils,
   WalletCards,
 } from "../../src/ui/icon";
@@ -72,39 +72,39 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: theme.colors.finance,
+        tabBarActiveTintColor: "#4F8D2C",
         tabBarShowLabel: false,
         tabBarInactiveTintColor: theme.colors.textMuted,
         tabBarHideOnKeyboard: true,
         tabBarIconStyle: {
           alignItems: "stretch",
           flex: 1,
-          height: 58,
+          height: 48,
           justifyContent: "center",
           width: "100%",
         },
         tabBarItemStyle: {
           alignItems: "stretch",
           flex: 1,
-          height: 58,
+          height: 48,
           justifyContent: "center",
           padding: 0,
         },
         tabBarStyle: {
           backgroundColor: theme.colors.overlay,
           borderColor: theme.colors.border,
-          borderRadius: 18,
+          borderRadius: 16,
           borderTopColor: theme.colors.border,
           borderTopWidth: 1,
           borderWidth: 1,
           elevation: 0,
-          height: 76,
-          marginBottom: 10,
+          height: 52,
+          marginBottom: 12,
           marginHorizontal: 12,
           overflow: "hidden",
-          paddingBottom: 10,
+          paddingBottom: 6,
           paddingHorizontal: 8,
-          paddingTop: 8,
+          paddingTop: 6,
           position: "absolute",
           shadowColor: theme.colors.text,
           shadowOffset: { height: 8, width: 0 },
@@ -120,7 +120,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <TabGlyph
               focused={focused}
-              icon={(color) => <CheckCircle2 color={color} size={27} />}
+              icon={(color) => <Sun color={color} size={21} />}
             />
           ),
         }}
@@ -133,7 +133,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <TabGlyph
               focused={focused}
-              icon={(color) => <CalendarDays color={color} size={27} />}
+              icon={(color) => <CalendarDays color={color} size={21} />}
             />
           ),
         }}
@@ -146,7 +146,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <TabGlyph
               focused={focused}
-              icon={(color) => <WalletCards color={color} size={27} />}
+              icon={(color) => <WalletCards color={color} size={21} />}
             />
           ),
         }}
@@ -159,7 +159,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <TabGlyph
               focused={focused}
-              icon={(color) => <Utensils color={color} size={27} />}
+              icon={(color) => <Utensils color={color} size={21} />}
             />
           ),
         }}
@@ -172,7 +172,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <TabGlyph
               focused={focused}
-              icon={(color) => <NotebookText color={color} size={27} />}
+              icon={(color) => <CheckSquare color={color} size={21} />}
             />
           ),
         }}
@@ -185,7 +185,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <TabGlyph
               focused={focused}
-              icon={(color) => <ShoppingCart color={color} size={27} />}
+              icon={(color) => <ShoppingCart color={color} size={21} />}
             />
           ),
         }}
@@ -198,7 +198,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <TabGlyph
               focused={focused}
-              icon={(color) => <Utensils color={color} size={27} />}
+              icon={(color) => <Utensils color={color} size={21} />}
             />
           ),
         }}
@@ -218,7 +218,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <TabGlyph
               focused={focused}
-              icon={(color) => <Home color={color} size={27} />}
+              icon={(color) => <Home color={color} size={21} />}
             />
           ),
         }}
@@ -228,7 +228,7 @@ export default function TabsLayout() {
         options={{
           href: null,
           title: "Więcej",
-          tabBarIcon: ({ color }) => <MoreHorizontal color={color} size={27} />,
+          tabBarIcon: ({ color }) => <MoreHorizontal color={color} size={21} />,
         }}
       />
     </Tabs>
@@ -242,12 +242,13 @@ function TabGlyph({
   focused: boolean;
   icon: (color: string) => ReactNode;
 }) {
-  const theme = useAppTheme();
-  const color = focused ? theme.colors.finance : theme.colors.textMuted;
+  const color = focused ? "#4F8D2C" : "#454A4C";
 
   return (
     <View style={styles.tabGlyph}>
-      <View style={styles.tabIconSlot}>{icon(color)}</View>
+      <View style={[styles.tabIconSlot, focused && styles.tabIconSlotActive]}>
+        {icon(color)}
+      </View>
     </View>
   );
 }
@@ -274,13 +275,18 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     marginHorizontal: 1,
-    minHeight: 56,
+    minHeight: 42,
     paddingHorizontal: 2,
     paddingVertical: 5,
   },
   tabIconSlot: {
     alignItems: "center",
-    height: 34,
+    borderRadius: 16,
+    height: 38,
     justifyContent: "center",
+    width: 40,
+  },
+  tabIconSlotActive: {
+    backgroundColor: "#EEF8E9",
   },
 });

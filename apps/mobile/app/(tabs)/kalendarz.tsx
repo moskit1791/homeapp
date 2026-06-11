@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import {
@@ -98,6 +99,14 @@ const googleCalendarMarkerColors = [
   "#34D399",
   "#FB7185",
 ];
+const localCalendarMarkerColors = [
+  "#B4232D",
+  "#FFC438",
+  "#F27A98",
+  "#FF943D",
+  "#667CE8",
+];
+const mockupGreen = "#4F8D2C";
 
 export default function KalendarzScreen() {
   const { session } = useSession();
@@ -107,8 +116,7 @@ export default function KalendarzScreen() {
     intent?: string | string[];
   }>();
   const permissionsQuery = usePermissions();
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
+  const { screenBackground, styles, theme } = useCalendarStyles();
   const accessToken = session?.accessToken;
   const [visibleMonth, setVisibleMonth] = useState(() =>
     monthAnchor(new Date()),
@@ -446,7 +454,7 @@ export default function KalendarzScreen() {
                   color={
                     googleCalendarPending ? theme.colors.textSubtle : "#DB4437"
                   }
-                  size={30}
+                  size={19}
                 />
                 {googleCalendarConnected ? (
                   <View style={styles.headerStatusDot} />
@@ -457,16 +465,18 @@ export default function KalendarzScreen() {
               <IconButton
                 accessibilityLabel="Dodaj wydarzenie"
                 onPress={() => openCreateEvent()}
-                style={styles.headerIconButton}
+                style={[styles.headerIconButton, styles.addHeaderButton]}
               >
-                <CalendarPlus color={theme.colors.text} size={28} />
+                <CalendarPlus color={theme.colors.text} size={20} />
               </IconButton>
             ) : null}
           </View>
         ) : undefined
       }
+      backgroundColor={screenBackground}
       contentStyle={styles.calendarScreenContent}
       title="Kalendarz"
+      titleStyle={styles.calendarTitle}
       titleVariant="display"
     >
       <CalendarViewToggle onChange={setCalendarView} value={calendarView} />
@@ -477,7 +487,7 @@ export default function KalendarzScreen() {
           onPress={() => shiftVisiblePeriod(-1)}
           style={styles.periodNavButton}
         >
-          <ChevronLeft color={theme.colors.text} size={31} />
+          <ChevronLeft color={theme.colors.text} size={18} />
         </IconButton>
         <View style={styles.periodText}>
           <Text style={styles.periodTitle}>
@@ -489,7 +499,7 @@ export default function KalendarzScreen() {
           onPress={() => shiftVisiblePeriod(1)}
           style={styles.periodNavButton}
         >
-          <ChevronRight color={theme.colors.text} size={31} />
+          <ChevronRight color={theme.colors.text} size={18} />
         </IconButton>
       </View>
 
@@ -666,6 +676,16 @@ export default function KalendarzScreen() {
   );
 }
 
+function useCalendarStyles() {
+  const theme = useAppTheme();
+  const { width } = useWindowDimensions();
+  const screenBackground =
+    theme.colors.background === "#0C1220" ? theme.colors.background : "#FCFAF5";
+  const styles = createStyles(theme.colors, width);
+
+  return { screenBackground, styles, theme };
+}
+
 function CalendarViewToggle({
   onChange,
   value,
@@ -673,8 +693,7 @@ function CalendarViewToggle({
   onChange: (value: CalendarViewMode) => void;
   value: CalendarViewMode;
 }) {
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
+  const { styles, theme } = useCalendarStyles();
 
   return (
     <View style={styles.calendarModeCard}>
@@ -694,8 +713,8 @@ function CalendarViewToggle({
             ]}
           >
             <CalendarDays
-              color={active ? theme.colors.finance : theme.colors.text}
-              size={24}
+              color={active ? mockupGreen : theme.colors.text}
+              size={16}
             />
             <Text
               style={[
@@ -725,8 +744,7 @@ function CalendarMonth({
   onSelectDate: (date: string) => void;
   selectedDate: string;
 }) {
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
+  const { styles, theme } = useCalendarStyles();
   const days = getCalendarDays(month);
   const eventMarkersByDate = useMemo(
     () => buildEventMarkersByDate(events, theme.colors),
@@ -736,22 +754,35 @@ function CalendarMonth({
   return (
     <View style={styles.calendarCard}>
       <View style={styles.weekRow}>
-        {["Pn", "Wt", "Śr", "Cz", "Pt", "So", "Nd"].map((day) => (
-          <Text key={day} style={styles.weekLabel}>
+        {weekdayLabels.map((day, index) => (
+          <Text
+            key={day}
+            style={[
+              styles.weekLabel,
+              index >= 5 && styles.weekLabelWeekend,
+            ]}
+          >
             {day}
           </Text>
         ))}
       </View>
       <View style={styles.dayGrid}>
-        {days.map((day) => {
+        {days.map((day, index) => {
           const isToday = day.iso === todayIso();
           const isSelected = day.iso === selectedDate;
+          const isWeekend = index % 7 >= 5;
           const markers = day.iso
             ? (eventMarkersByDate.get(day.iso) ?? [])
             : [];
 
           return (
-            <View key={`${day.iso}-${day.label}`} style={styles.dayCell}>
+            <View
+              key={`${day.iso}-${day.label}`}
+              style={[
+                styles.dayCell,
+                index >= 7 && styles.dayCellWeekDivider,
+              ]}
+            >
               <Pressable
                 disabled={!day.iso}
                 hitSlop={8}
@@ -770,6 +801,7 @@ function CalendarMonth({
                 <Text
                   style={[
                     styles.dayText,
+                    isWeekend && styles.dayTextWeekend,
                     !day.inMonth && styles.dayTextMuted,
                     isToday && styles.dayTextToday,
                     isSelected && styles.dayTextSelected,
@@ -808,8 +840,7 @@ function WeekStrip({
   onSelectDate: (date: string) => void;
   selectedDate: string;
 }) {
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
+  const { styles } = useCalendarStyles();
   const days = getWeekDays(selectedDate);
   const today = todayIso();
 
@@ -859,8 +890,7 @@ function SelectedDaySummary({
   date: string;
   eventCount: number;
 }) {
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
+  const { styles, theme } = useCalendarStyles();
 
   return (
     <View style={styles.selectedDaySummary}>
@@ -904,8 +934,7 @@ function AgendaTimeline({
   onDelete: (event: CalendarEvent) => void;
   onEdit: (event: CalendarEvent) => void;
 }) {
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
+  const { styles, theme } = useCalendarStyles();
   const sortedEvents = [...events].sort(compareCalendarEvents);
 
   if (isLoading || error) {
@@ -1036,8 +1065,7 @@ function UpcomingEvents({
   onEdit: (event: CalendarEvent) => void;
   query: { error: unknown; isLoading: boolean };
 }) {
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
+  const { styles, theme } = useCalendarStyles();
 
   const sortedEvents = [...events].sort(compareCalendarEvents);
 
@@ -1090,7 +1118,7 @@ function UpcomingEvents({
                   ]}
                 />
                 <View style={styles.eventIconFrame}>
-                  <CalendarDays color={accent.color} size={24} />
+                  <CalendarDays color={accent.color} size={19} />
                 </View>
                 <View style={styles.eventPillText}>
                   <Text numberOfLines={1} style={styles.eventTitle}>
@@ -1111,7 +1139,7 @@ function UpcomingEvents({
                     </Pressable>
                   ) : null}
                 </View>
-                <ChevronRight color={theme.colors.text} size={25} />
+                <ChevronRight color={theme.colors.text} size={19} />
               </Pressable>
             );
           })}
@@ -1128,7 +1156,7 @@ function UpcomingEvents({
             pressed && styles.addEventDashedPressed,
           ]}
         >
-          <Plus color={theme.colors.finance} size={29} />
+          <Plus color={mockupGreen} size={22} />
           <Text style={styles.addEventDashedText}>Dodaj wydarzenie</Text>
         </Pressable>
       ) : null}
@@ -1139,8 +1167,7 @@ function UpcomingEvents({
 function _NotesBoard({ accessToken }: { accessToken?: string | null }) {
   const queryClient = useQueryClient();
   const permission = useModulePermission("notes");
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
+  const { styles, theme } = useCalendarStyles();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -1317,8 +1344,7 @@ function _NotesBoard({ accessToken }: { accessToken?: string | null }) {
 function _TodoBoard({ accessToken }: { accessToken?: string | null }) {
   const queryClient = useQueryClient();
   const permission = useModulePermission("todo");
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
+  const { styles, theme } = useCalendarStyles();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
@@ -1848,7 +1874,10 @@ function getAgendaAccent(
   event: CalendarEvent,
   index: number,
 ) {
-  const color = getCalendarEventMarkerColor(colors, event, index);
+  const color =
+    event.sourceType === "google"
+      ? getCalendarEventMarkerColor(colors, event, index)
+      : mockupGreen;
 
   return {
     border: withAlpha(color, event.sourceType === "google" ? 0.36 : 0.22),
@@ -1864,7 +1893,13 @@ function getCalendarEventMarkerColor(
   index = 0,
 ): string {
   if (event.sourceType !== "google") {
-    return index % 2 === 0 ? colors.calendar : colors.textSubtle;
+    const markerKey = `${event.eventDate}:${event.title}:${event.id}:${index}`;
+
+    return (
+      localCalendarMarkerColors[
+        hashString(markerKey) % localCalendarMarkerColors.length
+      ] ?? colors.calendar
+    );
   }
 
   const sourceKey = getCalendarEventSourceKey(event);
@@ -1949,48 +1984,55 @@ function formatDateTime(value: string): string {
   }).format(date);
 }
 
-function createStyles(colors: AppPalette) {
+function createStyles(colors: AppPalette, viewportWidth: number) {
   const isDark = colors.background === "#0C1220";
   const displayFontFamily = Platform.select({
     android: "serif",
     ios: "Georgia",
   });
+  const isCompact = viewportWidth < 430;
   const panelBackground = isDark ? colors.card : "#FFFDF8";
-  const panelBorder = isDark ? colors.border : "#EDE7DC";
-  const panelShadowOpacity = isDark ? 0.18 : 0.07;
+  const panelBorder = isDark ? colors.border : "#F1EDE7";
+  const panelShadowOpacity = isDark ? 0.18 : 0.045;
   const selectedGreen = "#0F3F35";
 
   return StyleSheet.create({
     addEventDashed: {
       alignItems: "center",
       borderColor: isDark ? colors.border : "#DCD5CA",
-      borderRadius: 14,
+      borderRadius: 12,
       borderStyle: "dashed",
       borderWidth: 1.5,
       flexDirection: "row",
       gap: spacing.sm,
       justifyContent: "center",
-      minHeight: 58,
+      minHeight: isCompact ? 42 : 54,
     },
     addEventDashedPressed: {
       opacity: 0.76,
     },
     addEventDashedText: {
-      color: colors.finance,
+      color: mockupGreen,
       fontFamily: displayFontFamily,
-      fontSize: 16,
-      fontWeight: "900",
+      fontSize: isCompact ? 14 : 16,
+      fontWeight: "400",
       letterSpacing: 0,
+    },
+    addHeaderButton: {
+      backgroundColor: "transparent",
+      borderColor: "transparent",
+      elevation: 0,
+      shadowOpacity: 0,
     },
     calendarCard: {
       backgroundColor: panelBackground,
       borderColor: panelBorder,
-      borderRadius: 18,
+      borderRadius: 12,
       borderWidth: 1,
       elevation: 2,
       overflow: "hidden",
-      paddingHorizontal: spacing.sm,
-      paddingVertical: spacing.md,
+      paddingHorizontal: isCompact ? 6 : spacing.sm,
+      paddingVertical: isCompact ? 9 : spacing.md,
       shadowColor: "#000000",
       shadowOffset: { height: 10, width: 0 },
       shadowOpacity: panelShadowOpacity,
@@ -1999,12 +2041,12 @@ function createStyles(colors: AppPalette) {
     calendarModeCard: {
       backgroundColor: panelBackground,
       borderColor: panelBorder,
-      borderRadius: 16,
+      borderRadius: 12,
       borderWidth: 1,
       elevation: 2,
       flexDirection: "row",
-      gap: 4,
-      padding: 6,
+      gap: 3,
+      padding: 4,
       shadowColor: "#000000",
       shadowOffset: { height: 8, width: 0 },
       shadowOpacity: panelShadowOpacity,
@@ -2013,13 +2055,13 @@ function createStyles(colors: AppPalette) {
     calendarModeOption: {
       alignItems: "center",
       borderColor: "transparent",
-      borderRadius: 13,
+      borderRadius: 11,
       borderWidth: 1,
       flex: 1,
       flexDirection: "row",
-      gap: spacing.xs,
+      gap: 5,
       justifyContent: "center",
-      minHeight: 50,
+      minHeight: isCompact ? 42 : 48,
     },
     calendarModeOptionActive: {
       backgroundColor: isDark ? colors.cardMuted : "#F6FAF0",
@@ -2031,13 +2073,13 @@ function createStyles(colors: AppPalette) {
     calendarModeText: {
       color: colors.text,
       fontFamily: displayFontFamily,
-      fontSize: 18,
-      fontWeight: "900",
+      fontSize: isCompact ? 14 : 17,
+      fontWeight: "400",
       letterSpacing: 0,
-      lineHeight: 27,
+      lineHeight: isCompact ? 21 : 25,
     },
     calendarModeTextActive: {
-      color: colors.finance,
+      color: mockupGreen,
     },
     calendarLoading: {
       color: colors.textMuted,
@@ -2073,9 +2115,14 @@ function createStyles(colors: AppPalette) {
       textAlign: "center",
     },
     calendarScreenContent: {
-      gap: spacing.md,
+      gap: isCompact ? 8 : spacing.md,
       paddingHorizontal: spacing.md,
-      paddingTop: spacing.sm,
+      paddingTop: isCompact ? 0 : spacing.sm,
+    },
+    calendarTitle: {
+      fontSize: isCompact ? 27 : 38,
+      fontWeight: "400",
+      lineHeight: isCompact ? 33 : 46,
     },
     agendaAccent: {
       alignSelf: "stretch",
@@ -2155,13 +2202,13 @@ function createStyles(colors: AppPalette) {
     agendaMeta: {
       color: colors.textMuted,
       fontSize: 11,
-      fontWeight: "700",
+      fontWeight: "400",
       letterSpacing: 0,
     },
     agendaScope: {
       color: colors.textMuted,
       fontSize: 12,
-      fontWeight: "700",
+      fontWeight: "400",
       letterSpacing: 0,
       lineHeight: 16,
     },
@@ -2188,9 +2235,9 @@ function createStyles(colors: AppPalette) {
     dayBubble: {
       alignItems: "center",
       borderRadius: 999,
-      height: 42,
+      height: isCompact ? 28 : 42,
       justifyContent: "center",
-      width: 42,
+      width: isCompact ? 28 : 42,
     },
     dayBubbleMuted: {
       opacity: 0.42,
@@ -2204,8 +2251,13 @@ function createStyles(colors: AppPalette) {
     dayCell: {
       alignItems: "center",
       flexBasis: "14.285%",
-      height: 64,
+      height: isCompact ? 50 : 64,
       justifyContent: "flex-start",
+    },
+    dayCellWeekDivider: {
+      borderTopColor: isDark ? colors.border : "#F1ECE4",
+      borderTopWidth: 1,
+      paddingTop: isCompact ? 2 : 4,
     },
     dayGrid: {
       flexDirection: "row",
@@ -2214,10 +2266,10 @@ function createStyles(colors: AppPalette) {
     dayText: {
       color: colors.text,
       fontFamily: displayFontFamily,
-      fontSize: 19,
-      fontWeight: "800",
+      fontSize: isCompact ? 14 : 19,
+      fontWeight: "400",
       letterSpacing: 0,
-      lineHeight: 30,
+      lineHeight: isCompact ? 20 : 30,
     },
     dayTextMuted: {
       color: colors.textSubtle,
@@ -2228,40 +2280,43 @@ function createStyles(colors: AppPalette) {
     dayTextToday: {
       color: colors.text,
     },
+    dayTextWeekend: {
+      color: colors.textMuted,
+    },
     doneText: {
       color: colors.textMuted,
       textDecorationLine: "line-through",
     },
     dotSlot: {
       alignItems: "center",
-      height: 16,
+      height: isCompact ? 11 : 16,
       justifyContent: "center",
     },
     eventDotsRow: {
       alignItems: "center",
       flexDirection: "row",
-      gap: 3,
+      gap: 2,
       justifyContent: "center",
     },
     eventDot: {
       backgroundColor: colors.warning,
       borderRadius: 999,
-      height: 4,
-      width: 20,
+      height: isCompact ? 3 : 4,
+      width: isCompact ? 13 : 20,
     },
     eventMeta: {
       color: colors.textMuted,
-      fontSize: 13,
-      fontWeight: "800",
+      fontSize: 11,
+      fontWeight: "400",
       letterSpacing: 0,
     },
     eventIconFrame: {
       alignItems: "center",
       backgroundColor: isDark ? colors.cardMuted : colors.successSoft,
-      borderRadius: 13,
-      height: 48,
+      borderRadius: 11,
+      height: isCompact ? 38 : 48,
       justifyContent: "center",
-      width: 48,
+      width: isCompact ? 38 : 48,
     },
     eventLocationLink: {
       alignItems: "center",
@@ -2282,14 +2337,14 @@ function createStyles(colors: AppPalette) {
       alignSelf: "stretch",
       backgroundColor: panelBackground,
       borderColor: panelBorder,
-      borderRadius: 14,
+      borderRadius: 12,
       borderWidth: 1,
       flexDirection: "row",
-      gap: spacing.md,
-      minHeight: 80,
+      gap: isCompact ? spacing.sm : spacing.md,
+      minHeight: isCompact ? 58 : 80,
       overflow: "hidden",
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
+      paddingHorizontal: isCompact ? 10 : spacing.md,
+      paddingVertical: isCompact ? 5 : spacing.sm,
     },
     eventPillPressed: {
       opacity: 0.78,
@@ -2307,12 +2362,12 @@ function createStyles(colors: AppPalette) {
     },
     eventStrip: {
       flexDirection: "column",
-      gap: spacing.md,
+      gap: isCompact ? spacing.sm : spacing.md,
     },
     eventSourceLine: {
       alignSelf: "stretch",
       borderRadius: 999,
-      width: 7,
+      width: isCompact ? 5 : 7,
     },
     eventSourceDot: {
       borderRadius: 999,
@@ -2321,10 +2376,10 @@ function createStyles(colors: AppPalette) {
     },
     eventTitle: {
       color: colors.text,
-      fontSize: 15,
-      fontWeight: "900",
+      fontSize: isCompact ? 13 : 15,
+      fontWeight: "700",
       letterSpacing: 0,
-      lineHeight: 23,
+      lineHeight: isCompact ? 18 : 23,
     },
     fab: {
       alignItems: "center",
@@ -2370,29 +2425,31 @@ function createStyles(colors: AppPalette) {
       backgroundColor: panelBackground,
       borderColor: panelBorder,
       borderWidth: 1,
-      elevation: 3,
-      height: 56,
+      elevation: 1,
+      borderRadius: 999,
+      height: isCompact ? 34 : 48,
+      padding: 0,
       shadowColor: "#000000",
-      shadowOffset: { height: 8, width: 0 },
+      shadowOffset: { height: 4, width: 0 },
       shadowOpacity: panelShadowOpacity,
-      shadowRadius: 18,
-      width: 56,
+      shadowRadius: 10,
+      width: isCompact ? 34 : 48,
     },
     headerStatusDot: {
       backgroundColor: "#27D45B",
       borderColor: panelBackground,
       borderRadius: 999,
       borderWidth: 2,
-      height: 12,
+      height: 8,
       position: "absolute",
-      right: 5,
-      top: 3,
-      width: 12,
+      right: 2,
+      top: 1,
+      width: 8,
     },
     headerActions: {
       alignItems: "center",
       flexDirection: "row",
-      gap: spacing.xs,
+      gap: 5,
     },
     input: {
       backgroundColor: colors.field,
@@ -2440,13 +2497,13 @@ function createStyles(colors: AppPalette) {
       alignItems: "center",
       backgroundColor: panelBackground,
       borderColor: panelBorder,
-      borderRadius: 16,
+      borderRadius: 12,
       borderWidth: 1,
       elevation: 2,
       flexDirection: "row",
       justifyContent: "space-between",
-      minHeight: 70,
-      paddingHorizontal: spacing.md,
+      minHeight: isCompact ? 48 : 68,
+      paddingHorizontal: isCompact ? 7 : spacing.md,
       shadowColor: "#000000",
       shadowOffset: { height: 8, width: 0 },
       shadowOpacity: panelShadowOpacity,
@@ -2455,19 +2512,20 @@ function createStyles(colors: AppPalette) {
     periodNavButton: {
       backgroundColor: isDark ? colors.cardMuted : "#FFFEFC",
       borderColor: panelBorder,
+      borderRadius: 9,
       borderWidth: 1,
-      elevation: 2,
-      height: 46,
+      elevation: 1,
+      height: isCompact ? 30 : 44,
       shadowColor: "#000000",
       shadowOffset: { height: 6, width: 0 },
       shadowOpacity: panelShadowOpacity,
-      shadowRadius: 14,
-      width: 46,
+      shadowRadius: 10,
+      width: isCompact ? 30 : 44,
     },
     periodSubtitle: {
       color: colors.textMuted,
       fontSize: 12,
-      fontWeight: "700",
+      fontWeight: "400",
       letterSpacing: 0,
       lineHeight: 17,
       textAlign: "center",
@@ -2481,8 +2539,8 @@ function createStyles(colors: AppPalette) {
     periodTitle: {
       color: colors.text,
       fontFamily: displayFontFamily,
-      fontSize: 25,
-      fontWeight: "900",
+      fontSize: isCompact ? 18 : 25,
+      fontWeight: "400",
       letterSpacing: 0,
       textAlign: "center",
     },
@@ -2565,7 +2623,7 @@ function createStyles(colors: AppPalette) {
     selectedDayMeta: {
       color: colors.textMuted,
       fontSize: 12,
-      fontWeight: "700",
+      fontWeight: "400",
       letterSpacing: 0,
       lineHeight: 17,
     },
@@ -2596,11 +2654,11 @@ function createStyles(colors: AppPalette) {
     },
     selectedEventsEmpty: {
       color: colors.textMuted,
-      fontSize: 15,
-      fontWeight: "800",
+      fontSize: isCompact ? 12 : 15,
+      fontWeight: "400",
       letterSpacing: 0,
-      lineHeight: 21,
-      paddingVertical: spacing.md,
+      lineHeight: isCompact ? 17 : 21,
+      paddingVertical: isCompact ? spacing.sm : spacing.md,
     },
     selectedEventsHeader: {
       alignItems: "center",
@@ -2610,11 +2668,11 @@ function createStyles(colors: AppPalette) {
     selectedEventsPanel: {
       backgroundColor: panelBackground,
       borderColor: panelBorder,
-      borderRadius: 16,
+      borderRadius: 12,
       borderWidth: 1,
       elevation: 2,
-      gap: spacing.md,
-      padding: spacing.md,
+      gap: isCompact ? 8 : spacing.md,
+      padding: isCompact ? 9 : spacing.md,
       shadowColor: "#000000",
       shadowOffset: { height: 10, width: 0 },
       shadowOpacity: panelShadowOpacity,
@@ -2624,10 +2682,10 @@ function createStyles(colors: AppPalette) {
       color: colors.text,
       flex: 1,
       fontFamily: displayFontFamily,
-      fontSize: 22,
-      fontWeight: "900",
+      fontSize: isCompact ? 17 : 22,
+      fontWeight: "400",
       letterSpacing: 0,
-      lineHeight: 28,
+      lineHeight: isCompact ? 22 : 28,
       minWidth: 0,
     },
     textArea: {
@@ -2693,10 +2751,13 @@ function createStyles(colors: AppPalette) {
       color: colors.text,
       flex: 1,
       fontFamily: displayFontFamily,
-      fontSize: 14,
-      fontWeight: "900",
+      fontSize: isCompact ? 11 : 14,
+      fontWeight: "400",
       letterSpacing: 0,
       textAlign: "center",
+    },
+    weekLabelWeekend: {
+      color: colors.textMuted,
     },
     weekDay: {
       alignItems: "center",
@@ -2740,7 +2801,7 @@ function createStyles(colors: AppPalette) {
     },
     weekRow: {
       flexDirection: "row",
-      paddingBottom: spacing.md,
+      paddingBottom: isCompact ? 6 : spacing.md,
     },
     weekPanel: {
       backgroundColor: panelBackground,
@@ -2758,18 +2819,18 @@ function createStyles(colors: AppPalette) {
       alignItems: "center",
       backgroundColor: isDark ? colors.cardMuted : "#F7FAF0",
       borderColor: panelBorder,
-      borderRadius: 14,
+      borderRadius: 12,
       borderWidth: 1,
       elevation: 1,
       justifyContent: "center",
-      minHeight: 38,
+      minHeight: isCompact ? 32 : 38,
       paddingHorizontal: spacing.sm,
     },
     todayBadgeText: {
-      color: colors.finance,
+      color: mockupGreen,
       fontFamily: displayFontFamily,
-      fontSize: 16,
-      fontWeight: "900",
+      fontSize: isCompact ? 14 : 16,
+      fontWeight: "400",
       letterSpacing: 0,
     },
   });

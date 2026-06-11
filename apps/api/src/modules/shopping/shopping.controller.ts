@@ -37,6 +37,14 @@ export class ShoppingController {
     return this.shoppingService.listShoppingLists(this.requireHousehold(household).householdId);
   }
 
+  @Get('pantry/dashboard')
+  @RequirePermission('shopping', 'read')
+  pantryDashboard(@CurrentHousehold() household: HouseholdContext | undefined) {
+    return this.shoppingService.getPantryDashboard(
+      this.requireHousehold(household).householdId
+    );
+  }
+
   @Get(':type/items')
   @RequirePermission('shopping', 'read')
   listItems(

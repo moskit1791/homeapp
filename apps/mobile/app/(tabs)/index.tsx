@@ -8,6 +8,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
   type ImageSourcePropType,
 } from "react-native";
@@ -53,11 +54,12 @@ import calendarCardImage from "../../assets/today-calendar-card.png";
 import mealCardImage from "../../assets/today-meal-card.png";
 import shoppingCardImage from "../../assets/today-shopping-card.png";
 
+const mockupGreen = "#4F8D2C";
+
 export default function DzisiajScreen() {
   const { session } = useSession();
   const router = useRouter();
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
+  const { screenBackground, styles, theme } = useTodayStyles();
   const accessToken = session?.accessToken;
   const [notificationsVisible, setNotificationsVisible] = useState(false);
   const [pushNotifications, setPushNotifications] = useState<
@@ -238,9 +240,11 @@ export default function DzisiajScreen() {
           </IconButton>
         </View>
       }
+      backgroundColor={screenBackground}
       contentStyle={styles.todayContent}
       title="Dzisiaj"
       titleAlign="center"
+      titleStyle={styles.todayTitle}
       titleVariant="display"
     >
       <AppToast offsetTop={74} text={toast} />
@@ -281,16 +285,16 @@ export default function DzisiajScreen() {
       <View style={styles.quickSection}>
         <View style={styles.quickGrid}>
           <QuickAction
-            accent={theme.colors.finance}
+            accent={mockupGreen}
             caption="Dodaj wydarzenie"
-            icon={<CalendarDays color={theme.colors.calendar} size={29} />}
+            icon={<CalendarDays color={mockupGreen} size={24} />}
             label="Wydarzenie"
             onPress={() => openCalendarForDate(todayIso(), "create")}
           />
           <QuickAction
-            accent={theme.colors.finance}
+            accent={mockupGreen}
             caption="Dodaj wydatek"
-            icon={<ReceiptText color={theme.colors.finance} size={29} />}
+            icon={<ReceiptText color={mockupGreen} size={24} />}
             label="Wydatek"
             onPress={() =>
               router.push({
@@ -364,6 +368,16 @@ export default function DzisiajScreen() {
       ) : null}
     </AppScreen>
   );
+}
+
+function useTodayStyles() {
+  const theme = useAppTheme();
+  const { width } = useWindowDimensions();
+  const screenBackground =
+    theme.colors.background === "#0C1220" ? theme.colors.background : "#FCFAF5";
+  const styles = createStyles(theme.colors, width);
+
+  return { screenBackground, styles, theme };
 }
 
 interface NotificationItem {
@@ -484,8 +498,7 @@ function NotificationCenterPanel({
   onOpenStoredNotification: (notification: StoredNotification) => void;
   pushNotifications: StoredNotification[];
 }) {
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
+  const { styles, theme } = useTodayStyles();
   const activeCount = pushNotifications.length || notificationItems.length;
   const subtitle =
     activeCount === 0
@@ -550,8 +563,7 @@ function NotificationCenterPanel({
 }
 
 function NotificationRow({ item }: { item: NotificationItem }) {
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
+  const { styles, theme } = useTodayStyles();
 
   return (
     <Pressable
@@ -580,8 +592,7 @@ function StoredNotificationRow({
   item: StoredNotification;
   onPress: () => void;
 }) {
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
+  const { styles, theme } = useTodayStyles();
   const isNavigable = Boolean(resolveStoredNotificationTarget(item));
 
   return (
@@ -621,8 +632,7 @@ function NextEventCard({
   event: StartCalendarEvent | undefined;
   onPress: () => void;
 }) {
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
+  const { styles, theme } = useTodayStyles();
   const eventDateTime = event ? formatEventDateTime(event) : "Brak wydarzeń";
   const eventDetails = event?.title ?? "Dodaj wydarzenie do kalendarza";
 
@@ -654,7 +664,7 @@ function NextEventCard({
           <Text style={styles.nextEventCtaText}>
             {event ? "Zobacz szczegóły" : "Dodaj wydarzenie"}
           </Text>
-          <ChevronRight color={theme.colors.finance} size={18} />
+          <ChevronRight color={mockupGreen} size={18} />
         </View>
       </View>
     </Pressable>
@@ -680,8 +690,7 @@ function TodayOverviewGrid({
   shoppingCount: number;
   tasks: StartTodoItem[];
 }) {
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
+  const { styles, theme } = useTodayStyles();
 
   return (
     <View style={styles.todayOverviewGrid}>
@@ -726,8 +735,15 @@ function TodayOverviewGrid({
           ))}
         </View>
         <View style={styles.todoSeeAll}>
-          <Text style={styles.todoSeeAllText}>Zobacz wszystkie</Text>
-          <ChevronRight color={theme.colors.primaryDark} size={16} />
+          <Text
+            adjustsFontSizeToFit
+            minimumFontScale={0.82}
+            numberOfLines={1}
+            style={styles.todoSeeAllText}
+          >
+            Zobacz wszystkie zadania
+          </Text>
+          <ChevronRight color={mockupGreen} size={16} />
         </View>
       </Pressable>
       <View style={styles.todayMiniColumn}>
@@ -739,8 +755,8 @@ function TodayOverviewGrid({
           title="Zakupy"
         />
         <MiniTodayCard
-          accent={theme.colors.food}
-          caption={`${mealCount} ${mealLabel(mealCount)} na dziś`}
+          accent={mockupGreen}
+          caption={`${mealCount} ${mealLabel(mealCount)}\nna dziś`}
           illustration={mealCardImage}
           onPress={onOpenMeals}
           title="Plan posiłków"
@@ -763,8 +779,7 @@ function MiniTodayCard({
   onPress: () => void;
   title: string;
 }) {
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
+  const { styles, theme } = useTodayStyles();
 
   return (
     <Pressable
@@ -773,7 +788,7 @@ function MiniTodayCard({
       onPress={onPress}
       style={({ pressed }) => [
         styles.miniTodayCard,
-        { borderColor: `${accent}7A`, shadowColor: accent },
+        { shadowColor: "#000000" },
         pressed && styles.pressed,
       ]}
     >
@@ -811,8 +826,7 @@ function QuickAction({
   label: string;
   onPress: () => void;
 }) {
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
+  const { styles, theme } = useTodayStyles();
 
   return (
     <Pressable
@@ -828,14 +842,26 @@ function QuickAction({
         {icon}
       </View>
       <View style={styles.quickText}>
-        <Text numberOfLines={1} style={styles.quickLabel}>
+        <Text
+          adjustsFontSizeToFit
+          minimumFontScale={0.82}
+          numberOfLines={1}
+          style={styles.quickLabel}
+        >
           {label}
         </Text>
-        <Text numberOfLines={1} style={styles.quickCaption}>
+        <Text
+          adjustsFontSizeToFit
+          minimumFontScale={0.76}
+          numberOfLines={1}
+          style={styles.quickCaption}
+        >
           {caption}
         </Text>
       </View>
-      <ChevronRight color={theme.colors.textMuted} size={22} />
+      <View style={styles.quickChevron}>
+        <ChevronRight color={theme.colors.textMuted} size={21} />
+      </View>
     </Pressable>
   );
 }
@@ -933,18 +959,24 @@ function formatDateTime(value: string): string {
   }).format(date);
 }
 
-function createStyles(colors: AppPalette) {
+function createStyles(colors: AppPalette, viewportWidth: number) {
   const isDark = colors.background === "#0C1220";
   const displayFontFamily = Platform.select({
     android: "serif",
     ios: "Georgia",
   });
+  const isNarrow = viewportWidth < 430;
+  const isVeryNarrow = viewportWidth < 370;
+  const stackQuickActions = viewportWidth < 350;
+  const stackOverview = viewportWidth < 370;
+  const compactGap = isNarrow ? spacing.sm : spacing.md;
+  const contentPadding = isNarrow ? spacing.md : spacing.lg;
   const todayPanelBackground = isDark ? colors.card : "#FFFDF8";
-  const todayPanelBorder = isDark ? colors.border : "#EDE7DC";
+  const todayPanelBorder = isDark ? colors.border : "#F1EDE7";
   const todayPanelText = isDark ? colors.text : "#142017";
   const todayPanelMuted = isDark ? colors.textMuted : "#5F635F";
-  const todayPanelEyebrow = isDark ? colors.finance : "#20A44A";
-  const todayPanelShadowOpacity = isDark ? 0.18 : 0.07;
+  const todayPanelEyebrow = isDark ? colors.finance : mockupGreen;
+  const todayPanelShadowOpacity = isDark ? 0.18 : 0.045;
 
   return StyleSheet.create({
     bellDot: {
@@ -970,8 +1002,13 @@ function createStyles(colors: AppPalette) {
       gap: spacing.xs,
     },
     todayContent: {
-      gap: spacing.lg,
-      paddingHorizontal: spacing.lg,
+      gap: isNarrow ? 11 : spacing.lg,
+      paddingHorizontal: contentPadding,
+    },
+    todayTitle: {
+      fontSize: isNarrow ? 31 : 40,
+      fontWeight: "700",
+      lineHeight: isNarrow ? 38 : 48,
     },
     greetingBlock: {
       gap: spacing.xs,
@@ -979,17 +1016,17 @@ function createStyles(colors: AppPalette) {
     },
     greetingSubtitle: {
       color: todayPanelMuted,
-      fontSize: 15,
+      fontSize: 14,
       letterSpacing: 0,
-      lineHeight: 22,
+      lineHeight: 20,
     },
     greetingTitle: {
       color: todayPanelText,
       fontFamily: displayFontFamily,
-      fontSize: 26,
-      fontWeight: "900",
+      fontSize: 23,
+      fontWeight: "700",
       letterSpacing: 0,
-      lineHeight: 32,
+      lineHeight: 30,
     },
     greetingTitleRow: {
       alignItems: "center",
@@ -1022,20 +1059,20 @@ function createStyles(colors: AppPalette) {
     },
     nextEventBody: {
       alignItems: "flex-start",
-      gap: spacing.md,
-      marginTop: spacing.lg,
-      paddingRight: 145,
+      gap: isNarrow ? 7 : spacing.md,
+      marginTop: isNarrow ? 10 : spacing.lg,
+      paddingRight: isVeryNarrow ? 94 : isNarrow ? 118 : 145,
     },
     nextEventCard: {
       backgroundColor: todayPanelBackground,
       borderColor: todayPanelBorder,
-      borderRadius: 22,
+      borderRadius: 20,
       borderWidth: 1,
       elevation: 2,
-      minHeight: 178,
+      minHeight: isNarrow ? 162 : 178,
       overflow: "hidden",
-      paddingHorizontal: spacing.xl,
-      paddingVertical: spacing.lg,
+      paddingHorizontal: isNarrow ? spacing.lg : spacing.xl,
+      paddingVertical: isNarrow ? 14 : spacing.lg,
       shadowColor: "#000000",
       shadowOffset: { height: 12, width: 0 },
       shadowOpacity: todayPanelShadowOpacity,
@@ -1047,36 +1084,36 @@ function createStyles(colors: AppPalette) {
       borderRadius: 999,
       flexDirection: "row",
       gap: spacing.xs,
-      minHeight: 38,
+      minHeight: 36,
       paddingLeft: spacing.md,
       paddingRight: spacing.sm,
     },
     nextEventCtaText: {
-      color: colors.finance,
-      fontSize: 13,
-      fontWeight: "900",
+      color: mockupGreen,
+      fontSize: 12,
+      fontWeight: "800",
       letterSpacing: 0,
     },
     nextEventDetails: {
       color: todayPanelMuted,
-      fontSize: 15,
-      fontWeight: "700",
+      fontSize: 14,
+      fontWeight: "600",
       letterSpacing: 0,
-      lineHeight: 21,
+      lineHeight: 20,
     },
     nextEventEyebrow: {
       color: todayPanelEyebrow,
-      fontSize: 12,
-      fontWeight: "900",
+      fontSize: 11,
+      fontWeight: "800",
       letterSpacing: 0,
       textTransform: "uppercase",
     },
     nextEventImage: {
-      bottom: -10,
-      height: 166,
+      bottom: -8,
+      height: isVeryNarrow ? 126 : isNarrow ? 144 : 166,
       position: "absolute",
-      right: -12,
-      width: 172,
+      right: isNarrow ? -12 : -12,
+      width: isVeryNarrow ? 130 : isNarrow ? 150 : 172,
     },
     nextEventIcon: {
       alignItems: "center",
@@ -1091,10 +1128,10 @@ function createStyles(colors: AppPalette) {
     nextEventTime: {
       color: todayPanelText,
       flex: 1,
-      fontSize: 17,
-      fontWeight: "900",
+      fontSize: 16,
+      fontWeight: "700",
       letterSpacing: 0,
-      lineHeight: 23,
+      lineHeight: 22,
       minWidth: 0,
     },
     nextEventTimeRow: {
@@ -1106,37 +1143,37 @@ function createStyles(colors: AppPalette) {
     nextEventTitle: {
       color: todayPanelText,
       fontFamily: displayFontFamily,
-      fontSize: 24,
-      fontWeight: "900",
+      fontSize: isNarrow ? 22 : 24,
+      fontWeight: "700",
       letterSpacing: 0,
-      lineHeight: 30,
+      lineHeight: isNarrow ? 27 : 30,
       marginTop: spacing.sm,
     },
     miniTodayCard: {
       backgroundColor: todayPanelBackground,
       borderColor: todayPanelBorder,
-      borderRadius: 18,
+      borderRadius: 16,
       borderWidth: 1,
       elevation: 3,
       flexBasis: 0,
       flex: 1,
       justifyContent: "space-between",
-      minHeight: 112,
+      minHeight: isNarrow ? 96 : 112,
       minWidth: 0,
       overflow: "hidden",
-      padding: spacing.lg,
+      padding: isNarrow ? 12 : spacing.lg,
       position: "relative",
       shadowColor: "#000000",
       shadowOffset: { height: 8, width: 0 },
-      shadowOpacity: isDark ? 0.18 : 0.09,
+      shadowOpacity: isDark ? 0.18 : 0.05,
       shadowRadius: 16,
     },
     miniTodayImage: {
       bottom: -6,
-      height: 92,
+      height: isNarrow ? 68 : 92,
       position: "absolute",
-      right: 4,
-      width: 104,
+      right: 0,
+      width: isNarrow ? 78 : 104,
     },
     miniTodayIcon: {
       alignItems: "center",
@@ -1151,18 +1188,18 @@ function createStyles(colors: AppPalette) {
     miniTodayLabel: {
       color: "#FFFFFF",
       fontSize: 11,
-      fontWeight: "900",
+      fontWeight: "800",
       letterSpacing: 0,
       lineHeight: 13,
       maxWidth: 72,
       zIndex: 1,
     },
     miniTodayCaption: {
-      fontSize: 15,
+      fontSize: isNarrow ? 13 : 15,
       fontWeight: "900",
       letterSpacing: 0,
-      lineHeight: 20,
-      maxWidth: 82,
+      lineHeight: isNarrow ? 18 : 20,
+      maxWidth: isNarrow ? 100 : 82,
       zIndex: 1,
     },
     miniTodayChevron: {
@@ -1191,23 +1228,24 @@ function createStyles(colors: AppPalette) {
     miniTodayTitle: {
       color: todayPanelText,
       fontFamily: displayFontFamily,
-      fontSize: 17,
-      fontWeight: "900",
+      fontSize: 16,
+      fontWeight: "700",
       letterSpacing: 0,
-      lineHeight: 22,
-      maxWidth: 112,
+      lineHeight: 20,
+      maxWidth: isNarrow ? 132 : 112,
       zIndex: 1,
     },
     todayMiniColumn: {
       flex: 1,
       flexBasis: 0,
-      gap: spacing.md,
-      minWidth: 126,
+      flexDirection: stackOverview ? "row" : "column",
+      gap: compactGap,
+      minWidth: 0,
     },
     todayOverviewGrid: {
       alignItems: "stretch",
-      flexDirection: "row",
-      gap: spacing.md,
+      flexDirection: stackOverview ? "column" : "row",
+      gap: compactGap,
     },
     todoCircle: {
       borderColor: colors.textSubtle,
@@ -1219,23 +1257,24 @@ function createStyles(colors: AppPalette) {
     todoCompactCard: {
       backgroundColor: todayPanelBackground,
       borderColor: todayPanelBorder,
-      borderRadius: 18,
+      borderRadius: 16,
       borderWidth: 1,
       elevation: 3,
       flex: 1.08,
       flexBasis: 0,
-      gap: spacing.md,
+      gap: isNarrow ? 8 : spacing.md,
       minWidth: 0,
-      minHeight: 236,
-      padding: spacing.lg,
+      minHeight: isNarrow ? 196 : 236,
+      padding: isNarrow ? 12 : spacing.lg,
       shadowColor: "#000000",
       shadowOffset: { height: 8, width: 0 },
-      shadowOpacity: isDark ? 0.18 : 0.09,
+      shadowOpacity: isDark ? 0.18 : 0.05,
       shadowRadius: 16,
     },
     todoCompactHeader: {
       alignItems: "center",
       flexDirection: "row",
+      gap: spacing.xs,
       justifyContent: "space-between",
     },
     todoCompactList: {
@@ -1246,7 +1285,7 @@ function createStyles(colors: AppPalette) {
       alignItems: "center",
       flexDirection: "row",
       gap: spacing.sm,
-      minHeight: 44,
+      minHeight: 40,
     },
     todoCompactRowDivider: {
       borderBottomColor: colors.border,
@@ -1255,30 +1294,31 @@ function createStyles(colors: AppPalette) {
     todoCompactText: {
       color: colors.text,
       flex: 1,
-      fontSize: 13,
-      fontWeight: "800",
+      fontSize: 12,
+      fontWeight: "700",
       letterSpacing: 0,
-      lineHeight: 16,
+      lineHeight: 15,
       minWidth: 0,
     },
     todoCompactTitle: {
       color: todayPanelText,
       fontFamily: displayFontFamily,
-      fontSize: 18,
-      fontWeight: "900",
+      flexShrink: 1,
+      fontSize: isNarrow ? 17 : 18,
+      fontWeight: "700",
       letterSpacing: 0,
     },
     todoCountPill: {
       alignItems: "center",
       backgroundColor: colors.successSoft,
       borderRadius: 999,
-      height: 28,
+      height: isNarrow ? 26 : 28,
       justifyContent: "center",
-      minWidth: 28,
+      minWidth: isNarrow ? 26 : 28,
       paddingHorizontal: spacing.xs,
     },
     todoCountText: {
-      color: colors.finance,
+      color: mockupGreen,
       fontSize: 13,
       fontWeight: "900",
       letterSpacing: 0,
@@ -1291,19 +1331,21 @@ function createStyles(colors: AppPalette) {
       flexDirection: "row",
       gap: spacing.xs,
       justifyContent: "center",
-      minHeight: 38,
+      minHeight: 34,
       paddingHorizontal: spacing.md,
     },
     todoSeeAllText: {
-      color: colors.primaryDark,
-      fontSize: 13,
-      fontWeight: "900",
+      color: mockupGreen,
+      fontSize: 12,
+      fontWeight: "800",
       letterSpacing: 0,
+      maxWidth: "86%",
     },
     todoTitleRow: {
       alignItems: "center",
       flexDirection: "row",
-      gap: spacing.sm,
+      gap: spacing.xs,
+      flex: 1,
       minWidth: 0,
     },
     dashboardIcon: {
@@ -1471,20 +1513,24 @@ function createStyles(colors: AppPalette) {
       alignItems: "center",
       backgroundColor: colors.overlay,
       borderColor: todayPanelBorder,
-      borderRadius: 18,
+      borderRadius: 16,
       borderWidth: 1,
       elevation: 2,
-      flexBasis: "47.5%",
+      flexBasis: stackQuickActions ? "100%" : "47.5%",
       flexDirection: "row",
       flexGrow: 1,
-      gap: spacing.md,
-      justifyContent: "space-between",
-      minHeight: 104,
-      minWidth: 140,
-      padding: spacing.md,
+      gap: isNarrow ? spacing.sm : spacing.md,
+      justifyContent: "flex-start",
+      minHeight: isNarrow ? 78 : 104,
+      minWidth: 0,
+      paddingBottom: isNarrow ? 10 : spacing.md,
+      paddingLeft: isNarrow ? 10 : spacing.md,
+      paddingRight: isNarrow ? 25 : spacing.md,
+      paddingTop: isNarrow ? 10 : spacing.md,
+      position: "relative",
       shadowColor: "#000000",
       shadowOffset: { height: 8, width: 0 },
-      shadowOpacity: isDark ? 0.16 : 0.06,
+      shadowOpacity: isDark ? 0.16 : 0.045,
       shadowRadius: 18,
     },
     quickActionPressed: {
@@ -1492,30 +1538,36 @@ function createStyles(colors: AppPalette) {
       opacity: 0.86,
     },
     quickCaption: {
-      color: colors.finance,
-      fontSize: 13,
+      color: mockupGreen,
+      fontSize: isNarrow ? 11 : 13,
       fontWeight: "700",
       letterSpacing: 0,
-      lineHeight: 18,
+      lineHeight: 16,
+    },
+    quickChevron: {
+      position: "absolute",
+      right: 9,
+      top: "50%",
+      transform: [{ translateY: -10 }],
     },
     quickGrid: {
       flexDirection: "row",
       flexWrap: "wrap",
-      gap: spacing.md,
+      gap: compactGap,
     },
     quickIcon: {
       alignItems: "center",
-      borderRadius: 16,
-      height: 58,
+      borderRadius: isNarrow ? 15 : 16,
+      height: isNarrow ? 42 : 58,
       justifyContent: "center",
-      width: 58,
+      width: isNarrow ? 42 : 58,
     },
     quickLabel: {
       color: colors.text,
-      fontSize: 17,
-      fontWeight: "900",
+      fontSize: isNarrow ? 14 : 17,
+      fontWeight: "800",
       letterSpacing: 0,
-      lineHeight: 22,
+      lineHeight: isNarrow ? 18 : 22,
     },
     quickSection: {
       gap: spacing.md,
@@ -1524,6 +1576,7 @@ function createStyles(colors: AppPalette) {
       flex: 1,
       gap: 2,
       minWidth: 0,
+      paddingRight: 0,
     },
     sectionHeader: {
       alignItems: "flex-end",

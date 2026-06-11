@@ -1,4 +1,13 @@
-import { IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Min } from 'class-validator';
+import {
+  IsDateString,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Length,
+  Min
+} from 'class-validator';
 
 export const SHOPPING_LIST_TYPES = ['daily', 'tomorrow', 'long_term', 'pantry'] as const;
 
@@ -30,6 +39,10 @@ export class CreateShoppingItemDto {
   category?: string;
 
   @IsOptional()
+  @IsDateString()
+  expirationDate?: string;
+
+  @IsOptional()
   @IsInt()
   @Min(0)
   displayOrder?: number;
@@ -50,6 +63,10 @@ export class UpdateShoppingItemDto {
   @IsString()
   @Length(0, 80)
   category?: string;
+
+  @IsOptional()
+  @IsDateString()
+  expirationDate?: string | null;
 
   @IsOptional()
   @IsInt()

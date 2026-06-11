@@ -9,11 +9,12 @@ import {
 } from "@homeapp/shared-types";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { setStringAsync } from "expo-clipboard";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Image,
   Linking,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -32,6 +33,7 @@ import {
   getCurrentMealPlanWeek,
   getMealPlanWeek,
   getMyHousehold,
+  getPantryDashboard,
   importShoppingItemsWithAi,
   listMealPlanHistory,
   listShoppingItems,
@@ -75,11 +77,19 @@ import {
 } from "../../src/ui";
 import {
   CalendarDays,
+  AlertCircle,
+  Bell,
   Check,
   ChevronRight,
+  DotsVertical,
   ExternalLink,
+  Filter,
+  MoreHorizontal,
+  Package,
   Pencil,
   Plus,
+  Search,
+  ShoppingCart,
   Sparkles,
   TableLarge,
   Trash2,
@@ -170,6 +180,7 @@ export default function ListaScreen() {
   const [mealViewResetRequest, setMealViewResetRequest] = useState(0);
   const [mealLayout, setMealLayout] = useState<MealLayout>("list");
   const [mealLayoutLoaded, setMealLayoutLoaded] = useState(false);
+  const [pantryMenuVisible, setPantryMenuVisible] = useState(false);
   const clearRouteAction = useCallback(() => {
     router.setParams({ action: undefined });
   }, [router]);
@@ -318,15 +329,27 @@ export default function ListaScreen() {
               )}
             </IconButton>
           </View>
+        ) : activeSegment === "pantry" ? (
+          <IconButton
+            accessibilityLabel="Menu spiżarni"
+            onPress={() => setPantryMenuVisible(true)}
+            style={styles.pantryHeaderButton}
+          >
+            <MoreHorizontal color={theme.colors.text} size={24} />
+          </IconButton>
         ) : undefined
       }
-      title="Jedzenie"
+      title={activeSegment === "pantry" ? "Spiżarnia" : "Jedzenie"}
+      titleStyle={activeSegment === "pantry" ? styles.pantryScreenTitle : undefined}
+      titleVariant={activeSegment === "pantry" ? "display" : "default"}
     >
-      <SegmentedControl
-        onChange={selectMainSegment}
-        options={availableSegments}
-        value={activeSegment}
-      />
+      {activeSegment !== "pantry" ? (
+        <SegmentedControl
+          onChange={selectMainSegment}
+          options={availableSegments}
+          value={activeSegment}
+        />
+      ) : null}
 
       {activeSegment === "shopping" ? (
         <ShoppingBoard
@@ -345,8 +368,34 @@ export default function ListaScreen() {
         />
       ) : null}
       {activeSegment === "pantry" ? (
-        <PantryBoard />
+        <PantryDashboardBoard />
       ) : null}
+
+      <FormModal
+        onClose={() => setPantryMenuVisible(false)}
+        title="Jedzenie"
+        visible={pantryMenuVisible}
+      >
+        <View style={styles.pantryNavigationMenu}>
+          {availableSegments.map((segment) => (
+            <Pressable
+              key={segment.value}
+              onPress={() => {
+                selectMainSegment(segment.value);
+                setPantryMenuVisible(false);
+              }}
+              style={({ pressed }) => [
+                styles.pantryNavigationItem,
+                segment.value === activeSegment && styles.pantryNavigationItemActive,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={styles.pantryNavigationLabel}>{segment.label}</Text>
+              <ChevronRight color={theme.colors.textMuted} size={20} />
+            </Pressable>
+          ))}
+        </View>
+      </FormModal>
     </AppScreen>
   );
 }
@@ -2457,7 +2506,7 @@ function weekdayShort(day: number): string {
   return ["Pn", "Wt", "Śr", "Cz", "Pt", "So", "Nd"][day - 1] ?? String(day);
 }
 
-function PantryBoard() {
+function _PantryBoard() {
   const { session } = useSession();
   const queryClient = useQueryClient();
   const permission = useModulePermission("shopping");
@@ -2564,7 +2613,7 @@ function PantryBoard() {
 
       <View style={{ gap: 16, padding: 16, paddingBottom: 100 }}>
         {groupedItems.map((group) => (
-          <PantryGroupCard
+          <_PantryGroupCard
             category={group.category}
             items={group.items}
             key={group.category}
@@ -2713,7 +2762,7 @@ function PantryBoard() {
   );
 }
 
-function PantryGroupCard({
+function _PantryGroupCard({
   category,
   items,
   meta,
@@ -2771,6 +2820,643 @@ function PantryGroupCard({
   );
 }
 
+type PantryDashboardGroup = {
+  categories: ShoppingCategory[];
+  emoji: string;
+  id: string;
+  label: string;
+};
+
+const pantryDashboardGroups: PantryDashboardGroup[] = [
+  {
+    categories: ["Sypkie", "Pieczywo", "Pieczenie i dodatki", "Kawa i herbata"],
+    emoji: "🌾",
+    id: "dry",
+    label: "Artykuły suche",
+  },
+  {
+    categories: ["Nabiał i jaja"],
+    emoji: "🥛",
+    id: "dairy",
+    label: "Nabiał",
+  },
+  {
+    categories: ["Konserwy i przetwory"],
+    emoji: "🥫",
+    id: "preserves",
+    label: "Konserwy i puszki",
+  },
+  {
+    categories: ["Mrożonki"],
+    emoji: "❄️",
+    id: "frozen",
+    label: "Mrożonki",
+  },
+  {
+    categories: ["Przyprawy, sosy i oleje"],
+    emoji: "🌿",
+    id: "spices",
+    label: "Przyprawy i dodatki",
+  },
+  {
+    categories: ["Woda i napoje", "Alkohole"],
+    emoji: "🧃",
+    id: "drinks",
+    label: "Napoje",
+  },
+  {
+    categories: ["Słodycze i przekąski"],
+    emoji: "🍪",
+    id: "snacks",
+    label: "Słodycze i przekąski",
+  },
+  {
+    categories: ["Inne"],
+    emoji: "📦",
+    id: "other",
+    label: "Inne",
+  },
+];
+
+function PantryDashboardBoard() {
+  const { session } = useSession();
+  const queryClient = useQueryClient();
+  const permission = useModulePermission("shopping");
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+  const accessToken = session?.accessToken;
+  const [search, setSearch] = useState("");
+  const [selectedGroupId, setSelectedGroupId] = useState("all");
+  const [showAllItems, setShowAllItems] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editItem, setEditItem] = useState<ShoppingItem | null>(null);
+  const [name, setName] = useState("");
+  const [quantity, setQuantity] = useState("");
+  const [expirationDate, setExpirationDate] = useState("");
+  const [category, setCategory] = useState<ShoppingCategory>("Inne");
+
+  const pantryQueryKey = useMemo(
+    () => [...queryKeys.shopping, "pantry", "dashboard"] as const,
+    [],
+  );
+  const pantryQuery = useQuery({
+    enabled: permission.canRead && Boolean(accessToken),
+    queryFn: () => getPantryDashboard({ accessToken }),
+    queryKey: pantryQueryKey,
+  });
+
+  const invalidatePantry = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: pantryQueryKey });
+    queryClient.invalidateQueries({ queryKey: queryKeys.shopping });
+  }, [pantryQueryKey, queryClient]);
+
+  function closeEditor() {
+    setModalVisible(false);
+    setEditItem(null);
+    setName("");
+    setQuantity("");
+    setExpirationDate("");
+    setCategory("Inne");
+  }
+
+  function openCreateEditor() {
+    setEditItem(null);
+    setName("");
+    setQuantity("");
+    setExpirationDate("");
+    setCategory("Inne");
+    setModalVisible(true);
+  }
+
+  function openEditEditor(item: ShoppingItem) {
+    setEditItem(item);
+    setName(item.name);
+    setQuantity(item.quantity ?? "");
+    setExpirationDate(item.expirationDate ?? "");
+    setCategory(isShoppingCategory(item.category) ? item.category : "Inne");
+    setModalVisible(true);
+  }
+
+  const createMutation = useMutation({
+    mutationFn: () =>
+      createShoppingItem(
+        "pantry",
+        {
+          category: category === "Inne" ? categorizeShoppingProduct(name) : category,
+          expirationDate: expirationDate.trim() || null,
+          name: name.trim(),
+          quantity: quantity.trim(),
+        },
+        { accessToken },
+      ),
+    onSuccess: () => {
+      invalidatePantry();
+      closeEditor();
+    },
+  });
+  const updateMutation = useMutation({
+    mutationFn: () =>
+      updateShoppingItem(
+        editItem!.id,
+        {
+          category,
+          expirationDate: expirationDate.trim() || null,
+          name: name.trim(),
+          quantity: quantity.trim(),
+        },
+        { accessToken },
+      ),
+    onSuccess: () => {
+      invalidatePantry();
+      closeEditor();
+    },
+  });
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteShoppingItem(editItem!.id, { accessToken }),
+    onSuccess: () => {
+      invalidatePantry();
+      closeEditor();
+    },
+  });
+
+  const items = pantryQuery.data?.items ?? [];
+  const selectedGroup = pantryDashboardGroups.find(
+    (group) => group.id === selectedGroupId,
+  );
+  const filteredItems = useMemo(() => {
+    const normalizedSearch = search.trim().toLocaleLowerCase("pl-PL");
+
+    return [...items]
+      .filter((item) => {
+        const itemCategory = isShoppingCategory(item.category)
+          ? item.category
+          : "Inne";
+
+        if (selectedGroup && !selectedGroup.categories.includes(itemCategory)) {
+          return false;
+        }
+
+        return (
+          !normalizedSearch ||
+          item.name.toLocaleLowerCase("pl-PL").includes(normalizedSearch) ||
+          item.quantity.toLocaleLowerCase("pl-PL").includes(normalizedSearch)
+        );
+      })
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }, [items, search, selectedGroup]);
+  const categoryCards = useMemo(
+    () =>
+      pantryDashboardGroups.map((group) => ({
+        ...group,
+        count: items.filter((item) =>
+          group.categories.includes(
+            isShoppingCategory(item.category) ? item.category : "Inne",
+          ),
+        ).length,
+      })),
+    [items],
+  );
+  const visibleItems = showAllItems ? filteredItems : filteredItems.slice(0, 4);
+  const stats = pantryQuery.data?.stats ?? {
+    expiringSoon: 0,
+    expired: 0,
+    shoppingList: 0,
+    total: items.length,
+  };
+  const isSaving = createMutation.isPending || updateMutation.isPending;
+  const canSave = Boolean(name.trim()) && isValidOptionalIsoDate(expirationDate);
+
+  if (!permission.canRead) {
+    return <InlineAlert text="Nie masz dostępu do spiżarni." />;
+  }
+
+  return (
+    <View style={styles.pantryDashboard}>
+      <View style={styles.pantrySearchBar}>
+        <Search color={theme.colors.textMuted} size={20} />
+        <TextInput
+          onChangeText={setSearch}
+          placeholder="Szukaj produktu..."
+          placeholderTextColor={theme.colors.textMuted}
+          style={styles.pantrySearchInput}
+          value={search}
+        />
+        <View style={styles.pantrySearchDivider} />
+        <Pressable
+          accessibilityLabel="Wyczyść filtr kategorii"
+          onPress={() => setSelectedGroupId("all")}
+          style={({ pressed }) => [
+            styles.pantryFilterButton,
+            pressed && styles.pressed,
+          ]}
+        >
+          <Filter color={theme.colors.text} size={20} />
+        </Pressable>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={styles.pantryChipRow}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+      >
+        <PantryFilterChip
+          active={selectedGroupId === "all"}
+          icon={
+            <ViewGrid
+              color={selectedGroupId === "all" ? "#FFFFFF" : theme.colors.textMuted}
+              size={17}
+            />
+          }
+          label="Wszystkie"
+          onPress={() => setSelectedGroupId("all")}
+        />
+        {pantryDashboardGroups.slice(0, 5).map((group) => (
+          <PantryFilterChip
+            active={selectedGroupId === group.id}
+            icon={<Text style={styles.pantryChipEmoji}>{group.emoji}</Text>}
+            key={group.id}
+            label={group.label}
+            onPress={() => setSelectedGroupId(group.id)}
+          />
+        ))}
+      </ScrollView>
+
+      <View style={styles.pantryStatsRow}>
+        <PantryStatCard
+          icon={<Package color="#719B4C" size={22} />}
+          label="Wszystkie produkty"
+          softColor="#EEF6E7"
+          value={stats.total}
+        />
+        <PantryStatCard
+          icon={<Bell color="#E9A42C" size={22} />}
+          label="Kończy się"
+          softColor="#FFF4DB"
+          value={stats.expiringSoon}
+        />
+        <PantryStatCard
+          icon={<AlertCircle color="#D94C45" size={22} />}
+          label="Przeterminowane"
+          softColor="#FCE6E5"
+          value={stats.expired}
+        />
+        <PantryStatCard
+          icon={<ShoppingCart color="#719B4C" size={22} />}
+          label="Na liście zakupów"
+          softColor="#EEF6E7"
+          value={stats.shoppingList}
+        />
+      </View>
+
+      <PantrySectionHeader
+        action="Zarządzaj"
+        onPress={() => setSelectedGroupId("all")}
+        title="Kategorie"
+      />
+      <View style={styles.pantryCategoryGrid}>
+        {categoryCards.map((group) => (
+          <Pressable
+            key={group.id}
+            onPress={() => setSelectedGroupId(group.id)}
+            style={({ pressed }) => [
+              styles.pantryCategoryCard,
+              selectedGroupId === group.id && styles.pantryCategoryCardActive,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={styles.pantryCategoryEmoji}>{group.emoji}</Text>
+            <Text numberOfLines={2} style={styles.pantryCategoryTitle}>
+              {group.label}
+            </Text>
+            <Text style={styles.pantryCategoryCount}>
+              {formatProductCount(group.count)}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      <PantrySectionHeader
+        action={
+          filteredItems.length > 4
+            ? showAllItems
+              ? "Pokaż mniej"
+              : "Zobacz wszystkie"
+            : undefined
+        }
+        onPress={() => setShowAllItems((value) => !value)}
+        title={
+          search || selectedGroupId !== "all" ? "Produkty" : "Ostatnio dodane"
+        }
+      />
+      <View style={styles.pantryRecentCard}>
+        {visibleItems.length === 0 ? (
+          <Text style={styles.pantryEmptyText}>
+            Brak produktów pasujących do wybranego filtra.
+          </Text>
+        ) : (
+          visibleItems.map((item, index) => (
+            <Pressable
+              key={item.id}
+              onPress={() => openEditEditor(item)}
+              style={({ pressed }) => [
+                styles.pantryProductRow,
+                index < visibleItems.length - 1 && styles.pantryProductRowBorder,
+                pressed && styles.pressed,
+              ]}
+            >
+              <View style={styles.pantryProductIcon}>
+                <Text style={styles.pantryProductEmoji}>
+                  {getShoppingCategoryMeta(item.category).emoji}
+                </Text>
+              </View>
+              <View style={styles.pantryProductText}>
+                <Text numberOfLines={1} style={styles.pantryProductName}>
+                  {item.name}
+                </Text>
+                <Text numberOfLines={1} style={styles.pantryProductCategory}>
+                  {getShoppingCategoryMeta(item.category).title}
+                </Text>
+              </View>
+              <View style={styles.pantryProductMeta}>
+                <Text numberOfLines={1} style={styles.pantryProductQuantity}>
+                  {item.quantity || "—"}
+                </Text>
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.pantryProductDate,
+                    isExpiredPantryItem(item) && styles.pantryProductDateExpired,
+                  ]}
+                >
+                  {item.expirationDate
+                    ? formatPantryDate(item.expirationDate)
+                    : formatPantryDate(item.createdAt)}
+                </Text>
+              </View>
+              <DotsVertical color={theme.colors.textMuted} size={20} />
+            </Pressable>
+          ))
+        )}
+      </View>
+
+      {permission.canCreate ? (
+        <Pressable
+          onPress={openCreateEditor}
+          style={({ pressed }) => [
+            styles.pantryAddButton,
+            pressed && styles.pressed,
+          ]}
+        >
+          <Plus color={theme.colors.finance} size={26} />
+          <Text style={styles.pantryAddButtonLabel}>Dodaj produkt</Text>
+        </Pressable>
+      ) : null}
+
+      {pantryQuery.error ? (
+        <InlineAlert text="Nie udało się pobrać danych spiżarni." />
+      ) : null}
+
+      <FormModal
+        footer={
+          <View style={styles.pantryEditorFooter}>
+            {editItem && permission.canDelete ? (
+              <IconButton
+                accessibilityLabel="Usuń produkt"
+                disabled={deleteMutation.isPending}
+                onPress={() => deleteMutation.mutate()}
+                style={styles.pantryDeleteButton}
+              >
+                <Trash2 color={theme.colors.danger} size={21} />
+              </IconButton>
+            ) : null}
+            <ActionButton
+              disabled={!canSave || isSaving}
+              onPress={() =>
+                editItem ? updateMutation.mutate() : createMutation.mutate()
+              }
+              style={styles.pantrySaveButton}
+              title={editItem ? "Zapisz zmiany" : "Dodaj produkt"}
+              variant="primary"
+            />
+          </View>
+        }
+        onClose={closeEditor}
+        title={editItem ? "Edytuj produkt" : "Dodaj produkt"}
+        visible={modalVisible}
+      >
+        <PantryEditorField
+          label="Nazwa"
+          onChangeText={setName}
+          placeholder="np. Makaron spaghetti"
+          value={name}
+        />
+        <PantryEditorField
+          label="Ilość"
+          onChangeText={setQuantity}
+          placeholder="np. 500 g, 2 szt."
+          value={quantity}
+        />
+        <PantryEditorField
+          label="Data ważności"
+          onChangeText={setExpirationDate}
+          placeholder="RRRR-MM-DD"
+          value={expirationDate}
+        />
+        {!isValidOptionalIsoDate(expirationDate) ? (
+          <Text style={styles.pantryDateError}>
+            Wpisz datę w formacie RRRR-MM-DD.
+          </Text>
+        ) : null}
+        <Text style={styles.pantryEditorLabel}>Kategoria</Text>
+        <View style={styles.pantryEditorCategories}>
+          {pantryDashboardGroups.map((group) => {
+            const groupCategory = group.categories[0]!;
+            const active = group.categories.includes(category);
+
+            return (
+              <Pressable
+                key={group.id}
+                onPress={() => setCategory(groupCategory)}
+                style={({ pressed }) => [
+                  styles.pantryEditorCategory,
+                  active && styles.pantryEditorCategoryActive,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={styles.pantryChipEmoji}>{group.emoji}</Text>
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.pantryEditorCategoryLabel,
+                    active && styles.pantryEditorCategoryLabelActive,
+                  ]}
+                >
+                  {group.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </FormModal>
+    </View>
+  );
+}
+
+function PantryFilterChip({
+  active,
+  icon,
+  label,
+  onPress,
+}: {
+  active: boolean;
+  icon: ReactNode;
+  label: string;
+  onPress: () => void;
+}) {
+  const styles = createStyles(useAppTheme().colors);
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.pantryChip,
+        active && styles.pantryChipActive,
+        pressed && styles.pressed,
+      ]}
+    >
+      {icon}
+      <Text
+        numberOfLines={1}
+        style={[styles.pantryChipLabel, active && styles.pantryChipLabelActive]}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function PantryStatCard({
+  icon,
+  label,
+  softColor,
+  value,
+}: {
+  icon: ReactNode;
+  label: string;
+  softColor: string;
+  value: number;
+}) {
+  const styles = createStyles(useAppTheme().colors);
+
+  return (
+    <View style={styles.pantryStatCard}>
+      <View style={[styles.pantryStatIcon, { backgroundColor: softColor }]}>
+        {icon}
+      </View>
+      <Text style={styles.pantryStatValue}>{value}</Text>
+      <Text numberOfLines={2} style={styles.pantryStatLabel}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+function PantrySectionHeader({
+  action,
+  onPress,
+  title,
+}: {
+  action?: string;
+  onPress: () => void;
+  title: string;
+}) {
+  const styles = createStyles(useAppTheme().colors);
+
+  return (
+    <View style={styles.pantrySectionHeader}>
+      <Text style={styles.pantrySectionTitle}>{title}</Text>
+      {action ? (
+        <Pressable onPress={onPress}>
+          <Text style={styles.pantrySectionAction}>{action}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+function PantryEditorField({
+  label,
+  onChangeText,
+  placeholder,
+  value,
+}: {
+  label: string;
+  onChangeText: (value: string) => void;
+  placeholder: string;
+  value: string;
+}) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+
+  return (
+    <View style={styles.pantryEditorField}>
+      <Text style={styles.pantryEditorLabel}>{label}</Text>
+      <TextInput
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={theme.colors.textMuted}
+        style={styles.pantryEditorInput}
+        value={value}
+      />
+    </View>
+  );
+}
+
+function formatProductCount(count: number): string {
+  if (count === 1) {
+    return "1 produkt";
+  }
+
+  if (count > 1 && count < 5) {
+    return `${count} produkty`;
+  }
+
+  return `${count} produktów`;
+}
+
+function formatPantryDate(value: string): string {
+  const date = new Date(value.length === 10 ? `${value}T12:00:00` : value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value.slice(0, 10);
+  }
+
+  return new Intl.DateTimeFormat("pl-PL", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+}
+
+function isExpiredPantryItem(item: ShoppingItem): boolean {
+  if (!item.expirationDate) {
+    return false;
+  }
+
+  return new Date(`${item.expirationDate}T23:59:59`).getTime() < Date.now();
+}
+
+function isValidOptionalIsoDate(value: string): boolean {
+  if (!value.trim()) {
+    return true;
+  }
+
+  return (
+    /^\d{4}-\d{2}-\d{2}$/.test(value.trim()) &&
+    !Number.isNaN(new Date(`${value.trim()}T12:00:00`).getTime())
+  );
+}
+
 function createStyles(colors: AppPalette) {
   const isDark = colors.background === "#0C1220";
   const shoppingCardBackground = isDark ? colors.card : "#FFFFFF";
@@ -2784,6 +3470,359 @@ function createStyles(colors: AppPalette) {
   const shoppingCountText = isDark ? colors.text : "#4E5435";
 
   return StyleSheet.create({
+    pantryAddButton: {
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: 10,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      justifyContent: "center",
+      minHeight: 52,
+    },
+    pantryAddButtonLabel: {
+      color: colors.finance,
+      fontSize: 15,
+      fontWeight: "800",
+      letterSpacing: 0,
+    },
+    pantryCategoryCard: {
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: 10,
+      borderWidth: 1,
+      flexBasis: "22%",
+      flexGrow: 1,
+      justifyContent: "center",
+      minHeight: 88,
+      padding: 5,
+    },
+    pantryCategoryCardActive: {
+      backgroundColor: colors.softGreen,
+      borderColor: colors.finance,
+    },
+    pantryCategoryCount: {
+      color: colors.textMuted,
+      fontSize: 9,
+      letterSpacing: 0,
+      marginTop: 3,
+    },
+    pantryCategoryEmoji: {
+      fontSize: 22,
+      letterSpacing: 0,
+      marginBottom: spacing.xs,
+    },
+    pantryCategoryGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: spacing.sm,
+    },
+    pantryCategoryTitle: {
+      color: colors.text,
+      fontSize: 9,
+      fontWeight: "800",
+      letterSpacing: 0,
+      lineHeight: 12,
+      textAlign: "center",
+    },
+    pantryChip: {
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: 999,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: 6,
+      height: 38,
+      paddingHorizontal: spacing.md,
+    },
+    pantryChipActive: {
+      backgroundColor: colors.finance,
+      borderColor: colors.finance,
+    },
+    pantryChipEmoji: {
+      fontSize: 15,
+      letterSpacing: 0,
+    },
+    pantryChipLabel: {
+      color: colors.text,
+      fontSize: 11,
+      fontWeight: "700",
+      letterSpacing: 0,
+    },
+    pantryChipLabelActive: {
+      color: "#FFFFFF",
+    },
+    pantryChipRow: {
+      gap: spacing.sm,
+      paddingRight: spacing.md,
+    },
+    pantryDashboard: {
+      gap: spacing.md,
+    },
+    pantryDateError: {
+      color: colors.danger,
+      fontSize: 11,
+      letterSpacing: 0,
+      marginTop: -spacing.sm,
+    },
+    pantryDeleteButton: {
+      backgroundColor: colors.dangerSoft,
+      borderColor: colors.danger,
+      height: 46,
+      width: 50,
+    },
+    pantryEditorCategories: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: spacing.sm,
+    },
+    pantryEditorCategory: {
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: 999,
+      borderWidth: 1,
+      flexBasis: "47%",
+      flexDirection: "row",
+      flexGrow: 1,
+      gap: 6,
+      minHeight: 38,
+      paddingHorizontal: spacing.sm,
+    },
+    pantryEditorCategoryActive: {
+      backgroundColor: colors.softGreen,
+      borderColor: colors.finance,
+    },
+    pantryEditorCategoryLabel: {
+      color: colors.text,
+      flex: 1,
+      fontSize: 11,
+      fontWeight: "700",
+      letterSpacing: 0,
+    },
+    pantryEditorCategoryLabelActive: {
+      color: colors.finance,
+    },
+    pantryEditorField: {
+      gap: 6,
+    },
+    pantryEditorFooter: {
+      flexDirection: "row",
+      gap: spacing.sm,
+    },
+    pantryEditorInput: {
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: 8,
+      borderWidth: 1,
+      color: colors.text,
+      fontSize: 14,
+      minHeight: 44,
+      paddingHorizontal: spacing.md,
+    },
+    pantryEditorLabel: {
+      color: colors.text,
+      fontSize: 12,
+      fontWeight: "800",
+      letterSpacing: 0,
+    },
+    pantryEmptyText: {
+      color: colors.textMuted,
+      fontSize: 12,
+      letterSpacing: 0,
+      padding: spacing.lg,
+      textAlign: "center",
+    },
+    pantryFilterButton: {
+      alignItems: "center",
+      height: 38,
+      justifyContent: "center",
+      width: 38,
+    },
+    pantryHeaderButton: {
+      backgroundColor: "transparent",
+      borderColor: "transparent",
+      elevation: 0,
+    },
+    pantryNavigationItem: {
+      alignItems: "center",
+      borderBottomColor: colors.line,
+      borderBottomWidth: 1,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      minHeight: 48,
+      paddingHorizontal: spacing.sm,
+    },
+    pantryNavigationItemActive: {
+      backgroundColor: colors.softGreen,
+    },
+    pantryNavigationLabel: {
+      color: colors.text,
+      fontSize: 14,
+      fontWeight: "800",
+      letterSpacing: 0,
+    },
+    pantryNavigationMenu: {
+      gap: 0,
+    },
+    pantryProductCategory: {
+      color: colors.textMuted,
+      fontSize: 10,
+      letterSpacing: 0,
+    },
+    pantryProductDate: {
+      color: colors.textMuted,
+      fontSize: 10,
+      letterSpacing: 0,
+      textAlign: "right",
+    },
+    pantryProductDateExpired: {
+      color: colors.danger,
+      fontWeight: "800",
+    },
+    pantryProductEmoji: {
+      fontSize: 23,
+      letterSpacing: 0,
+    },
+    pantryProductIcon: {
+      alignItems: "center",
+      backgroundColor: colors.cardMuted,
+      borderRadius: 8,
+      height: 42,
+      justifyContent: "center",
+      width: 42,
+    },
+    pantryProductMeta: {
+      alignItems: "flex-end",
+      gap: 2,
+      minWidth: 72,
+    },
+    pantryProductName: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: "800",
+      letterSpacing: 0,
+    },
+    pantryProductQuantity: {
+      color: colors.text,
+      fontSize: 12,
+      letterSpacing: 0,
+      textAlign: "right",
+    },
+    pantryProductRow: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.sm,
+      minHeight: 62,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+    },
+    pantryProductRowBorder: {
+      borderBottomColor: colors.line,
+      borderBottomWidth: 1,
+    },
+    pantryProductText: {
+      flex: 1,
+      gap: 2,
+      minWidth: 0,
+    },
+    pantryRecentCard: {
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: 10,
+      borderWidth: 1,
+      overflow: "hidden",
+    },
+    pantrySaveButton: {
+      flex: 1,
+    },
+    pantryScreenTitle: {
+      color: colors.finance,
+      fontSize: 32,
+      lineHeight: 38,
+    },
+    pantrySearchBar: {
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: 999,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      height: 48,
+      paddingLeft: spacing.md,
+      paddingRight: spacing.xs,
+    },
+    pantrySearchDivider: {
+      backgroundColor: colors.line,
+      height: 26,
+      width: 1,
+    },
+    pantrySearchInput: {
+      color: colors.text,
+      flex: 1,
+      fontSize: 13,
+      minWidth: 0,
+    },
+    pantrySectionAction: {
+      color: colors.finance,
+      fontSize: 12,
+      fontWeight: "800",
+      letterSpacing: 0,
+    },
+    pantrySectionHeader: {
+      alignItems: "center",
+      flexDirection: "row",
+      justifyContent: "space-between",
+      marginTop: spacing.xs,
+    },
+    pantrySectionTitle: {
+      color: colors.text,
+      fontSize: 17,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    pantryStatCard: {
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: 10,
+      borderWidth: 1,
+      flex: 1,
+      minHeight: 105,
+      paddingHorizontal: 3,
+      paddingVertical: spacing.sm,
+    },
+    pantryStatIcon: {
+      alignItems: "center",
+      borderRadius: 999,
+      height: 38,
+      justifyContent: "center",
+      width: 38,
+    },
+    pantryStatLabel: {
+      color: colors.text,
+      fontSize: 9,
+      letterSpacing: 0,
+      lineHeight: 12,
+      marginTop: 2,
+      textAlign: "center",
+    },
+    pantryStatsRow: {
+      flexDirection: "row",
+      gap: 6,
+    },
+    pantryStatValue: {
+      color: colors.text,
+      fontSize: 18,
+      fontWeight: "900",
+      letterSpacing: 0,
+      lineHeight: 22,
+      marginTop: 2,
+    },
     checkBox: {
       alignItems: "center",
       backgroundColor: isDark ? colors.field : "#FFFCF5",

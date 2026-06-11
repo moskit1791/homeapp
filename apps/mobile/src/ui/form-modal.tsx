@@ -16,8 +16,10 @@ import { Close } from "./icon";
 import { IconButton } from "./icon-button";
 
 interface FormModalProps extends PropsWithChildren {
+  compact?: boolean;
   footer?: ReactNode;
   onClose: () => void;
+  showCloseButton?: boolean;
   subtitle?: string;
   title: string;
   visible: boolean;
@@ -25,8 +27,10 @@ interface FormModalProps extends PropsWithChildren {
 
 export function FormModal({
   children,
+  compact = false,
   footer,
   onClose,
+  showCloseButton = true,
   subtitle,
   title,
   visible,
@@ -49,19 +53,30 @@ export function FormModal({
           <Pressable onPress={onClose} style={styles.backdrop} />
           <View style={styles.sheet}>
             <View style={styles.handle} />
-            <View style={styles.header}>
+            <View style={[styles.header, compact && styles.headerCompact]}>
               <View style={styles.headerText}>
-                <Text numberOfLines={2} style={styles.title}>{title}</Text>
+                <Text
+                  numberOfLines={2}
+                  style={[styles.title, compact && styles.titleCompact]}
+                >
+                  {title}
+                </Text>
                 {subtitle ? (
                   <Text style={styles.subtitle}>{subtitle}</Text>
                 ) : null}
               </View>
-              <IconButton accessibilityLabel="Zamknij okno" onPress={onClose}>
-                <Close color={theme.colors.textMuted} size={18} />
-              </IconButton>
+              {showCloseButton ? (
+                <IconButton accessibilityLabel="Zamknij okno" onPress={onClose}>
+                  <Close color={theme.colors.textMuted} size={18} />
+                </IconButton>
+              ) : null}
             </View>
             <ScrollView
-              contentContainerStyle={[styles.body, footer ? styles.bodyWithFooter : null]}
+              contentContainerStyle={[
+                styles.body,
+                footer ? styles.bodyWithFooter : null,
+                compact && styles.bodyCompact,
+              ]}
               keyboardShouldPersistTaps="handled"
               nestedScrollEnabled
               showsVerticalScrollIndicator={false}
@@ -69,7 +84,11 @@ export function FormModal({
             >
               {children}
             </ScrollView>
-            {footer ? <View style={styles.footer}>{footer}</View> : null}
+            {footer ? (
+              <View style={[styles.footer, compact && styles.footerCompact]}>
+                {footer}
+              </View>
+            ) : null}
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -91,6 +110,11 @@ function createStyles(colors: AppPalette) {
     bodyWithFooter: {
       paddingBottom: spacing.xxl + spacing.xl,
     },
+    bodyCompact: {
+      gap: 10,
+      padding: 12,
+      paddingBottom: 20,
+    },
     footer: {
       borderColor: colors.border,
       borderTopWidth: 1,
@@ -98,6 +122,9 @@ function createStyles(colors: AppPalette) {
       gap: spacing.sm,
       padding: spacing.lg,
       paddingTop: spacing.md,
+    },
+    footerCompact: {
+      padding: 12,
     },
     handle: {
       alignSelf: "center",
@@ -116,6 +143,11 @@ function createStyles(colors: AppPalette) {
       paddingHorizontal: spacing.md,
       paddingTop: spacing.lg,
       paddingBottom: spacing.md,
+    },
+    headerCompact: {
+      paddingBottom: 10,
+      paddingHorizontal: 12,
+      paddingTop: 12,
     },
     headerText: {
       flex: 1,
@@ -160,6 +192,16 @@ function createStyles(colors: AppPalette) {
       fontSize: 18,
       fontWeight: "900",
       letterSpacing: 0,
+    },
+    titleCompact: {
+      fontFamily: Platform.select({
+        android: "serif",
+        default: "Georgia",
+        ios: "Georgia",
+        web: "Georgia",
+      }),
+      fontSize: 16,
+      fontWeight: "700",
     },
   });
 }

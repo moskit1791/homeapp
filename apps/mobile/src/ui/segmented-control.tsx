@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { radii, spacing } from "../theme/tokens";
 import { useAppTheme, type AppPalette } from "../theme/use-app-theme";
 
@@ -14,6 +14,7 @@ interface SegmentedControlProps<TValue extends string> {
   accentTextColor?: string;
   onChange: (value: TValue) => void;
   options: SegmentOption<TValue>[];
+  presentation?: "default" | "mockup";
   value: TValue;
 }
 
@@ -22,6 +23,7 @@ export function SegmentedControl<TValue extends string>({
   accentTextColor,
   onChange,
   options,
+  presentation = "default",
   value,
 }: SegmentedControlProps<TValue>) {
   const theme = useAppTheme();
@@ -38,12 +40,14 @@ export function SegmentedControl<TValue extends string>({
           <Pressable
             accessibilityLabel={option.label}
             accessibilityRole="button"
-          accessibilityState={{ selected: active }}
-          key={option.value}
-          onPress={() => onChange(option.value)}
+            accessibilityState={{ selected: active }}
+            key={option.value}
+            onPress={() => onChange(option.value)}
             style={({ pressed }) => [
               styles.option,
+              presentation === "mockup" && styles.mockupOption,
               active && styles.active,
+              active && presentation === "mockup" && styles.mockupActive,
               active && {
                 backgroundColor: selectedBackgroundColor,
                 borderColor: selectedBackgroundColor,
@@ -59,8 +63,12 @@ export function SegmentedControl<TValue extends string>({
                 </View>
               ) : null}
               <Text
+                adjustsFontSizeToFit
+                minimumFontScale={0.78}
+                numberOfLines={1}
                 style={[
                   styles.label,
+                  presentation === "mockup" && styles.mockupLabel,
                   active && { color: selectedTextColor },
                 ]}
               >
@@ -84,6 +92,7 @@ function createStyles(colors: AppPalette) {
     },
     iconWrap: {
       alignItems: "center",
+      flexShrink: 0,
       justifyContent: "center",
     },
     label: {
@@ -91,12 +100,16 @@ function createStyles(colors: AppPalette) {
       fontSize: 13,
       fontWeight: "800",
       letterSpacing: 0,
+      minWidth: 0,
+      textAlign: "center",
     },
     optionContent: {
       alignItems: "center",
+      flexShrink: 1,
       flexDirection: "row",
       gap: spacing.xs,
       justifyContent: "center",
+      minWidth: 0,
     },
     option: {
       alignItems: "center",
@@ -106,7 +119,26 @@ function createStyles(colors: AppPalette) {
       flex: 1,
       justifyContent: "center",
       minHeight: 34,
+      minWidth: 0,
       paddingHorizontal: spacing.xs,
+    },
+    mockupActive: {
+      elevation: 0,
+      shadowOpacity: 0,
+    },
+    mockupLabel: {
+      fontFamily: Platform.select({
+        android: "serif",
+        default: "Georgia",
+        ios: "Georgia",
+        web: "Georgia",
+      }),
+      fontSize: 15,
+      fontWeight: "400",
+    },
+    mockupOption: {
+      borderRadius: 999,
+      minHeight: 34,
     },
     pressed: {
       opacity: 0.78,

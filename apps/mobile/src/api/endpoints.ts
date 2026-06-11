@@ -83,6 +83,7 @@ import type {
   Note,
   NotificationPreference,
   OkResponse,
+  PantryDashboard,
   PatchMemberPermissionsRequest,
   PushSendResult,
   PushToken,
@@ -1345,6 +1346,15 @@ export function listShoppingItems(type: ShoppingListType, options?: ApiCallOptio
   const requestOptions = normalizeApiCallOptions(options);
 
   return apiRequest<ShoppingItem[]>(`/shopping-lists/${type}/items`, {
+    accessToken: requestOptions.accessToken,
+    signal: requestOptions.signal
+  });
+}
+
+export function getPantryDashboard(options?: ApiCallOptionsInput): Promise<PantryDashboard> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<PantryDashboard>('/shopping-lists/pantry/dashboard', {
     accessToken: requestOptions.accessToken,
     signal: requestOptions.signal
   });

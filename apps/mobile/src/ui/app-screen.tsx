@@ -5,6 +5,8 @@ import {
   StyleProp,
   StyleSheet,
   Text,
+  TextStyle,
+  useWindowDimensions,
   View,
   ViewStyle,
 } from "react-native";
@@ -14,6 +16,7 @@ import { useAppTheme, type AppPalette } from "../theme/use-app-theme";
 
 interface AppScreenProps extends PropsWithChildren {
   actions?: ReactNode;
+  backgroundColor?: string;
   contentStyle?: StyleProp<ViewStyle>;
   floatingAction?: ReactNode;
   leading?: ReactNode;
@@ -21,11 +24,13 @@ interface AppScreenProps extends PropsWithChildren {
   subtitle?: string;
   title: string;
   titleAlign?: "left" | "center";
+  titleStyle?: StyleProp<TextStyle>;
   titleVariant?: "default" | "display";
 }
 
 export function AppScreen({
   actions,
+  backgroundColor,
   children,
   contentStyle,
   floatingAction,
@@ -34,14 +39,18 @@ export function AppScreen({
   subtitle,
   title,
   titleAlign = "left",
+  titleStyle,
   titleVariant = "default",
 }: AppScreenProps) {
   const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
+  const { width } = useWindowDimensions();
+  const styles = createStyles(theme.colors, width);
   const centered = titleAlign === "center";
 
   return (
-    <View style={styles.safeArea}>
+    <View
+      style={[styles.safeArea, backgroundColor ? { backgroundColor } : null]}
+    >
       <SafeAreaView style={styles.safeAreaContent}>
         <View style={styles.shell}>
           <ScrollView
@@ -66,6 +75,7 @@ export function AppScreen({
                   style={[
                     styles.title,
                     titleVariant === "display" && styles.displayTitle,
+                    titleStyle,
                   ]}
                 >
                   {title}
@@ -93,12 +103,14 @@ export function AppScreen({
   );
 }
 
-function createStyles(colors: AppPalette) {
+function createStyles(colors: AppPalette, viewportWidth: number) {
+  const isNarrow = viewportWidth < 430;
+
   return StyleSheet.create({
     content: {
       gap: spacing.md,
       padding: spacing.md,
-      paddingBottom: 128,
+      paddingBottom: 148,
     },
     actions: {
       alignItems: "center",
@@ -148,13 +160,13 @@ function createStyles(colors: AppPalette) {
         ios: "Georgia",
         web: "Georgia",
       }),
-      fontSize: 40,
+      fontSize: isNarrow ? 31 : 40,
       fontWeight: "900",
-      lineHeight: 48,
+      lineHeight: isNarrow ? 38 : 48,
     },
     floatingAction: {
       alignItems: "center",
-      bottom: 88,
+      bottom: 86,
       left: 0,
       position: "absolute",
       right: 0,

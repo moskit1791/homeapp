@@ -63,6 +63,7 @@ export class ShoppingService {
           sli.name,
           sli.quantity,
           sli.category,
+          sli.expiration_date,
           sli.is_checked,
           sli.checked_at,
           sli.display_order,
@@ -81,6 +82,45 @@ export class ShoppingService {
     );
 
     return result.rows.map((row) => this.mapItem(row));
+  }
+
+  async getPantryDashboard(householdId: string): Promise<PantryDashboardRecord> {
+    await this.ensureShoppingState(householdId);
+
+    const [items, shoppingCountResult] = await Promise.all([
+      this.listItems(householdId, 'pantry'),
+      this.database.query<{ count: string }>(
+        `
+          select count(*)::text as count
+          from shopping_list_items sli
+          join shopping_lists sl on sl.id = sli.shopping_list_id
+          where sl.household_id = $1
+            and sl.type <> 'pantry'
+            and sli.is_checked = false
+        `,
+        [householdId]
+      )
+    ]);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const warningDate = new Date(today);
+    warningDate.setDate(warningDate.getDate() + 7);
+    const datedItems = items.filter((item) => item.expirationDate);
+
+    return {
+      items,
+      stats: {
+        expiringSoon: datedItems.filter((item) => {
+          const expiration = new Date(`${item.expirationDate}T12:00:00`);
+          return expiration >= today && expiration <= warningDate;
+        }).length,
+        expired: datedItems.filter(
+          (item) => new Date(`${item.expirationDate}T12:00:00`) < today
+        ).length,
+        shoppingList: Number(shoppingCountResult.rows[0]?.count ?? 0),
+        total: items.length
+      }
+    };
   }
 
   async createItem(
@@ -159,7 +199,8 @@ export class ShoppingService {
           name = $3,
           quantity = $4,
           display_order = $5,
-          category = $6
+          category = $6,
+          expiration_date = $7
         from shopping_lists sl
         where sl.id = sli.shopping_list_id
           and sl.household_id = $1
@@ -172,6 +213,7 @@ export class ShoppingService {
           sli.name,
           sli.quantity,
           sli.category,
+          sli.expiration_date,
           sli.is_checked,
           sli.checked_at,
           sli.display_order,
@@ -184,7 +226,8 @@ export class ShoppingService {
         dto.name?.trim() ?? current.name,
         dto.quantity?.trim() ?? current.quantity,
         dto.displayOrder ?? current.displayOrder,
-        normalizeShoppingCategory(dto.category) ?? current.category
+        normalizeShoppingCategory(dto.category) ?? current.category,
+        dto.expirationDate === undefined ? current.expirationDate : dto.expirationDate
       ]
     );
 
@@ -236,6 +279,7 @@ export class ShoppingService {
           sli.name,
           sli.quantity,
           sli.category,
+          sli.expiration_date,
           sli.is_checked,
           sli.checked_at,
           sli.display_order,
@@ -272,6 +316,7 @@ export class ShoppingService {
           sli.name,
           sli.quantity,
           sli.category,
+          sli.expiration_date,
           sli.is_checked,
           sli.checked_at,
           sli.display_order,
@@ -341,6 +386,7 @@ export class ShoppingService {
             sli.name,
             sli.quantity,
             sli.category,
+            sli.expiration_date,
             sli.is_checked,
             sli.checked_at,
             sli.display_order,
@@ -418,7 +464,8 @@ export class ShoppingService {
           update shopping_list_items
           set
             quantity = $2,
-            category = coalesce($5, category)
+            category = coalesce($5, category),
+            expiration_date = coalesce($7::date, expiration_date)
           where id = $1
             and shopping_list_id = $6
           returning
@@ -429,6 +476,7 @@ export class ShoppingService {
             name,
             quantity,
             category,
+            expiration_date,
             is_checked,
             checked_at,
             display_order,
@@ -441,7 +489,8 @@ export class ShoppingService {
           householdId,
           type,
           normalizeShoppingCategory(dto.category),
-          listId
+          listId,
+          dto.expirationDate ?? null
         ]
       );
 
@@ -456,17 +505,19 @@ export class ShoppingService {
           name,
           quantity,
           category,
+          expiration_date,
           display_order
         )
-        values ($1, $2, $3, $4, $5)
+        values ($1, $2, $3, $4, $5, $6)
         returning
           id,
           shopping_list_id,
-          $6::uuid as household_id,
-          $7::shopping_list_type as type,
+          $7::uuid as household_id,
+          $8::shopping_list_type as type,
           name,
           quantity,
           category,
+          expiration_date,
           is_checked,
           checked_at,
           display_order,
@@ -478,6 +529,7 @@ export class ShoppingService {
         dto.name.trim(),
         dto.quantity?.trim() ?? '',
         normalizeShoppingCategory(dto.category),
+        dto.expirationDate ?? null,
         displayOrder,
         householdId,
         type
@@ -498,6 +550,7 @@ export class ShoppingService {
           sli.name,
           sli.quantity,
           sli.category,
+          sli.expiration_date,
           sli.is_checked,
           sli.checked_at,
           sli.display_order,
@@ -630,6 +683,7 @@ export class ShoppingService {
           sli.name,
           sli.quantity,
           sli.category,
+          sli.expiration_date,
           sli.is_checked,
           sli.checked_at,
           sli.display_order,
@@ -688,6 +742,7 @@ export class ShoppingService {
       createdAt: row.created_at,
       category: row.category,
       displayOrder: row.display_order,
+      expirationDate: row.expiration_date,
       householdId: row.household_id,
       id: row.id,
       isChecked: row.is_checked,
@@ -786,6 +841,7 @@ interface ShoppingItemRow {
   category: ShoppingAiCategory | null;
   created_at: string;
   display_order: number;
+  expiration_date: string | null;
   household_id: string;
   id: string;
   is_checked: boolean;
@@ -810,6 +866,7 @@ export interface ShoppingItemRecord {
   category: ShoppingAiCategory | null;
   createdAt: string;
   displayOrder: number;
+  expirationDate: string | null;
   householdId: string;
   id: string;
   isChecked: boolean;
@@ -818,6 +875,16 @@ export interface ShoppingItemRecord {
   shoppingListId: string;
   type: ShoppingListType;
   updatedAt: string;
+}
+
+export interface PantryDashboardRecord {
+  items: ShoppingItemRecord[];
+  stats: {
+    expiringSoon: number;
+    expired: number;
+    shoppingList: number;
+    total: number;
+  };
 }
 
 export interface ShoppingAiImportResult {

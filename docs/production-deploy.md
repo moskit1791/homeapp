@@ -78,7 +78,7 @@ Najczestsze bledy na Windows:
 Bezpieczny schemat, tylko gdy APK jest naprawde potrzebny:
 
 ```powershell
-$src = "C:\Users\moski\Desktop\homeapp"
+$src = (Get-Location).Path
 $work = "C:\ha-build-$(Get-Date -Format yyyyMMddHHmm)"
 $env:EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID = "<ANDROID_OAUTH_CLIENT_ID>"
 $env:EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID = "<ANDROID_OAUTH_CLIENT_ID>"

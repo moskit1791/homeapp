@@ -17,7 +17,6 @@ import {
   Archive,
   Banknote,
   Car,
-  CartPlus,
   Check,
   CheckCircle2,
   CalendarDays,
@@ -205,6 +204,8 @@ const financeSortOptions: Array<{ id: FinanceSortKey; label: string }> = [
   { id: "spent", label: "Wydano" },
   { id: "remaining", label: "Zostaje" },
 ];
+
+const mockupGreen = "#4F8D2C";
 
 export default function FinanseScreen() {
   const { session } = useSession();
@@ -1145,16 +1146,6 @@ export default function FinanseScreen() {
     setFinanceModal("expense");
   }
 
-  function openExpenseModalForItem(item: BudgetItemWithCategory) {
-    setSelectedExpenseOwnerId(item.owner.memberId);
-    setSelectedExpenseCategoryId(item.category.id);
-    setSelectedExpenseItemId(item.id);
-    setExpenseQuickItemId(item.id);
-    setExpenseQuickCategoryId(null);
-    setValue("expenseAmount", "");
-    setFinanceModal("expense");
-  }
-
   function openItemModalForCategory(category: BudgetCategoryWithItems) {
     setEditingBudgetItem(null);
     setSelectedItemCategoryId(category.id);
@@ -1166,18 +1157,6 @@ export default function FinanseScreen() {
   function openExpenseHistory(item: BudgetItemWithCategory) {
     setHistoryBudgetItemId(item.id);
     setFinanceModal("expenseHistory");
-  }
-
-  function openEditBudgetItem(item: BudgetItemWithCategory) {
-    setEditingBudgetItem(item);
-    setSelectedItemCategoryId(item.categoryId);
-    setSelectedItemOwnerId(item.owner?.memberId ?? "");
-    setValue("itemName", item.name);
-    setValue(
-      "itemAmount",
-      item.budgetAmount ? formatMoneyInput(item.budgetAmount) : "",
-    );
-    setFinanceModal("item");
   }
 
   function updateFinanceFilters(nextFilters: Partial<FinanceFilters>) {
@@ -1333,7 +1312,7 @@ export default function FinanseScreen() {
           onPress={() => setFinanceModal("menu")}
           style={styles.financeHeaderMenuButton}
         >
-          <MoreHorizontal color={theme.colors.text} size={28} />
+          <MoreHorizontal color={theme.colors.text} size={20} />
         </IconButton>
       }
       contentStyle={styles.financeScreenContent}
@@ -1352,54 +1331,41 @@ export default function FinanseScreen() {
           </Pressable>
         ) : null
       }
+      backgroundColor="#FCFAF5"
       title="Finanse"
+      titleStyle={styles.financeTitle}
       titleVariant="display"
     >
-      <QueryState
-        emptyText="Brak danych finansowych."
-        error={
-          currentQuery.error ??
-          (showingArchiveMonth ? selectedArchiveQuery.error : null)
-        }
-        isEmpty={!currentQuery.isLoading && !summary}
-        isLoading={currentQuery.isLoading || selectedArchiveQuery.isLoading}
-      />
+      {!summary ? (
+        <QueryState
+          emptyText="Brak danych finansowych."
+          error={
+            currentQuery.error ??
+            (showingArchiveMonth ? selectedArchiveQuery.error : null)
+          }
+          isEmpty={!currentQuery.isLoading}
+          isLoading={currentQuery.isLoading || selectedArchiveQuery.isLoading}
+        />
+      ) : null}
 
       <SegmentedControl
-        accentColor={theme.colors.finance}
+        accentColor={mockupGreen}
         onChange={(value) => setActiveFinanceView(value as FinanceView)}
         options={[
           {
-            icon: (active) => (
-              <WalletCards
-                color={active ? theme.colors.inverseText : theme.colors.textMuted}
-                size={16}
-              />
-            ),
             label: "Budżet",
             value: "budget",
           },
           {
-            icon: (active) => (
-              <ReceiptText
-                color={active ? theme.colors.inverseText : theme.colors.textMuted}
-                size={16}
-              />
-            ),
             label: "Pożyczki/Debety",
             value: "debts",
           },
           {
-            icon: (active) => (
-              <PiggyBank
-                color={active ? theme.colors.inverseText : theme.colors.textMuted}
-                size={16}
-              />
-            ),
             label: "Oszczędności",
             value: "savings",
           },
         ]}
+        presentation="mockup"
         value={activeFinanceView}
       />
 
@@ -1441,7 +1407,7 @@ export default function FinanseScreen() {
                 />
               </IconButton>
             </View>
-            {canDelete ? (
+            {canDelete && canRemoveSelectedMonth ? (
               <IconButton
                 accessibilityLabel="Usuń wybrany miesiąc budżetu"
                 disabled={!canRemoveSelectedMonth}
@@ -1478,19 +1444,13 @@ export default function FinanseScreen() {
               setFinanceFiltersExpanded((value) => !value)
             }
             owners={financeOwnerOptions}
-            resultCount={filteredRows.length}
-            totalCount={visibleFlatItems.length}
           />
 
           <FinanceCategoryCards
-            canCreateExpense={canCreateVisibleExpense}
             canCreateItem={canCreateVisibleBudgetItem}
-            canUpdate={canUpdateVisibleBudgetItem}
             categories={filteredCategories}
             currencyCode={currencyCode}
             onAddCategoryItem={openItemModalForCategory}
-            onAddExpense={openExpenseModalForItem}
-            onEdit={openEditBudgetItem}
             onHistory={openExpenseHistory}
             rows={filteredRows}
           />
@@ -1829,6 +1789,7 @@ export default function FinanseScreen() {
           </FormModal>
 
           <FormModal
+            compact
             footer={
               <View style={styles.modalFooter}>
                 <ActionButton
@@ -2259,6 +2220,7 @@ export default function FinanseScreen() {
               </View>
             }
             onClose={closeFinanceModal}
+            showCloseButton={false}
             title={editingDebt ? "Edytuj pożyczkę" : "Dodaj pożyczkę/debet"}
             visible={financeModal === "debt"}
           >
@@ -2282,19 +2244,24 @@ export default function FinanseScreen() {
             </View>
             <TextField
               control={control}
+              inputStyle={styles.debtFormInput}
               label="Nazwa"
               name="debtPurpose"
               placeholder="Np. tineco odkurzacz"
             />
             <View style={styles.debtFormGrid}>
               <TextField
+                containerStyle={styles.debtFormField}
                 control={control}
+                inputStyle={styles.debtFormInput}
                 label="Osoba"
                 name="debtLenderName"
                 placeholder="Np. Malwinka"
               />
               <TextField
+                containerStyle={styles.debtFormField}
                 control={control}
+                inputStyle={styles.debtFormInput}
                 keyboardType="decimal-pad"
                 label="Kwota"
                 name="debtAmount"
@@ -2303,12 +2270,14 @@ export default function FinanseScreen() {
             </View>
             <TextField
               control={control}
+              inputStyle={styles.debtFormInput}
               label="Termin oddania"
               name="debtDueDate"
               placeholder="YYYY-MM-DD, opcjonalnie"
             />
             <TextField
               control={control}
+              inputStyle={styles.debtFormInput}
               label="Notatka"
               name="debtNote"
               placeholder="Opcjonalnie"
@@ -2317,6 +2286,7 @@ export default function FinanseScreen() {
               <View style={styles.debtStatusGroup}>
                 <Text style={styles.selectorLabel}>Status</Text>
                 <SegmentedControl
+                  accentColor={mockupGreen}
                   onChange={(value) => setDebtIsSettled(value === "settled")}
                   options={[
                     { label: "Aktywne", value: "active" },
@@ -2344,12 +2314,6 @@ export default function FinanseScreen() {
 
       {activeFinanceView === "savings" ? (
         <>
-          <QueryState
-            emptyText="Brak zapisanych celów oszczędnościowych."
-            error={savingsQuery.error}
-            isEmpty={!savingsQuery.isLoading && savingsGoals.length === 0}
-            isLoading={savingsQuery.isLoading}
-          />
           <SavingsOverview
             currencyCode={currencyCode}
             groups={savingsGroups}
@@ -2359,6 +2323,13 @@ export default function FinanseScreen() {
             totalAchieved={savingsGoalsAchieved}
             totalGoals={savingsGoals.length}
           />
+          {!savingsQuery.isLoading ? (
+            <QueryState
+              emptyText="Brak zapisanych celów oszczędnościowych."
+              error={savingsQuery.error}
+              isEmpty={savingsGoals.length === 0}
+            />
+          ) : null}
         </>
       ) : null}
       <FormModal
@@ -2888,7 +2859,7 @@ function SavingsOverview({
       <View style={styles.savingsSummaryCard}>
         <View style={styles.savingsSummaryHeader}>
           <View style={styles.savingsSummaryIconWrap}>
-            <PiggyBank color={theme.colors.finance} size={34} />
+            <PiggyBank color={theme.colors.finance} size={28} />
           </View>
           <View style={styles.savingsSummaryText}>
             <Text style={styles.savingsSummaryKicker}>OSZCZĘDNOŚCI</Text>
@@ -2903,13 +2874,13 @@ function SavingsOverview({
 
         <View style={styles.savingsSummaryStats}>
           <View style={styles.savingsSummaryStat}>
-            <CalendarDays color={theme.colors.finance} size={20} />
+            <CalendarDays color={theme.colors.finance} size={17} />
             <Text style={styles.savingsSummaryStatValue}>{totalGoals}</Text>
             <Text style={styles.savingsSummaryStatLabel}>cele</Text>
           </View>
           <View style={styles.savingsSummaryStatDivider} />
           <View style={styles.savingsSummaryStat}>
-            <CheckCircle2 color={theme.colors.finance} size={20} />
+            <CheckCircle2 color={theme.colors.finance} size={17} />
             <Text style={styles.savingsSummaryStatValue}>{totalAchieved}</Text>
             <Text style={styles.savingsSummaryStatLabel}>osiągnięte</Text>
           </View>
@@ -3019,25 +2990,17 @@ function SavingsGoalGroupCard({
               </Text>
             </View>
           </View>
-          <Text style={styles.savingsGroupMeta}>
-            {group.achievedCount}/{group.totalCount} osiągnięte
-          </Text>
         </View>
         <View style={styles.savingsGroupAmountBlock}>
           <Text numberOfLines={1} style={styles.savingsGroupAmount}>
             {formatMoney(group.currentTotal, currencyCode)}
           </Text>
-          <Text style={styles.savingsGroupMeta}>
-            {group.targetTotal > 0
-              ? `${formatMoney(group.targetTotal, currencyCode)} celu`
-              : "Bez celu"}
-          </Text>
         </View>
         <View style={styles.savingsGroupChevron}>
           {expanded ? (
-            <ChevronUp color={theme.colors.textMuted} size={24} />
+            <ChevronUp color={theme.colors.textMuted} size={18} />
           ) : (
-            <ChevronDown color={theme.colors.textMuted} size={24} />
+            <ChevronDown color={theme.colors.textMuted} size={18} />
           )}
         </View>
       </Pressable>
@@ -3126,7 +3089,7 @@ function SavingsGoalRow({
           />
         </View>
       </View>
-      <ChevronRight color={theme.colors.textMuted} size={22} />
+      <ChevronRight color={theme.colors.textMuted} size={18} />
     </Pressable>
   );
 }
@@ -3265,7 +3228,7 @@ function FinanceDebtOverview({
   return (
     <View style={styles.debtOverviewCard}>
       <View style={styles.debtOverviewIconWrap}>
-        <WalletCards color={theme.colors.finance} size={35} />
+        <WalletCards color={theme.colors.finance} size={26} />
       </View>
       <View style={styles.debtOverviewMain}>
         <Text style={styles.debtOverviewKicker}>DO ODDANIA</Text>
@@ -3276,13 +3239,13 @@ function FinanceDebtOverview({
       </View>
       <View style={styles.debtOverviewStats}>
         <View style={styles.debtOverviewStat}>
-          <ReceiptText color={theme.colors.textMuted} size={22} />
+          <ReceiptText color={theme.colors.textMuted} size={17} />
           <Text style={styles.debtOverviewStatValue}>{activeCount}</Text>
           <Text style={styles.debtOverviewStatLabel}>aktywne</Text>
         </View>
         <View style={styles.debtOverviewDivider} />
         <View style={styles.debtOverviewStat}>
-          <CheckCircle2 color={theme.colors.textMuted} size={22} />
+          <CheckCircle2 color={theme.colors.textMuted} size={17} />
           <Text style={styles.debtOverviewStatValue}>{settledCount}</Text>
           <Text style={styles.debtOverviewStatLabel}>spłacone</Text>
         </View>
@@ -3391,9 +3354,9 @@ function FinanceDebtsList({
                 {formatMoney(group.totalOpen, currencyCode)}
               </Text>
               {expanded ? (
-                <ChevronUp color={theme.colors.textMuted} size={24} />
+                <ChevronUp color={theme.colors.textMuted} size={18} />
               ) : (
-                <ChevronDown color={theme.colors.textMuted} size={24} />
+                <ChevronDown color={theme.colors.textMuted} size={18} />
               )}
             </Pressable>
 
@@ -3418,11 +3381,11 @@ function FinanceDebtsList({
                       ]}
                     >
                       {debt.isSettled ? (
-                        <Check color={theme.colors.finance} size={16} />
+                        <Check color={theme.colors.finance} size={12} />
                       ) : null}
                     </View>
                     <View style={styles.debtRowIcon}>
-                      <Hammer color={theme.colors.finance} size={20} />
+                      <Hammer color={theme.colors.finance} size={16} />
                     </View>
                     <View style={styles.debtRowText}>
                       <Text
@@ -3462,7 +3425,7 @@ function FinanceDebtsList({
                         </Text>
                       </View>
                     </View>
-                    <ChevronRight color={theme.colors.textMuted} size={22} />
+                    <ChevronRight color={theme.colors.textMuted} size={18} />
                   </Pressable>
                 ))}
               </View>
@@ -3609,8 +3572,6 @@ function FinanceFiltersPanel({
   onChange,
   onToggleExpanded,
   owners,
-  resultCount,
-  totalCount,
 }: {
   categories: BudgetCategoryWithItems[];
   expanded: boolean;
@@ -3618,19 +3579,30 @@ function FinanceFiltersPanel({
   onChange: (filters: Partial<FinanceFilters>) => void;
   onToggleExpanded: () => void;
   owners: Array<{ id: string; label: string }>;
-  resultCount: number;
-  totalCount: number;
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
-  const summary = describeFinanceFilters(filters, resultCount, totalCount);
 
   return (
     <View style={styles.filterPanel}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={styles.filterOwnerRail}>
+      <View style={styles.filterTopRow}>
+        <ScrollView
+          contentContainerStyle={styles.filterOwnerRail}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+        >
           <FilterChip
             active={!filters.ownerMemberId}
+            icon={
+              <Filter
+                color={
+                  !filters.ownerMemberId
+                    ? theme.colors.inverseText
+                    : mockupGreen
+                }
+                size={14}
+              />
+            }
             label="Wszystkie"
             onPress={() => onChange({ ownerMemberId: "" })}
           />
@@ -3642,23 +3614,20 @@ function FinanceFiltersPanel({
               onPress={() => onChange({ ownerMemberId: owner.id })}
             />
           ))}
-        </View>
-      </ScrollView>
-      <Pressable
-        accessibilityRole="button"
-        onPress={onToggleExpanded}
-        style={styles.filterToggleButton}
-      >
-        <Filter color={theme.colors.finance} size={18} />
-        <Text numberOfLines={1} style={styles.filterSummary}>
-          {summary}
-        </Text>
+        </ScrollView>
+        <Pressable
+          accessibilityLabel="Pozostałe filtry"
+          accessibilityRole="button"
+          onPress={onToggleExpanded}
+          style={styles.filterToggleButton}
+        >
         {expanded ? (
-          <ChevronUp color={theme.colors.finance} size={18} />
+            <ChevronUp color={mockupGreen} size={17} />
         ) : (
-          <ChevronDown color={theme.colors.finance} size={18} />
+            <ChevronDown color={mockupGreen} size={17} />
         )}
-      </Pressable>
+        </Pressable>
+      </View>
       {expanded ? (
         <View style={styles.filterDetails}>
           <TextInput
@@ -3727,11 +3696,13 @@ function FinanceFiltersPanel({
 function FilterChip({
   active,
   compact = false,
+  icon,
   label,
   onPress,
 }: {
   active: boolean;
   compact?: boolean;
+  icon?: ReactNode;
   label: string;
   onPress: () => void;
 }) {
@@ -3747,6 +3718,7 @@ function FilterChip({
         active && styles.filterChipActive,
       ]}
     >
+      {icon}
       <Text
         numberOfLines={1}
         style={[styles.filterChipText, active && styles.filterChipTextActive]}
@@ -3758,25 +3730,17 @@ function FilterChip({
 }
 
 function FinanceCategoryCards({
-  canCreateExpense,
   canCreateItem,
-  canUpdate,
   categories,
   currencyCode,
   onAddCategoryItem,
-  onAddExpense,
-  onEdit,
   onHistory,
   rows,
 }: {
-  canCreateExpense: boolean;
   canCreateItem: boolean;
-  canUpdate: boolean;
   categories: BudgetCategoryWithItems[];
   currencyCode: SupportedCurrencyCode;
   onAddCategoryItem: (category: BudgetCategoryWithItems) => void;
-  onAddExpense: (item: BudgetItemWithCategory) => void;
-  onEdit: (item: BudgetItemWithCategory) => void;
   onHistory: (item: BudgetItemWithCategory) => void;
   rows: BudgetItemWithCategory[];
 }) {
@@ -3946,27 +3910,7 @@ function FinanceCategoryCards({
                         </Text>
                       </View>
                       <View style={styles.budgetItemActions}>
-                        {canCreateExpense ? (
-                          <IconButton
-                            accessibilityLabel="Dodaj wydatek"
-                            onPress={() => onAddExpense(item)}
-                            style={styles.budgetItemIconButton}
-                          >
-                            <CartPlus color={theme.colors.finance} size={18} />
-                          </IconButton>
-                        ) : null}
-                        {canUpdate ? (
-                          <IconButton
-                            accessibilityLabel="Edytuj pozycję"
-                            onPress={() => onEdit(item)}
-                            style={styles.budgetItemIconButton}
-                          >
-                            <MoreHorizontal
-                              color={theme.colors.textMuted}
-                              size={20}
-                            />
-                          </IconButton>
-                        ) : null}
+                        <ChevronRight color={theme.colors.textMuted} size={18} />
                       </View>
                     </Pressable>
                   ))
@@ -3981,7 +3925,7 @@ function FinanceCategoryCards({
                       pressed && styles.pressedRow,
                     ]}
                   >
-                    <Plus color={theme.colors.finance} size={22} />
+                    <Plus color={mockupGreen} size={22} />
                     <Text style={styles.budgetAddItemText}>Dodaj pozycję</Text>
                   </Pressable>
                 ) : null}
@@ -4162,34 +4106,6 @@ function compareFinanceRows(
         textCompare(left.name, right.name)
       );
   }
-}
-
-function describeFinanceFilters(
-  filters: FinanceFilters,
-  resultCount: number,
-  totalCount: number,
-): string {
-  const active: string[] = [`${resultCount}/${totalCount} pozycji`];
-
-  if (filters.search.trim()) {
-    active.push(`szukaj: ${filters.search.trim()}`);
-  }
-
-  if (filters.ownerMemberId) {
-    active.push("osoba");
-  }
-
-  if (filters.categoryId) {
-    active.push("kategoria");
-  }
-
-  if (filters.onlyOverBudget) {
-    active.push("po limicie");
-  }
-
-  active.push(filters.sortDirection === "asc" ? "rosnaco" : "malejaco");
-
-  return active.join(" / ");
 }
 
 function groupRowsByCategory(
@@ -4675,8 +4591,8 @@ function createStyles(colors: AppPalette) {
     },
     budgetAccordionAmounts: {
       alignItems: "flex-end",
-      gap: 2,
-      minWidth: 104,
+      gap: 1,
+      minWidth: 88,
     },
     budgetAccordionBody: {
       backgroundColor: colors.card,
@@ -4684,8 +4600,8 @@ function createStyles(colors: AppPalette) {
     },
     budgetAccordionCard: {
       backgroundColor: colors.card,
-      borderColor: colors.border,
-      borderRadius: radii.card,
+      borderColor: "#F1EDE7",
+      borderRadius: 12,
       borderWidth: 1,
       overflow: "hidden",
     },
@@ -4693,50 +4609,51 @@ function createStyles(colors: AppPalette) {
       alignItems: "center",
       flexDirection: "row",
       gap: spacing.sm,
-      minHeight: 82,
-      padding: spacing.md,
+      minHeight: 54,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
     },
     budgetAccordionIcon: {
       alignItems: "center",
-      borderRadius: 13,
-      height: 48,
+      borderRadius: 10,
+      height: 34,
       justifyContent: "center",
-      width: 48,
+      width: 34,
     },
     budgetAccordionMeta: {
       color: colors.textMuted,
-      fontSize: 11,
+      fontSize: 9,
       letterSpacing: 0,
     },
     budgetAccordionPercent: {
       color: colors.textMuted,
-      fontSize: 11,
-      fontWeight: "800",
+      fontSize: 9,
+      fontWeight: "700",
       letterSpacing: 0,
     },
     budgetAccordionRemaining: {
-      fontSize: 12,
-      fontWeight: "900",
+      fontSize: 10,
+      fontWeight: "700",
       letterSpacing: 0,
       textAlign: "right",
     },
     budgetAccordionSpent: {
       color: colors.text,
-      fontSize: 14,
-      fontWeight: "900",
+      fontSize: 11,
+      fontWeight: "700",
       letterSpacing: 0,
       textAlign: "right",
     },
     budgetAccordionText: {
       flex: 1,
-      gap: spacing.sm,
+      gap: 5,
       minWidth: 0,
     },
     budgetAccordionTitle: {
       color: colors.text,
       flex: 1,
-      fontSize: 16,
-      fontWeight: "900",
+      fontSize: 13,
+      fontWeight: "700",
       letterSpacing: 0,
       minWidth: 0,
     },
@@ -4749,24 +4666,26 @@ function createStyles(colors: AppPalette) {
       borderTopWidth: 1,
       flexDirection: "row",
       gap: spacing.sm,
-      minHeight: 48,
+      minHeight: 36,
       paddingHorizontal: spacing.md,
     },
     budgetAddItemText: {
-      color: colors.finance,
-      fontSize: 14,
-      fontWeight: "900",
+      color: mockupGreen,
+      fontSize: 12,
+      fontWeight: "700",
       letterSpacing: 0,
     },
     budgetItemActions: {
       alignItems: "center",
       flexDirection: "row",
       gap: 2,
+      minWidth: 22,
+      justifyContent: "flex-end",
     },
     budgetItemAmount: {
       color: colors.text,
-      fontSize: 12,
-      fontWeight: "900",
+      fontSize: 11,
+      fontWeight: "700",
       letterSpacing: 0,
       textAlign: "right",
     },
@@ -4781,12 +4700,12 @@ function createStyles(colors: AppPalette) {
     },
     budgetItemMeta: {
       color: colors.textMuted,
-      fontSize: 11,
+      fontSize: 9,
       letterSpacing: 0,
     },
     budgetItemRemaining: {
-      fontSize: 11,
-      fontWeight: "900",
+      fontSize: 10,
+      fontWeight: "700",
       letterSpacing: 0,
       textAlign: "right",
     },
@@ -4797,9 +4716,9 @@ function createStyles(colors: AppPalette) {
       borderTopWidth: 1,
       flexDirection: "row",
       gap: spacing.sm,
-      minHeight: 58,
+      minHeight: 40,
       paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
+      paddingVertical: 5,
     },
     budgetItemText: {
       flex: 1,
@@ -4808,8 +4727,8 @@ function createStyles(colors: AppPalette) {
     },
     budgetItemTitle: {
       color: colors.text,
-      fontSize: 13,
-      fontWeight: "900",
+      fontSize: 11,
+      fontWeight: "700",
       letterSpacing: 0,
     },
     budgetOwnerPill: {
@@ -4817,15 +4736,15 @@ function createStyles(colors: AppPalette) {
       backgroundColor: colors.softGreen,
       borderRadius: 999,
       maxWidth: 82,
-      minHeight: 25,
+      minHeight: 20,
       paddingHorizontal: spacing.sm,
     },
     budgetOwnerText: {
-      color: colors.finance,
-      fontSize: 10,
-      fontWeight: "900",
+      color: mockupGreen,
+      fontSize: 9,
+      fontWeight: "700",
       letterSpacing: 0,
-      lineHeight: 25,
+      lineHeight: 20,
     },
     budgetProgressFill: {
       borderRadius: 999,
@@ -4834,7 +4753,7 @@ function createStyles(colors: AppPalette) {
     budgetProgressTrack: {
       backgroundColor: colors.cardMuted,
       borderRadius: 999,
-      height: 8,
+      height: 5,
       overflow: "hidden",
       width: "100%",
     },
@@ -5200,12 +5119,21 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
     },
     debtFormGrid: {
+      flexDirection: "row",
       gap: spacing.sm,
+    },
+    debtFormField: {
+      flex: 1,
+      minWidth: 0,
+    },
+    debtFormInput: {
+      fontSize: 13,
+      minHeight: 40,
     },
     debtGroupAmount: {
       color: colors.finance,
-      fontSize: 18,
-      fontWeight: "900",
+      fontSize: 15,
+      fontWeight: "700",
       letterSpacing: 0,
       maxWidth: 110,
       textAlign: "right",
@@ -5214,9 +5142,9 @@ function createStyles(colors: AppPalette) {
       alignItems: "center",
       borderRadius: 999,
       borderWidth: 1,
-      height: 46,
+      height: 36,
       justifyContent: "center",
-      width: 46,
+      width: 36,
     },
     debtGroupAvatarText: {
       fontFamily: Platform.select({
@@ -5225,14 +5153,14 @@ function createStyles(colors: AppPalette) {
         ios: "Georgia",
         web: "Georgia",
       }),
-      fontSize: 20,
-      fontWeight: "900",
+      fontSize: 16,
+      fontWeight: "400",
       letterSpacing: 0,
     },
     debtGroupCard: {
       backgroundColor: colors.card,
       borderColor: colors.border,
-      borderRadius: radii.card,
+      borderRadius: 12,
       borderWidth: 1,
       overflow: "hidden",
     },
@@ -5240,22 +5168,23 @@ function createStyles(colors: AppPalette) {
       alignItems: "center",
       backgroundColor: colors.softGreen,
       borderRadius: 999,
-      minWidth: 24,
-      paddingHorizontal: 8,
-      paddingVertical: 3,
+      minWidth: 20,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
     },
     debtGroupCountText: {
       color: colors.finance,
-      fontSize: 12,
-      fontWeight: "900",
+      fontSize: 10,
+      fontWeight: "700",
       letterSpacing: 0,
     },
     debtGroupHeader: {
       alignItems: "center",
       flexDirection: "row",
       gap: spacing.sm,
-      minHeight: 76,
-      padding: spacing.md,
+      minHeight: 54,
+      paddingHorizontal: 10,
+      paddingVertical: 7,
     },
     debtGroupList: {
       gap: spacing.sm,
@@ -5270,12 +5199,13 @@ function createStyles(colors: AppPalette) {
     },
     debtGroupMeta: {
       color: colors.textMuted,
-      fontSize: 11,
+      display: "none",
+      fontSize: 9,
       letterSpacing: 0,
     },
     debtGroupText: {
       flex: 1,
-      gap: 3,
+      gap: 1,
       minWidth: 0,
     },
     debtGroupTitle: {
@@ -5287,8 +5217,8 @@ function createStyles(colors: AppPalette) {
         ios: "Georgia",
         web: "Georgia",
       }),
-      fontSize: 20,
-      fontWeight: "800",
+      fontSize: 16,
+      fontWeight: "400",
       letterSpacing: 0,
       minWidth: 0,
     },
@@ -5309,20 +5239,22 @@ function createStyles(colors: AppPalette) {
         ios: "Georgia",
         web: "Georgia",
       }),
-      fontSize: 34,
-      fontWeight: "900",
+      fontSize: 27,
+      fontWeight: "400",
       letterSpacing: 0,
-      lineHeight: 38,
+      lineHeight: 31,
     },
     debtOverviewCard: {
       alignItems: "center",
       backgroundColor: colors.card,
       borderColor: colors.border,
-      borderRadius: 16,
+      borderRadius: 12,
       borderWidth: 1,
       flexDirection: "row",
-      gap: spacing.md,
-      padding: spacing.md,
+      gap: 10,
+      minHeight: 82,
+      paddingHorizontal: 10,
+      paddingVertical: 9,
     },
     debtOverviewDivider: {
       alignSelf: "stretch",
@@ -5335,14 +5267,14 @@ function createStyles(colors: AppPalette) {
       borderColor: colors.line,
       borderRadius: 999,
       borderWidth: 1,
-      height: 72,
+      height: 50,
       justifyContent: "center",
-      width: 72,
+      width: 50,
     },
     debtOverviewKicker: {
       color: colors.textMuted,
-      fontSize: 10,
-      fontWeight: "900",
+      fontSize: 9,
+      fontWeight: "700",
       letterSpacing: 0,
       textTransform: "uppercase",
     },
@@ -5353,7 +5285,7 @@ function createStyles(colors: AppPalette) {
     },
     debtOverviewMeta: {
       color: colors.textMuted,
-      fontSize: 11,
+      fontSize: 9,
       letterSpacing: 0,
     },
     debtOverviewStat: {
@@ -5363,20 +5295,20 @@ function createStyles(colors: AppPalette) {
     },
     debtOverviewStatLabel: {
       color: colors.textMuted,
-      fontSize: 10,
-      fontWeight: "800",
+      fontSize: 9,
+      fontWeight: "700",
       letterSpacing: 0,
     },
     debtOverviewStats: {
       alignItems: "center",
       alignSelf: "stretch",
       flexDirection: "row",
-      width: 126,
+      width: 112,
     },
     debtOverviewStatValue: {
       color: colors.text,
-      fontSize: 18,
-      fontWeight: "900",
+      fontSize: 15,
+      fontWeight: "700",
       letterSpacing: 0,
     },
     debtRow: {
@@ -5386,14 +5318,14 @@ function createStyles(colors: AppPalette) {
       borderTopWidth: 1,
       flexDirection: "row",
       gap: spacing.sm,
-      minHeight: 72,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
+      minHeight: 52,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
     },
     debtRowAmount: {
       color: colors.text,
-      fontSize: 15,
-      fontWeight: "900",
+      fontSize: 12,
+      fontWeight: "700",
       letterSpacing: 0,
       textAlign: "right",
     },
@@ -5401,15 +5333,15 @@ function createStyles(colors: AppPalette) {
       alignItems: "center",
       backgroundColor: colors.softGreen,
       borderColor: colors.line,
-      borderRadius: 13,
+      borderRadius: 10,
       borderWidth: 1,
-      height: 42,
+      height: 34,
       justifyContent: "center",
-      width: 42,
+      width: 34,
     },
     debtRowMeta: {
       color: colors.textMuted,
-      fontSize: 12,
+      fontSize: 10,
       letterSpacing: 0,
     },
     debtRowSettled: {
@@ -5421,7 +5353,7 @@ function createStyles(colors: AppPalette) {
     debtRowSide: {
       alignItems: "flex-end",
       gap: 2,
-      minWidth: 82,
+      minWidth: 68,
     },
     debtSide: {
       alignItems: "flex-end",
@@ -5430,16 +5362,18 @@ function createStyles(colors: AppPalette) {
     },
     debtRowText: {
       flex: 1,
-      gap: 3,
+      gap: 1,
       minWidth: 0,
     },
     debtRowTitle: {
       color: colors.text,
-      fontSize: 14,
-      fontWeight: "900",
+      fontSize: 12,
+      fontWeight: "700",
       letterSpacing: 0,
     },
     debtSaveButton: {
+      backgroundColor: mockupGreen,
+      borderColor: mockupGreen,
       flex: 1,
     },
     debtSettledText: {
@@ -5449,8 +5383,8 @@ function createStyles(colors: AppPalette) {
     debtStatusDot: {
       backgroundColor: colors.warning,
       borderRadius: 999,
-      height: 8,
-      width: 8,
+      height: 6,
+      width: 6,
     },
     debtStatusDotDone: {
       backgroundColor: colors.finance,
@@ -5467,8 +5401,8 @@ function createStyles(colors: AppPalette) {
       borderColor: colors.finance,
       borderRadius: 999,
       borderWidth: 2,
-      height: 32,
-      width: 32,
+      height: 24,
+      width: 24,
       alignItems: "center",
       justifyContent: "center",
     },
@@ -5477,8 +5411,8 @@ function createStyles(colors: AppPalette) {
     },
     debtStatusText: {
       color: colors.textMuted,
-      fontSize: 11,
-      fontWeight: "800",
+      fontSize: 9,
+      fontWeight: "700",
       letterSpacing: 0,
     },
     debtSummary: {
@@ -5640,17 +5574,20 @@ function createStyles(colors: AppPalette) {
       borderColor: colors.border,
       borderRadius: 999,
       borderWidth: 1,
-      height: 42,
+      height: 32,
       justifyContent: "center",
-      width: 42,
+      width: 32,
     },
     financeMenuGrid: {
       gap: spacing.sm,
     },
     financeScreenContent: {
-      gap: spacing.lg,
+      gap: 12,
       paddingBottom: 160,
-      paddingTop: spacing.sm,
+      paddingTop: 2,
+    },
+    financeTitle: {
+      fontWeight: "400",
     },
     savingsDetailsCard: {
       backgroundColor: colors.cardMuted,
@@ -5693,27 +5630,26 @@ function createStyles(colors: AppPalette) {
     },
     savingsGroupAmount: {
       color: colors.finance,
-      fontSize: 18,
-      fontWeight: "900",
+      fontSize: 15,
+      fontWeight: "800",
       letterSpacing: 0,
       textAlign: "right",
     },
     savingsGroupAmountBlock: {
       alignItems: "flex-end",
-      gap: 2,
-      minWidth: 88,
+      minWidth: 72,
     },
     savingsGroupAvatar: {
       alignItems: "center",
       borderRadius: 999,
       borderWidth: 1,
-      height: 46,
+      height: 36,
       justifyContent: "center",
-      width: 46,
+      width: 36,
     },
     savingsGroupAvatarLabel: {
-      fontSize: 17,
-      fontWeight: "900",
+      fontSize: 14,
+      fontWeight: "800",
       letterSpacing: 0,
     },
     savingsGroupCard: {
@@ -5732,22 +5668,22 @@ function createStyles(colors: AppPalette) {
       alignItems: "center",
       backgroundColor: colors.softGreen,
       borderRadius: 999,
-      height: 22,
+      height: 19,
       justifyContent: "center",
-      minWidth: 22,
-      paddingHorizontal: 7,
+      minWidth: 19,
+      paddingHorizontal: 6,
     },
     savingsGroupCountText: {
       color: colors.finance,
-      fontSize: 12,
-      fontWeight: "900",
+      fontSize: 10,
+      fontWeight: "800",
       letterSpacing: 0,
     },
     savingsGroupHeader: {
       alignItems: "center",
       flexDirection: "row",
-      gap: spacing.sm,
-      padding: spacing.md,
+      gap: 7,
+      padding: spacing.sm,
     },
     savingsGroupList: {
       gap: spacing.sm,
@@ -5771,8 +5707,8 @@ function createStyles(colors: AppPalette) {
         ios: "Georgia",
         web: "Georgia",
       }),
-      fontSize: 20,
-      fontWeight: "800",
+      fontSize: 15,
+      fontWeight: "700",
       letterSpacing: 0,
       minWidth: 0,
     },
@@ -5783,25 +5719,25 @@ function createStyles(colors: AppPalette) {
     },
     savingsGoalAmount: {
       color: colors.text,
-      fontSize: 17,
-      fontWeight: "900",
+      fontSize: 12,
+      fontWeight: "800",
       letterSpacing: 0,
       textAlign: "right",
     },
     savingsGoalAmountBlock: {
       alignItems: "flex-end",
       gap: 2,
-      minWidth: 102,
+      minWidth: 78,
     },
     savingsGoalIcon: {
       alignItems: "center",
       backgroundColor: colors.softGreen,
       borderColor: colors.line,
-      borderRadius: 14,
+      borderRadius: 10,
       borderWidth: 1,
-      height: 40,
+      height: 34,
       justifyContent: "center",
-      width: 40,
+      width: 34,
     },
     savingsGoalList: {
       gap: 0,
@@ -5809,7 +5745,7 @@ function createStyles(colors: AppPalette) {
     },
     savingsGoalMeta: {
       color: colors.textMuted,
-      fontSize: 11,
+      fontSize: 9,
       letterSpacing: 0,
     },
     savingsGoalProgressFill: {
@@ -5817,8 +5753,8 @@ function createStyles(colors: AppPalette) {
       height: "100%",
     },
     savingsGoalProgressLabel: {
-      fontSize: 11,
-      fontWeight: "900",
+      fontSize: 9,
+      fontWeight: "800",
       letterSpacing: 0,
       textAlign: "right",
     },
@@ -5834,7 +5770,7 @@ function createStyles(colors: AppPalette) {
     savingsGoalProgressTrack: {
       backgroundColor: colors.cardMuted,
       borderRadius: 999,
-      height: 6,
+      height: 4,
       overflow: "hidden",
       width: "100%",
     },
@@ -5874,9 +5810,9 @@ function createStyles(colors: AppPalette) {
       borderColor: colors.line,
       borderTopWidth: 1,
       flexDirection: "row",
-      gap: spacing.sm,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.md,
+      gap: 7,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 9,
     },
     savingsGoalText: {
       flex: 1,
@@ -5885,8 +5821,8 @@ function createStyles(colors: AppPalette) {
     },
     savingsGoalTitle: {
       color: colors.text,
-      fontSize: 14,
-      fontWeight: "900",
+      fontSize: 11,
+      fontWeight: "800",
       letterSpacing: 0,
     },
     savingsNextGoalCard: {
@@ -5952,7 +5888,7 @@ function createStyles(colors: AppPalette) {
       borderWidth: 1,
       flexDirection: "row",
       gap: spacing.sm,
-      padding: spacing.md,
+      padding: 10,
     },
     savingsSummaryHeader: {
       alignItems: "center",
@@ -5967,20 +5903,20 @@ function createStyles(colors: AppPalette) {
       borderColor: colors.line,
       borderRadius: 999,
       borderWidth: 1,
-      height: 58,
+      height: 48,
       justifyContent: "center",
-      width: 58,
+      width: 48,
     },
     savingsSummaryKicker: {
       color: colors.textMuted,
-      fontSize: 10,
-      fontWeight: "900",
+      fontSize: 9,
+      fontWeight: "800",
       letterSpacing: 0,
       textTransform: "uppercase",
     },
     savingsSummaryMeta: {
       color: colors.textMuted,
-      fontSize: 10,
+      fontSize: 9,
       letterSpacing: 0,
       lineHeight: 14,
     },
@@ -5989,8 +5925,8 @@ function createStyles(colors: AppPalette) {
       alignSelf: "stretch",
       flexDirection: "row",
       justifyContent: "space-between",
-      paddingLeft: spacing.sm,
-      width: 130,
+      paddingLeft: 7,
+      width: 112,
     },
     savingsSummaryStat: {
       alignItems: "center",
@@ -6005,14 +5941,14 @@ function createStyles(colors: AppPalette) {
     },
     savingsSummaryStatLabel: {
       color: colors.textMuted,
-      fontSize: 10,
-      fontWeight: "800",
+      fontSize: 9,
+      fontWeight: "700",
       letterSpacing: 0,
     },
     savingsSummaryStatValue: {
       color: colors.text,
-      fontSize: 17,
-      fontWeight: "900",
+      fontSize: 14,
+      fontWeight: "800",
       letterSpacing: 0,
     },
     savingsSummaryText: {
@@ -6035,10 +5971,10 @@ function createStyles(colors: AppPalette) {
         ios: "Georgia",
         web: "Georgia",
       }),
-      fontSize: 30,
-      fontWeight: "900",
+      fontSize: 24,
+      fontWeight: "800",
       letterSpacing: 0,
-      lineHeight: 34,
+      lineHeight: 28,
     },
     savingsAmount: {
       color: colors.primaryDark,
@@ -6241,14 +6177,14 @@ function createStyles(colors: AppPalette) {
     },
     fab: {
       alignItems: "center",
-      alignSelf: "flex-end",
-      backgroundColor: colors.primary,
+      alignSelf: "center",
+      backgroundColor: mockupGreen,
       borderRadius: 999,
       elevation: 5,
       height: 54,
       justifyContent: "center",
       marginTop: spacing.xs,
-      shadowColor: "#000000",
+      shadowColor: mockupGreen,
       shadowOffset: { height: 10, width: 0 },
       shadowOpacity: 0.12,
       shadowRadius: 18,
@@ -6258,15 +6194,17 @@ function createStyles(colors: AppPalette) {
       alignItems: "center",
       backgroundColor: colors.card,
       borderColor: colors.border,
-      borderRadius: radii.control,
+      borderRadius: 999,
       borderWidth: 1,
+      flexDirection: "row",
+      gap: 5,
       justifyContent: "center",
-      minHeight: 32,
+      minHeight: 30,
       paddingHorizontal: spacing.sm,
     },
     filterChipActive: {
-      backgroundColor: colors.primary,
-      borderColor: colors.primary,
+      backgroundColor: mockupGreen,
+      borderColor: mockupGreen,
     },
     filterChipCompact: {
       flexBasis: "31.8%",
@@ -6285,8 +6223,8 @@ function createStyles(colors: AppPalette) {
     },
     filterChipText: {
       color: colors.textMuted,
-      fontSize: 11,
-      fontWeight: "900",
+      fontSize: 10,
+      fontWeight: "700",
       letterSpacing: 0,
     },
     filterChipTextActive: {
@@ -6311,20 +6249,23 @@ function createStyles(colors: AppPalette) {
     },
     filterToggleButton: {
       alignItems: "center",
-      backgroundColor: colors.cardMuted,
+      backgroundColor: colors.card,
       borderColor: colors.border,
-      borderRadius: radii.control,
+      borderRadius: 999,
       borderWidth: 1,
-      flexDirection: "row",
-      gap: spacing.sm,
-      justifyContent: "space-between",
-      minHeight: 36,
-      paddingHorizontal: spacing.sm,
+      height: 30,
+      justifyContent: "center",
+      width: 30,
     },
     filterOwnerRail: {
       flexDirection: "row",
       gap: spacing.xs,
-      paddingRight: spacing.md,
+      paddingRight: spacing.xs,
+    },
+    filterTopRow: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.xs,
     },
     filterGroup: {
       gap: spacing.xs,
@@ -6347,12 +6288,12 @@ function createStyles(colors: AppPalette) {
       textTransform: "uppercase",
     },
     filterPanel: {
-      backgroundColor: colors.card,
-      borderColor: colors.border,
-      borderRadius: radii.card,
-      borderWidth: 1,
+      backgroundColor: "transparent",
+      borderColor: "transparent",
+      borderRadius: 0,
+      borderWidth: 0,
       gap: spacing.sm,
-      padding: spacing.sm,
+      padding: 0,
     },
     headerCell: {
       backgroundColor: colors.cardMuted,
@@ -6427,53 +6368,59 @@ function createStyles(colors: AppPalette) {
       minHeight: 24,
       paddingHorizontal: spacing.sm,
       position: "absolute",
+      display: "none",
     },
     financeSummaryBudgetText: {
       color: colors.textMuted,
       fontSize: 10,
-      fontWeight: "900",
+      fontWeight: "700",
       letterSpacing: 0,
     },
     financeSummaryCard: {
       alignItems: "center",
       backgroundColor: colors.overlay,
-      borderColor: colors.border,
+      borderColor: "#F1EDE7",
       borderRadius: 14,
       borderWidth: 1,
-      elevation: 3,
+      elevation: 2,
       flexDirection: "row",
       gap: spacing.sm,
       justifyContent: "space-between",
-      minHeight: 118,
+      minHeight: 100,
       overflow: "hidden",
-      paddingBottom: 30,
-      paddingHorizontal: spacing.md,
-      paddingTop: spacing.md,
+      paddingHorizontal: 10,
+      paddingVertical: 10,
       shadowColor: "#000000",
       shadowOffset: { height: 10, width: 0 },
-      shadowOpacity: 0.1,
+      shadowOpacity: 0.055,
       shadowRadius: 22,
     },
     financeSummaryCenter: {
       alignItems: "center",
-      height: 102,
-      justifyContent: "center",
-      width: 108,
+      height: 88,
+      justifyContent: "flex-start",
+      position: "relative",
+      width: 82,
     },
     financeSummaryCenterText: {
       alignItems: "center",
       gap: 1,
+      left: 0,
       position: "absolute",
+      right: 0,
+      top: 18,
     },
     financeSummaryCenterMeta: {
       alignItems: "center",
-      bottom: -1,
       gap: 1,
+      left: 0,
       position: "absolute",
+      right: 0,
+      top: 68,
     },
     financeSummaryLabel: {
-      fontSize: 10,
-      fontWeight: "900",
+      fontSize: 9,
+      fontWeight: "700",
       letterSpacing: 0,
     },
     financeSummaryLabelRow: {
@@ -6485,52 +6432,52 @@ function createStyles(colors: AppPalette) {
     financeSummaryRing: {
       alignItems: "center",
       borderRadius: 999,
-      height: 82,
+      height: 62,
       justifyContent: "center",
       position: "relative",
-      width: 82,
+      width: 62,
     },
     financeSummaryRingInner: {
       backgroundColor: colors.overlay,
       borderColor: colors.cardMuted,
       borderRadius: 999,
       borderWidth: 1,
-      height: 58,
+      height: 44,
       position: "absolute",
-      width: 58,
+      width: 44,
     },
     financeSummaryRingLabel: {
       color: colors.textMuted,
-      fontSize: 9,
-      fontWeight: "800",
+      fontSize: 8,
+      fontWeight: "700",
       letterSpacing: 0,
     },
     financeSummaryRingSegment: {
       borderRadius: 999,
-      height: 10,
-      left: 39,
+      height: 8,
+      left: 29,
       position: "absolute",
-      top: 36,
-      width: 4,
+      top: 27,
+      width: 3,
     },
     financeSummaryRingValue: {
       color: colors.text,
-      fontSize: 13,
-      fontWeight: "900",
+      fontSize: 11,
+      fontWeight: "700",
       letterSpacing: 0,
       maxWidth: 64,
       textAlign: "center",
     },
     financeSummaryMetaLabel: {
       color: colors.textMuted,
-      fontSize: 9,
-      fontWeight: "900",
+      fontSize: 8,
+      fontWeight: "700",
       letterSpacing: 0,
       textTransform: "uppercase",
     },
     financeSummaryMetaValue: {
-      fontSize: 11,
-      fontWeight: "900",
+      fontSize: 9,
+      fontWeight: "700",
       letterSpacing: 0,
     },
     financeSummarySide: {
@@ -6541,14 +6488,14 @@ function createStyles(colors: AppPalette) {
     },
     financeSummaryValue: {
       color: colors.text,
-      fontSize: 14,
-      fontWeight: "900",
+      fontSize: 12,
+      fontWeight: "700",
       letterSpacing: 0,
       textAlign: "center",
     },
     financeSummarySideMeta: {
-      fontSize: 10,
-      fontWeight: "900",
+      fontSize: 9,
+      fontWeight: "700",
       letterSpacing: 0,
       textAlign: "center",
     },
@@ -6599,22 +6546,23 @@ function createStyles(colors: AppPalette) {
       borderColor: colors.border,
       borderRadius: 999,
       borderWidth: 1,
-      flex: 1,
       flexDirection: "row",
       justifyContent: "space-between",
-      minHeight: 38,
+      minHeight: 34,
       paddingHorizontal: 4,
+      width: 166,
     },
     monthSwitcherRow: {
       alignItems: "center",
       flexDirection: "row",
       gap: spacing.sm,
+      justifyContent: "center",
     },
     monthSwitcherTitle: {
-      color: colors.primaryDark,
+      color: colors.text,
       flex: 1,
-      fontSize: 14,
-      fontWeight: "900",
+      fontSize: 13,
+      fontWeight: "700",
       letterSpacing: 0,
       textAlign: "center",
     },
@@ -6675,7 +6623,7 @@ function createStyles(colors: AppPalette) {
       width: 64,
     },
     positiveText: {
-      color: colors.primaryDark,
+      color: mockupGreen,
     },
     sheet: {
       backgroundColor: colors.card,

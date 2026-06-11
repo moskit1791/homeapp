@@ -194,6 +194,7 @@ export interface ShoppingItem {
   checkedAt: string | null;
   createdAt: string;
   displayOrder: number;
+  expirationDate: string | null;
   householdId: string;
   id: string;
   isChecked: boolean;
@@ -207,6 +208,7 @@ export interface ShoppingItem {
 export interface CreateShoppingItemRequest {
   category?: string | null;
   displayOrder?: number;
+  expirationDate?: string | null;
   name: string;
   quantity?: string;
 }
@@ -214,8 +216,19 @@ export interface CreateShoppingItemRequest {
 export interface UpdateShoppingItemRequest {
   category?: string | null;
   displayOrder?: number;
+  expirationDate?: string | null;
   name?: string;
   quantity?: string;
+}
+
+export interface PantryDashboard {
+  items: ShoppingItem[];
+  stats: {
+    expiringSoon: number;
+    expired: number;
+    shoppingList: number;
+    total: number;
+  };
 }
 
 export interface MoveShoppingItemRequest {
