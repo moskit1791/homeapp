@@ -461,9 +461,6 @@ export default function KalendarzScreen() {
                     googleCalendarPending && styles.googleHeaderImageDisabled,
                   ]}
                 />
-                {googleCalendarConnected ? (
-                  <View style={styles.headerStatusDot} />
-                ) : null}
               </IconButton>
             ) : null}
             {calendarPermission.canCreate ? (
@@ -561,16 +558,18 @@ export default function KalendarzScreen() {
         footer={
           <View style={styles.modalFooter}>
             <ActionButton
+              labelStyle={styles.calendarCancelButtonLabel}
               onPress={closeEventModal}
-              style={styles.modalFooterButton}
+              style={[styles.modalFooterButton, styles.calendarCancelButton]}
               title="Anuluj"
               variant="secondary"
             />
             <ActionButton
               disabled={!canSaveEvent}
+              labelStyle={styles.calendarSaveButtonLabel}
               loading={saveEventMutation.isPending}
               onPress={() => saveEventMutation.mutate()}
-              style={styles.modalFooterButton}
+              style={[styles.modalFooterButton, styles.calendarSaveButton]}
               title={editingEvent ? "Zapisz" : "Dodaj"}
             />
             {editingEvent && calendarPermission.canDelete ? (
@@ -644,8 +643,10 @@ export default function KalendarzScreen() {
         <View style={styles.formGroup}>
           <Text style={styles.formLabel}>Przypomnienie</Text>
           <SegmentedControl
+            accentColor={mockupGreen}
             onChange={setEventReminder}
             options={reminderOptions}
+            presentation="mockup"
             value={eventReminder}
           />
         </View>
@@ -2014,10 +2015,23 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       letterSpacing: 0,
     },
     addHeaderButton: {
-      backgroundColor: "transparent",
-      borderColor: "transparent",
-      elevation: 0,
-      shadowOpacity: 0,
+      backgroundColor: panelBackground,
+      borderColor: isDark ? colors.border : "#DDE7D7",
+    },
+    calendarCancelButton: {
+      backgroundColor: panelBackground,
+      borderColor: isDark ? colors.border : "#DDE7D7",
+    },
+    calendarCancelButtonLabel: {
+      color: mockupGreen,
+    },
+    calendarSaveButton: {
+      backgroundColor: mockupGreen,
+      borderColor: mockupGreen,
+      shadowColor: mockupGreen,
+    },
+    calendarSaveButtonLabel: {
+      color: "#FFFFFF",
     },
     calendarCard: {
       backgroundColor: panelBackground,
@@ -2404,11 +2418,12 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       gap: spacing.sm,
     },
     googleHeaderButton: {
-      backgroundColor: panelBackground,
+      backgroundColor: isDark ? colors.card : "#FFFFFF",
+      borderColor: isDark ? colors.border : "#E6DFD4",
     },
     googleHeaderImage: {
-      height: isCompact ? 20 : 24,
-      width: isCompact ? 20 : 24,
+      height: isCompact ? 26 : 30,
+      width: isCompact ? 26 : 30,
     },
     googleHeaderImageDisabled: {
       opacity: 0.48,
@@ -2422,24 +2437,13 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       borderWidth: 1,
       elevation: 1,
       borderRadius: 999,
-      height: isCompact ? 34 : 48,
+      height: isCompact ? 40 : 48,
       padding: 0,
       shadowColor: "#000000",
       shadowOffset: { height: 4, width: 0 },
       shadowOpacity: panelShadowOpacity,
       shadowRadius: 10,
-      width: isCompact ? 34 : 48,
-    },
-    headerStatusDot: {
-      backgroundColor: "#27D45B",
-      borderColor: panelBackground,
-      borderRadius: 999,
-      borderWidth: 2,
-      height: 8,
-      position: "absolute",
-      right: 2,
-      top: 1,
-      width: 8,
+      width: isCompact ? 40 : 48,
     },
     headerActions: {
       alignItems: "center",
@@ -2447,8 +2451,8 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       gap: 5,
     },
     input: {
-      backgroundColor: colors.field,
-      borderColor: colors.border,
+      backgroundColor: panelBackground,
+      borderColor: isDark ? colors.border : "#E1E7DD",
       borderRadius: radii.control,
       borderWidth: 1,
       color: colors.text,

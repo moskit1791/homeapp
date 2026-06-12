@@ -284,7 +284,7 @@ const lightPalette: Palette = {
   field: "#FFFFFF",
   inverseText: "#FFFFFF",
   line: "rgba(145, 158, 171, 0.24)",
-  modalSurface: "rgba(246, 247, 249, 0.95)",
+  modalSurface: "#F6F7F9",
   overlay: "#FFFFFF",
   softBlue: "#EAF2FF",
   softGreen: "#E9FCD4",

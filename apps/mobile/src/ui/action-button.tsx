@@ -33,6 +33,8 @@ export function ActionButton({
   const isDisabled = disabled || loading;
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
+  const actionAccent =
+    theme.colors.background === "#0C1220" ? theme.colors.primary : "#4F8D2C";
 
   return (
     <Pressable
@@ -54,7 +56,7 @@ export function ActionButton({
           color={
             variant === "primary"
               ? theme.colors.inverseText
-              : theme.colors.primary
+              : actionAccent
           }
         />
       ) : (
@@ -67,6 +69,11 @@ export function ActionButton({
 }
 
 function createStyles(colors: AppPalette) {
+  const isDark = colors.background === "#0C1220";
+  const actionAccent = isDark ? colors.primary : "#4F8D2C";
+  const actionAccentBorder = isDark ? colors.primaryLight : "#DDE7D7";
+  const actionAccentDark = isDark ? colors.primaryDark : "#4F8D2C";
+
   return StyleSheet.create({
     button: {
       alignItems: "center",
@@ -97,10 +104,10 @@ function createStyles(colors: AppPalette) {
       opacity: 0.82,
     },
     primary: {
-      backgroundColor: colors.primary,
-      borderColor: colors.primaryLight,
+      backgroundColor: actionAccent,
+      borderColor: actionAccent,
       elevation: 3,
-      shadowColor: colors.primary,
+      shadowColor: actionAccent,
       shadowOffset: { height: 0, width: 0 },
       shadowOpacity: 0.28,
       shadowRadius: 12,
@@ -110,10 +117,10 @@ function createStyles(colors: AppPalette) {
     },
     secondary: {
       backgroundColor: colors.card,
-      borderColor: colors.primary,
+      borderColor: actionAccentBorder,
     },
     secondaryLabel: {
-      color: colors.primaryDark,
+      color: actionAccentDark,
     },
     small: {
       minHeight: 36,

@@ -1,7 +1,7 @@
 import type { ModuleKey } from "@homeapp/shared-types";
 import { Tabs, useRouter } from "expo-router";
-import { useEffect, type ReactNode } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { useEffect, type ComponentProps, type ReactNode } from "react";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import {
   CalendarDays,
   CheckSquare,
@@ -22,6 +22,16 @@ import { spacing } from "../../src/theme/tokens";
 import { useAppTheme } from "../../src/theme/use-app-theme";
 
 let redirectingFromTabsToLogin = false;
+type TabBarButtonProps = Pick<
+  ComponentProps<typeof Pressable>,
+  | "accessibilityLabel"
+  | "accessibilityRole"
+  | "accessibilityState"
+  | "children"
+  | "onLongPress"
+  | "onPress"
+  | "testID"
+>;
 
 export default function TabsLayout() {
   const { session, status } = useSession();
@@ -72,20 +82,22 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
+        tabBarButton: (props) => <TabBarButton {...props} />,
         tabBarActiveTintColor: "#4F8D2C",
         tabBarShowLabel: false,
         tabBarInactiveTintColor: theme.colors.textMuted,
         tabBarHideOnKeyboard: true,
         tabBarIconStyle: {
           alignItems: "center",
-          height: 48,
+          height: 42,
           justifyContent: "center",
-          width: 48,
+          margin: 0,
+          width: 42,
         },
         tabBarItemStyle: {
           alignItems: "center",
           flex: 1,
-          height: 48,
+          height: 42,
           justifyContent: "center",
           padding: 0,
         },
@@ -119,7 +131,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <TabGlyph
               focused={focused}
-              icon={(color) => <Sun color={color} size={24} />}
+              icon={(color) => <Sun color={color} size={25} />}
             />
           ),
         }}
@@ -132,7 +144,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <TabGlyph
               focused={focused}
-              icon={(color) => <CalendarDays color={color} size={24} />}
+              icon={(color) => <CalendarDays color={color} size={25} />}
             />
           ),
         }}
@@ -145,7 +157,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <TabGlyph
               focused={focused}
-              icon={(color) => <WalletCards color={color} size={24} />}
+              icon={(color) => <WalletCards color={color} size={25} />}
             />
           ),
         }}
@@ -158,7 +170,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <TabGlyph
               focused={focused}
-              icon={(color) => <Utensils color={color} size={24} />}
+              icon={(color) => <Utensils color={color} size={25} />}
             />
           ),
         }}
@@ -171,7 +183,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <TabGlyph
               focused={focused}
-              icon={(color) => <CheckSquare color={color} size={24} />}
+              icon={(color) => <CheckSquare color={color} size={25} />}
             />
           ),
         }}
@@ -184,7 +196,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <TabGlyph
               focused={focused}
-              icon={(color) => <ShoppingCart color={color} size={24} />}
+              icon={(color) => <ShoppingCart color={color} size={25} />}
             />
           ),
         }}
@@ -197,7 +209,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <TabGlyph
               focused={focused}
-              icon={(color) => <Utensils color={color} size={24} />}
+              icon={(color) => <Utensils color={color} size={25} />}
             />
           ),
         }}
@@ -217,7 +229,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <TabGlyph
               focused={focused}
-              icon={(color) => <Home color={color} size={24} />}
+              icon={(color) => <Home color={color} size={25} />}
             />
           ),
         }}
@@ -230,12 +242,37 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <TabGlyph
               focused={focused}
-              icon={(color) => <MoreHorizontal color={color} size={24} />}
+              icon={(color) => <MoreHorizontal color={color} size={25} />}
             />
           ),
         }}
       />
     </Tabs>
+  );
+}
+
+function TabBarButton({
+  accessibilityLabel,
+  accessibilityRole,
+  accessibilityState,
+  children,
+  onLongPress,
+  onPress,
+  testID,
+}: TabBarButtonProps) {
+  return (
+    <Pressable
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole={accessibilityRole}
+      accessibilityState={accessibilityState}
+      android_ripple={{ color: "transparent" }}
+      onLongPress={onLongPress}
+      onPress={onPress}
+      style={styles.tabBarButton}
+      testID={testID}
+    >
+      {children}
+    </Pressable>
   );
 }
 
@@ -276,15 +313,21 @@ const styles = StyleSheet.create({
     elevation: 0,
     height: 42,
     justifyContent: "center",
-    marginHorizontal: 1,
-    width: 44,
+    width: 42,
+  },
+  tabBarButton: {
+    alignItems: "center",
+    flex: 1,
+    height: "100%",
+    justifyContent: "center",
+    padding: 0,
   },
   tabIconSlot: {
     alignItems: "center",
     borderRadius: 999,
-    height: 40,
+    height: 42,
     justifyContent: "center",
-    width: 40,
+    width: 42,
   },
   tabIconSlotActive: {
     backgroundColor: "#EEF8E9",

@@ -114,6 +114,7 @@ type MainSegment = "shopping" | "meals" | "pantry";
 type MealLayout = "list" | "cards";
 
 const mealLayoutStorageKey = "homeapp.meals.layout.v1";
+const mockupGreen = "#4F8D2C";
 
 const listTypes: Array<{ label: string; value: ShoppingListType }> = [
   { label: "Dzisiaj", value: "daily" },
@@ -176,7 +177,9 @@ export default function ListaScreen() {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
   const [activeSegment, setActiveSegment] = useState<MainSegment>("shopping");
+  const [shoppingAddOpenRequest, setShoppingAddOpenRequest] = useState(0);
   const [shoppingAiOpenRequest, setShoppingAiOpenRequest] = useState(0);
+  const [mealAddOpenRequest, setMealAddOpenRequest] = useState(0);
   const [mealAiOpenRequest, setMealAiOpenRequest] = useState(0);
   const [mealViewResetRequest, setMealViewResetRequest] = useState(0);
   const [mealLayout, setMealLayout] = useState<MealLayout>("list");
@@ -200,6 +203,8 @@ export default function ListaScreen() {
       ].filter(Boolean) as Array<{ label: string; value: MainSegment }>,
     [mealPermission.canRead, shoppingPermission.canRead],
   );
+  const screenBackground =
+    theme.colors.background === "#0C1220" ? theme.colors.background : "#FBFAF6";
 
   useEffect(() => {
     if (
@@ -296,23 +301,41 @@ export default function ListaScreen() {
     <AppScreen
       actions={
         activeSegment === "shopping" && shoppingPermission.canCreate ? (
-          <IconButton
-            accessibilityLabel="AI do listy zakupów"
-            onPress={() => setShoppingAiOpenRequest((value) => value + 1)}
-            style={styles.aiHeaderButton}
-          >
-            <Sparkles color={theme.colors.primary} size={22} />
-          </IconButton>
+          <View style={styles.headerActions}>
+            <IconButton
+              accessibilityLabel="AI do listy zakupów"
+              onPress={() => setShoppingAiOpenRequest((value) => value + 1)}
+              style={styles.foodHeaderButton}
+            >
+              <Sparkles color={mockupGreen} size={21} />
+            </IconButton>
+            <IconButton
+              accessibilityLabel="Dodaj produkt"
+              onPress={() => setShoppingAddOpenRequest((value) => value + 1)}
+              style={styles.foodHeaderButton}
+            >
+              <Plus color={mockupGreen} size={23} />
+            </IconButton>
+          </View>
         ) : activeSegment === "meals" ? (
           <View style={styles.headerActions}>
             {mealPermission.canCreate && mealPermission.canUpdate ? (
-              <IconButton
-                accessibilityLabel="AI do planu posilkow"
-                onPress={() => setMealAiOpenRequest((value) => value + 1)}
-                style={styles.aiHeaderButton}
-              >
-                <Sparkles color={theme.colors.food} size={22} />
-              </IconButton>
+              <>
+                <IconButton
+                  accessibilityLabel="AI do planu posilkow"
+                  onPress={() => setMealAiOpenRequest((value) => value + 1)}
+                  style={styles.foodHeaderButton}
+                >
+                  <Sparkles color={mockupGreen} size={21} />
+                </IconButton>
+                <IconButton
+                  accessibilityLabel="Dodaj posilek"
+                  onPress={() => setMealAddOpenRequest((value) => value + 1)}
+                  style={styles.foodHeaderButton}
+                >
+                  <Plus color={mockupGreen} size={23} />
+                </IconButton>
+              </>
             ) : null}
             <IconButton
               accessibilityLabel={
@@ -321,12 +344,12 @@ export default function ListaScreen() {
                   : "Zmien uklad posilkow na liste"
               }
               onPress={toggleMealLayout}
-              style={styles.mealLayoutButton}
+              style={styles.foodHeaderButton}
             >
               {mealLayout === "list" ? (
-                <ViewGrid color={theme.colors.food} size={21} />
+                <ViewGrid color={mockupGreen} size={21} />
               ) : (
-                <TableLarge color={theme.colors.food} size={21} />
+                <TableLarge color={mockupGreen} size={21} />
               )}
             </IconButton>
           </View>
@@ -334,18 +357,21 @@ export default function ListaScreen() {
           <IconButton
             accessibilityLabel="Menu spiżarni"
             onPress={() => setPantryMenuVisible(true)}
-            style={styles.pantryHeaderButton}
+            style={styles.foodHeaderButton}
           >
-            <MoreHorizontal color={theme.colors.text} size={24} />
+            <MoreHorizontal color={mockupGreen} size={24} />
           </IconButton>
         ) : undefined
       }
+      backgroundColor={screenBackground}
       title={activeSegment === "pantry" ? "Spiżarnia" : "Jedzenie"}
     >
       {activeSegment !== "pantry" ? (
         <SegmentedControl
+          accentColor={mockupGreen}
           onChange={selectMainSegment}
           options={availableSegments}
+          presentation="mockup"
           value={activeSegment}
         />
       ) : null}
@@ -353,6 +379,7 @@ export default function ListaScreen() {
       {activeSegment === "shopping" ? (
         <ShoppingBoard
           action={params.action}
+          addOpenRequest={shoppingAddOpenRequest}
           aiOpenRequest={shoppingAiOpenRequest}
           onRouteActionHandled={clearRouteAction}
         />
@@ -360,6 +387,7 @@ export default function ListaScreen() {
       {activeSegment === "meals" ? (
         <MealsBoard
           action={params.action}
+          addOpenRequest={mealAddOpenRequest}
           aiOpenRequest={mealAiOpenRequest}
           layout={mealLayout}
           onRouteActionHandled={clearRouteAction}
@@ -401,10 +429,12 @@ export default function ListaScreen() {
 
 function ShoppingBoard({
   action,
+  addOpenRequest,
   aiOpenRequest,
   onRouteActionHandled,
 }: {
   action?: string;
+  addOpenRequest: number;
   aiOpenRequest: number;
   onRouteActionHandled: () => void;
 }) {
@@ -420,6 +450,8 @@ function ShoppingBoard({
   const [aiMessage, setAiMessage] = useState("");
   const [aiNotice, setAiNotice] = useState("");
   const [aiModalVisible, setAiModalVisible] = useState(false);
+  const [handledAddOpenRequest, setHandledAddOpenRequest] =
+    useState(addOpenRequest);
   const [handledAiOpenRequest, setHandledAiOpenRequest] =
     useState(aiOpenRequest);
   const [clearConfirmVisible, setClearConfirmVisible] = useState(false);
@@ -446,6 +478,13 @@ function ShoppingBoard({
       onRouteActionHandled();
     }
   }, [action, onRouteActionHandled]);
+
+  useEffect(() => {
+    if (addOpenRequest > handledAddOpenRequest) {
+      setHandledAddOpenRequest(addOpenRequest);
+      setModalVisible(true);
+    }
+  }, [addOpenRequest, handledAddOpenRequest]);
 
   useEffect(() => {
     if (aiOpenRequest > handledAiOpenRequest) {
@@ -582,8 +621,10 @@ function ShoppingBoard({
   return (
     <>
       <SegmentedControl
+        accentColor={mockupGreen}
         onChange={setActiveType}
         options={listTypes}
+        presentation="mockup"
         value={activeType}
       />
 
@@ -596,14 +637,6 @@ function ShoppingBoard({
             {uncheckedItems.length} do kupienia / {checkedItems.length} kupione
           </Text>
         </View>
-        {permission.canCreate ? (
-          <Pressable
-            onPress={() => setModalVisible(true)}
-            style={styles.fabInline}
-          >
-            <Plus color={theme.colors.card} size={22} />
-          </Pressable>
-        ) : null}
       </View>
 
       <View style={styles.quickActions}>
@@ -612,9 +645,11 @@ function ShoppingBoard({
         permission.canUpdate ? (
           <ActionButton
             disabled={moveUncheckedMutation.isPending}
+            labelStyle={styles.foodSecondaryActionLabel}
             loading={moveUncheckedMutation.isPending}
             onPress={() => moveUncheckedMutation.mutate()}
             size="small"
+            style={styles.foodSecondaryAction}
             title="Przenieś niekupione na jutro"
             variant="secondary"
           />
@@ -905,12 +940,14 @@ function ShoppingBoard({
 
 function MealsBoard({
   action,
+  addOpenRequest,
   aiOpenRequest,
   layout,
   onRouteActionHandled,
   resetRequest,
 }: {
   action?: string;
+  addOpenRequest: number;
   aiOpenRequest: number;
   layout: MealLayout;
   onRouteActionHandled: () => void;
@@ -943,6 +980,8 @@ function MealsBoard({
     selectedWeekStartDate,
   );
   const [aiNotice, setAiNotice] = useState("");
+  const [handledAddOpenRequest, setHandledAddOpenRequest] =
+    useState(addOpenRequest);
   const [handledAiOpenRequest, setHandledAiOpenRequest] =
     useState(aiOpenRequest);
   const [isCalendarExpanded, setCalendarExpanded] = useState(false);
@@ -1012,6 +1051,13 @@ function MealsBoard({
       onRouteActionHandled();
     }
   }, [action, onRouteActionHandled]);
+
+  useEffect(() => {
+    if (addOpenRequest > handledAddOpenRequest) {
+      setHandledAddOpenRequest(addOpenRequest);
+      openCreateMealModal();
+    }
+  }, [addOpenRequest, handledAddOpenRequest]);
 
   useEffect(() => {
     if (aiOpenRequest > handledAiOpenRequest) {
@@ -1378,7 +1424,7 @@ function MealsBoard({
     <>
       <View style={styles.mealHero}>
         <View style={styles.mealHeroIcon}>
-          <Utensils color={theme.colors.food} size={22} />
+          <Utensils color={mockupGreen} size={22} />
         </View>
         <View style={styles.mealHeroText}>
           <Text style={styles.sectionTitle}>Plan posiłków</Text>
@@ -1386,11 +1432,6 @@ function MealsBoard({
             {formatWeekRange(selectedWeekStartDate)}
           </Text>
         </View>
-        {permission.canUpdate ? (
-          <Pressable onPress={openCreateMealModal} style={styles.fabInline}>
-            <Plus color={theme.colors.card} size={22} />
-          </Pressable>
-        ) : null}
       </View>
       {aiNotice ? <InlineAlert text={aiNotice} /> : null}
 
@@ -1406,7 +1447,7 @@ function MealsBoard({
         ]}
       >
         <View style={styles.calendarToggleIcon}>
-          <CalendarDays color={theme.colors.food} size={19} />
+          <CalendarDays color={mockupGreen} size={19} />
         </View>
         <View style={styles.calendarToggleText}>
           <Text style={styles.calendarToggleTitle}>
@@ -1491,7 +1532,7 @@ function MealsBoard({
                         accessibilityLabel="Otworz link"
                         onPress={() => Linking.openURL(entry.linkUrl!)}
                       >
-                        <ExternalLink color={theme.colors.food} size={15} />
+                        <ExternalLink color={mockupGreen} size={15} />
                       </IconButton>
                     ) : null}
                   </Pressable>
@@ -1515,7 +1556,7 @@ function MealsBoard({
                     pressed && styles.pressed,
                   ]}
                 >
-                  <Plus color={theme.colors.food} size={16} />
+                  <Plus color={mockupGreen} size={16} />
                   <Text style={styles.mealTileAddText}>Dodaj</Text>
                 </Pressable>
               ) : null}
@@ -1549,7 +1590,7 @@ function MealsBoard({
                       accessibilityLabel="Otworz link"
                       onPress={() => Linking.openURL(entry.linkUrl!)}
                     >
-                      <ExternalLink color={theme.colors.food} size={17} />
+                      <ExternalLink color={mockupGreen} size={17} />
                     </IconButton>
                   ) : null}
                   <View style={styles.mealRowActions}>
@@ -1709,7 +1750,7 @@ function MealsBoard({
       >
         <View style={styles.aiHeader}>
           <View style={styles.aiIcon}>
-            <Sparkles color={theme.colors.food} size={20} />
+            <Sparkles color={mockupGreen} size={20} />
           </View>
           <View style={styles.itemText}>
             <Text style={styles.sectionTitle}>Tydzien docelowy</Text>
@@ -1803,7 +1844,7 @@ function MealsBoard({
                         accessibilityLabel="Otworz link z AI"
                         onPress={() => Linking.openURL(entry.linkUrl!)}
                       >
-                        <ExternalLink color={theme.colors.food} size={16} />
+                        <ExternalLink color={mockupGreen} size={16} />
                       </IconButton>
                     ) : null}
                   </View>
@@ -2269,7 +2310,7 @@ function buildMarkedMealWeekDates(
 
     if (plannedWeekdays.length === 0 && week.entriesCount) {
       marked[week.weekStartDate] = {
-        dotColor: colors.food,
+        dotColor: mockupGreen,
         marked: true,
       };
       return;
@@ -2279,7 +2320,7 @@ function buildMarkedMealWeekDates(
       const date = dateForWeekday(week.weekStartDate, weekday);
 
       marked[date] = {
-        dotColor: colors.food,
+        dotColor: mockupGreen,
         marked: true,
       };
     });
@@ -3462,6 +3503,11 @@ function createStyles(colors: AppPalette) {
   const shoppingMutedText = isDark ? colors.textSubtle : "#8B8478";
   const shoppingCountBackground = isDark ? colors.field : "#E7E0C8";
   const shoppingCountText = isDark ? colors.text : "#4E5435";
+  const panelBackground = isDark ? colors.card : "#FFFFFF";
+  const panelBorder = isDark ? colors.border : "#E8DED2";
+  const panelShadowOpacity = isDark ? 0.18 : 0.08;
+  const softGreenPanel = isDark ? colors.cardMuted : "#F6FAF0";
+  const softGreenBorder = isDark ? colors.border : "#E2EAD9";
 
   return StyleSheet.create({
     pantryAddButton: {
@@ -3637,9 +3683,13 @@ function createStyles(colors: AppPalette) {
       width: 38,
     },
     pantryHeaderButton: {
-      backgroundColor: "transparent",
-      borderColor: "transparent",
-      elevation: 0,
+      backgroundColor: panelBackground,
+      borderColor: panelBorder,
+      elevation: 1,
+      shadowColor: "#000000",
+      shadowOffset: { height: 4, width: 0 },
+      shadowOpacity: panelShadowOpacity,
+      shadowRadius: 10,
     },
     pantryNavigationItem: {
       alignItems: "center",
@@ -3828,13 +3878,30 @@ function createStyles(colors: AppPalette) {
       gap: spacing.sm,
     },
     aiHeaderButton: {
-      backgroundColor: colors.card,
-      borderColor: "#448aff",
-      elevation: 8,
-      shadowColor: "#448aff",
-      shadowOffset: { height: 8, width: 0 },
-      shadowOpacity: 0.28,
-      shadowRadius: 14,
+      backgroundColor: panelBackground,
+      borderColor: panelBorder,
+      elevation: 1,
+      shadowColor: "#000000",
+      shadowOffset: { height: 4, width: 0 },
+      shadowOpacity: panelShadowOpacity,
+      shadowRadius: 10,
+    },
+    foodHeaderButton: {
+      backgroundColor: panelBackground,
+      borderColor: panelBorder,
+      borderWidth: 1,
+      elevation: 1,
+      shadowColor: "#000000",
+      shadowOffset: { height: 4, width: 0 },
+      shadowOpacity: panelShadowOpacity,
+      shadowRadius: 10,
+    },
+    foodSecondaryAction: {
+      backgroundColor: panelBackground,
+      borderColor: softGreenBorder,
+    },
+    foodSecondaryActionLabel: {
+      color: mockupGreen,
     },
     headerActions: {
       alignItems: "center",
@@ -3843,7 +3910,7 @@ function createStyles(colors: AppPalette) {
     },
     aiIcon: {
       alignItems: "center",
-      backgroundColor: colors.primarySoft,
+      backgroundColor: softGreenPanel,
       borderRadius: radii.control,
       height: 38,
       justifyContent: "center",
@@ -3911,11 +3978,16 @@ function createStyles(colors: AppPalette) {
       gap: spacing.sm,
     },
     calendarPicker: {
-      backgroundColor: colors.card,
-      borderColor: colors.border,
-      borderRadius: radii.card,
+      backgroundColor: panelBackground,
+      borderColor: panelBorder,
+      borderRadius: 12,
       borderWidth: 1,
+      elevation: 2,
       overflow: "hidden",
+      shadowColor: "#000000",
+      shadowOffset: { height: 8, width: 0 },
+      shadowOpacity: panelShadowOpacity,
+      shadowRadius: 18,
     },
     calendarPickerMeta: {
       borderColor: colors.border,
@@ -3929,22 +4001,27 @@ function createStyles(colors: AppPalette) {
     },
     calendarToggle: {
       alignItems: "center",
-      backgroundColor: colors.card,
-      borderColor: colors.border,
-      borderRadius: radii.card,
+      backgroundColor: panelBackground,
+      borderColor: panelBorder,
+      borderRadius: 12,
       borderWidth: 1,
+      elevation: 2,
       flexDirection: "row",
       gap: spacing.sm,
       minHeight: 58,
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.sm,
+      shadowColor: "#000000",
+      shadowOffset: { height: 8, width: 0 },
+      shadowOpacity: panelShadowOpacity,
+      shadowRadius: 18,
     },
     calendarToggleChevronOpen: {
       transform: [{ rotate: "90deg" }],
     },
     calendarToggleIcon: {
       alignItems: "center",
-      backgroundColor: colors.cardMuted,
+      backgroundColor: softGreenPanel,
       borderRadius: radii.control,
       height: 36,
       justifyContent: "center",
@@ -4144,26 +4221,36 @@ function createStyles(colors: AppPalette) {
       justifyContent: "space-between",
     },
     mealDayCard: {
-      backgroundColor: colors.card,
-      borderColor: colors.border,
-      borderRadius: radii.card,
+      backgroundColor: panelBackground,
+      borderColor: panelBorder,
+      borderRadius: 12,
       borderWidth: 1,
+      elevation: 2,
       gap: spacing.sm,
       padding: spacing.md,
+      shadowColor: "#000000",
+      shadowOffset: { height: 8, width: 0 },
+      shadowOpacity: panelShadowOpacity,
+      shadowRadius: 18,
     },
     mealHero: {
       alignItems: "center",
-      backgroundColor: colors.card,
-      borderColor: colors.border,
-      borderRadius: radii.card,
+      backgroundColor: panelBackground,
+      borderColor: panelBorder,
+      borderRadius: 12,
       borderWidth: 1,
+      elevation: 2,
       flexDirection: "row",
       gap: spacing.md,
       padding: spacing.md,
+      shadowColor: "#000000",
+      shadowOffset: { height: 8, width: 0 },
+      shadowOpacity: panelShadowOpacity,
+      shadowRadius: 18,
     },
     mealHeroIcon: {
       alignItems: "center",
-      backgroundColor: colors.cardMuted,
+      backgroundColor: softGreenPanel,
       borderRadius: radii.control,
       height: 44,
       justifyContent: "center",
@@ -4180,13 +4267,13 @@ function createStyles(colors: AppPalette) {
       gap: spacing.sm,
     },
     mealLayoutButton: {
-      backgroundColor: colors.card,
-      borderColor: colors.food,
-      elevation: 4,
-      shadowColor: colors.food,
-      shadowOffset: { height: 6, width: 0 },
-      shadowOpacity: 0.18,
-      shadowRadius: 12,
+      backgroundColor: panelBackground,
+      borderColor: panelBorder,
+      elevation: 1,
+      shadowColor: "#000000",
+      shadowOffset: { height: 4, width: 0 },
+      shadowOpacity: panelShadowOpacity,
+      shadowRadius: 10,
     },
     mealRow: {
       alignItems: "center",
@@ -4200,37 +4287,42 @@ function createStyles(colors: AppPalette) {
     },
     mealSlot: {
       alignItems: "center",
-      backgroundColor: colors.primarySoft,
+      backgroundColor: softGreenPanel,
       borderRadius: 999,
       height: 28,
       justifyContent: "center",
       width: 28,
     },
     mealSlotText: {
-      color: colors.primaryDark,
+      color: mockupGreen,
       fontSize: 12,
       fontWeight: "900",
       letterSpacing: 0,
     },
     mealTile: {
-      backgroundColor: colors.card,
-      borderColor: colors.border,
-      borderRadius: radii.card,
+      backgroundColor: panelBackground,
+      borderColor: panelBorder,
+      borderRadius: 12,
       borderWidth: 1,
+      elevation: 2,
       flexBasis: "47%",
       flexGrow: 1,
       gap: spacing.sm,
       minHeight: 178,
       minWidth: 150,
       padding: spacing.sm,
+      shadowColor: "#000000",
+      shadowOffset: { height: 8, width: 0 },
+      shadowOpacity: panelShadowOpacity,
+      shadowRadius: 18,
     },
     mealTileActive: {
-      backgroundColor: colors.cardMuted,
-      borderColor: colors.food,
+      backgroundColor: softGreenPanel,
+      borderColor: softGreenBorder,
     },
     mealTileAdd: {
       alignItems: "center",
-      borderColor: colors.border,
+      borderColor: softGreenBorder,
       borderRadius: radii.control,
       borderWidth: 1,
       flexDirection: "row",
@@ -4239,13 +4331,13 @@ function createStyles(colors: AppPalette) {
       minHeight: 32,
     },
     mealTileAddText: {
-      color: colors.food,
+      color: mockupGreen,
       fontSize: 12,
       fontWeight: "900",
       letterSpacing: 0,
     },
     mealTileCount: {
-      color: colors.food,
+      color: mockupGreen,
       fontSize: 12,
       fontWeight: "900",
       letterSpacing: 0,
@@ -4313,7 +4405,7 @@ function createStyles(colors: AppPalette) {
       paddingRight: 2,
     },
     mealTileSlot: {
-      color: colors.food,
+      color: mockupGreen,
       fontSize: 11,
       fontWeight: "900",
       letterSpacing: 0,
