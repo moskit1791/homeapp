@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { radii, spacing } from "../theme/tokens";
 import { useAppTheme, type AppPalette } from "../theme/use-app-theme";
 
@@ -28,6 +28,8 @@ export function SegmentedControl<TValue extends string>({
 }: SegmentedControlProps<TValue>) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
+  const isMockup = presentation === "mockup";
+  const mockupSelectedTextColor = accentColor ?? theme.colors.primary;
   const selectedBackgroundColor = accentColor ?? theme.colors.primary;
   const selectedTextColor = accentTextColor ?? theme.colors.inverseText;
 
@@ -45,14 +47,15 @@ export function SegmentedControl<TValue extends string>({
             onPress={() => onChange(option.value)}
             style={({ pressed }) => [
               styles.option,
-              presentation === "mockup" && styles.mockupOption,
+              isMockup && styles.mockupOption,
               active && styles.active,
-              active && presentation === "mockup" && styles.mockupActive,
-              active && {
-                backgroundColor: selectedBackgroundColor,
-                borderColor: selectedBackgroundColor,
-                shadowColor: selectedBackgroundColor,
-              },
+              active && isMockup
+                ? styles.mockupActive
+                : active && {
+                    backgroundColor: selectedBackgroundColor,
+                    borderColor: selectedBackgroundColor,
+                    shadowColor: selectedBackgroundColor,
+                  },
               pressed && styles.pressed,
             ]}
           >
@@ -68,8 +71,10 @@ export function SegmentedControl<TValue extends string>({
                 numberOfLines={1}
                 style={[
                   styles.label,
-                  presentation === "mockup" && styles.mockupLabel,
-                  active && { color: selectedTextColor },
+                  isMockup && styles.mockupLabel,
+                  active && {
+                    color: isMockup ? mockupSelectedTextColor : selectedTextColor,
+                  },
                 ]}
               >
                 {option.label}
@@ -123,18 +128,15 @@ function createStyles(colors: AppPalette) {
       paddingHorizontal: spacing.xs,
     },
     mockupActive: {
+      backgroundColor:
+        colors.background === "#0C1220" ? colors.cardMuted : "#F6FAF0",
+      borderColor: colors.background === "#0C1220" ? colors.border : "#E2EAD9",
       elevation: 0,
       shadowOpacity: 0,
     },
     mockupLabel: {
-      fontFamily: Platform.select({
-        android: "serif",
-        default: "Georgia",
-        ios: "Georgia",
-        web: "Georgia",
-      }),
-      fontSize: 15,
-      fontWeight: "400",
+      fontSize: 14,
+      fontWeight: "700",
     },
     mockupOption: {
       borderRadius: 999,
