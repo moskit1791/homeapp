@@ -34,7 +34,7 @@ export function SegmentedControl<TValue extends string>({
   const selectedTextColor = accentTextColor ?? theme.colors.inverseText;
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, isMockup && styles.mockupRoot]}>
       {options.map((option) => {
         const active = option.value === value;
 
@@ -140,7 +140,17 @@ function createStyles(colors: AppPalette) {
     },
     mockupOption: {
       borderRadius: 999,
-      minHeight: 34,
+      minHeight: 42,
+    },
+    mockupRoot: {
+      backgroundColor: colors.background === "#0C1220" ? colors.card : "#FFFFFF",
+      borderColor: colors.background === "#0C1220" ? colors.border : "#E8DED2",
+      borderRadius: 12,
+      elevation: 2,
+      shadowColor: "#000000",
+      shadowOffset: { height: 8, width: 0 },
+      shadowOpacity: colors.background === "#0C1220" ? 0.18 : 0.08,
+      shadowRadius: 18,
     },
     pressed: {
       opacity: 0.78,

@@ -14,7 +14,6 @@ import {
   Image,
   Linking,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -78,17 +77,13 @@ import {
 } from "../../src/ui";
 import {
   CalendarDays,
-  AlertCircle,
-  Bell,
+  CartPlus,
   Check,
   ChevronRight,
   DotsVertical,
   ExternalLink,
-  Filter,
-  MoreHorizontal,
   Package,
   Pencil,
-  Plus,
   Search,
   ShoppingCart,
   Sparkles,
@@ -181,10 +176,10 @@ export default function ListaScreen() {
   const [shoppingAiOpenRequest, setShoppingAiOpenRequest] = useState(0);
   const [mealAddOpenRequest, setMealAddOpenRequest] = useState(0);
   const [mealAiOpenRequest, setMealAiOpenRequest] = useState(0);
+  const [pantryAddOpenRequest, setPantryAddOpenRequest] = useState(0);
   const [mealViewResetRequest, setMealViewResetRequest] = useState(0);
   const [mealLayout, setMealLayout] = useState<MealLayout>("list");
   const [mealLayoutLoaded, setMealLayoutLoaded] = useState(false);
-  const [pantryMenuVisible, setPantryMenuVisible] = useState(false);
   const clearRouteAction = useCallback(() => {
     router.setParams({ action: undefined });
   }, [router]);
@@ -192,16 +187,47 @@ export default function ListaScreen() {
     () =>
       [
         shoppingPermission.canRead
-          ? { label: "Zakupy", value: "shopping" as const }
+          ? {
+              icon: (active: boolean) => (
+                <ShoppingCart
+                  color={active ? mockupGreen : theme.colors.textMuted}
+                  size={16}
+                />
+              ),
+              label: "Zakupy",
+              value: "shopping" as const,
+            }
           : null,
         mealPermission.canRead
-          ? { label: "Posiłki", value: "meals" as const }
+          ? {
+              icon: (active: boolean) => (
+                <Utensils
+                  color={active ? mockupGreen : theme.colors.textMuted}
+                  size={16}
+                />
+              ),
+              label: "Posiłki",
+              value: "meals" as const,
+            }
           : null,
         shoppingPermission.canRead
-          ? { label: "Spiżarnia", value: "pantry" as const }
+          ? {
+              icon: (active: boolean) => (
+                <Package
+                  color={active ? mockupGreen : theme.colors.textMuted}
+                  size={16}
+                />
+              ),
+              label: "Spiżarnia",
+              value: "pantry" as const,
+            }
           : null,
-      ].filter(Boolean) as Array<{ label: string; value: MainSegment }>,
-    [mealPermission.canRead, shoppingPermission.canRead],
+      ].filter(Boolean) as Array<{
+        icon: (active: boolean) => ReactNode;
+        label: string;
+        value: MainSegment;
+      }>,
+    [mealPermission.canRead, shoppingPermission.canRead, theme.colors.textMuted],
   );
   const screenBackground =
     theme.colors.background === "#0C1220" ? theme.colors.background : "#FBFAF6";
@@ -314,7 +340,7 @@ export default function ListaScreen() {
               onPress={() => setShoppingAddOpenRequest((value) => value + 1)}
               style={styles.foodHeaderButton}
             >
-              <Plus color={mockupGreen} size={23} />
+              <CartPlus color={mockupGreen} size={23} />
             </IconButton>
           </View>
         ) : activeSegment === "meals" ? (
@@ -333,7 +359,7 @@ export default function ListaScreen() {
                   onPress={() => setMealAddOpenRequest((value) => value + 1)}
                   style={styles.foodHeaderButton}
                 >
-                  <Plus color={mockupGreen} size={23} />
+                  <Utensils color={mockupGreen} size={23} />
                 </IconButton>
               </>
             ) : null}
@@ -353,28 +379,26 @@ export default function ListaScreen() {
               )}
             </IconButton>
           </View>
-        ) : activeSegment === "pantry" ? (
+        ) : activeSegment === "pantry" && shoppingPermission.canCreate ? (
           <IconButton
-            accessibilityLabel="Menu spiżarni"
-            onPress={() => setPantryMenuVisible(true)}
+            accessibilityLabel="Dodaj produkt do spiżarni"
+            onPress={() => setPantryAddOpenRequest((value) => value + 1)}
             style={styles.foodHeaderButton}
           >
-            <MoreHorizontal color={mockupGreen} size={24} />
+            <Package color={mockupGreen} size={23} />
           </IconButton>
         ) : undefined
       }
       backgroundColor={screenBackground}
-      title={activeSegment === "pantry" ? "Spiżarnia" : "Jedzenie"}
+      title="Jedzenie"
     >
-      {activeSegment !== "pantry" ? (
-        <SegmentedControl
-          accentColor={mockupGreen}
-          onChange={selectMainSegment}
-          options={availableSegments}
-          presentation="mockup"
-          value={activeSegment}
-        />
-      ) : null}
+      <SegmentedControl
+        accentColor={mockupGreen}
+        onChange={selectMainSegment}
+        options={availableSegments}
+        presentation="mockup"
+        value={activeSegment}
+      />
 
       {activeSegment === "shopping" ? (
         <ShoppingBoard
@@ -395,34 +419,8 @@ export default function ListaScreen() {
         />
       ) : null}
       {activeSegment === "pantry" ? (
-        <PantryDashboardBoard />
+        <PantryDashboardBoard addOpenRequest={pantryAddOpenRequest} />
       ) : null}
-
-      <FormModal
-        onClose={() => setPantryMenuVisible(false)}
-        title="Jedzenie"
-        visible={pantryMenuVisible}
-      >
-        <View style={styles.pantryNavigationMenu}>
-          {availableSegments.map((segment) => (
-            <Pressable
-              key={segment.value}
-              onPress={() => {
-                selectMainSegment(segment.value);
-                setPantryMenuVisible(false);
-              }}
-              style={({ pressed }) => [
-                styles.pantryNavigationItem,
-                segment.value === activeSegment && styles.pantryNavigationItemActive,
-                pressed && styles.pressed,
-              ]}
-            >
-              <Text style={styles.pantryNavigationLabel}>{segment.label}</Text>
-              <ChevronRight color={theme.colors.textMuted} size={20} />
-            </Pressable>
-          ))}
-        </View>
-      </FormModal>
     </AppScreen>
   );
 }
@@ -1556,7 +1554,7 @@ function MealsBoard({
                     pressed && styles.pressed,
                   ]}
                 >
-                  <Plus color={mockupGreen} size={16} />
+                  <Utensils color={mockupGreen} size={16} />
                   <Text style={styles.mealTileAddText}>Dodaj</Text>
                 </Pressable>
               ) : null}
@@ -2673,7 +2671,7 @@ function _PantryBoard() {
             onPress={() => setModalVisible(true)}
             style={{ backgroundColor: theme.colors.primary, borderRadius: 32, elevation: 6, height: 64, width: 64, alignItems: "center", justifyContent: "center" }}
           >
-            <Plus color="#FFFFFF" size={32} />
+            <Package color="#FFFFFF" size={32} />
           </IconButton>
         </View>
       ) : null}
@@ -2918,7 +2916,11 @@ const pantryDashboardGroups: PantryDashboardGroup[] = [
   },
 ];
 
-function PantryDashboardBoard() {
+function PantryDashboardBoard({
+  addOpenRequest,
+}: {
+  addOpenRequest: number;
+}) {
   const { session } = useSession();
   const queryClient = useQueryClient();
   const permission = useModulePermission("shopping");
@@ -2926,8 +2928,9 @@ function PantryDashboardBoard() {
   const styles = createStyles(theme.colors);
   const accessToken = session?.accessToken;
   const [search, setSearch] = useState("");
-  const [selectedGroupId, setSelectedGroupId] = useState("all");
   const [showAllItems, setShowAllItems] = useState(false);
+  const [handledAddOpenRequest, setHandledAddOpenRequest] =
+    useState(addOpenRequest);
   const [modalVisible, setModalVisible] = useState(false);
   const [editItem, setEditItem] = useState<ShoppingItem | null>(null);
   const [name, setName] = useState("");
@@ -2959,15 +2962,6 @@ function PantryDashboardBoard() {
     setCategory("Inne");
   }
 
-  function openCreateEditor() {
-    setEditItem(null);
-    setName("");
-    setQuantity("");
-    setExpirationDate("");
-    setCategory("Inne");
-    setModalVisible(true);
-  }
-
   function openEditEditor(item: ShoppingItem) {
     setEditItem(item);
     setName(item.name);
@@ -2976,6 +2970,18 @@ function PantryDashboardBoard() {
     setCategory(isShoppingCategory(item.category) ? item.category : "Inne");
     setModalVisible(true);
   }
+
+  useEffect(() => {
+    if (addOpenRequest > handledAddOpenRequest) {
+      setHandledAddOpenRequest(addOpenRequest);
+      setEditItem(null);
+      setName("");
+      setQuantity("");
+      setExpirationDate("");
+      setCategory("Inne");
+      setModalVisible(true);
+    }
+  }, [addOpenRequest, handledAddOpenRequest]);
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -3020,22 +3026,11 @@ function PantryDashboardBoard() {
   });
 
   const items = pantryQuery.data?.items ?? [];
-  const selectedGroup = pantryDashboardGroups.find(
-    (group) => group.id === selectedGroupId,
-  );
   const filteredItems = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase("pl-PL");
 
     return [...items]
       .filter((item) => {
-        const itemCategory = isShoppingCategory(item.category)
-          ? item.category
-          : "Inne";
-
-        if (selectedGroup && !selectedGroup.categories.includes(itemCategory)) {
-          return false;
-        }
-
         return (
           !normalizedSearch ||
           item.name.toLocaleLowerCase("pl-PL").includes(normalizedSearch) ||
@@ -3043,26 +3038,8 @@ function PantryDashboardBoard() {
         );
       })
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [items, search, selectedGroup]);
-  const categoryCards = useMemo(
-    () =>
-      pantryDashboardGroups.map((group) => ({
-        ...group,
-        count: items.filter((item) =>
-          group.categories.includes(
-            isShoppingCategory(item.category) ? item.category : "Inne",
-          ),
-        ).length,
-      })),
-    [items],
-  );
+  }, [items, search]);
   const visibleItems = showAllItems ? filteredItems : filteredItems.slice(0, 4);
-  const stats = pantryQuery.data?.stats ?? {
-    expiringSoon: 0,
-    expired: 0,
-    shoppingList: 0,
-    total: items.length,
-  };
   const isSaving = createMutation.isPending || updateMutation.isPending;
   const canSave = Boolean(name.trim()) && isValidOptionalIsoDate(expirationDate);
 
@@ -3081,98 +3058,6 @@ function PantryDashboardBoard() {
           style={styles.pantrySearchInput}
           value={search}
         />
-        <View style={styles.pantrySearchDivider} />
-        <Pressable
-          accessibilityLabel="Wyczyść filtr kategorii"
-          onPress={() => setSelectedGroupId("all")}
-          style={({ pressed }) => [
-            styles.pantryFilterButton,
-            pressed && styles.pressed,
-          ]}
-        >
-          <Filter color={theme.colors.text} size={20} />
-        </Pressable>
-      </View>
-
-      <ScrollView
-        contentContainerStyle={styles.pantryChipRow}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-      >
-        <PantryFilterChip
-          active={selectedGroupId === "all"}
-          icon={
-            <ViewGrid
-              color={selectedGroupId === "all" ? "#FFFFFF" : theme.colors.textMuted}
-              size={17}
-            />
-          }
-          label="Wszystkie"
-          onPress={() => setSelectedGroupId("all")}
-        />
-        {pantryDashboardGroups.slice(0, 5).map((group) => (
-          <PantryFilterChip
-            active={selectedGroupId === group.id}
-            icon={<Text style={styles.pantryChipEmoji}>{group.emoji}</Text>}
-            key={group.id}
-            label={group.label}
-            onPress={() => setSelectedGroupId(group.id)}
-          />
-        ))}
-      </ScrollView>
-
-      <View style={styles.pantryStatsRow}>
-        <PantryStatCard
-          icon={<Package color="#719B4C" size={22} />}
-          label="Wszystkie produkty"
-          softColor="#EEF6E7"
-          value={stats.total}
-        />
-        <PantryStatCard
-          icon={<Bell color="#E9A42C" size={22} />}
-          label="Kończy się"
-          softColor="#FFF4DB"
-          value={stats.expiringSoon}
-        />
-        <PantryStatCard
-          icon={<AlertCircle color="#D94C45" size={22} />}
-          label="Przeterminowane"
-          softColor="#FCE6E5"
-          value={stats.expired}
-        />
-        <PantryStatCard
-          icon={<ShoppingCart color="#719B4C" size={22} />}
-          label="Na liście zakupów"
-          softColor="#EEF6E7"
-          value={stats.shoppingList}
-        />
-      </View>
-
-      <PantrySectionHeader
-        action="Zarządzaj"
-        onPress={() => setSelectedGroupId("all")}
-        title="Kategorie"
-      />
-      <View style={styles.pantryCategoryGrid}>
-        {categoryCards.map((group) => (
-          <Pressable
-            key={group.id}
-            onPress={() => setSelectedGroupId(group.id)}
-            style={({ pressed }) => [
-              styles.pantryCategoryCard,
-              selectedGroupId === group.id && styles.pantryCategoryCardActive,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Text style={styles.pantryCategoryEmoji}>{group.emoji}</Text>
-            <Text numberOfLines={2} style={styles.pantryCategoryTitle}>
-              {group.label}
-            </Text>
-            <Text style={styles.pantryCategoryCount}>
-              {formatProductCount(group.count)}
-            </Text>
-          </Pressable>
-        ))}
       </View>
 
       <PantrySectionHeader
@@ -3184,14 +3069,14 @@ function PantryDashboardBoard() {
             : undefined
         }
         onPress={() => setShowAllItems((value) => !value)}
-        title={
-          search || selectedGroupId !== "all" ? "Produkty" : "Ostatnio dodane"
-        }
+        title={search ? "Produkty" : "Ostatnio dodane"}
       />
       <View style={styles.pantryRecentCard}>
         {visibleItems.length === 0 ? (
           <Text style={styles.pantryEmptyText}>
-            Brak produktów pasujących do wybranego filtra.
+            {search
+              ? "Brak produktów pasujących do wyszukiwania."
+              : "Brak produktów w spiżarni."}
           </Text>
         ) : (
           visibleItems.map((item, index) => (
@@ -3238,19 +3123,6 @@ function PantryDashboardBoard() {
           ))
         )}
       </View>
-
-      {permission.canCreate ? (
-        <Pressable
-          onPress={openCreateEditor}
-          style={({ pressed }) => [
-            styles.pantryAddButton,
-            pressed && styles.pressed,
-          ]}
-        >
-          <Plus color={theme.colors.finance} size={26} />
-          <Text style={styles.pantryAddButtonLabel}>Dodaj produkt</Text>
-        </Pressable>
-      ) : null}
 
       {pantryQuery.error ? (
         <InlineAlert text="Nie udało się pobrać danych spiżarni." />
@@ -3337,65 +3209,6 @@ function PantryDashboardBoard() {
   );
 }
 
-function PantryFilterChip({
-  active,
-  icon,
-  label,
-  onPress,
-}: {
-  active: boolean;
-  icon: ReactNode;
-  label: string;
-  onPress: () => void;
-}) {
-  const styles = createStyles(useAppTheme().colors);
-
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.pantryChip,
-        active && styles.pantryChipActive,
-        pressed && styles.pressed,
-      ]}
-    >
-      {icon}
-      <Text
-        numberOfLines={1}
-        style={[styles.pantryChipLabel, active && styles.pantryChipLabelActive]}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
-function PantryStatCard({
-  icon,
-  label,
-  softColor,
-  value,
-}: {
-  icon: ReactNode;
-  label: string;
-  softColor: string;
-  value: number;
-}) {
-  const styles = createStyles(useAppTheme().colors);
-
-  return (
-    <View style={styles.pantryStatCard}>
-      <View style={[styles.pantryStatIcon, { backgroundColor: softColor }]}>
-        {icon}
-      </View>
-      <Text style={styles.pantryStatValue}>{value}</Text>
-      <Text numberOfLines={2} style={styles.pantryStatLabel}>
-        {label}
-      </Text>
-    </View>
-  );
-}
-
 function PantrySectionHeader({
   action,
   onPress,
@@ -3445,18 +3258,6 @@ function PantryEditorField({
       />
     </View>
   );
-}
-
-function formatProductCount(count: number): string {
-  if (count === 1) {
-    return "1 produkt";
-  }
-
-  if (count > 1 && count < 5) {
-    return `${count} produkty`;
-  }
-
-  return `${count} produktów`;
 }
 
 function formatPantryDate(value: string): string {

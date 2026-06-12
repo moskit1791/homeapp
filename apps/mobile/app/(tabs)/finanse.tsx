@@ -19,6 +19,7 @@ import {
   Archive,
   Banknote,
   Car,
+  ChartBar,
   Check,
   CheckCircle2,
   CalendarDays,
@@ -26,6 +27,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  Dumbbell,
   Filter,
   Gamepad2,
   Gift,
@@ -33,6 +35,7 @@ import {
   Heart,
   Home,
   Minus,
+  MoreHorizontal,
   PiggyBank,
   Plus,
   ReceiptText,
@@ -41,7 +44,9 @@ import {
   Trash2,
   Users,
   Utensils,
+  Vacuum,
   WalletCards,
+  Wrench,
 } from "../../src/ui/icon";
 import savingsGoalCarImage from "../../assets/savings-goal-car.png";
 import savingsGoalDefaultImage from "../../assets/savings-goal-default.png";
@@ -1343,7 +1348,13 @@ export default function FinanseScreen() {
             }}
             style={styles.financeHeaderActionButton}
           >
-            <Plus color={mockupGreen} size={22} />
+            {activeFinanceView === "debts" ? (
+              <ReceiptText color={mockupGreen} size={23} />
+            ) : activeFinanceView === "savings" ? (
+              <PiggyBank color={mockupGreen} size={24} />
+            ) : (
+              <MoreHorizontal color={mockupGreen} size={25} />
+            )}
           </IconButton>
         ) : undefined
       }
@@ -1370,14 +1381,32 @@ export default function FinanseScreen() {
         onChange={(value) => setActiveFinanceView(value as FinanceView)}
         options={[
           {
+            icon: (active) => (
+              <ChartBar
+                color={active ? mockupGreen : theme.colors.textMuted}
+                size={16}
+              />
+            ),
             label: "Budżet",
             value: "budget",
           },
           {
+            icon: (active) => (
+              <ReceiptText
+                color={active ? mockupGreen : theme.colors.textMuted}
+                size={16}
+              />
+            ),
             label: "Pożyczki",
             value: "debts",
           },
           {
+            icon: (active) => (
+              <PiggyBank
+                color={active ? mockupGreen : theme.colors.textMuted}
+                size={16}
+              />
+            ),
             label: "Oszczędności",
             value: "savings",
           },
@@ -3243,18 +3272,12 @@ function FinanceDebtsList({
                       pressed && styles.pressedRow,
                     ]}
                   >
-                    <View
-                      style={[
-                        styles.debtStatusRing,
-                        debt.isSettled && styles.debtStatusRingDone,
-                      ]}
-                    >
-                      {debt.isSettled ? (
-                        <Check color={theme.colors.finance} size={12} />
-                      ) : null}
-                    </View>
                     <View style={styles.debtRowIcon}>
-                      <Hammer color={theme.colors.finance} size={16} />
+                      {renderDebtPurposeIcon(
+                        debt.purpose,
+                        theme.colors.finance,
+                        17,
+                      )}
                     </View>
                     <View style={styles.debtRowText}>
                       <Text
@@ -3788,7 +3811,7 @@ function FinanceCategoryCards({
                       pressed && styles.pressedRow,
                     ]}
                   >
-                    <Plus color={mockupGreen} size={22} />
+                    <ReceiptText color={mockupGreen} size={22} />
                     <Text style={styles.budgetAddItemText}>Dodaj pozycję</Text>
                   </Pressable>
                 ) : null}
@@ -4170,6 +4193,63 @@ function getBudgetCategoryIcon(categoryName: string, color: string): ReactNode {
   return <ShoppingCart color={color} size={iconSize} />;
 }
 
+function renderDebtPurposeIcon(
+  purpose: string,
+  color: string,
+  iconSize = 18,
+): ReactNode {
+  const normalized = normalizeCategoryName(purpose);
+
+  if (
+    normalized.includes("auto") ||
+    normalized.includes("samochod") ||
+    normalized.includes("corsa") ||
+    normalized.includes("transport")
+  ) {
+    return <Car color={color} size={iconSize} />;
+  }
+
+  if (
+    normalized.includes("silown") ||
+    normalized.includes("ciezar") ||
+    normalized.includes("hantl") ||
+    normalized.includes("lawka") ||
+    normalized.includes("fitness")
+  ) {
+    return <Dumbbell color={color} size={iconSize} />;
+  }
+
+  if (
+    normalized.includes("napraw") ||
+    normalized.includes("remont") ||
+    normalized.includes("serwis")
+  ) {
+    return <Wrench color={color} size={iconSize} />;
+  }
+
+  if (
+    normalized.includes("odkurz") ||
+    normalized.includes("tineco") ||
+    normalized.includes("agd")
+  ) {
+    return <Vacuum color={color} size={iconSize} />;
+  }
+
+  if (normalized.includes("dziec") || normalized.includes("szkol")) {
+    return <Users color={color} size={iconSize} />;
+  }
+
+  if (normalized.includes("telefon") || normalized.includes("komputer")) {
+    return <Smartphone color={color} size={iconSize} />;
+  }
+
+  if (normalized.includes("prezent") || normalized.includes("urodzin")) {
+    return <Gift color={color} size={iconSize} />;
+  }
+
+  return <ReceiptText color={color} size={iconSize} />;
+}
+
 function normalizeCategoryName(value: string): string {
   return value
     .toLocaleLowerCase("pl-PL")
@@ -4534,7 +4614,7 @@ function createStyles(colors: AppPalette) {
       borderColor: colors.line,
       borderTopWidth: 1,
       flexDirection: "row",
-      gap: spacing.sm,
+      gap: 10,
       minHeight: 36,
       paddingHorizontal: spacing.md,
     },
@@ -5214,9 +5294,9 @@ function createStyles(colors: AppPalette) {
       borderColor: colors.line,
       borderRadius: 10,
       borderWidth: 1,
-      height: 34,
+      height: 36,
       justifyContent: "center",
-      width: 34,
+      width: 36,
     },
     debtRowMeta: {
       color: colors.textMuted,
@@ -5275,18 +5355,6 @@ function createStyles(colors: AppPalette) {
       alignItems: "center",
       flexDirection: "row",
       gap: 5,
-    },
-    debtStatusRing: {
-      borderColor: colors.finance,
-      borderRadius: 999,
-      borderWidth: 2,
-      height: 24,
-      width: 24,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    debtStatusRingDone: {
-      backgroundColor: colors.softGreen,
     },
     debtStatusText: {
       color: colors.textMuted,
@@ -5435,12 +5503,13 @@ function createStyles(colors: AppPalette) {
       borderColor: panelBorder,
       borderWidth: 1,
       elevation: 1,
-      height: 38,
+      height: 48,
+      padding: 0,
       shadowColor: "#000000",
       shadowOffset: { height: 4, width: 0 },
       shadowOpacity: panelShadowOpacity,
       shadowRadius: 10,
-      width: 38,
+      width: 48,
     },
     financeMenuGrid: {
       gap: spacing.sm,
