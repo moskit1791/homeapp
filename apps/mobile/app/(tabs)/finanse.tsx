@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import {
+  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -12,6 +13,7 @@ import {
   Text,
   TextInput,
   View,
+  type ImageSourcePropType,
 } from "react-native";
 import {
   Archive,
@@ -31,18 +33,23 @@ import {
   Heart,
   Home,
   Minus,
-  MoreHorizontal,
   PiggyBank,
   Plus,
   ReceiptText,
   ShoppingCart,
   Smartphone,
-  ShieldCheck,
   Trash2,
   Users,
   Utensils,
   WalletCards,
 } from "../../src/ui/icon";
+import savingsGoalCarImage from "../../assets/savings-goal-car.png";
+import savingsGoalDefaultImage from "../../assets/savings-goal-default.png";
+import savingsGoalEmergencyImage from "../../assets/savings-goal-emergency.png";
+import savingsGoalGiftImage from "../../assets/savings-goal-gift.png";
+import savingsGoalHomeImage from "../../assets/savings-goal-home.png";
+import savingsGoalPhoneImage from "../../assets/savings-goal-phone.png";
+import savingsGoalTravelImage from "../../assets/savings-goal-travel.png";
 import {
   createBudgetCategory,
   createBudgetItem,
@@ -1288,6 +1295,16 @@ export default function FinanseScreen() {
     Boolean(selectedMonthId) &&
     monthTabs.length > 1 &&
     !deleteMonthMutation.isPending;
+  const canOpenFinanceActions =
+    activeFinanceView === "budget"
+      ? canCreate || canDelete || canUpdate
+      : canCreate;
+  const financeActionLabel =
+    activeFinanceView === "debts"
+      ? "Dodaj pożyczkę"
+      : activeFinanceView === "savings"
+        ? "Dodaj cel oszczędnościowy"
+        : "Akcje finansów";
 
   if (permissionsQuery.isLoading) {
     return (
@@ -1308,34 +1325,33 @@ export default function FinanseScreen() {
   return (
     <AppScreen
       actions={
-        <IconButton
-          accessibilityLabel="Menu finansów"
-          onPress={() => setFinanceModal("menu")}
-          style={styles.financeHeaderMenuButton}
-        >
-          <MoreHorizontal color={theme.colors.text} size={20} />
-        </IconButton>
+        canOpenFinanceActions ? (
+          <IconButton
+            accessibilityLabel={financeActionLabel}
+            onPress={() => {
+              if (activeFinanceView === "debts") {
+                openCreateDebt();
+                return;
+              }
+
+              if (activeFinanceView === "savings") {
+                openCreateSavingsAccount();
+                return;
+              }
+
+              setFinanceModal("menu");
+            }}
+            style={styles.financeHeaderActionButton}
+          >
+            <Plus color={mockupGreen} size={22} />
+          </IconButton>
+        ) : undefined
       }
       contentStyle={styles.financeScreenContent}
-      floatingAction={
-        activeFinanceView === "savings" && canCreate ? (
-          <Pressable
-            accessibilityLabel="Dodaj cel oszczędnościowy"
-            accessibilityRole="button"
-            onPress={openCreateSavingsAccount}
-            style={({ pressed }) => [
-              styles.financeFloatingAction,
-              pressed && styles.financeFloatingActionPressed,
-            ]}
-          >
-            <Plus color={theme.colors.inverseText} size={30} />
-          </Pressable>
-        ) : null
+      backgroundColor={
+        theme.colors.background === "#0C1220" ? theme.colors.background : "#FBFAF6"
       }
-      backgroundColor="#FCFAF5"
       title="Finanse"
-      titleStyle={styles.financeTitle}
-      titleVariant="display"
     >
       {!summary ? (
         <QueryState
@@ -1358,7 +1374,7 @@ export default function FinanseScreen() {
             value: "budget",
           },
           {
-            label: "Pożyczki/Debety",
+            label: "Pożyczki",
             value: "debts",
           },
           {
@@ -1473,15 +1489,6 @@ export default function FinanseScreen() {
               {formatMoney(remainingAmount, currencyCode)}
             </Text>
           </View>
-
-          {canRead ? (
-            <Pressable
-              onPress={() => setFinanceModal("menu")}
-              style={styles.fab}
-            >
-              <Plus color={theme.colors.card} size={25} />
-            </Pressable>
-          ) : null}
 
           <FormModal
             onClose={closeFinanceModal}
@@ -2182,7 +2189,7 @@ export default function FinanseScreen() {
             settledCount={settledDebts.length}
           />
           <QueryState
-            emptyText="Brak pożyczek i debetów."
+            emptyText="Brak pożyczek."
             error={debtsQuery.error}
             isEmpty={!debtsQuery.isLoading && debts.length === 0}
             isLoading={debtsQuery.isLoading}
@@ -2193,11 +2200,6 @@ export default function FinanseScreen() {
             debts={debts}
             onEdit={openEditDebt}
           />
-          {canCreate ? (
-            <Pressable onPress={openCreateDebt} style={styles.fab}>
-              <Plus color={theme.colors.card} size={25} />
-            </Pressable>
-          ) : null}
           <FormModal
             footer={
               <View style={styles.debtModalFooter}>
@@ -2222,7 +2224,7 @@ export default function FinanseScreen() {
             }
             onClose={closeFinanceModal}
             showCloseButton={false}
-            title={editingDebt ? "Edytuj pożyczkę" : "Dodaj pożyczkę/debet"}
+            title={editingDebt ? "Edytuj pożyczkę" : "Dodaj pożyczkę"}
             visible={financeModal === "debt"}
           >
             <View style={styles.debtEditorPreview}>
@@ -2332,96 +2334,6 @@ export default function FinanseScreen() {
           ) : null}
         </>
       ) : null}
-      <FormModal
-        footer={
-          <View style={styles.modalFooter}>
-            <ActionButton
-              onPress={closeFinanceModal}
-              style={styles.modalFooterButton}
-              title="Zamknij"
-              variant="secondary"
-            />
-          </View>
-        }
-        onClose={closeFinanceModal}
-        subtitle="Szybkie akcje dla finansów domu."
-        title="Menu finansów"
-        visible={financeModal === "menu"}
-      >
-        <View style={styles.financeMenuGrid}>
-          {activeFinanceView === "budget" ? (
-            <>
-              <ActionButton
-                onPress={() => {
-                  closeFinanceModal();
-                  openExpenseModal();
-                }}
-                title="Dodaj wydatek"
-              />
-              <ActionButton
-                onPress={() => {
-                  closeFinanceModal();
-                  const firstCategory = categories[0];
-
-                  if (firstCategory) {
-                    openItemModalForCategory(firstCategory);
-                  }
-                }}
-                title="Nowa pozycja"
-                variant="secondary"
-              />
-              <ActionButton
-                onPress={() => {
-                  closeFinanceModal();
-                  setFinanceModal("generateMonth");
-                }}
-                title="Generuj miesiąc"
-                variant="secondary"
-              />
-              {canDelete ? (
-                <ActionButton
-                  onPress={() => {
-                    closeFinanceModal();
-                    setDeleteMonthConfirmVisible(true);
-                  }}
-                  title="Usuń miesiąc"
-                  variant="ghost"
-                />
-              ) : null}
-            </>
-          ) : null}
-          {activeFinanceView === "debts" ? (
-            <ActionButton
-              onPress={() => {
-                closeFinanceModal();
-                openCreateDebt();
-              }}
-              title="Nowa pożyczka"
-            />
-          ) : null}
-          {activeFinanceView === "savings" ? (
-            <>
-              <ActionButton
-                onPress={() => {
-                  closeFinanceModal();
-                  openCreateSavingsAccount();
-                }}
-                title="Nowy cel"
-              />
-              {nextSavingsGoal ? (
-                <ActionButton
-                  onPress={() => {
-                    closeFinanceModal();
-                    openSavingsDetails(nextSavingsGoal);
-                  }}
-                  title="Najbliższy cel"
-                  variant="secondary"
-                />
-              ) : null}
-            </>
-          ) : null}
-        </View>
-      </FormModal>
       <FormModal
         footer={
           <View style={styles.modalFooter}>
@@ -2551,11 +2463,15 @@ export default function FinanseScreen() {
             <View style={styles.savingsDetailsHeader}>
               <View
                 style={[
-                  styles.savingsGoalIcon,
-                  styles.savingsDetailsIcon,
+                  styles.savingsGoalImageFrame,
+                  styles.savingsDetailsImageFrame,
                 ]}
               >
-                {getSavingsGoalIcon(selectedSavingsGoal.name, theme.colors.finance)}
+                <Image
+                  resizeMode="contain"
+                  source={getSavingsGoalImage(selectedSavingsGoal.name)}
+                  style={styles.savingsDetailsImage}
+                />
               </View>
               <View style={styles.savingsDetailsText}>
                 <Text style={styles.savingsDetailsTitle}>
@@ -2757,23 +2673,6 @@ function FinanceSummaryCard({
             {spentPercent}%
           </Text>
           <Text style={styles.financeSummaryRingLabel}>wykorzystane</Text>
-        </View>
-        <View style={styles.financeSummaryCenterMeta}>
-          <Text style={[styles.financeSummaryMetaLabel, isOverBudget && styles.dangerText]}>
-            {isOverBudget ? "Przekroczono o" : "Zostaje"}
-          </Text>
-          <Text
-            numberOfLines={1}
-            style={[
-              styles.financeSummaryMetaValue,
-              isOverBudget ? styles.dangerText : styles.positiveText,
-            ]}
-          >
-            {formatMoney(
-              isOverBudget ? Math.abs(remainingAmount) : remainingAmount,
-              currencyCode,
-            )}
-          </Text>
         </View>
       </View>
 
@@ -3044,11 +2943,12 @@ function SavingsGoalRow({
       onPress={() => onOpenGoal(goal)}
       style={({ pressed }) => [styles.savingsGoalRow, pressed && styles.pressedRow]}
     >
-      <View style={styles.savingsGoalRing}>
-        <SavingsGoalRing progress={goal.progressRatio} />
-      </View>
-      <View style={styles.savingsGoalIcon}>
-        {getSavingsGoalIcon(goal.name, theme.colors.finance)}
+      <View style={styles.savingsGoalImageFrame}>
+        <Image
+          resizeMode="contain"
+          source={getSavingsGoalImage(goal.name)}
+          style={styles.savingsGoalImage}
+        />
       </View>
       <View style={styles.savingsGoalText}>
         <Text numberOfLines={1} style={styles.savingsGoalTitle}>
@@ -3090,36 +2990,6 @@ function SavingsGoalRow({
       </View>
       <ChevronRight color={theme.colors.textMuted} size={18} />
     </Pressable>
-  );
-}
-
-function SavingsGoalRing({ progress }: { progress: number }) {
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
-  const segmentCount = 18;
-  const filledSegments = Math.round(progress * segmentCount);
-
-  return (
-    <View style={styles.savingsGoalRingOuter}>
-      {Array.from({ length: segmentCount }).map((_, index) => {
-        const angle = (360 / segmentCount) * index;
-        const isFilled = index < filledSegments;
-
-        return (
-          <View
-            key={index}
-            style={[
-              styles.savingsGoalRingSegment,
-              {
-                backgroundColor: isFilled ? theme.colors.finance : theme.colors.line,
-                transform: [{ rotate: `${angle}deg` }, { translateY: -12 }],
-              },
-            ]}
-          />
-        );
-      })}
-      <View style={styles.savingsGoalRingInner} />
-    </View>
   );
 }
 
@@ -3432,12 +3302,6 @@ function FinanceDebtsList({
           </View>
         );
       })}
-      <View style={styles.debtSwipeHint}>
-        <MoreHorizontal color={theme.colors.textSubtle} size={20} />
-        <Text style={styles.debtSwipeHintText}>
-          Dotknij pozycję, aby edytować lub usunąć
-        </Text>
-      </View>
     </View>
   );
 }
@@ -4383,38 +4247,34 @@ function getMemberAccent(seed: string): {
   return accents[hash % accents.length] ?? fallback;
 }
 
-function getSavingsGoalIcon(goalName: string, color: string): ReactNode {
-  const normalized = goalName.toLocaleLowerCase("pl-PL");
+function getSavingsGoalImage(goalName: string): ImageSourcePropType {
+  const normalized = normalizeCategoryName(goalName);
 
-  if (/(wakacj|urlop|podr[oó]ż|podroz|wyjazd|travel)/.test(normalized)) {
-    return <Gift color={color} size={18} />;
+  if (/(wakacj|urlop|podroz|wyjazd|travel|hotel|lot)/.test(normalized)) {
+    return savingsGoalTravelImage;
   }
 
-  if (/(bezpiec|podusz|awary|rezerwa)/.test(normalized)) {
-    return <ShieldCheck color={color} size={18} />;
+  if (/(bezpiec|podusz|awary|rezerwa|fundusz|spokoj)/.test(normalized)) {
+    return savingsGoalEmergencyImage;
   }
 
-  if (/(telefon|smartfon|iphone|android|kom[oó]r)/.test(normalized)) {
-    return <Smartphone color={color} size={18} />;
+  if (/(telefon|smartfon|iphone|android|komor|laptop|tablet|elektronik)/.test(normalized)) {
+    return savingsGoalPhoneImage;
   }
 
-  if (/(dom|mieszkan|remont|mebl|ogr[oó]d)/.test(normalized)) {
-    return <Home color={color} size={18} />;
+  if (/(dom|mieszkan|remont|mebl|ogrod|kuchni|lazienk)/.test(normalized)) {
+    return savingsGoalHomeImage;
   }
 
   if (/(auto|samoch|car|warsztat)/.test(normalized)) {
-    return <Car color={color} size={18} />;
+    return savingsGoalCarImage;
   }
 
-  if (/(dzieci|rodzin|rodzina|wsp[oó]lne)/.test(normalized)) {
-    return <Users color={color} size={18} />;
+  if (/(dzieci|rodzin|rodzina|wspolne|prezent|swieta|urodzin|gift)/.test(normalized)) {
+    return savingsGoalGiftImage;
   }
 
-  if (/(prezent|święta|swieta|gift)/.test(normalized)) {
-    return <Heart color={color} size={18} />;
-  }
-
-  return <PiggyBank color={color} size={18} />;
+  return savingsGoalDefaultImage;
 }
 
 function parseMoney(value: string): number {
@@ -4491,6 +4351,11 @@ function formatMonthLong(month: BudgetMonth): string {
 }
 
 function createStyles(colors: AppPalette) {
+  const isDark = colors.background === "#0C1220";
+  const panelBackground = isDark ? colors.card : "#FFFFFF";
+  const panelBorder = isDark ? colors.border : "#E8DED2";
+  const panelShadowOpacity = isDark ? 0.18 : 0.065;
+
   return StyleSheet.create({
     actionPicker: {
       gap: spacing.sm,
@@ -4598,11 +4463,16 @@ function createStyles(colors: AppPalette) {
       paddingBottom: spacing.sm,
     },
     budgetAccordionCard: {
-      backgroundColor: colors.card,
-      borderColor: "#F1EDE7",
+      backgroundColor: panelBackground,
+      borderColor: panelBorder,
       borderRadius: 12,
       borderWidth: 1,
+      elevation: 2,
       overflow: "hidden",
+      shadowColor: "#000000",
+      shadowOffset: { height: 10, width: 0 },
+      shadowOpacity: panelShadowOpacity,
+      shadowRadius: 22,
     },
     budgetAccordionHeader: {
       alignItems: "center",
@@ -5157,11 +5027,16 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
     },
     debtGroupCard: {
-      backgroundColor: colors.card,
-      borderColor: colors.border,
+      backgroundColor: panelBackground,
+      borderColor: panelBorder,
       borderRadius: 12,
       borderWidth: 1,
+      elevation: 2,
       overflow: "hidden",
+      shadowColor: "#000000",
+      shadowOffset: { height: 10, width: 0 },
+      shadowOpacity: panelShadowOpacity,
+      shadowRadius: 22,
     },
     debtGroupCountBadge: {
       alignItems: "center",
@@ -5245,15 +5120,20 @@ function createStyles(colors: AppPalette) {
     },
     debtOverviewCard: {
       alignItems: "center",
-      backgroundColor: colors.card,
-      borderColor: colors.border,
+      backgroundColor: panelBackground,
+      borderColor: panelBorder,
       borderRadius: 12,
       borderWidth: 1,
+      elevation: 2,
       flexDirection: "row",
       gap: 10,
       minHeight: 82,
       paddingHorizontal: 10,
       paddingVertical: 9,
+      shadowColor: "#000000",
+      shadowOffset: { height: 10, width: 0 },
+      shadowOpacity: panelShadowOpacity,
+      shadowRadius: 22,
     },
     debtOverviewDivider: {
       alignSelf: "stretch",
@@ -5550,43 +5430,25 @@ function createStyles(colors: AppPalette) {
       fontWeight: "900",
       letterSpacing: 0,
     },
-    financeFloatingAction: {
-      alignItems: "center",
-      backgroundColor: colors.finance,
-      borderColor: colors.finance,
-      borderRadius: 999,
-      elevation: 8,
-      height: 58,
-      justifyContent: "center",
-      shadowColor: colors.finance,
-      shadowOffset: { height: 8, width: 0 },
-      shadowOpacity: 0.24,
-      shadowRadius: 18,
-      width: 58,
-    },
-    financeFloatingActionPressed: {
-      opacity: 0.86,
-    },
-    financeHeaderMenuButton: {
-      alignItems: "center",
-      backgroundColor: colors.card,
-      borderColor: colors.border,
-      borderRadius: 999,
+    financeHeaderActionButton: {
+      backgroundColor: panelBackground,
+      borderColor: panelBorder,
       borderWidth: 1,
-      height: 32,
-      justifyContent: "center",
-      width: 32,
+      elevation: 1,
+      height: 38,
+      shadowColor: "#000000",
+      shadowOffset: { height: 4, width: 0 },
+      shadowOpacity: panelShadowOpacity,
+      shadowRadius: 10,
+      width: 38,
     },
     financeMenuGrid: {
       gap: spacing.sm,
     },
     financeScreenContent: {
       gap: 12,
-      paddingBottom: 160,
+      paddingBottom: 128,
       paddingTop: 2,
-    },
-    financeTitle: {
-      fontWeight: "400",
     },
     savingsDetailsCard: {
       backgroundColor: colors.cardMuted,
@@ -5595,6 +5457,14 @@ function createStyles(colors: AppPalette) {
       borderWidth: 1,
       gap: spacing.sm,
       padding: spacing.md,
+    },
+    savingsDetailsImage: {
+      height: 64,
+      width: 64,
+    },
+    savingsDetailsImageFrame: {
+      height: 72,
+      width: 72,
     },
     savingsDetailsHeader: {
       alignItems: "center",
@@ -5652,11 +5522,16 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
     },
     savingsGroupCard: {
-      backgroundColor: colors.card,
-      borderColor: colors.border,
+      backgroundColor: panelBackground,
+      borderColor: panelBorder,
       borderRadius: radii.card,
       borderWidth: 1,
+      elevation: 2,
       overflow: "hidden",
+      shadowColor: "#000000",
+      shadowOffset: { height: 10, width: 0 },
+      shadowOpacity: panelShadowOpacity,
+      shadowRadius: 22,
     },
     savingsGroupChevron: {
       alignItems: "center",
@@ -5728,15 +5603,15 @@ function createStyles(colors: AppPalette) {
       gap: 2,
       minWidth: 78,
     },
-    savingsGoalIcon: {
+    savingsGoalImage: {
+      height: 48,
+      width: 48,
+    },
+    savingsGoalImageFrame: {
       alignItems: "center",
-      backgroundColor: colors.softGreen,
-      borderColor: colors.line,
-      borderRadius: 10,
-      borderWidth: 1,
-      height: 34,
+      height: 52,
       justifyContent: "center",
-      width: 34,
+      width: 52,
     },
     savingsGoalList: {
       gap: 0,
@@ -5772,36 +5647,6 @@ function createStyles(colors: AppPalette) {
       height: 4,
       overflow: "hidden",
       width: "100%",
-    },
-    savingsGoalRing: {
-      alignItems: "center",
-      height: 30,
-      justifyContent: "center",
-      width: 30,
-    },
-    savingsGoalRingInner: {
-      backgroundColor: colors.card,
-      borderColor: colors.line,
-      borderRadius: 999,
-      borderWidth: 1,
-      height: 18,
-      position: "absolute",
-      width: 18,
-    },
-    savingsGoalRingOuter: {
-      alignItems: "center",
-      height: 30,
-      justifyContent: "center",
-      position: "relative",
-      width: 30,
-    },
-    savingsGoalRingSegment: {
-      borderRadius: 999,
-      height: 7,
-      left: 14,
-      position: "absolute",
-      top: 11,
-      width: 3,
     },
     savingsGoalRow: {
       alignItems: "center",
@@ -5881,13 +5726,18 @@ function createStyles(colors: AppPalette) {
     },
     savingsSummaryCard: {
       alignItems: "center",
-      backgroundColor: colors.card,
-      borderColor: colors.border,
+      backgroundColor: panelBackground,
+      borderColor: panelBorder,
       borderRadius: 16,
       borderWidth: 1,
+      elevation: 2,
       flexDirection: "row",
       gap: spacing.sm,
       padding: 10,
+      shadowColor: "#000000",
+      shadowOffset: { height: 10, width: 0 },
+      shadowOpacity: panelShadowOpacity,
+      shadowRadius: 22,
     },
     savingsSummaryHeader: {
       alignItems: "center",
@@ -6174,21 +6024,6 @@ function createStyles(colors: AppPalette) {
     generateItemRowMuted: {
       opacity: 0.64,
     },
-    fab: {
-      alignItems: "center",
-      alignSelf: "center",
-      backgroundColor: mockupGreen,
-      borderRadius: 999,
-      elevation: 5,
-      height: 54,
-      justifyContent: "center",
-      marginTop: spacing.xs,
-      shadowColor: mockupGreen,
-      shadowOffset: { height: 10, width: 0 },
-      shadowOpacity: 0.12,
-      shadowRadius: 18,
-      width: 54,
-    },
     filterChip: {
       alignItems: "center",
       backgroundColor: colors.card,
@@ -6377,8 +6212,8 @@ function createStyles(colors: AppPalette) {
     },
     financeSummaryCard: {
       alignItems: "center",
-      backgroundColor: colors.overlay,
-      borderColor: "#F1EDE7",
+      backgroundColor: panelBackground,
+      borderColor: panelBorder,
       borderRadius: 14,
       borderWidth: 1,
       elevation: 2,
@@ -6391,7 +6226,7 @@ function createStyles(colors: AppPalette) {
       paddingVertical: 10,
       shadowColor: "#000000",
       shadowOffset: { height: 10, width: 0 },
-      shadowOpacity: 0.055,
+      shadowOpacity: panelShadowOpacity,
       shadowRadius: 22,
     },
     financeSummaryCenter: {
@@ -6408,14 +6243,6 @@ function createStyles(colors: AppPalette) {
       position: "absolute",
       right: 0,
       top: 18,
-    },
-    financeSummaryCenterMeta: {
-      alignItems: "center",
-      gap: 1,
-      left: 0,
-      position: "absolute",
-      right: 0,
-      top: 68,
     },
     financeSummaryLabel: {
       fontSize: 9,
@@ -6466,18 +6293,6 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
       maxWidth: 64,
       textAlign: "center",
-    },
-    financeSummaryMetaLabel: {
-      color: colors.textMuted,
-      fontSize: 8,
-      fontWeight: "700",
-      letterSpacing: 0,
-      textTransform: "uppercase",
-    },
-    financeSummaryMetaValue: {
-      fontSize: 9,
-      fontWeight: "700",
-      letterSpacing: 0,
     },
     financeSummarySide: {
       alignItems: "center",

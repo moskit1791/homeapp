@@ -48,7 +48,6 @@ import {
   MoreHorizontal,
   ReceiptText,
   ShoppingCart,
-  Sun,
 } from "../../src/ui/icon";
 import calendarCardImage from "../../assets/today-calendar-card.png";
 import mealCardImage from "../../assets/today-meal-card.png";
@@ -242,10 +241,8 @@ export default function DzisiajScreen() {
       }
       backgroundColor={screenBackground}
       contentStyle={styles.todayContent}
-      title="Dzisiaj"
-      titleAlign="center"
-      titleStyle={styles.todayTitle}
-      titleVariant="display"
+      subtitle="Masz dziś kilka planów do realizacji."
+      title={`${greetingTitle()}!`}
     >
       <AppToast offsetTop={74} text={toast} />
       <QueryState
@@ -271,16 +268,6 @@ export default function DzisiajScreen() {
           pushNotifications={pushNotifications}
         />
       ) : null}
-
-      <View style={styles.greetingBlock}>
-        <View style={styles.greetingTitleRow}>
-          <Text style={styles.greetingTitle}>{greetingTitle()}!</Text>
-          <Sun color={theme.colors.food} size={28} />
-        </View>
-        <Text style={styles.greetingSubtitle}>
-          Masz dziś kilka planów do realizacji.
-        </Text>
-      </View>
 
       <View style={styles.quickSection}>
         <View style={styles.quickGrid}>
@@ -838,7 +825,7 @@ function QuickAction({
         pressed && styles.quickActionPressed,
       ]}
     >
-      <View style={[styles.quickIcon, { backgroundColor: `${accent}18` }]}>
+      <View style={[styles.quickIcon, { backgroundColor: `${accent}10` }]}>
         {icon}
       </View>
       <View style={styles.quickText}>
@@ -977,6 +964,8 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
   const todayPanelMuted = isDark ? colors.textMuted : "#5F635F";
   const todayPanelEyebrow = isDark ? colors.finance : mockupGreen;
   const todayPanelShadowOpacity = isDark ? 0.18 : 0.045;
+  const quickActionBackground = isDark ? colors.card : "#FFFCF6";
+  const quickActionPressedBackground = isDark ? colors.cardMuted : "#FFF6EA";
 
   return StyleSheet.create({
     bellDot: {
@@ -1005,11 +994,6 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       gap: isNarrow ? 11 : spacing.lg,
       paddingHorizontal: contentPadding,
     },
-    todayTitle: {
-      fontSize: isNarrow ? 31 : 40,
-      fontWeight: "700",
-      lineHeight: isNarrow ? 38 : 48,
-    },
     greetingBlock: {
       gap: spacing.xs,
       paddingTop: spacing.xs,
@@ -1024,7 +1008,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       color: todayPanelText,
       fontFamily: displayFontFamily,
       fontSize: 23,
-      fontWeight: "700",
+      fontWeight: "400",
       letterSpacing: 0,
       lineHeight: 30,
     },
@@ -1091,20 +1075,20 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
     nextEventCtaText: {
       color: mockupGreen,
       fontSize: 12,
-      fontWeight: "800",
+      fontWeight: "700",
       letterSpacing: 0,
     },
     nextEventDetails: {
       color: todayPanelMuted,
       fontSize: 14,
-      fontWeight: "600",
+      fontWeight: "500",
       letterSpacing: 0,
       lineHeight: 20,
     },
     nextEventEyebrow: {
       color: todayPanelEyebrow,
       fontSize: 11,
-      fontWeight: "800",
+      fontWeight: "700",
       letterSpacing: 0,
       textTransform: "uppercase",
     },
@@ -1144,7 +1128,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       color: todayPanelText,
       fontFamily: displayFontFamily,
       fontSize: isNarrow ? 22 : 24,
-      fontWeight: "700",
+      fontWeight: "400",
       letterSpacing: 0,
       lineHeight: isNarrow ? 27 : 30,
       marginTop: spacing.sm,
@@ -1196,7 +1180,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
     },
     miniTodayCaption: {
       fontSize: isNarrow ? 13 : 15,
-      fontWeight: "900",
+      fontWeight: "700",
       letterSpacing: 0,
       lineHeight: isNarrow ? 18 : 20,
       maxWidth: isNarrow ? 100 : 82,
@@ -1229,7 +1213,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       color: todayPanelText,
       fontFamily: displayFontFamily,
       fontSize: 16,
-      fontWeight: "700",
+      fontWeight: "400",
       letterSpacing: 0,
       lineHeight: 20,
       maxWidth: isNarrow ? 132 : 112,
@@ -1295,7 +1279,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       color: colors.text,
       flex: 1,
       fontSize: 12,
-      fontWeight: "700",
+      fontWeight: "600",
       letterSpacing: 0,
       lineHeight: 15,
       minWidth: 0,
@@ -1305,7 +1289,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       fontFamily: displayFontFamily,
       flexShrink: 1,
       fontSize: isNarrow ? 17 : 18,
-      fontWeight: "700",
+      fontWeight: "400",
       letterSpacing: 0,
     },
     todoCountPill: {
@@ -1337,7 +1321,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
     todoSeeAllText: {
       color: mockupGreen,
       fontSize: 12,
-      fontWeight: "800",
+      fontWeight: "600",
       letterSpacing: 0,
       maxWidth: "86%",
     },
@@ -1511,7 +1495,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
     },
     quickAction: {
       alignItems: "center",
-      backgroundColor: colors.overlay,
+      backgroundColor: quickActionBackground,
       borderColor: todayPanelBorder,
       borderRadius: 16,
       borderWidth: 1,
@@ -1534,13 +1518,13 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       shadowRadius: 18,
     },
     quickActionPressed: {
-      backgroundColor: colors.cardMuted,
+      backgroundColor: quickActionPressedBackground,
       opacity: 0.86,
     },
     quickCaption: {
       color: mockupGreen,
       fontSize: isNarrow ? 11 : 13,
-      fontWeight: "700",
+      fontWeight: "600",
       letterSpacing: 0,
       lineHeight: 16,
     },
@@ -1565,7 +1549,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
     quickLabel: {
       color: colors.text,
       fontSize: isNarrow ? 14 : 17,
-      fontWeight: "800",
+      fontWeight: "600",
       letterSpacing: 0,
       lineHeight: isNarrow ? 18 : 22,
     },

@@ -1,6 +1,5 @@
 import { PropsWithChildren, ReactNode, RefObject } from "react";
 import {
-  Platform,
   ScrollView,
   StyleProp,
   StyleSheet,
@@ -118,16 +117,18 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       gap: spacing.sm,
     },
     header: {
-      alignItems: "center",
+      alignItems: "flex-start",
       flexDirection: "row",
       gap: spacing.md,
       justifyContent: "space-between",
-      marginBottom: spacing.xs,
-      minHeight: 42,
+      marginBottom: spacing.sm,
+      minHeight: 48,
     },
     headerText: {
       flex: 1,
       gap: spacing.xs,
+      minWidth: 0,
+      paddingTop: 1,
     },
     headerTextCentered: {
       alignItems: "center",
@@ -149,20 +150,15 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
     },
     title: {
       color: colors.text,
-      fontSize: 23,
+      fontSize: 24,
       fontWeight: "800",
       letterSpacing: 0,
+      lineHeight: 30,
     },
     displayTitle: {
-      fontFamily: Platform.select({
-        android: "serif",
-        default: "Georgia",
-        ios: "Georgia",
-        web: "Georgia",
-      }),
-      fontSize: isNarrow ? 31 : 40,
-      fontWeight: "900",
-      lineHeight: isNarrow ? 38 : 48,
+      fontSize: isNarrow ? 24 : 26,
+      fontWeight: "800",
+      lineHeight: isNarrow ? 30 : 32,
     },
     floatingAction: {
       alignItems: "center",

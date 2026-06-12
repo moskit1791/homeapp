@@ -77,14 +77,13 @@ export default function TabsLayout() {
         tabBarInactiveTintColor: theme.colors.textMuted,
         tabBarHideOnKeyboard: true,
         tabBarIconStyle: {
-          alignItems: "stretch",
-          flex: 1,
+          alignItems: "center",
           height: 48,
           justifyContent: "center",
-          width: "100%",
+          width: 48,
         },
         tabBarItemStyle: {
-          alignItems: "stretch",
+          alignItems: "center",
           flex: 1,
           height: 48,
           justifyContent: "center",
@@ -120,7 +119,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <TabGlyph
               focused={focused}
-              icon={(color) => <Sun color={color} size={21} />}
+              icon={(color) => <Sun color={color} size={24} />}
             />
           ),
         }}
@@ -133,7 +132,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <TabGlyph
               focused={focused}
-              icon={(color) => <CalendarDays color={color} size={21} />}
+              icon={(color) => <CalendarDays color={color} size={24} />}
             />
           ),
         }}
@@ -146,7 +145,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <TabGlyph
               focused={focused}
-              icon={(color) => <WalletCards color={color} size={21} />}
+              icon={(color) => <WalletCards color={color} size={24} />}
             />
           ),
         }}
@@ -159,7 +158,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <TabGlyph
               focused={focused}
-              icon={(color) => <Utensils color={color} size={21} />}
+              icon={(color) => <Utensils color={color} size={24} />}
             />
           ),
         }}
@@ -172,7 +171,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <TabGlyph
               focused={focused}
-              icon={(color) => <CheckSquare color={color} size={21} />}
+              icon={(color) => <CheckSquare color={color} size={24} />}
             />
           ),
         }}
@@ -185,7 +184,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <TabGlyph
               focused={focused}
-              icon={(color) => <ShoppingCart color={color} size={21} />}
+              icon={(color) => <ShoppingCart color={color} size={24} />}
             />
           ),
         }}
@@ -198,7 +197,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <TabGlyph
               focused={focused}
-              icon={(color) => <Utensils color={color} size={21} />}
+              icon={(color) => <Utensils color={color} size={24} />}
             />
           ),
         }}
@@ -218,7 +217,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused }) => (
             <TabGlyph
               focused={focused}
-              icon={(color) => <Home color={color} size={21} />}
+              icon={(color) => <Home color={color} size={24} />}
             />
           ),
         }}
@@ -228,7 +227,12 @@ export default function TabsLayout() {
         options={{
           href: null,
           title: "Więcej",
-          tabBarIcon: ({ color }) => <MoreHorizontal color={color} size={21} />,
+          tabBarIcon: ({ focused }) => (
+            <TabGlyph
+              focused={focused}
+              icon={(color) => <MoreHorizontal color={color} size={24} />}
+            />
+          ),
         }}
       />
     </Tabs>
@@ -268,21 +272,17 @@ const styles = StyleSheet.create({
   },
   tabGlyph: {
     alignItems: "center",
-    alignSelf: "stretch",
     borderColor: "transparent",
-    borderRadius: 18,
     elevation: 0,
-    flex: 1,
+    height: 42,
     justifyContent: "center",
     marginHorizontal: 1,
-    minHeight: 42,
-    paddingHorizontal: 2,
-    paddingVertical: 5,
+    width: 44,
   },
   tabIconSlot: {
     alignItems: "center",
-    borderRadius: 16,
-    height: 38,
+    borderRadius: 999,
+    height: 40,
     justifyContent: "center",
     width: 40,
   },

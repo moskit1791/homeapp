@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Image,
   Linking,
   Platform,
   Pressable,
@@ -60,11 +61,11 @@ import {
   ChevronLeft,
   ChevronRight,
   ExternalLink,
-  Google,
   Pencil,
   Plus,
   Trash2,
 } from "../../src/ui/icon";
+import googleGImage from "../../assets/google-g.png";
 
 type CalendarViewMode = "month" | "week";
 type _AgendaSegment = "notes" | "todo";
@@ -216,6 +217,7 @@ export default function KalendarzScreen() {
     mutationFn: (event: CalendarEvent) =>
       deleteCalendarEvent(getEditableCalendarEventId(event), { accessToken }),
     onSuccess: async () => {
+      closeEventModal();
       await queryClient.invalidateQueries({ queryKey: queryKeys.calendar });
       await queryClient.invalidateQueries({ queryKey: queryKeys.start });
     },
@@ -451,11 +453,13 @@ export default function KalendarzScreen() {
                   googleCalendarConnected && styles.googleHeaderButtonConnected,
                 ]}
               >
-                <Google
-                  color={
-                    googleCalendarPending ? theme.colors.textSubtle : "#DB4437"
-                  }
-                  size={19}
+                <Image
+                  resizeMode="contain"
+                  source={googleGImage}
+                  style={[
+                    styles.googleHeaderImage,
+                    googleCalendarPending && styles.googleHeaderImageDisabled,
+                  ]}
                 />
                 {googleCalendarConnected ? (
                   <View style={styles.headerStatusDot} />
@@ -468,7 +472,7 @@ export default function KalendarzScreen() {
                 onPress={() => openCreateEvent()}
                 style={[styles.headerIconButton, styles.addHeaderButton]}
               >
-                <CalendarPlus color={theme.colors.text} size={20} />
+                <CalendarPlus color={mockupGreen} size={20} />
               </IconButton>
             ) : null}
           </View>
@@ -477,8 +481,6 @@ export default function KalendarzScreen() {
       backgroundColor={screenBackground}
       contentStyle={styles.calendarScreenContent}
       title="Kalendarz"
-      titleStyle={styles.calendarTitle}
-      titleVariant="display"
     >
       <CalendarViewToggle onChange={setCalendarView} value={calendarView} />
 
@@ -503,16 +505,6 @@ export default function KalendarzScreen() {
           <ChevronRight color={theme.colors.text} size={18} />
         </IconButton>
       </View>
-
-      {calendarView !== "month" ? (
-        <View style={styles.weekPanel}>
-          <WeekStrip onSelectDate={selectDate} selectedDate={selectedDate} />
-          <SelectedDaySummary
-            date={selectedDate}
-            eventCount={selectedDayEvents.length}
-          />
-        </View>
-      ) : null}
 
       {calendarToast ? (
         <View
@@ -542,25 +534,18 @@ export default function KalendarzScreen() {
             selectedDate={selectedDate}
           />
         ) : (
-          <AgendaTimeline
-            canCreate={calendarPermission.canCreate}
-            canDelete={calendarPermission.canDelete}
-            canUpdate={calendarPermission.canUpdate}
-            date={selectedDate}
-            deleting={deleteEventMutation.isPending}
-            error={monthEventsQuery.error}
-            events={selectedDayEvents}
+          <CalendarWeek
+            events={monthEventsQuery.data ?? []}
             isLoading={monthEventsQuery.isLoading}
-            onCreate={() => openCreateEvent(selectedDate)}
-            onDelete={(event) => deleteEventMutation.mutate(event)}
-            onEdit={openEditEvent}
+            onSelectDate={selectDate}
+            selectedDate={selectedDate}
           />
         )
       ) : (
         <InlineAlert text="Nie masz uprawnienia do kalendarza." />
       )}
 
-      {calendarPermission.canRead && calendarView === "month" ? (
+      {calendarPermission.canRead ? (
         <UpcomingEvents
           canUpdate={calendarPermission.canUpdate}
           date={selectedDate}
@@ -570,19 +555,6 @@ export default function KalendarzScreen() {
           onCreate={() => openCreateEvent(selectedDate)}
           query={monthEventsQuery}
         />
-      ) : null}
-
-      {calendarPermission.canCreate && calendarView !== "month" ? (
-        <View style={styles.fabRow}>
-          <Pressable
-            accessibilityLabel="Dodaj wydarzenie"
-            accessibilityRole="button"
-            onPress={() => openCreateEvent(selectedDate)}
-            style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
-          >
-            <Plus color={theme.colors.inverseText} size={27} />
-          </Pressable>
-        </View>
       ) : null}
 
       <FormModal
@@ -601,6 +573,16 @@ export default function KalendarzScreen() {
               style={styles.modalFooterButton}
               title={editingEvent ? "Zapisz" : "Dodaj"}
             />
+            {editingEvent && calendarPermission.canDelete ? (
+              <IconButton
+                accessibilityLabel="Usuń wydarzenie"
+                disabled={deleteEventMutation.isPending}
+                onPress={() => deleteEventMutation.mutate(editingEvent)}
+                style={styles.modalDeleteButton}
+              >
+                <Trash2 color={theme.colors.danger} size={19} />
+              </IconButton>
+            ) : null}
           </View>
         }
         onClose={closeEventModal}
@@ -679,7 +661,7 @@ function useCalendarStyles() {
   const theme = useAppTheme();
   const { width } = useWindowDimensions();
   const screenBackground =
-    theme.colors.background === "#0C1220" ? theme.colors.background : "#FCFAF5";
+    theme.colors.background === "#0C1220" ? theme.colors.background : "#FBFAF6";
   const styles = createStyles(theme.colors, width);
 
   return { screenBackground, styles, theme };
@@ -832,83 +814,92 @@ function CalendarMonth({
   );
 }
 
-function WeekStrip({
+function CalendarWeek({
+  events,
+  isLoading,
   onSelectDate,
   selectedDate,
 }: {
+  events: CalendarEvent[];
+  isLoading: boolean;
   onSelectDate: (date: string) => void;
   selectedDate: string;
 }) {
-  const { styles } = useCalendarStyles();
+  const { styles, theme } = useCalendarStyles();
   const days = getWeekDays(selectedDate);
-  const today = todayIso();
+  const eventMarkersByDate = useMemo(
+    () => buildEventMarkersByDate(events, theme.colors),
+    [events, theme.colors],
+  );
 
   return (
-    <View style={styles.weekStrip}>
-      {days.map((day, index) => {
-        const active = day === selectedDate;
-        const isToday = day === today;
-
-        return (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ selected: active }}
+    <View style={styles.calendarCard}>
+      <View style={styles.weekRow}>
+        {weekdayLabels.map((day, index) => (
+          <Text
             key={day}
-            onPress={() => onSelectDate(day)}
-            style={({ pressed }) => [
-              styles.weekDay,
-              active && styles.weekDayActive,
-              pressed && styles.weekDayPressed,
+            style={[
+              styles.weekLabel,
+              index >= 5 && styles.weekLabelWeekend,
             ]}
           >
-            <Text
-              style={[styles.weekDayName, active && styles.weekDayNameActive]}
-            >
-              {weekdayLabels[index]}
-            </Text>
-            <Text
-              style={[
-                styles.weekDayNumber,
-                isToday && styles.weekDayNumberToday,
-                active && styles.weekDayNumberActive,
-              ]}
-            >
-              {parseIsoDate(day).getDate()}
-            </Text>
-          </Pressable>
-        );
-      })}
+            {day}
+          </Text>
+        ))}
+      </View>
+      <View style={styles.dayGrid}>
+        {days.map((day, index) => {
+          const isToday = day === todayIso();
+          const isSelected = day === selectedDate;
+          const isWeekend = index >= 5;
+          const markers = eventMarkersByDate.get(day) ?? [];
+
+          return (
+            <View key={day} style={styles.dayCell}>
+              <Pressable
+                hitSlop={8}
+                onPress={() => onSelectDate(day)}
+                style={[
+                  styles.dayBubble,
+                  isToday && styles.dayBubbleToday,
+                  isSelected && styles.dayBubbleSelected,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.dayText,
+                    isWeekend && styles.dayTextWeekend,
+                    isToday && styles.dayTextToday,
+                    isSelected && styles.dayTextSelected,
+                  ]}
+                >
+                  {parseIsoDate(day).getDate()}
+                </Text>
+              </Pressable>
+              <View style={styles.dotSlot}>
+                {markers.length > 0 ? (
+                  <View style={styles.eventDotsRow}>
+                    {markers.map((color, markerIndex) => (
+                      <View
+                        key={`${day}-${color}-${markerIndex}`}
+                        style={[styles.eventDot, { backgroundColor: color }]}
+                      />
+                    ))}
+                  </View>
+                ) : null}
+              </View>
+            </View>
+          );
+        })}
+      </View>
+      {isLoading ? (
+        <Text style={styles.calendarLoading}>Ładuję wydarzenia...</Text>
+      ) : null}
     </View>
   );
 }
 
-function SelectedDaySummary({
-  date,
-  eventCount,
-}: {
-  date: string;
-  eventCount: number;
-}) {
-  const { styles, theme } = useCalendarStyles();
-
-  return (
-    <View style={styles.selectedDaySummary}>
-      <View style={styles.selectedDayIcon}>
-        <CalendarClock color={theme.colors.primary} size={18} />
-      </View>
-      <View style={styles.selectedDayText}>
-        <Text numberOfLines={1} style={styles.selectedDayTitle}>
-          {formatDateLong(date)}
-        </Text>
-        <Text style={styles.selectedDayMeta}>
-          {formatEventCount(eventCount)}
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-function AgendaTimeline({
+function _AgendaTimeline({
   canCreate,
   canDelete,
   canUpdate,
@@ -1228,11 +1219,13 @@ function _NotesBoard({ accessToken }: { accessToken?: string | null }) {
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Notatki prywatne</Text>
         {permission.canCreate ? (
-          <ActionButton
+          <IconButton
+            accessibilityLabel="Dodaj notatkę"
             onPress={() => setModalVisible(true)}
-            size="small"
-            title="+ Dodaj"
-          />
+            style={styles.sectionIconButton}
+          >
+            <Plus color={mockupGreen} size={20} />
+          </IconButton>
         ) : null}
       </View>
       <QueryState
@@ -1397,11 +1390,13 @@ function _TodoBoard({ accessToken }: { accessToken?: string | null }) {
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Do zrobienia dzisiaj</Text>
         {permission.canCreate ? (
-          <ActionButton
+          <IconButton
+            accessibilityLabel="Dodaj zadanie"
             onPress={() => setModalVisible(true)}
-            size="small"
-            title="+ Dodaj"
-          />
+            style={styles.sectionIconButton}
+          >
+            <Plus color={mockupGreen} size={20} />
+          </IconButton>
         ) : null}
       </View>
       <QueryState
@@ -1704,7 +1699,7 @@ function formatSelectedDayTitle(value: string): string {
   return title.charAt(0).toUpperCase() + title.slice(1);
 }
 
-function formatEventCount(count: number): string {
+function _formatEventCount(count: number): string {
   if (count === 0) {
     return "Brak wydarzeń w tym dniu";
   }
@@ -1990,31 +1985,32 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
     ios: "Georgia",
   });
   const isCompact = viewportWidth < 430;
-  const panelBackground = isDark ? colors.card : "#FFFDF8";
-  const panelBorder = isDark ? colors.border : "#F1EDE7";
-  const panelShadowOpacity = isDark ? 0.18 : 0.045;
+  const panelBackground = isDark ? colors.card : "#FFFFFF";
+  const panelBorder = isDark ? colors.border : "#E8DED2";
+  const panelShadowOpacity = isDark ? 0.18 : 0.065;
   const selectedGreen = "#0F3F35";
 
   return StyleSheet.create({
     addEventDashed: {
       alignItems: "center",
-      borderColor: isDark ? colors.border : "#DCD5CA",
+      backgroundColor: panelBackground,
+      borderColor: isDark ? colors.border : "#DDE7D7",
       borderRadius: 12,
-      borderStyle: "dashed",
-      borderWidth: 1.5,
+      borderStyle: "solid",
+      borderWidth: 1,
       flexDirection: "row",
       gap: spacing.sm,
       justifyContent: "center",
       minHeight: isCompact ? 42 : 54,
+      paddingHorizontal: spacing.md,
     },
     addEventDashedPressed: {
       opacity: 0.76,
     },
     addEventDashedText: {
       color: mockupGreen,
-      fontFamily: displayFontFamily,
       fontSize: isCompact ? 14 : 16,
-      fontWeight: "400",
+      fontWeight: "700",
       letterSpacing: 0,
     },
     addHeaderButton: {
@@ -2071,9 +2067,8 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
     },
     calendarModeText: {
       color: colors.text,
-      fontFamily: displayFontFamily,
       fontSize: isCompact ? 14 : 17,
-      fontWeight: "400",
+      fontWeight: "700",
       letterSpacing: 0,
       lineHeight: isCompact ? 21 : 25,
     },
@@ -2117,11 +2112,6 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       gap: isCompact ? 8 : spacing.md,
       paddingHorizontal: spacing.md,
       paddingTop: isCompact ? 0 : spacing.sm,
-    },
-    calendarTitle: {
-      fontSize: isCompact ? 27 : 38,
-      fontWeight: "400",
-      lineHeight: isCompact ? 33 : 46,
     },
     agendaAccent: {
       alignSelf: "stretch",
@@ -2264,9 +2254,8 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
     },
     dayText: {
       color: colors.text,
-      fontFamily: displayFontFamily,
       fontSize: isCompact ? 14 : 19,
-      fontWeight: "400",
+      fontWeight: "700",
       letterSpacing: 0,
       lineHeight: isCompact ? 20 : 30,
     },
@@ -2417,6 +2406,13 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
     googleHeaderButton: {
       backgroundColor: panelBackground,
     },
+    googleHeaderImage: {
+      height: isCompact ? 20 : 24,
+      width: isCompact ? 20 : 24,
+    },
+    googleHeaderImageDisabled: {
+      opacity: 0.48,
+    },
     googleHeaderButtonConnected: {
       borderColor: isDark ? colors.border : "#EDE7DC",
     },
@@ -2492,6 +2488,12 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
     modalFooterButton: {
       flex: 1,
     },
+    modalDeleteButton: {
+      backgroundColor: colors.dangerSoft,
+      borderColor: colors.danger,
+      height: 44,
+      width: 44,
+    },
     periodHeader: {
       alignItems: "center",
       backgroundColor: panelBackground,
@@ -2509,12 +2511,15 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       shadowRadius: 20,
     },
     periodNavButton: {
+      alignItems: "center",
       backgroundColor: isDark ? colors.cardMuted : "#FFFEFC",
       borderColor: panelBorder,
       borderRadius: 9,
       borderWidth: 1,
       elevation: 1,
       height: isCompact ? 30 : 44,
+      justifyContent: "center",
+      padding: 0,
       shadowColor: "#000000",
       shadowOffset: { height: 6, width: 0 },
       shadowOpacity: panelShadowOpacity,
@@ -2537,9 +2542,8 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
     },
     periodTitle: {
       color: colors.text,
-      fontFamily: displayFontFamily,
       fontSize: isCompact ? 18 : 25,
-      fontWeight: "400",
+      fontWeight: "700",
       letterSpacing: 0,
       textAlign: "center",
     },
@@ -2602,6 +2606,13 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       flexDirection: "row",
       justifyContent: "space-between",
       minHeight: 38,
+    },
+    sectionIconButton: {
+      backgroundColor: panelBackground,
+      borderColor: panelBorder,
+      borderWidth: 1,
+      height: 38,
+      width: 38,
     },
     sectionTitle: {
       color: colors.text,
@@ -2680,9 +2691,8 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
     selectedEventsTitle: {
       color: colors.text,
       flex: 1,
-      fontFamily: displayFontFamily,
       fontSize: isCompact ? 17 : 22,
-      fontWeight: "400",
+      fontWeight: "700",
       letterSpacing: 0,
       lineHeight: isCompact ? 22 : 28,
       minWidth: 0,

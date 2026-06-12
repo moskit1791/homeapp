@@ -341,8 +341,6 @@ export default function ListaScreen() {
         ) : undefined
       }
       title={activeSegment === "pantry" ? "Spiżarnia" : "Jedzenie"}
-      titleStyle={activeSegment === "pantry" ? styles.pantryScreenTitle : undefined}
-      titleVariant={activeSegment === "pantry" ? "display" : "default"}
     >
       {activeSegment !== "pantry" ? (
         <SegmentedControl
@@ -3734,11 +3732,6 @@ function createStyles(colors: AppPalette) {
     },
     pantrySaveButton: {
       flex: 1,
-    },
-    pantryScreenTitle: {
-      color: colors.finance,
-      fontSize: 32,
-      lineHeight: 38,
     },
     pantrySearchBar: {
       alignItems: "center",
