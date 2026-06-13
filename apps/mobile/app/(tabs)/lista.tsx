@@ -83,7 +83,6 @@ import {
   DotsVertical,
   ExternalLink,
   Package,
-  Pencil,
   Search,
   ShoppingCart,
   Sparkles,
@@ -456,6 +455,8 @@ function ShoppingBoard({
   const [clearFinalConfirmVisible, setClearFinalConfirmVisible] =
     useState(false);
   const [modalVisible, setModalVisible] = useState(false);
+  const [selectedShoppingItem, setSelectedShoppingItem] =
+    useState<ShoppingItem | null>(null);
   const [toggleError, setToggleError] = useState("");
   const shoppingItemsQueryKey = useMemo(
     () => [...queryKeys.shopping, activeType, "items"] as const,
@@ -559,8 +560,10 @@ function ShoppingBoard({
   });
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteShoppingItem(id, { accessToken }),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: queryKeys.shopping }),
+    onSuccess: () => {
+      setSelectedShoppingItem(null);
+      return queryClient.invalidateQueries({ queryKey: queryKeys.shopping });
+    },
   });
   const moveMutation = useMutation({
     mutationFn: ({
@@ -675,18 +678,13 @@ function ShoppingBoard({
       <View style={styles.groupList}>
         {groups.map((group) => (
           <ShoppingGroupCard
-            canDelete={permission.canDelete}
             canUpdate={permission.canUpdate}
-            deleting={deleteMutation.isPending}
             group={group}
             key={group.title}
             listType={activeType}
             moving={moveMutation.isPending}
             onCheck={(item) => shoppingToggle.toggle(item.id)}
-            onDelete={(item) => {
-              shoppingToggle.cancel(item.id);
-              deleteMutation.mutate(item.id);
-            }}
+            onOpenDetails={setSelectedShoppingItem}
             onMove={(item, targetType) => {
               shoppingToggle.cancel(item.id);
               moveMutation.mutate({ id: item.id, targetType });
@@ -696,9 +694,7 @@ function ShoppingBoard({
         ))}
         {checkedItems.length > 0 ? (
           <ShoppingGroupCard
-            canDelete={permission.canDelete}
             canUpdate={permission.canUpdate}
-            deleting={deleteMutation.isPending}
             group={{
               category: "Inne",
               emoji: "✓",
@@ -708,10 +704,7 @@ function ShoppingBoard({
             listType={activeType}
             moving={moveMutation.isPending}
             onCheck={(item) => shoppingToggle.toggle(item.id)}
-            onDelete={(item) => {
-              shoppingToggle.cancel(item.id);
-              deleteMutation.mutate(item.id);
-            }}
+            onOpenDetails={setSelectedShoppingItem}
             onMove={(item, targetType) => {
               shoppingToggle.cancel(item.id);
               moveMutation.mutate({ id: item.id, targetType });
@@ -720,6 +713,38 @@ function ShoppingBoard({
           />
         ) : null}
       </View>
+
+      <FormModal
+        footer={
+          <View style={styles.modalFooterStack}>
+            {selectedShoppingItem && permission.canDelete ? (
+              <ActionButton
+                labelStyle={styles.deleteActionLabel}
+                loading={deleteMutation.isPending}
+                onPress={() => {
+                  shoppingToggle.cancel(selectedShoppingItem.id);
+                  deleteMutation.mutate(selectedShoppingItem.id);
+                }}
+                style={styles.deleteActionButton}
+                title="Usuń produkt"
+                variant="secondary"
+              />
+            ) : null}
+            <ActionButton
+              onPress={() => setSelectedShoppingItem(null)}
+              title="Zamknij"
+              variant="secondary"
+            />
+          </View>
+        }
+        onClose={() => setSelectedShoppingItem(null)}
+        title={selectedShoppingItem?.name ?? "Produkt"}
+        visible={Boolean(selectedShoppingItem)}
+      >
+        <Text style={styles.itemMeta}>
+          {selectedShoppingItem?.quantity || "Bez podanej ilości"}
+        </Text>
+      </FormModal>
 
       <FormModal
         footer={
@@ -1135,6 +1160,8 @@ function MealsBoard({
       ),
     onSuccess: async (updatedPlan) => {
       setSelectedWeekStartDate(updatedPlan.week.weekStartDate);
+      setMealDrafts({});
+      setModalVisible(false);
       await queryClient.invalidateQueries({ queryKey: queryKeys.meal });
       await queryClient.invalidateQueries({ queryKey: queryKeys.start });
     },
@@ -1286,6 +1313,25 @@ function MealsBoard({
       left.weekday - right.weekday || left.slotIndex - right.slotIndex,
   );
   const groupedEntries = groupMeals(entries);
+  const editingMealEntry = useMemo(
+    () =>
+      modalVisible
+        ? activePlan?.entries.find(
+            (entry) =>
+              entry.weekday === weekday &&
+              entry.slotIndex === slotIndex &&
+              activePlan.week.weekStartDate === selectedWeekStartDate,
+          ) ?? null
+        : null,
+    [
+      activePlan?.entries,
+      activePlan?.week.weekStartDate,
+      modalVisible,
+      selectedWeekStartDate,
+      slotIndex,
+      weekday,
+    ],
+  );
   const mealSlots = buildMealSlotIndexes(householdQuery.data?.mealSlotsPerDay);
   const mealWeekCards = buildMealWeekCards(
     entries,
@@ -1569,7 +1615,16 @@ function MealsBoard({
             <View key={group.day} style={styles.mealDayCard}>
               <Text style={styles.groupTitle}>{weekdayLabel(group.day)}</Text>
               {group.entries.map((entry) => (
-                <View key={entry.id} style={styles.mealRow}>
+                <Pressable
+                  key={entry.id}
+                  onPress={() =>
+                    permission.canUpdate ? openEditMealModal(entry) : undefined
+                  }
+                  style={({ pressed }) => [
+                    styles.mealRow,
+                    pressed && styles.pressed,
+                  ]}
+                >
                   <View style={styles.mealSlot}>
                     <Text style={styles.mealSlotText}>
                       {entry.slotIndex + 1}
@@ -1591,26 +1646,7 @@ function MealsBoard({
                       <ExternalLink color={mockupGreen} size={17} />
                     </IconButton>
                   ) : null}
-                  <View style={styles.mealRowActions}>
-                    {permission.canUpdate ? (
-                      <IconButton
-                        accessibilityLabel="Edytuj posiłek"
-                        onPress={() => openEditMealModal(entry)}
-                      >
-                        <Pencil color={theme.colors.primary} size={16} />
-                      </IconButton>
-                    ) : null}
-                    {permission.canDelete ? (
-                      <IconButton
-                        accessibilityLabel="Usuń posiłek"
-                        disabled={deleteMealMutation.isPending}
-                        onPress={() => deleteMealMutation.mutate(entry)}
-                      >
-                        <Trash2 color={theme.colors.danger} size={16} />
-                      </IconButton>
-                    ) : null}
-                  </View>
-                </View>
+                </Pressable>
               ))}
             </View>
           ))}
@@ -1619,20 +1655,32 @@ function MealsBoard({
 
       <FormModal
         footer={
-          <View style={styles.modalFooter}>
-            <ActionButton
-              onPress={() => setModalVisible(false)}
-              style={styles.modalFooterButton}
-              title="Anuluj"
-              variant="secondary"
-            />
-            <ActionButton
-              disabled={!canSave}
-              loading={upsertMutation.isPending}
-              onPress={() => upsertMutation.mutate()}
-              style={styles.modalFooterButton}
-              title="Zapisz"
-            />
+          <View style={styles.modalFooterStack}>
+            {editingMealEntry && permission.canDelete ? (
+              <ActionButton
+                labelStyle={styles.deleteActionLabel}
+                loading={deleteMealMutation.isPending}
+                onPress={() => deleteMealMutation.mutate(editingMealEntry)}
+                style={styles.deleteActionButton}
+                title="Usuń posiłek"
+                variant="secondary"
+              />
+            ) : null}
+            <View style={styles.modalFooter}>
+              <ActionButton
+                onPress={() => setModalVisible(false)}
+                style={styles.modalFooterButton}
+                title="Anuluj"
+                variant="secondary"
+              />
+              <ActionButton
+                disabled={!canSave}
+                loading={upsertMutation.isPending}
+                onPress={() => upsertMutation.mutate()}
+                style={styles.modalFooterButton}
+                title="Zapisz"
+              />
+            </View>
           </View>
         }
         onClose={() => setModalVisible(false)}
@@ -1894,26 +1942,22 @@ function MealsBoard({
 }
 
 function ShoppingGroupCard({
-  canDelete,
   canUpdate,
-  deleting,
   group,
   isUpdating,
   listType,
   moving,
   onCheck,
-  onDelete,
+  onOpenDetails,
   onMove,
 }: {
-  canDelete: boolean;
   canUpdate: boolean;
-  deleting: boolean;
   group: ShoppingGroup;
   isUpdating: (id: string) => boolean;
   listType: ShoppingListType;
   moving: boolean;
   onCheck: (item: ShoppingItem) => void;
-  onDelete: (item: ShoppingItem) => void;
+  onOpenDetails: (item: ShoppingItem) => void;
   onMove: (item: ShoppingItem, targetType: ShoppingListType) => void;
 }) {
   const theme = useAppTheme();
@@ -1943,6 +1987,7 @@ function ShoppingGroupCard({
               </Pressable>
               <Pressable
                 disabled={!canUpdate || isUpdating(item.id)}
+                onLongPress={() => onOpenDetails(item)}
                 onPress={() => onCheck(item)}
                 style={styles.itemText}
               >
@@ -1974,11 +2019,6 @@ function ShoppingGroupCard({
                     variant="secondary"
                   />
                 </View>
-              ) : null}
-              {canDelete ? (
-                <IconButton disabled={deleting} onPress={() => onDelete(item)}>
-                  <Trash2 color={theme.colors.danger} size={16} />
-                </IconButton>
               ) : null}
             </View>
           ))}
@@ -3311,23 +3351,6 @@ function createStyles(colors: AppPalette) {
   const softGreenBorder = isDark ? colors.border : "#E2EAD9";
 
   return StyleSheet.create({
-    pantryAddButton: {
-      alignItems: "center",
-      backgroundColor: colors.card,
-      borderColor: colors.border,
-      borderRadius: 10,
-      borderWidth: 1,
-      flexDirection: "row",
-      gap: spacing.sm,
-      justifyContent: "center",
-      minHeight: 52,
-    },
-    pantryAddButtonLabel: {
-      color: colors.finance,
-      fontSize: 15,
-      fontWeight: "800",
-      letterSpacing: 0,
-    },
     pantryCategoryCard: {
       alignItems: "center",
       backgroundColor: colors.card,
@@ -4081,11 +4104,6 @@ function createStyles(colors: AppPalette) {
       flexDirection: "row",
       gap: spacing.sm,
     },
-    mealRowActions: {
-      alignItems: "center",
-      flexDirection: "row",
-      gap: spacing.xs,
-    },
     mealSlot: {
       alignItems: "center",
       backgroundColor: softGreenPanel,
@@ -4219,6 +4237,16 @@ function createStyles(colors: AppPalette) {
     },
     modalFooterButton: {
       flex: 1,
+    },
+    modalFooterStack: {
+      gap: spacing.sm,
+    },
+    deleteActionButton: {
+      borderColor: colors.danger,
+      minHeight: 42,
+    },
+    deleteActionLabel: {
+      color: colors.danger,
     },
     pressed: {
       opacity: 0.78,

@@ -159,6 +159,7 @@ const imageAttachmentMimeTypes = [
   "image/png",
   "image/webp",
 ] as const;
+const mockupGreen = "#4F8D2C";
 
 type Accent = {
   color: string;
@@ -275,7 +276,6 @@ export default function DomScreen() {
   }>();
   const permissionsQuery = usePermissions();
   const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
   const [activeSegment, setActiveSegment] = useState<HomeSegment>("cleaning");
   const availableTiles = useMemo(
     () =>
@@ -287,6 +287,22 @@ export default function DomScreen() {
       ),
     [permissionsQuery.data],
   );
+  const availableSegments = useMemo(
+    () =>
+      availableTiles.map((tile) => ({
+        icon: (active: boolean): ReactNode =>
+          getSegmentIcon(
+            tile.value,
+            active ? mockupGreen : theme.colors.textMuted,
+            16,
+          ),
+        label: tile.label,
+        value: tile.value,
+      })),
+    [availableTiles, theme.colors.textMuted],
+  );
+  const screenBackground =
+    theme.colors.background === "#0C1220" ? theme.colors.background : "#FBFAF6";
 
   useEffect(() => {
     if (
@@ -313,7 +329,7 @@ export default function DomScreen() {
 
   if (permissionsQuery.isLoading) {
     return (
-      <AppScreen title="Dom">
+      <AppScreen backgroundColor={screenBackground} title="Dom">
         <QueryState isLoading />
       </AppScreen>
     );
@@ -322,75 +338,26 @@ export default function DomScreen() {
   return (
     <AppScreen
       actions={<SettingsRow openOnMount={params.settings === "1"} />}
+      backgroundColor={screenBackground}
       subtitle="Zarządzaj swoim domem"
       title="Dom"
     >
       {availableTiles.length === 0 ? (
         <InlineAlert text="Nie masz dostępu do modułów domowych." />
       ) : (
-        <View style={styles.moduleGrid}>
-          {availableTiles.map((tile, index) => (
-            <ModuleTile
-              active={tile.value === activeSegment}
-              description={tile.description}
-              key={tile.value}
-              segment={tile.value}
-              showDivider={index < availableTiles.length - 1}
-              title={tile.title}
-              onPress={() => setActiveSegment(tile.value)}
-            />
-          ))}
-        </View>
+        <SegmentedControl
+          accentColor={mockupGreen}
+          onChange={setActiveSegment}
+          options={availableSegments}
+          presentation="mockup"
+          value={activeSegment}
+        />
       )}
 
       {availableTiles.length > 0 ? (
         <ActiveModule segment={activeSegment} />
       ) : null}
     </AppScreen>
-  );
-}
-
-function ModuleTile({
-  active,
-  description,
-  onPress,
-  segment,
-  showDivider,
-  title,
-}: {
-  active: boolean;
-  description: string;
-  onPress: () => void;
-  segment: HomeSegment;
-  showDivider: boolean;
-  title: string;
-}) {
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
-  const accent = getSegmentAccent(theme.colors, segment);
-
-  return (
-    <Pressable
-      accessibilityLabel={`${title}. ${description}`}
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.moduleTile,
-        showDivider && styles.moduleTileDivider,
-        active && styles.moduleTileActive,
-        pressed && styles.pressed,
-      ]}
-    >
-      <View style={styles.moduleTileTop}>
-        <View style={styles.moduleTileIcon}>
-          {getSegmentIcon(segment, accent.color, 30)}
-        </View>
-      </View>
-      <Text numberOfLines={2} style={styles.moduleTitle}>
-        {title}
-      </Text>
-    </Pressable>
   );
 }
 
@@ -575,6 +542,10 @@ function CleaningPanel() {
     onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.cleaning });
     },
+    onSuccess: () => {
+      setEditingTask(null);
+      setModalVisible(false);
+    },
   });
   const tasks = tasksQuery.data ?? [];
   const overdue = tasks.filter((task) => task.isOverdue).length;
@@ -618,7 +589,13 @@ function CleaningPanel() {
       accent={accent}
       action={
         permission.canCreate ? (
-          <ActionButton onPress={openCreateTask} size="small" title="+ Dodaj" />
+          <IconButton
+            accessibilityLabel="Dodaj zadanie sprzątania"
+            onPress={openCreateTask}
+            style={styles.homeHeaderButton}
+          >
+            <Broom color={accent.color} size={22} />
+          </IconButton>
         ) : undefined
       }
       icon={<Broom color={accent.color} size={18} />}
@@ -636,18 +613,13 @@ function CleaningPanel() {
         {tasks.map((task) => (
           <CleaningRow
             accent={accent}
-            canDelete={permission.canDelete}
             canUpdate={permission.canUpdate}
             completing={
               completeMutation.isPending &&
               completeMutation.variables === task.id
             }
-            deleting={
-              deleteMutation.isPending && deleteMutation.variables === task.id
-            }
             key={task.id}
             onComplete={() => completeMutation.mutate(task.id)}
-            onDelete={() => deleteMutation.mutate(task.id)}
             onEdit={() => openEditTask(task)}
             task={task}
           />
@@ -655,22 +627,34 @@ function CleaningPanel() {
       </View>
       <FormModal
         footer={
-          <View style={styles.modalFooter}>
-            <ActionButton
-              onPress={closeTaskModal}
-              style={styles.modalFooterButton}
-              title="Anuluj"
-              variant="secondary"
-            />
-            <ActionButton
-              disabled={!canSave}
-              loading={createMutation.isPending || updateMutation.isPending}
-              onPress={() =>
-                editingTask ? updateMutation.mutate() : createMutation.mutate()
-              }
-              style={styles.modalFooterButton}
-              title={editingTask ? "Zapisz" : "Dodaj"}
-            />
+          <View style={styles.modalFooterStack}>
+            {editingTask && permission.canDelete ? (
+              <ActionButton
+                labelStyle={styles.deleteButtonLabel}
+                loading={deleteMutation.isPending}
+                onPress={() => deleteMutation.mutate(editingTask.id)}
+                style={styles.deleteButton}
+                title="Usuń zadanie"
+                variant="secondary"
+              />
+            ) : null}
+            <View style={styles.modalFooter}>
+              <ActionButton
+                onPress={closeTaskModal}
+                style={styles.modalFooterButton}
+                title="Anuluj"
+                variant="secondary"
+              />
+              <ActionButton
+                disabled={!canSave}
+                loading={createMutation.isPending || updateMutation.isPending}
+                onPress={() =>
+                  editingTask ? updateMutation.mutate() : createMutation.mutate()
+                }
+                style={styles.modalFooterButton}
+                title={editingTask ? "Zapisz" : "Dodaj"}
+              />
+            </View>
           </View>
         }
         onClose={closeTaskModal}
@@ -1025,11 +1009,13 @@ function AnnualCostsPanel() {
       accent={accent}
       action={
         permission.canCreate ? (
-          <ActionButton
+          <IconButton
+            accessibilityLabel="Dodaj koszt roczny"
             onPress={() => setModalVisible(true)}
-            size="small"
-            title="+ Dodaj"
-          />
+            style={styles.homeHeaderButton}
+          >
+            <ChartBar color={accent.color} size={22} />
+          </IconButton>
         ) : undefined
       }
       icon={<ChartBar color={accent.color} size={18} />}
@@ -1162,6 +1148,7 @@ function DataEntriesPanel() {
   const [search, setSearch] = useState("");
   const [title, setTitle] = useState("");
   const [value, setValue] = useState("");
+  const [selectedEntry, setSelectedEntry] = useState<DataEntry | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const dataEntriesQueryKey = [
     ...queryKeys.dataEntries,
@@ -1218,6 +1205,7 @@ function DataEntriesPanel() {
     },
     onSettled: () =>
       queryClient.invalidateQueries({ queryKey: queryKeys.dataEntries }),
+    onSuccess: () => setSelectedEntry(null),
   });
   const entries = entriesQuery.data ?? [];
   const canAdd =
@@ -1228,11 +1216,13 @@ function DataEntriesPanel() {
       accent={accent}
       action={
         permission.canCreate ? (
-          <ActionButton
+          <IconButton
+            accessibilityLabel="Dodaj wpis danych"
             onPress={() => setModalVisible(true)}
-            size="small"
-            title="+ Dodaj"
-          />
+            style={styles.homeHeaderButton}
+          >
+            <Database color={accent.color} size={22} />
+          </IconButton>
         ) : undefined
       }
       icon={<Database color={accent.color} size={18} />}
@@ -1256,13 +1246,9 @@ function DataEntriesPanel() {
         {entries.map((entry) => (
           <DataRow
             accent={accent}
-            canDelete={permission.canDelete}
-            deleting={
-              deleteMutation.isPending && deleteMutation.variables === entry.id
-            }
             entry={entry}
             key={entry.id}
-            onDelete={() => deleteMutation.mutate(entry.id)}
+            onOpen={() => setSelectedEntry(entry)}
           />
         ))}
       </View>
@@ -1307,6 +1293,32 @@ function DataEntriesPanel() {
         {createMutation.error ? (
           <InlineAlert tone="error" text="Nie udało się dodać wpisu." />
         ) : null}
+      </FormModal>
+      <FormModal
+        footer={
+          <View style={styles.modalFooterStack}>
+            {selectedEntry && permission.canDelete ? (
+              <ActionButton
+                labelStyle={styles.deleteButtonLabel}
+                loading={deleteMutation.isPending}
+                onPress={() => deleteMutation.mutate(selectedEntry.id)}
+                style={styles.deleteButton}
+                title="Usuń wpis"
+                variant="secondary"
+              />
+            ) : null}
+            <ActionButton
+              onPress={() => setSelectedEntry(null)}
+              title="Zamknij"
+              variant="secondary"
+            />
+          </View>
+        }
+        onClose={() => setSelectedEntry(null)}
+        title={selectedEntry?.title ?? "Wpis"}
+        visible={Boolean(selectedEntry)}
+      >
+        <Text style={styles.detailValue}>{selectedEntry?.value}</Text>
       </FormModal>
     </ModulePanel>
   );
@@ -1461,6 +1473,10 @@ function AttachmentsPanel() {
     },
     onSettled: () =>
       queryClient.invalidateQueries({ queryKey: queryKeys.attachments }),
+    onSuccess: () => {
+      setEditingAttachment(null);
+      setPreviewAttachment(null);
+    },
   });
   const attachments = attachmentsQuery.data ?? [];
   const canAdd =
@@ -1603,11 +1619,13 @@ function AttachmentsPanel() {
       accent={accent}
       action={
         permission.canCreate ? (
-          <ActionButton
+          <IconButton
+            accessibilityLabel="Dodaj plik"
             onPress={handlePickPhoto}
-            size="small"
-            title="+ Zdjęcie"
-          />
+            style={styles.homeHeaderButton}
+          >
+            <Folder color={accent.color} size={22} />
+          </IconButton>
         ) : undefined
       }
       icon={<Folder color={accent.color} size={18} />}
@@ -1642,17 +1660,9 @@ function AttachmentsPanel() {
             accessToken={accessToken}
             accent={accent}
             attachment={attachment}
-            canDelete={permission.canDelete}
-            canUpdate={permission.canUpdate}
-            deleting={
-              deleteMutation.isPending &&
-              deleteMutation.variables === attachment.id
-            }
             downloading={downloadingAttachmentId === attachment.id}
             key={attachment.id}
-            onDelete={() => deleteMutation.mutate(attachment.id)}
             onDownload={() => handleDownloadAttachment(attachment)}
-            onEdit={() => openEditAttachment(attachment)}
             onPreview={() => openPreviewAttachment(attachment)}
           />
         ))}
@@ -1770,7 +1780,23 @@ function AttachmentsPanel() {
         ) : null}
       </FormModal>
       <ZoomableImageModal
+        deleteLoading={deleteMutation.isPending}
         onClose={closePreviewAttachment}
+        onDelete={
+          previewAttachment && permission.canDelete
+            ? () => deleteMutation.mutate(previewAttachment.id)
+            : undefined
+        }
+        onEdit={
+          previewAttachment && permission.canUpdate
+            ? () => {
+                const attachment = previewAttachment;
+
+                closePreviewAttachment();
+                openEditAttachment(attachment);
+              }
+            : undefined
+        }
         source={
           previewAttachment?.mimeType.startsWith("image/")
             ? getAttachmentFileRequest(previewAttachment.id, { accessToken })
@@ -1781,22 +1807,52 @@ function AttachmentsPanel() {
       />
       <FormModal
         footer={
-          <View style={styles.modalFooter}>
-            <ActionButton
-              onPress={closePreviewAttachment}
-              style={styles.modalFooterButton}
-              title="Zamknij"
-              variant="secondary"
-            />
+          <View style={styles.modalFooterStack}>
             {previewAttachment &&
-            !previewAttachment.mimeType.startsWith("image/") ? (
-              <ActionButton
-                loading={openingAttachment}
-                onPress={handleOpenAttachmentFile}
-                style={styles.modalFooterButton}
-                title="Otwórz plik"
-              />
+            (permission.canUpdate || permission.canDelete) ? (
+              <View style={styles.modalFooter}>
+                {permission.canUpdate ? (
+                  <ActionButton
+                    onPress={() => {
+                      const attachment = previewAttachment;
+
+                      closePreviewAttachment();
+                      openEditAttachment(attachment);
+                    }}
+                    style={styles.modalFooterButton}
+                    title="Edytuj opis"
+                    variant="secondary"
+                  />
+                ) : null}
+                {permission.canDelete ? (
+                  <ActionButton
+                    labelStyle={styles.deleteButtonLabel}
+                    loading={deleteMutation.isPending}
+                    onPress={() => deleteMutation.mutate(previewAttachment.id)}
+                    style={[styles.modalFooterButton, styles.deleteButton]}
+                    title="Usuń plik"
+                    variant="secondary"
+                  />
+                ) : null}
+              </View>
             ) : null}
+            <View style={styles.modalFooter}>
+              <ActionButton
+                onPress={closePreviewAttachment}
+                style={styles.modalFooterButton}
+                title="Zamknij"
+                variant="secondary"
+              />
+              {previewAttachment &&
+              !previewAttachment.mimeType.startsWith("image/") ? (
+                <ActionButton
+                  loading={openingAttachment}
+                  onPress={handleOpenAttachmentFile}
+                  style={styles.modalFooterButton}
+                  title="Otwórz plik"
+                />
+              ) : null}
+            </View>
           </View>
         }
         onClose={closePreviewAttachment}
@@ -1822,12 +1878,18 @@ function AttachmentsPanel() {
 }
 
 function ZoomableImageModal({
+  deleteLoading,
   onClose,
+  onDelete,
+  onEdit,
   source,
   title,
   visible,
 }: {
+  deleteLoading: boolean;
   onClose: () => void;
+  onDelete?: () => void;
+  onEdit?: () => void;
   source?: { headers?: Record<string, string>; uri: string };
   title: string;
   visible: boolean;
@@ -1933,6 +1995,23 @@ function ZoomableImageModal({
             <Text numberOfLines={1} style={styles.zoomTitle}>
               {title}
             </Text>
+            {onEdit ? (
+              <IconButton
+                accessibilityLabel="Edytuj opis zdjęcia"
+                onPress={onEdit}
+              >
+                <Pencil color={theme.colors.primary} size={18} />
+              </IconButton>
+            ) : null}
+            {onDelete ? (
+              <IconButton
+                accessibilityLabel="Usuń zdjęcie"
+                disabled={deleteLoading}
+                onPress={onDelete}
+              >
+                <Trash2 color={theme.colors.danger} size={18} />
+              </IconButton>
+            ) : null}
             <IconButton
               accessibilityLabel="Zamknij podgląd zdjęcia"
               onPress={onClose}
@@ -2953,22 +3032,16 @@ function ModulePanel({
 
 function CleaningRow({
   accent,
-  canDelete,
   canUpdate,
   completing,
-  deleting,
   onComplete,
-  onDelete,
   onEdit,
   task,
 }: {
   accent: Accent;
-  canDelete: boolean;
   canUpdate: boolean;
   completing: boolean;
-  deleting: boolean;
   onComplete: () => void;
-  onDelete: () => void;
   onEdit: () => void;
   task: CleaningTask;
 }) {
@@ -2978,7 +3051,7 @@ function CleaningRow({
   const canCompleteNow = daysRemaining < 7;
   const isInactive = !canCompleteNow;
   const isDueSoon = daysRemaining < 1;
-  const isActionPending = completing || deleting;
+  const isActionPending = completing;
   const markerColor =
     task.isOverdue || isDueSoon
       ? theme.colors.danger
@@ -3008,7 +3081,16 @@ function CleaningRow({
       ]}
     >
       <View style={[styles.itemMarker, { backgroundColor: markerColor }]} />
-      <View style={styles.itemText}>
+      <Pressable
+        accessibilityLabel={`Edytuj sprzątanie ${task.name}`}
+        accessibilityRole="button"
+        disabled={!canUpdate}
+        onPress={onEdit}
+        style={({ pressed }) => [
+          styles.itemText,
+          pressed && styles.pressed,
+        ]}
+      >
         <View style={styles.cleaningTitleRow}>
           <Text numberOfLines={2} style={styles.itemName}>
             {task.name}
@@ -3041,7 +3123,7 @@ function CleaningRow({
         <Text style={styles.itemMeta}>
           Termin: {formatDateFull(task.nextDueAt)} / co {task.frequencyDays} dni
         </Text>
-      </View>
+      </Pressable>
       {canCompleteNow ? (
         <ActionButton
           disabled={!canUpdate}
@@ -3051,20 +3133,6 @@ function CleaningRow({
           title="Wykonane"
           variant="secondary"
         />
-      ) : null}
-      {canUpdate ? (
-        <IconButton accessibilityLabel="Edytuj sprzątanie" onPress={onEdit}>
-          <Pencil color={theme.colors.primary} size={17} />
-        </IconButton>
-      ) : null}
-      {canDelete ? (
-        <IconButton
-          accessibilityLabel="Usuń sprzątanie"
-          disabled={deleting}
-          onPress={onDelete}
-        >
-          <Trash2 color={theme.colors.danger} size={17} />
-        </IconButton>
       ) : null}
     </Animated.View>
   );
@@ -3118,22 +3186,23 @@ function CostRow({
 
 function DataRow({
   accent,
-  canDelete,
-  deleting,
   entry,
-  onDelete,
+  onOpen,
 }: {
   accent: Accent;
-  canDelete: boolean;
-  deleting: boolean;
   entry: DataEntry;
-  onDelete: () => void;
+  onOpen: () => void;
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
 
   return (
-    <View style={styles.itemRow}>
+    <Pressable
+      accessibilityLabel={`Otwórz wpis ${entry.title}`}
+      accessibilityRole="button"
+      onPress={onOpen}
+      style={({ pressed }) => [styles.itemRow, pressed && styles.pressed]}
+    >
       <View style={[styles.itemMarker, { backgroundColor: accent.color }]} />
       <View style={styles.itemText}>
         <Text style={styles.itemName}>{entry.title}</Text>
@@ -3141,12 +3210,7 @@ function DataRow({
           {entry.value}
         </Text>
       </View>
-      {canDelete ? (
-        <IconButton disabled={deleting} onPress={onDelete}>
-          <Trash2 color={theme.colors.danger} size={17} />
-        </IconButton>
-      ) : null}
-    </View>
+    </Pressable>
   );
 }
 
@@ -3154,25 +3218,15 @@ function AttachmentRow({
   accessToken,
   accent,
   attachment,
-  canDelete,
-  canUpdate,
-  deleting,
   downloading,
-  onDelete,
   onDownload,
-  onEdit,
   onPreview,
 }: {
   accessToken?: string | null;
   accent: Accent;
   attachment: Attachment;
-  canDelete: boolean;
-  canUpdate: boolean;
-  deleting: boolean;
   downloading: boolean;
-  onDelete: () => void;
   onDownload: () => void;
-  onEdit: () => void;
   onPreview: () => void;
 }) {
   const theme = useAppTheme();
@@ -3221,16 +3275,6 @@ function AttachmentRow({
       >
         <Download color={theme.colors.primary} size={17} />
       </IconButton>
-      {canUpdate ? (
-        <IconButton onPress={onEdit}>
-          <Pencil color={theme.colors.primary} size={17} />
-        </IconButton>
-      ) : null}
-      {canDelete ? (
-        <IconButton disabled={deleting} onPress={onDelete}>
-          <Trash2 color={theme.colors.danger} size={17} />
-        </IconButton>
-      ) : null}
     </View>
   );
 }
@@ -3992,6 +4036,22 @@ function createStyles(colors: AppPalette) {
     hidden: {
       display: "none",
     },
+    homeHeaderButton: {
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderColor: colors.background === "#0C1220" ? colors.border : "#E8DED2",
+      borderRadius: 999,
+      borderWidth: 1,
+      elevation: 2,
+      height: 44,
+      justifyContent: "center",
+      padding: 0,
+      shadowColor: "#000000",
+      shadowOffset: { height: 8, width: 0 },
+      shadowOpacity: colors.background === "#0C1220" ? 0.18 : 0.08,
+      shadowRadius: 16,
+      width: 44,
+    },
     inactiveCleaningRow: {
       backgroundColor: colors.card,
       borderColor: colors.border,
@@ -4109,9 +4169,9 @@ function createStyles(colors: AppPalette) {
     },
     itemRow: {
       alignItems: "center",
-      backgroundColor: colors.cardMuted,
-      borderColor: colors.border,
-      borderRadius: radii.card,
+      backgroundColor: colors.card,
+      borderColor: colors.background === "#0C1220" ? colors.border : "#E8DED2",
+      borderRadius: 12,
       borderWidth: 1,
       elevation: 1,
       flexDirection: "row",
@@ -4249,6 +4309,27 @@ function createStyles(colors: AppPalette) {
     modalFooterButton: {
       flex: 1,
     },
+    modalFooterStack: {
+      gap: spacing.sm,
+    },
+    deleteButton: {
+      borderColor: colors.danger,
+      minHeight: 42,
+    },
+    deleteButtonLabel: {
+      color: colors.danger,
+    },
+    detailValue: {
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      color: colors.text,
+      fontSize: 15,
+      letterSpacing: 0,
+      lineHeight: 22,
+      padding: spacing.md,
+    },
     moduleDescription: {
       color: colors.textMuted,
       fontSize: 11,
@@ -4327,16 +4408,16 @@ function createStyles(colors: AppPalette) {
     },
     panel: {
       backgroundColor: colors.overlay,
-      borderColor: colors.border,
-      borderRadius: radii.card,
+      borderColor: colors.background === "#0C1220" ? colors.border : "#E8DED2",
+      borderRadius: 12,
       borderWidth: 1,
-      elevation: 4,
+      elevation: 2,
       gap: spacing.md,
       padding: spacing.md,
       shadowColor: "#000000",
-      shadowOffset: { height: 12, width: 0 },
-      shadowOpacity: 0.08,
-      shadowRadius: 30,
+      shadowOffset: { height: 8, width: 0 },
+      shadowOpacity: colors.background === "#0C1220" ? 0.16 : 0.08,
+      shadowRadius: 18,
     },
     panelActions: {
       alignItems: "center",
