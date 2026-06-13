@@ -65,7 +65,7 @@ import {
   Plus,
   Trash2,
 } from "../../src/ui/icon";
-import googleGImage from "../../assets/google-g.png";
+import googleGImage from "../../assets/google-logo.webp";
 
 type CalendarViewMode = "month" | "week";
 type _AgendaSegment = "notes" | "todo";
@@ -454,7 +454,7 @@ export default function KalendarzScreen() {
                 ]}
               >
                 <Image
-                  resizeMode="contain"
+                  resizeMode="cover"
                   source={googleGImage}
                   style={[
                     styles.googleHeaderImage,
