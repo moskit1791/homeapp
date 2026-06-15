@@ -48,6 +48,7 @@ export function useDebouncedOptimisticToggle<TItem>({
   const mountedRef = useRef(true);
   const pendingRef = useRef(new Map<string, PendingToggle>());
   const flushRef = useRef<(id: string) => Promise<void>>(async () => undefined);
+  const writingCacheRef = useRef(false);
   const queryKeyHash = useMemo(() => JSON.stringify(queryKey), [queryKey]);
   const [syncingIds, setSyncingIds] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -73,25 +74,35 @@ export function useDebouncedOptimisticToggle<TItem>({
 
   const updateCachedValue = useCallback(
     (id: string, value: boolean) => {
-      queryClient.setQueryData<TItem[]>(queryKey, (current) => {
-        if (!current) {
-          return current;
-        }
+      writingCacheRef.current = true;
 
-        let changed = false;
-        const next = current.map((item) => {
-          if (getId(item) !== id) {
-            return item;
+      try {
+        queryClient.setQueryData<TItem[]>(queryKey, (current) => {
+          if (!current) {
+            return current;
           }
 
-          changed = true;
-          return setValue(item, value);
-        });
+          let changed = false;
+          const next = current.map((item) => {
+            if (getId(item) !== id) {
+              return item;
+            }
 
-        return changed ? next : current;
-      });
+            if (getValue(item) === value) {
+              return item;
+            }
+
+            changed = true;
+            return setValue(item, value);
+          });
+
+          return changed ? next : current;
+        });
+      } finally {
+        writingCacheRef.current = false;
+      }
     },
-    [getId, queryClient, queryKey, setValue],
+    [getId, getValue, queryClient, queryKey, setValue],
   );
 
   const applyPendingValues = useCallback(
@@ -118,18 +129,27 @@ export function useDebouncedOptimisticToggle<TItem>({
   );
 
   const reapplyPendingValues = useCallback(() => {
-    queryClient.setQueryData<TItem[]>(queryKey, (current) => {
-      if (!current) {
-        return current;
-      }
+    writingCacheRef.current = true;
 
-      return applyPendingValues(current);
-    });
+    try {
+      queryClient.setQueryData<TItem[]>(queryKey, (current) => {
+        if (!current) {
+          return current;
+        }
+
+        const next = applyPendingValues(current);
+
+        return next === current ? current : next;
+      });
+    } finally {
+      writingCacheRef.current = false;
+    }
   }, [applyPendingValues, queryClient, queryKey]);
 
   useEffect(() => {
     const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
       if (
+        writingCacheRef.current ||
         pendingRef.current.size === 0 ||
         !event.query ||
         JSON.stringify(event.query.queryKey) !== queryKeyHash
@@ -261,9 +281,6 @@ export function useDebouncedOptimisticToggle<TItem>({
         clearTimeout(currentEntry.timeout);
       }
 
-      void queryClient.cancelQueries({ queryKey });
-      updateCachedValue(id, desiredValue);
-
       const entry: PendingToggle = {
         baseValue,
         desiredValue,
@@ -275,11 +292,13 @@ export function useDebouncedOptimisticToggle<TItem>({
         timeout: null,
       };
 
+      pendingRef.current.set(id, entry);
+      void queryClient.cancelQueries({ queryKey });
+      updateCachedValue(id, desiredValue);
+
       entry.timeout = setTimeout(() => {
         void flushRef.current(id);
       }, delayMs);
-
-      pendingRef.current.set(id, entry);
     },
     [
       delayMs,

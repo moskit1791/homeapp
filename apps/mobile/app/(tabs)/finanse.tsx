@@ -1,7 +1,7 @@
 ﻿import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import {
   Image,
@@ -60,6 +60,7 @@ import {
   createBudgetItem,
   createExpense,
   createFinanceDebt,
+  createFinanceDebtPayment,
   createFinanceSavingsAccount,
   createFinanceSavingsTransaction,
   deleteBudgetItem,
@@ -119,6 +120,8 @@ type FinanceFormValues = {
   debtDueDate: string;
   debtLenderName: string;
   debtNote: string;
+  debtPaymentAmount: string;
+  debtPaymentNote: string;
   debtPurpose: string;
   expenseAmount: string;
   incomeAmount: string;
@@ -237,6 +240,8 @@ export default function FinanseScreen() {
       debtDueDate: "",
       debtLenderName: "",
       debtNote: "",
+      debtPaymentAmount: "",
+      debtPaymentNote: "",
       debtPurpose: "",
       expenseAmount: "",
       incomeAmount: "",
@@ -261,6 +266,8 @@ export default function FinanseScreen() {
   const debtDueDate = watch("debtDueDate");
   const debtLenderName = watch("debtLenderName");
   const debtNote = watch("debtNote");
+  const debtPaymentAmount = watch("debtPaymentAmount");
+  const debtPaymentNote = watch("debtPaymentNote");
   const debtPurpose = watch("debtPurpose");
   const savingsAmount = watch("savingsAmount");
   const savingsName = watch("savingsName");
@@ -398,7 +405,7 @@ export default function FinanseScreen() {
   const openDebts = debts.filter((debt) => !debt.isSettled);
   const settledDebts = debts.filter((debt) => debt.isSettled);
   const openDebtTotal = openDebts.reduce(
-    (sum, debt) => sum + Number(debt.amount ?? 0),
+    (sum, debt) => sum + Number(debt.remainingAmount ?? debt.amount ?? 0),
     0,
   );
   const savings = savingsQuery.data ?? [];
@@ -531,7 +538,7 @@ export default function FinanseScreen() {
         const targetAmountNumber =
           account.targetAmount === null ? null : Number(account.targetAmount);
         const owner = account.ownerMemberId
-          ? householdMemberMap.get(account.ownerMemberId) ?? null
+          ? (householdMemberMap.get(account.ownerMemberId) ?? null)
           : null;
         const progressRatio =
           targetAmountNumber && targetAmountNumber > 0
@@ -552,60 +559,61 @@ export default function FinanseScreen() {
       }),
     [householdMemberMap, savings],
   );
-  const savingsGroups = useMemo<SavingsGoalGroup[]>(
-    () => {
-      const grouped = new Map<string, SavingsGoalGroup>();
+  const savingsGroups = useMemo<SavingsGoalGroup[]>(() => {
+    const grouped = new Map<string, SavingsGoalGroup>();
 
-      savingsGoals.forEach((goal) => {
-        const member = goal.owner;
-        const id = member?.id ?? goal.ownerMemberId ?? "unassigned";
-        const label =
-          member?.displayName ||
-          member?.email ||
-          (goal.ownerMemberId ? "Bez przypisania" : "Bez właściciela");
-        const current =
-          grouped.get(id) ??
-          ({
-            accounts: [],
-            achievedCount: 0,
-            currentTotal: 0,
-            id,
-            label,
-            member,
-            targetTotal: 0,
-            totalCount: 0,
-          } as SavingsGoalGroup);
+    savingsGoals.forEach((goal) => {
+      const member = goal.owner;
+      const id = member?.id ?? goal.ownerMemberId ?? "unassigned";
+      const label =
+        member?.displayName ||
+        member?.email ||
+        (goal.ownerMemberId ? "Bez przypisania" : "Bez właściciela");
+      const current =
+        grouped.get(id) ??
+        ({
+          accounts: [],
+          achievedCount: 0,
+          currentTotal: 0,
+          id,
+          label,
+          member,
+          targetTotal: 0,
+          totalCount: 0,
+        } as SavingsGoalGroup);
 
-        current.accounts.push(goal);
-        current.currentTotal += goal.currentAmountNumber;
-        current.targetTotal += goal.targetAmountNumber ?? 0;
-        current.totalCount += 1;
-        if (goal.isAchieved) {
-          current.achievedCount += 1;
-        }
+      current.accounts.push(goal);
+      current.currentTotal += goal.currentAmountNumber;
+      current.targetTotal += goal.targetAmountNumber ?? 0;
+      current.totalCount += 1;
+      if (goal.isAchieved) {
+        current.achievedCount += 1;
+      }
 
-        grouped.set(id, current);
-      });
+      grouped.set(id, current);
+    });
 
-      return [...grouped.values()]
-        .map((group) => ({
-          ...group,
-          accounts: [...group.accounts].sort(compareSavingsGoals),
-        }))
-        .sort(
-          (left, right) =>
-            right.currentTotal - left.currentTotal ||
-            left.label.localeCompare(right.label, "pl-PL"),
-        );
-    },
-    [savingsGoals],
-  );
-  const savingsGoalsAchieved = savingsGoals.filter((goal) => goal.isAchieved).length;
+    return [...grouped.values()]
+      .map((group) => ({
+        ...group,
+        accounts: [...group.accounts].sort(compareSavingsGoals),
+      }))
+      .sort(
+        (left, right) =>
+          right.currentTotal - left.currentTotal ||
+          left.label.localeCompare(right.label, "pl-PL"),
+      );
+  }, [savingsGoals]);
+  const savingsGoalsAchieved = savingsGoals.filter(
+    (goal) => goal.isAchieved,
+  ).length;
   const nextSavingsGoal = useMemo(
     () =>
       [...savingsGoals]
         .sort(compareSavingsGoals)
-        .find((goal) => !goal.isAchieved) ?? savingsGoals[0] ?? null,
+        .find((goal) => !goal.isAchieved) ??
+      savingsGoals[0] ??
+      null,
     [savingsGoals],
   );
   const selectedSavingsGoal = useMemo(
@@ -622,6 +630,12 @@ export default function FinanseScreen() {
       setSelectedMonthId(nextMonth.id);
     }
   }
+
+  useFocusEffect(
+    useCallback(() => {
+      setSelectedMonthId(currentMonth?.id ?? null);
+    }, [currentMonth?.id]),
+  );
 
   function getGenerateAmountDefault(item: BudgetItemWithCategory): string {
     return item.budgetAmount ? formatMoneyInput(item.budgetAmount) : "";
@@ -1000,6 +1014,25 @@ export default function FinanseScreen() {
       await invalidateFinance();
     },
   });
+  const debtPaymentMutation = useMutation({
+    mutationFn: () =>
+      createFinanceDebtPayment(
+        editingDebt?.id ?? "",
+        {
+          amount: parseMoney(debtPaymentAmount),
+          note: debtPaymentNote.trim() || null,
+          paidAt: todayIso(),
+        },
+        { accessToken },
+      ),
+    onSuccess: async (debt) => {
+      setEditingDebt(debt);
+      setDebtIsSettled(debt.isSettled);
+      setValue("debtPaymentAmount", "");
+      setValue("debtPaymentNote", "");
+      await invalidateFinance();
+    },
+  });
   const savingsAccountMutation = useMutation({
     mutationFn: () =>
       createFinanceSavingsAccount(
@@ -1145,6 +1178,8 @@ export default function FinanseScreen() {
     setExpenseQuickItemId(null);
     setExpenseQuickCategoryId(null);
     setHistoryBudgetItemId(null);
+    setValue("debtPaymentAmount", "");
+    setValue("debtPaymentNote", "");
     setGenerateCopyItemIds([]);
     setGenerateAmountInputs({});
   }
@@ -1183,6 +1218,8 @@ export default function FinanseScreen() {
     setValue("debtDueDate", "");
     setValue("debtLenderName", "");
     setValue("debtNote", "");
+    setValue("debtPaymentAmount", "");
+    setValue("debtPaymentNote", "");
     setValue("debtPurpose", "");
   }
 
@@ -1198,6 +1235,8 @@ export default function FinanseScreen() {
     setValue("debtDueDate", debt.dueDate ?? "");
     setValue("debtLenderName", debt.lenderName);
     setValue("debtNote", debt.note ?? "");
+    setValue("debtPaymentAmount", "");
+    setValue("debtPaymentNote", "");
     setValue("debtPurpose", debt.purpose);
     setFinanceModal("debt");
   }
@@ -1215,7 +1254,7 @@ export default function FinanseScreen() {
     setSelectedSavingsOwnerId(
       householdMembers.find((member) => member.id === selectedSavingsOwnerId)
         ? selectedSavingsOwnerId
-        : householdMembers[0]?.id ?? "",
+        : (householdMembers[0]?.id ?? ""),
     );
     setFinanceModal("savingsAccount");
   }
@@ -1275,6 +1314,16 @@ export default function FinanseScreen() {
     Boolean(debtPurpose.trim()) &&
     isPositiveMoney(debtAmount) &&
     (!debtDueDate.trim() || /^\d{4}-\d{2}-\d{2}$/.test(debtDueDate));
+  const debtRemainingAmount = Number(
+    editingDebt?.remainingAmount ?? editingDebt?.amount ?? 0,
+  );
+  const canSaveDebtPayment =
+    canUpdate &&
+    Boolean(editingDebt?.id) &&
+    debtRemainingAmount > 0 &&
+    isPositiveMoney(debtPaymentAmount) &&
+    parseMoney(debtPaymentAmount) <= debtRemainingAmount &&
+    !debtPaymentMutation.isPending;
   const canSaveSavingsAccount =
     canCreate &&
     Boolean(selectedSavingsOwnerId) &&
@@ -1360,7 +1409,9 @@ export default function FinanseScreen() {
       }
       contentStyle={styles.financeScreenContent}
       backgroundColor={
-        theme.colors.background === "#0C1220" ? theme.colors.background : "#FBFAF6"
+        theme.colors.background === "#0C1220"
+          ? theme.colors.background
+          : "#FBFAF6"
       }
       title="Finanse"
     >
@@ -2327,17 +2378,103 @@ export default function FinanseScreen() {
                 />
               </View>
             ) : null}
+            {editingDebt ? (
+              <View style={styles.debtPaymentPanel}>
+                <Text style={styles.debtPaymentTitle}>Spłata</Text>
+                <View style={styles.debtPaymentSummary}>
+                  <View style={styles.debtPaymentSummaryItem}>
+                    <Text style={styles.debtPaymentSummaryLabel}>Kwota</Text>
+                    <Text style={styles.debtPaymentSummaryValue}>
+                      {formatMoney(editingDebt.amount, currencyCode)}
+                    </Text>
+                  </View>
+                  <View style={styles.debtPaymentSummaryItem}>
+                    <Text style={styles.debtPaymentSummaryLabel}>Spłacono</Text>
+                    <Text style={styles.debtPaymentSummaryValue}>
+                      {formatMoney(editingDebt.paidAmount, currencyCode)}
+                    </Text>
+                  </View>
+                  <View style={styles.debtPaymentSummaryItem}>
+                    <Text style={styles.debtPaymentSummaryLabel}>Zostaje</Text>
+                    <Text style={styles.debtPaymentSummaryValue}>
+                      {formatMoney(editingDebt.remainingAmount, currencyCode)}
+                    </Text>
+                  </View>
+                </View>
+                {debtRemainingAmount > 0 ? (
+                  <>
+                    <View style={styles.debtFormGrid}>
+                      <TextField
+                        containerStyle={styles.debtFormField}
+                        control={control}
+                        inputStyle={styles.debtFormInput}
+                        keyboardType="decimal-pad"
+                        label="Kwota spłaty"
+                        name="debtPaymentAmount"
+                        placeholder="0,00"
+                      />
+                      <TextField
+                        containerStyle={styles.debtFormField}
+                        control={control}
+                        inputStyle={styles.debtFormInput}
+                        label="Notatka"
+                        name="debtPaymentNote"
+                        placeholder="Opcjonalnie"
+                      />
+                    </View>
+                    <ActionButton
+                      disabled={!canSaveDebtPayment}
+                      loading={debtPaymentMutation.isPending}
+                      onPress={() => debtPaymentMutation.mutate()}
+                      title="Dodaj spłatę"
+                      variant="secondary"
+                    />
+                  </>
+                ) : (
+                  <InlineAlert text="Ta pożyczka jest już spłacona." />
+                )}
+                <View style={styles.debtPaymentHistory}>
+                  <Text style={styles.debtPaymentTitle}>Historia wpłat</Text>
+                  {editingDebt.payments.length > 0 ? (
+                    editingDebt.payments.map((payment) => (
+                      <View key={payment.id} style={styles.debtPaymentRow}>
+                        <View style={styles.debtPaymentRowText}>
+                          <Text style={styles.debtPaymentRowTitle}>
+                            {formatDateFull(
+                              payment.paidAt ?? payment.createdAt,
+                            )}
+                          </Text>
+                          {payment.note ? (
+                            <Text
+                              numberOfLines={1}
+                              style={styles.debtPaymentRowMeta}
+                            >
+                              {payment.note}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <Text style={styles.debtPaymentRowAmount}>
+                          {formatMoney(payment.amount, currencyCode)}
+                        </Text>
+                      </View>
+                    ))
+                  ) : (
+                    <InlineAlert text="Brak wpłat dla tej pożyczki." />
+                  )}
+                </View>
+              </View>
+            ) : null}
             {saveDebtMutation.error ? (
               <InlineAlert
                 tone="error"
                 text="Nie udało się zapisać pożyczki."
               />
             ) : null}
+            {debtPaymentMutation.error ? (
+              <InlineAlert tone="error" text="Nie udało się dodać spłaty." />
+            ) : null}
             {deleteDebtMutation.error ? (
-              <InlineAlert
-                tone="error"
-                text="Nie udało się usunąć pożyczki."
-              />
+              <InlineAlert tone="error" text="Nie udało się usunąć pożyczki." />
             ) : null}
           </FormModal>
         </>
@@ -2427,10 +2564,7 @@ export default function FinanseScreen() {
           placeholder="Opcjonalnie"
         />
         {savingsAccountMutation.error ? (
-          <InlineAlert
-            tone="error"
-            text="Nie udało się dodać oszczędności."
-          />
+          <InlineAlert tone="error" text="Nie udało się dodać oszczędności." />
         ) : null}
       </FormModal>
       <FormModal
@@ -2447,7 +2581,9 @@ export default function FinanseScreen() {
                 <ActionButton
                   disabled={!canSaveSavingsTransaction}
                   loading={savingsTransactionMutation.isPending}
-                  onPress={() => openSavingsTransaction(selectedSavingsGoal, "add")}
+                  onPress={() =>
+                    openSavingsTransaction(selectedSavingsGoal, "add")
+                  }
                   style={styles.modalFooterButton}
                   title="Dodaj"
                 />
@@ -2467,7 +2603,9 @@ export default function FinanseScreen() {
                     labelStyle={styles.dangerButtonLabel}
                     loading={deleteSavingsAccountMutation.isPending}
                     onPress={() =>
-                      deleteSavingsAccountMutation.mutate(selectedSavingsGoal.id)
+                      deleteSavingsAccountMutation.mutate(
+                        selectedSavingsGoal.id,
+                      )
                     }
                     style={[styles.modalFooterButton, styles.dangerButton]}
                     title="Usuń"
@@ -2504,12 +2642,18 @@ export default function FinanseScreen() {
               </View>
               <View style={styles.savingsDetailsText}>
                 <Text style={styles.savingsDetailsTitle}>
-                  {formatMoney(selectedSavingsGoal.currentAmountNumber, currencyCode)}
+                  {formatMoney(
+                    selectedSavingsGoal.currentAmountNumber,
+                    currencyCode,
+                  )}
                 </Text>
                 <Text style={styles.savingsDetailsMeta}>
                   Cel{" "}
                   {selectedSavingsGoal.targetAmountNumber !== null
-                    ? formatMoney(selectedSavingsGoal.targetAmountNumber, currencyCode)
+                    ? formatMoney(
+                        selectedSavingsGoal.targetAmountNumber,
+                        currencyCode,
+                      )
                     : "bez limitu"}
                 </Text>
                 <Text style={styles.savingsDetailsMeta}>
@@ -2535,25 +2679,30 @@ export default function FinanseScreen() {
             </Text>
             {selectedSavingsGoal.transactions.length > 0 ? (
               <View style={styles.savingsTransactionList}>
-                {selectedSavingsGoal.transactions.slice(0, 4).map((transaction) => (
-                  <View key={transaction.id} style={styles.savingsTransactionRow}>
-                    <Text
-                      style={[
-                        styles.savingsDelta,
-                        transaction.direction === "add"
-                          ? styles.savingsDeltaAdd
-                          : styles.savingsDeltaSubtract,
-                      ]}
+                {selectedSavingsGoal.transactions
+                  .slice(0, 4)
+                  .map((transaction) => (
+                    <View
+                      key={transaction.id}
+                      style={styles.savingsTransactionRow}
                     >
-                      {transaction.direction === "add" ? "+" : "-"}
-                      {formatMoney(transaction.amount, currencyCode)}
-                    </Text>
-                    <Text style={styles.savingsTransactionMeta}>
-                      {formatDateFull(transaction.changedAt)}
-                      {transaction.note ? ` / ${transaction.note}` : ""}
-                    </Text>
-                  </View>
-                ))}
+                      <Text
+                        style={[
+                          styles.savingsDelta,
+                          transaction.direction === "add"
+                            ? styles.savingsDeltaAdd
+                            : styles.savingsDeltaSubtract,
+                        ]}
+                      >
+                        {transaction.direction === "add" ? "+" : "-"}
+                        {formatMoney(transaction.amount, currencyCode)}
+                      </Text>
+                      <Text style={styles.savingsTransactionMeta}>
+                        {formatDateFull(transaction.changedAt)}
+                        {transaction.note ? ` / ${transaction.note}` : ""}
+                      </Text>
+                    </View>
+                  ))}
               </View>
             ) : (
               <InlineAlert text="Brak historii zmian." />
@@ -2898,10 +3047,7 @@ function SavingsGoalGroupCard({
           ]}
         >
           <Text
-            style={[
-              styles.savingsGroupAvatarLabel,
-              { color: accent.text },
-            ]}
+            style={[styles.savingsGroupAvatarLabel, { color: accent.text }]}
           >
             {getMemberInitial(group.member)}
           </Text>
@@ -2970,7 +3116,10 @@ function SavingsGoalRow({
     <Pressable
       accessibilityRole="button"
       onPress={() => onOpenGoal(goal)}
-      style={({ pressed }) => [styles.savingsGoalRow, pressed && styles.pressedRow]}
+      style={({ pressed }) => [
+        styles.savingsGoalRow,
+        pressed && styles.pressedRow,
+      ]}
     >
       <View style={styles.savingsGoalImageFrame}>
         <Image
@@ -2984,7 +3133,9 @@ function SavingsGoalRow({
           {goal.name}
         </Text>
         <Text style={styles.savingsGoalMeta}>
-          {goal.targetDate ? `Cel: ${formatDateFull(goal.targetDate)}` : "Brak terminu"}
+          {goal.targetDate
+            ? `Cel: ${formatDateFull(goal.targetDate)}`
+            : "Brak terminu"}
         </Text>
       </View>
       <View style={styles.savingsGoalAmountBlock}>
@@ -3229,7 +3380,9 @@ function FinanceDebtsList({
                   },
                 ]}
               >
-                <Text style={[styles.debtGroupAvatarText, { color: accent.text }]}>
+                <Text
+                  style={[styles.debtGroupAvatarText, { color: accent.text }]}
+                >
                   {getDebtGroupInitial(group.label)}
                 </Text>
               </View>
@@ -3290,9 +3443,11 @@ function FinanceDebtsList({
                         {debt.purpose}
                       </Text>
                       <Text numberOfLines={1} style={styles.debtRowMeta}>
-                        {debt.dueDate
-                          ? `Termin: ${formatDateFull(debt.dueDate)}`
-                          : "Bez terminu"}
+                        {Number(debt.paidAmount ?? 0) > 0
+                          ? `Spłacono ${formatMoney(debt.paidAmount, currencyCode)} z ${formatMoney(debt.amount, currencyCode)}`
+                          : debt.dueDate
+                            ? `Termin: ${formatDateFull(debt.dueDate)}`
+                            : "Bez terminu"}
                       </Text>
                     </View>
                     <View style={styles.debtRowSide}>
@@ -3303,7 +3458,10 @@ function FinanceDebtsList({
                           debt.isSettled && styles.debtSettledText,
                         ]}
                       >
-                        {formatMoney(debt.amount, currencyCode)}
+                        {formatMoney(
+                          debt.remainingAmount ?? debt.amount,
+                          currencyCode,
+                        )}
                       </Text>
                       <View style={styles.debtStatusLine}>
                         <View
@@ -3313,7 +3471,7 @@ function FinanceDebtsList({
                           ]}
                         />
                         <Text style={styles.debtStatusText}>
-                          {debt.isSettled ? "Spłacone" : "Aktywne"}
+                          {debt.isSettled ? "Spłacone" : "Do spłaty"}
                         </Text>
                       </View>
                     </View>
@@ -3507,11 +3665,11 @@ function FinanceFiltersPanel({
           onPress={onToggleExpanded}
           style={styles.filterToggleButton}
         >
-        {expanded ? (
+          {expanded ? (
             <ChevronUp color={mockupGreen} size={17} />
-        ) : (
+          ) : (
             <ChevronDown color={mockupGreen} size={17} />
-        )}
+          )}
         </Pressable>
       </View>
       {expanded ? (
@@ -3659,7 +3817,9 @@ function FinanceCategoryCards({
   function toggleCategory(categoryId: string) {
     setExpandedCategoryIds((current) =>
       current.includes(categoryId)
-        ? current.filter((currentCategoryId) => currentCategoryId !== categoryId)
+        ? current.filter(
+            (currentCategoryId) => currentCategoryId !== categoryId,
+          )
         : [...current, categoryId],
     );
   }
@@ -3791,12 +3951,18 @@ function FinanceCategoryCards({
                           ]}
                         >
                           {item.budgetAmount
-                            ? formatMoney(item.remainingAmount ?? 0, currencyCode)
+                            ? formatMoney(
+                                item.remainingAmount ?? 0,
+                                currencyCode,
+                              )
                             : "bez limitu"}
                         </Text>
                       </View>
                       <View style={styles.budgetItemActions}>
-                        <ChevronRight color={theme.colors.textMuted} size={18} />
+                        <ChevronRight
+                          color={theme.colors.textMuted}
+                          size={18}
+                        />
                       </View>
                     </Pressable>
                   ))
@@ -4054,7 +4220,7 @@ function groupDebtsByLender(debts: FinanceDebt[]): FinanceDebtGroup[] {
       group.settledCount += 1;
     } else {
       group.activeCount += 1;
-      group.totalOpen += Number(debt.amount ?? 0);
+      group.totalOpen += Number(debt.remainingAmount ?? debt.amount ?? 0);
     }
 
     groups.set(id, group);
@@ -4287,9 +4453,16 @@ function formatOwner(owner: BudgetItem["owner"] | null | undefined): string {
   return owner?.displayName || owner?.email || "Brak właściciela";
 }
 
-function compareSavingsGoals(left: SavingsGoalView, right: SavingsGoalView): number {
-  const leftDate = left.targetDate ? Date.parse(left.targetDate) : Number.POSITIVE_INFINITY;
-  const rightDate = right.targetDate ? Date.parse(right.targetDate) : Number.POSITIVE_INFINITY;
+function compareSavingsGoals(
+  left: SavingsGoalView,
+  right: SavingsGoalView,
+): number {
+  const leftDate = left.targetDate
+    ? Date.parse(left.targetDate)
+    : Number.POSITIVE_INFINITY;
+  const rightDate = right.targetDate
+    ? Date.parse(right.targetDate)
+    : Number.POSITIVE_INFINITY;
 
   if (leftDate !== rightDate) {
     return leftDate - rightDate;
@@ -4322,7 +4495,11 @@ function getMemberAccent(seed: string): {
     { background: "#EFF9F2", border: "#D5EEDB", text: "#3F7A4A" },
   ];
   const hash = [...seed].reduce((sum, char) => sum + char.charCodeAt(0), 0);
-  const fallback = { background: "#EEF5E8", border: "#DCE9D1", text: "#4D6A2D" };
+  const fallback = {
+    background: "#EEF5E8",
+    border: "#DCE9D1",
+    text: "#4D6A2D",
+  };
 
   return accents[hash % accents.length] ?? fallback;
 }
@@ -4338,7 +4515,11 @@ function getSavingsGoalImage(goalName: string): ImageSourcePropType {
     return savingsGoalEmergencyImage;
   }
 
-  if (/(telefon|smartfon|iphone|android|komor|laptop|tablet|elektronik)/.test(normalized)) {
+  if (
+    /(telefon|smartfon|iphone|android|komor|laptop|tablet|elektronik)/.test(
+      normalized,
+    )
+  ) {
     return savingsGoalPhoneImage;
   }
 
@@ -4350,7 +4531,11 @@ function getSavingsGoalImage(goalName: string): ImageSourcePropType {
     return savingsGoalCarImage;
   }
 
-  if (/(dzieci|rodzin|rodzina|wspolne|prezent|swieta|urodzin|gift)/.test(normalized)) {
+  if (
+    /(dzieci|rodzin|rodzina|wspolne|prezent|swieta|urodzin|gift)/.test(
+      normalized,
+    )
+  ) {
     return savingsGoalGiftImage;
   }
 
@@ -5184,6 +5369,82 @@ function createStyles(colors: AppPalette) {
     debtModalFooter: {
       flexDirection: "row",
       gap: spacing.sm,
+    },
+    debtPaymentHistory: {
+      gap: spacing.xs,
+    },
+    debtPaymentPanel: {
+      backgroundColor: colors.card,
+      borderColor: colors.line,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      gap: spacing.sm,
+      padding: spacing.sm,
+    },
+    debtPaymentRow: {
+      alignItems: "center",
+      borderColor: colors.line,
+      borderTopWidth: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      minHeight: 42,
+      paddingTop: spacing.sm,
+    },
+    debtPaymentRowAmount: {
+      color: colors.finance,
+      fontSize: 13,
+      fontWeight: "900",
+      letterSpacing: 0,
+      textAlign: "right",
+    },
+    debtPaymentRowMeta: {
+      color: colors.textMuted,
+      fontSize: 11,
+      letterSpacing: 0,
+    },
+    debtPaymentRowText: {
+      flex: 1,
+      gap: 2,
+      minWidth: 0,
+    },
+    debtPaymentRowTitle: {
+      color: colors.text,
+      fontSize: 12,
+      fontWeight: "800",
+      letterSpacing: 0,
+    },
+    debtPaymentSummary: {
+      flexDirection: "row",
+      gap: spacing.xs,
+    },
+    debtPaymentSummaryItem: {
+      backgroundColor: colors.cardMuted,
+      borderColor: colors.line,
+      borderRadius: 10,
+      borderWidth: 1,
+      flex: 1,
+      gap: 2,
+      minWidth: 0,
+      padding: spacing.sm,
+    },
+    debtPaymentSummaryLabel: {
+      color: colors.textMuted,
+      fontSize: 9,
+      fontWeight: "800",
+      letterSpacing: 0,
+      textTransform: "uppercase",
+    },
+    debtPaymentSummaryValue: {
+      color: colors.text,
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    debtPaymentTitle: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: "900",
+      letterSpacing: 0,
     },
     debtOverviewAmount: {
       color: colors.finance,

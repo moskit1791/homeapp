@@ -33,6 +33,7 @@ import type {
   CreateDataEntryRequest,
   CreateExpenseRequest,
   CreateFinanceDebtRequest,
+  CreateFinanceDebtPaymentRequest,
   CreateFinanceSavingsAccountRequest,
   CreateFinanceSavingsTransactionRequest,
   CreateHouseholdRequest,
@@ -630,6 +631,21 @@ export function updateFinanceDebt(
     accessToken: requestOptions.accessToken,
     body: input,
     method: 'PATCH',
+    signal: requestOptions.signal
+  });
+}
+
+export function createFinanceDebtPayment(
+  debtId: string,
+  input: CreateFinanceDebtPaymentRequest,
+  options?: ApiCallOptionsInput
+): Promise<FinanceDebt> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<FinanceDebt, CreateFinanceDebtPaymentRequest>(`/finance/debts/${debtId}/payments`, {
+    accessToken: requestOptions.accessToken,
+    body: input,
+    method: 'POST',
     signal: requestOptions.signal
   });
 }

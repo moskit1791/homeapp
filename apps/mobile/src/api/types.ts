@@ -434,9 +434,21 @@ export interface FinanceDebt {
   isSettled: boolean;
   lenderName: string;
   note: string | null;
+  paidAmount: string;
+  payments: FinanceDebtPayment[];
   purpose: string;
+  remainingAmount: string;
   settledAt: string | null;
   updatedAt: string;
+}
+
+export interface FinanceDebtPayment {
+  amount: string;
+  createdAt: string;
+  debtId: string;
+  id: string;
+  note: string | null;
+  paidAt: string | null;
 }
 
 export interface CreateFinanceDebtRequest {
@@ -445,6 +457,12 @@ export interface CreateFinanceDebtRequest {
   lenderName: string;
   note?: string | null;
   purpose: string;
+}
+
+export interface CreateFinanceDebtPaymentRequest {
+  amount: number;
+  note?: string | null;
+  paidAt?: string;
 }
 
 export interface UpdateFinanceDebtRequest {

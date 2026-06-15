@@ -23,6 +23,7 @@ import {
   CreateBudgetMonthDto,
   CreateExpenseDto,
   CreateFinanceDebtDto,
+  CreateFinanceDebtPaymentDto,
   CreateFinanceSavingsAccountDto,
   CreateFinanceSavingsTransactionDto,
   FinanceBudgetItemIdParamDto,
@@ -242,6 +243,26 @@ export class FinanceController {
   @RequirePermission('finances', 'create')
   createDebt(@CurrentHousehold() household: HouseholdContext | undefined, @Body() dto: CreateFinanceDebtDto) {
     return this.financeDebtsService.createDebt(this.requireHousehold(household).householdId, dto);
+  }
+
+  @Post('debts/:id/payments')
+  @RequirePermission('finances', 'update')
+  async createDebtPayment(
+    @CurrentHousehold() household: HouseholdContext | undefined,
+    @Param() params: FinanceDebtIdParamDto,
+    @Body() dto: CreateFinanceDebtPaymentDto
+  ) {
+    const debt = await this.financeDebtsService.createPayment(
+      this.requireHousehold(household).householdId,
+      params.id,
+      dto
+    );
+
+    if (!debt) {
+      throw new NotFoundException('Finance debt not found');
+    }
+
+    return debt;
   }
 
   @Patch('debts/:id')

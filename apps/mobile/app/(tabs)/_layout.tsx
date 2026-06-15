@@ -1,7 +1,13 @@
 import type { ModuleKey } from "@homeapp/shared-types";
 import { Tabs, useRouter } from "expo-router";
 import { useEffect, type ComponentProps, type ReactNode } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import {
   CalendarDays,
   CheckSquare,
@@ -83,7 +89,7 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         tabBarButton: (props) => <TabBarButton {...props} />,
-        tabBarActiveTintColor: "#4F8D2C",
+        tabBarActiveTintColor: theme.colors.primary,
         tabBarShowLabel: false,
         tabBarInactiveTintColor: theme.colors.textMuted,
         tabBarHideOnKeyboard: true,
@@ -283,11 +289,17 @@ function TabGlyph({
   focused: boolean;
   icon: (color: string) => ReactNode;
 }) {
-  const color = focused ? "#4F8D2C" : "#454A4C";
+  const theme = useAppTheme();
+  const color = focused ? theme.colors.primary : theme.colors.textMuted;
 
   return (
     <View style={styles.tabGlyph}>
-      <View style={[styles.tabIconSlot, focused && styles.tabIconSlotActive]}>
+      <View
+        style={[
+          styles.tabIconSlot,
+          focused && { backgroundColor: theme.colors.primarySoft },
+        ]}
+      >
         {icon(color)}
       </View>
     </View>
@@ -328,8 +340,5 @@ const styles = StyleSheet.create({
     height: 42,
     justifyContent: "center",
     width: 42,
-  },
-  tabIconSlotActive: {
-    backgroundColor: "#EEF8E9",
   },
 });

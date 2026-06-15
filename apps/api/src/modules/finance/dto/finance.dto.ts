@@ -253,6 +253,22 @@ export class UpdateFinanceDebtDto {
   purpose?: string;
 }
 
+export class CreateFinanceDebtPaymentDto {
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.01)
+  amount!: number;
+
+  @IsOptional()
+  @IsDateString()
+  paidAt?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 500)
+  note?: string | null;
+}
+
 export class CreateFinanceSavingsAccountDto {
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })

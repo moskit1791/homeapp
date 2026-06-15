@@ -80,11 +80,9 @@ import {
 import { useSession } from "../../src/session/session-context";
 import { radii, spacing } from "../../src/theme/tokens";
 import {
-  accentColorOptions,
   useAppTheme,
   useThemePreferences,
   type AppPalette,
-  type DarkAccentKey,
   type ThemeMode,
 } from "../../src/theme/use-app-theme";
 import {
@@ -107,7 +105,6 @@ import {
   Broom,
   CalendarDays,
   ChartBar,
-  Check,
   ChevronLeft,
   ChevronRight,
   Close,
@@ -129,16 +126,6 @@ type ImageAttachmentMimeType = Extract<
   Attachment["mimeType"],
   "image/jpeg" | "image/png" | "image/webp"
 >;
-const neutralAccentValues = new Set([
-  "#A16207",
-  "#92400E",
-  "#7C2D12",
-  "#F8FAFC",
-  "#E5E7EB",
-  "#94A3B8",
-  "#475569",
-  "#111827",
-]);
 const fontScaleSliderMin = 0.9;
 const fontScaleSliderMax = 1.3;
 const themeModeOptions: Array<{ label: string; value: ThemeMode }> = [
@@ -649,7 +636,9 @@ function CleaningPanel() {
                 disabled={!canSave}
                 loading={createMutation.isPending || updateMutation.isPending}
                 onPress={() =>
-                  editingTask ? updateMutation.mutate() : createMutation.mutate()
+                  editingTask
+                    ? updateMutation.mutate()
+                    : createMutation.mutate()
                 }
                 style={styles.modalFooterButton}
                 title={editingTask ? "Zapisz" : "Dodaj"}
@@ -2064,14 +2053,8 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
   const householdPermission = useModulePermission("household_members");
   const router = useRouter();
   const theme = useAppTheme();
-  const {
-    accent,
-    fontScale,
-    setAccent,
-    setFontScale,
-    setThemeMode,
-    themeMode,
-  } = useThemePreferences();
+  const { fontScale, setFontScale, setThemeMode, themeMode } =
+    useThemePreferences();
   const styles = createStyles(theme.colors);
   const accessToken = session?.accessToken;
   const [settingsVisible, setSettingsVisible] = useState(false);
@@ -2253,11 +2236,6 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
     notificationPreferencesMutation.mutate(next);
   }
 
-  function handleAccentChange(accent: DarkAccentKey) {
-    setAccent(accent);
-    showToast("Kolor zapisany");
-  }
-
   function handleThemeModeChange(mode: ThemeMode) {
     setThemeMode(mode);
     showToast("Tryb zapisany");
@@ -2281,7 +2259,6 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
     householdPermission.canCreate &&
     Boolean(memberInviteEmail.trim()) &&
     !inviteMemberMutation.isPending;
-  const selectedAccent = normalizeHexAccent(accent) ?? "#B56CFF";
   const themeModeLabel =
     themeModeOptions.find((option) => option.value === themeMode)?.label ??
     "System";
@@ -2444,29 +2421,19 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
                 <View
                   style={[
                     styles.moduleIcon,
-                    { backgroundColor: selectedAccent },
+                    { backgroundColor: theme.colors.primarySoft },
                   ]}
                 >
-                  <Pencil
-                    color={getReadableSwatchText(selectedAccent)}
-                    size={21}
-                  />
+                  <Pencil color={theme.colors.primary} size={21} />
                 </View>
                 <View style={styles.itemText}>
                   <Text style={styles.settingsPanelTitle}>
                     Wygląd aplikacji
                   </Text>
                   <Text style={styles.settingsPanelMeta}>
-                    {themeModeLabel} / {selectedAccent} /{" "}
-                    {Math.round(fontScale * 100)}%
+                    {themeModeLabel} / tekst {Math.round(fontScale * 100)}%
                   </Text>
                 </View>
-                <View
-                  style={[
-                    styles.accentPalettePreview,
-                    { backgroundColor: selectedAccent },
-                  ]}
-                />
               </View>
               <ActionButton
                 onPress={() => setSettingsView("appearance")}
@@ -2625,16 +2592,6 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
                   aplikacji.
                 </Text>
                 <FontScaleControl value={fontScale} onChange={setFontScale} />
-              </View>
-              <View style={styles.settingsPanelRow}>
-                <Text style={styles.settingsPanelTitle}>Kolor</Text>
-                <Text style={styles.settingsPanelMeta}>
-                  Kolor akcentu aplikacji.
-                </Text>
-                <AccentPalettePicker
-                  accent={accent}
-                  onChange={handleAccentChange}
-                />
               </View>
             </>
           ) : null}
@@ -2847,74 +2804,6 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
   );
 }
 
-function AccentPalettePicker({
-  accent,
-  onChange,
-}: {
-  accent: DarkAccentKey;
-  onChange: (accent: DarkAccentKey) => void;
-}) {
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
-  const selectedAccent = normalizeHexAccent(accent) ?? "#B56CFF";
-  const colorOptions = accentColorOptions.filter(
-    (option) => !neutralAccentValues.has(option.value),
-  );
-  const neutralOptions = accentColorOptions.filter((option) =>
-    neutralAccentValues.has(option.value),
-  );
-  const renderSwatch = (option: (typeof accentColorOptions)[number]) => {
-    const optionColor = normalizeHexAccent(option.value) ?? option.color;
-    const active = optionColor === selectedAccent;
-
-    return (
-      <Pressable
-        accessibilityLabel={`Kolor akcentu ${option.label}`}
-        accessibilityRole="button"
-        accessibilityState={{ selected: active }}
-        key={option.value}
-        onPress={() => onChange(option.value)}
-        style={({ pressed }) => [
-          styles.accentSwatch,
-          { backgroundColor: option.color },
-          active && styles.accentSwatchActive,
-          pressed && styles.pressed,
-        ]}
-      >
-        {active ? (
-          <Check color={getReadableSwatchText(optionColor)} size={13} />
-        ) : null}
-      </Pressable>
-    );
-  };
-
-  return (
-    <View style={styles.accentPaletteCard}>
-      <View style={styles.accentPaletteSection}>
-        <Text style={styles.accentPaletteTitle}>Kolory</Text>
-        <View style={styles.accentSwatchGrid}>
-          {colorOptions.map(renderSwatch)}
-        </View>
-      </View>
-      <View style={styles.accentPaletteSection}>
-        <Text style={styles.accentPaletteTitle}>Neutralne i ziemiste</Text>
-        <View style={styles.accentSwatchGrid}>
-          {neutralOptions.map(renderSwatch)}
-        </View>
-      </View>
-      <View style={styles.accentPalettePreviewRow}>
-        <View
-          style={[
-            styles.accentPalettePreview,
-            { backgroundColor: selectedAccent },
-          ]}
-        />
-        <Text style={styles.settingsPanelMeta}>{selectedAccent}</Text>
-      </View>
-    </View>
-  );
-}
-
 function FontScaleControl({
   onChange,
   value,
@@ -3086,10 +2975,7 @@ function CleaningRow({
         accessibilityRole="button"
         disabled={!canUpdate}
         onPress={onEdit}
-        style={({ pressed }) => [
-          styles.itemText,
-          pressed && styles.pressed,
-        ]}
+        style={({ pressed }) => [styles.itemText, pressed && styles.pressed]}
       >
         <View style={styles.cleaningTitleRow}>
           <Text numberOfLines={2} style={styles.itemName}>
@@ -3738,28 +3624,6 @@ function sanitizeCacheFileName(fileName: string): string {
   return sanitized || "attachment";
 }
 
-function getReadableSwatchText(color: string): string {
-  const rgb = parseHexColor(color);
-
-  if (!rgb) {
-    return "#FFFFFF";
-  }
-
-  const luminance =
-    (rgb.red * 0.299 + rgb.green * 0.587 + rgb.blue * 0.114) / 255;
-
-  return luminance > 0.62 ? "#111827" : "#FFFFFF";
-}
-
-function normalizeHexAccent(value: string): string | null {
-  const trimmed = value.trim();
-  const hex = trimmed.startsWith("#")
-    ? trimmed.toUpperCase()
-    : `#${trimmed.toUpperCase()}`;
-
-  return /^#[0-9A-F]{6}$/.test(hex) ? hex : null;
-}
-
 function clampFontScale(value: number): number {
   if (!Number.isFinite(value)) {
     return 1;
@@ -3773,72 +3637,8 @@ function clampFontScale(value: number): number {
   return Math.round(clamped * 20) / 20;
 }
 
-function parseHexColor(
-  color: string,
-): { blue: number; green: number; red: number } | null {
-  if (!/^#[0-9A-F]{6}$/i.test(color)) {
-    return null;
-  }
-
-  return {
-    blue: Number.parseInt(color.slice(5, 7), 16),
-    green: Number.parseInt(color.slice(3, 5), 16),
-    red: Number.parseInt(color.slice(1, 3), 16),
-  };
-}
-
 function createStyles(colors: AppPalette) {
   return StyleSheet.create({
-    accentPaletteCard: {
-      backgroundColor: colors.field,
-      borderColor: colors.border,
-      borderRadius: radii.card,
-      borderWidth: 1,
-      gap: spacing.md,
-      padding: spacing.md,
-    },
-    accentPalettePreview: {
-      borderColor: colors.border,
-      borderRadius: 999,
-      borderWidth: 1,
-      height: 26,
-      width: 26,
-    },
-    accentPalettePreviewRow: {
-      alignItems: "center",
-      flexDirection: "row",
-      gap: spacing.sm,
-      justifyContent: "center",
-    },
-    accentPaletteSection: {
-      gap: spacing.sm,
-    },
-    accentPaletteTitle: {
-      color: colors.textMuted,
-      fontSize: 11,
-      fontWeight: "900",
-      letterSpacing: 0,
-      textTransform: "uppercase",
-    },
-    accentSwatch: {
-      alignItems: "center",
-      borderColor: colors.border,
-      borderRadius: 999,
-      borderWidth: 1,
-      height: 32,
-      justifyContent: "center",
-      width: 32,
-    },
-    accentSwatchActive: {
-      borderColor: colors.text,
-      borderWidth: 2,
-      transform: [{ scale: 1.08 }],
-    },
-    accentSwatchGrid: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: spacing.sm,
-    },
     avatar: {
       alignItems: "center",
       backgroundColor: colors.cardMuted,

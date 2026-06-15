@@ -60,8 +60,6 @@ const visibleModules: ModuleKey[] = [
 export default function WiecejScreen() {
   const { logout, session } = useSession();
   const queryClient = useQueryClient();
-  const theme = useAppTheme();
-  const styles = createStyles(theme.colors);
   const accessToken = session?.accessToken;
   const permissionsQuery = usePermissions();
   const householdPermission = useModulePermission("household_members");
@@ -77,23 +75,6 @@ export default function WiecejScreen() {
       subtitle="Członkowie domu, role i ustawienia konta."
       title="Więcej"
     >
-      <View style={styles.hero}>
-        <View style={styles.heroIcon}>
-          <Users color={theme.colors.primary} size={24} />
-        </View>
-        <View style={styles.heroContent}>
-          <Text style={styles.heroKicker}>Administracja</Text>
-          <Text style={styles.heroTitle}>
-            Zarządzaj domem bez szukania w ustawieniach systemu.
-          </Text>
-          <View style={styles.quickRow}>
-            <QuickPill colors={theme.colors} text="Członkowie" tone="primary" />
-            <QuickPill colors={theme.colors} text="Uprawnienia" tone="info" />
-            <QuickPill colors={theme.colors} text="Konto" tone="warning" />
-          </View>
-        </View>
-      </View>
-
       <HouseholdPanel
         accessToken={accessToken}
         canCreate={householdPermission.canCreate}
@@ -386,7 +367,11 @@ function TechPanel({
             Wylogowanie usuwa aktywny token z aplikacji.
           </Text>
         </View>
-        <ActionButton onPress={onLogout} title="Wyloguj się" variant="secondary" />
+        <ActionButton
+          onPress={onLogout}
+          title="Wyloguj się"
+          variant="secondary"
+        />
       </View>
     </SectionCard>
   );
@@ -448,11 +433,7 @@ function Panel({
 
   return (
     <SectionCard
-      action={
-        <View style={styles.panelActions}>
-          {action}
-        </View>
-      }
+      action={<View style={styles.panelActions}>{action}</View>}
       icon={icon}
       subtitle={subtitle}
       title={title}
@@ -507,25 +488,6 @@ function MetricTile({
       <Text style={styles.metricValue}>{value}</Text>
     </View>
   );
-}
-
-function QuickPill({
-  colors,
-  text,
-  tone,
-}: {
-  colors: AppPalette;
-  text: string;
-  tone: "info" | "primary" | "warning";
-}) {
-  const styles = createStyles(colors);
-  const toneStyles = {
-    info: { backgroundColor: colors.softBlue, color: colors.calendar },
-    primary: { backgroundColor: colors.primarySoft, color: colors.primaryDark },
-    warning: { backgroundColor: colors.softOrange, color: colors.warning },
-  };
-
-  return <Text style={[styles.quickPill, toneStyles[tone]]}>{text}</Text>;
 }
 
 function getAccent(
@@ -622,41 +584,6 @@ function createStyles(colors: AppPalette) {
       fontWeight: "900",
       letterSpacing: 0,
       textTransform: "uppercase",
-    },
-    hero: {
-      backgroundColor: colors.card,
-      borderColor: colors.border,
-      borderRadius: radii.card,
-      borderWidth: 1,
-      flexDirection: "row",
-      gap: spacing.md,
-      padding: spacing.lg,
-    },
-    heroContent: {
-      flex: 1,
-      gap: spacing.sm,
-    },
-    heroIcon: {
-      alignItems: "center",
-      backgroundColor: colors.primarySoft,
-      borderRadius: radii.control,
-      height: 48,
-      justifyContent: "center",
-      width: 48,
-    },
-    heroKicker: {
-      color: colors.primaryDark,
-      fontSize: 12,
-      fontWeight: "900",
-      letterSpacing: 0,
-      textTransform: "uppercase",
-    },
-    heroTitle: {
-      color: colors.text,
-      fontSize: 20,
-      fontWeight: "900",
-      letterSpacing: 0,
-      lineHeight: 25,
     },
     input: {
       backgroundColor: colors.field,
@@ -781,20 +708,6 @@ function createStyles(colors: AppPalette) {
     permissionText: {
       flex: 1,
       gap: spacing.xs,
-    },
-    quickPill: {
-      borderRadius: 999,
-      fontSize: 11,
-      fontWeight: "900",
-      letterSpacing: 0,
-      overflow: "hidden",
-      paddingHorizontal: spacing.sm,
-      paddingVertical: 6,
-    },
-    quickRow: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: spacing.sm,
     },
     settingsBox: {
       alignItems: "center",
