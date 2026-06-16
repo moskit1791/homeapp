@@ -45,6 +45,9 @@ describe('MealPlannerAiService', () => {
       'model',
       'user'
     ]);
+    expect(body.contents[0]?.parts[0]?.text).toContain(
+      'W domu skonfigurowano 2 posilkow dziennie'
+    );
   });
 
   it('finalizes the chat into a draft and uses a separate Search pass for missing recipe links', async () => {

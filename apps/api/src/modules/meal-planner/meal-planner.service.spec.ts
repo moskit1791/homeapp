@@ -6,7 +6,7 @@ describe('MealPlannerService', () => {
     const database = {
       query: vi
         .fn()
-        .mockResolvedValueOnce({ rows: [{ meal_slots_per_day: 3 }] })
+        .mockResolvedValueOnce({ rows: [{ meal_slots_per_day: 4 }] })
         .mockResolvedValueOnce({
           rows: [
             mealHistoryRow({
@@ -63,15 +63,17 @@ describe('MealPlannerService', () => {
     const payload = parsePromptPayload(result.prompt);
 
     expect(result.prompt).toContain('To jest prompt uniwersalny');
+    expect(result.prompt).toContain('Dom ma 4 sloty posilkow dziennie');
     expect(result.prompt).toContain('Nie zakladaj z gory, ze slot 0 zawsze jest sniadaniem');
     expect(result.prompt).toContain('Nie dawaj teraz ponownie');
     expect(payload.summary).toMatchObject({
       entriesCount: 6,
       latestWeekStartDate: '2026-06-01',
-      mealSlotsPerDay: 3,
+      mealSlotsPerDay: 4,
       suggestedTargetWeekStartDate: '2026-06-08',
       weeksCount: 2
     });
+    expect(payload.slotProfiles).toHaveLength(4);
     expect(payload.slotProfiles[0]).toMatchObject({
       detectedRole: 'prawdopodobnie sniadanie',
       slotIndex: 0

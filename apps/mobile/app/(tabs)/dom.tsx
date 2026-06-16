@@ -2651,6 +2651,7 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
               <Close color={theme.colors.textMuted} size={18} />
             </IconButton>
           }
+          contentStyle={styles.notificationScreenContent}
           subtitle="Token, test push i typy zdarzeń."
           title="Powiadomienia"
         >
@@ -2659,7 +2660,7 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
               <Text style={styles.settingsToastText}>{toast}</Text>
             </View>
           ) : null}
-          <View style={styles.settingsPanel}>
+          <View collapsable={false} style={styles.settingsPanel}>
             <View style={styles.settingsPanelRow}>
               <Text style={styles.settingsPanelTitle}>Telefon</Text>
               <Text style={styles.settingsPanelMeta}>
@@ -2714,7 +2715,10 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
                 error={notificationPreferencesQuery.error}
                 isLoading={notificationPreferencesQuery.isLoading}
               />
-              <View style={styles.notificationPreferenceList}>
+              <View
+                collapsable={false}
+                style={styles.notificationPreferenceList}
+              >
                 {notificationPreferences.map((preference) => {
                   const copy =
                     notificationPreferenceLabels[preference.eventType];
@@ -3182,7 +3186,7 @@ function getSegmentAccent(colors: AppPalette, segment: HomeSegment): Accent {
   const accents: Record<HomeSegment, Accent> = {
     annual_costs: { color: colors.finance, soft: colors.softGreen },
     attachments: { color: colors.warning, soft: colors.warningSoft },
-    cleaning: { color: colors.shopping, soft: colors.softPurple },
+    cleaning: { color: colors.primary, soft: colors.softGreen },
     data_entries: { color: colors.calendar, soft: colors.softBlue },
   };
 
@@ -4027,6 +4031,9 @@ function createStyles(colors: AppPalette) {
       gap: 2,
       minWidth: 0,
     },
+    notificationScreenContent: {
+      paddingBottom: 196,
+    },
     preferenceToggleLabel: {
       color: colors.textMuted,
       flex: 1,
@@ -4184,6 +4191,7 @@ function createStyles(colors: AppPalette) {
       elevation: 0,
       height: 46,
       justifyContent: "center",
+      overflow: "hidden",
       width: 46,
     },
     moduleTileTop: {
@@ -4195,7 +4203,8 @@ function createStyles(colors: AppPalette) {
       fontSize: 12,
       fontWeight: "800",
       letterSpacing: 0,
-      lineHeight: 15,
+      lineHeight: 16,
+      minHeight: 32,
       textAlign: "center",
     },
     mealSlotsField: {

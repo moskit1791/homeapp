@@ -573,8 +573,11 @@ function ShoppingBoard({
       id: string;
       targetType: ShoppingListType;
     }) => moveShoppingItem(id, { targetType }, { accessToken }),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: queryKeys.shopping }),
+    onSuccess: async () => {
+      setSelectedShoppingItem(null);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.shopping });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.start });
+    },
   });
   const moveUncheckedMutation = useMutation({
     mutationFn: async () => {
@@ -685,10 +688,6 @@ function ShoppingBoard({
             moving={moveMutation.isPending}
             onCheck={(item) => shoppingToggle.toggle(item.id)}
             onOpenDetails={setSelectedShoppingItem}
-            onMove={(item, targetType) => {
-              shoppingToggle.cancel(item.id);
-              moveMutation.mutate({ id: item.id, targetType });
-            }}
             isUpdating={shoppingToggle.isSyncing}
           />
         ))}
@@ -705,10 +704,6 @@ function ShoppingBoard({
             moving={moveMutation.isPending}
             onCheck={(item) => shoppingToggle.toggle(item.id)}
             onOpenDetails={setSelectedShoppingItem}
-            onMove={(item, targetType) => {
-              shoppingToggle.cancel(item.id);
-              moveMutation.mutate({ id: item.id, targetType });
-            }}
             isUpdating={shoppingToggle.isSyncing}
           />
         ) : null}
@@ -717,6 +712,40 @@ function ShoppingBoard({
       <FormModal
         footer={
           <View style={styles.modalFooterStack}>
+            {selectedShoppingItem &&
+            activeType === "long_term" &&
+            permission.canUpdate ? (
+              <View style={styles.shoppingMoveActions}>
+                <ActionButton
+                  disabled={moveMutation.isPending}
+                  loading={moveMutation.isPending}
+                  onPress={() => {
+                    shoppingToggle.cancel(selectedShoppingItem.id);
+                    moveMutation.mutate({
+                      id: selectedShoppingItem.id,
+                      targetType: "daily",
+                    });
+                  }}
+                  style={styles.shoppingMoveAction}
+                  title="Przenieś na dziś"
+                  variant="secondary"
+                />
+                <ActionButton
+                  disabled={moveMutation.isPending}
+                  loading={moveMutation.isPending}
+                  onPress={() => {
+                    shoppingToggle.cancel(selectedShoppingItem.id);
+                    moveMutation.mutate({
+                      id: selectedShoppingItem.id,
+                      targetType: "tomorrow",
+                    });
+                  }}
+                  style={styles.shoppingMoveAction}
+                  title="Przenieś na jutro"
+                  variant="secondary"
+                />
+              </View>
+            ) : null}
             {selectedShoppingItem && permission.canDelete ? (
               <ActionButton
                 labelStyle={styles.deleteActionLabel}
@@ -1467,14 +1496,16 @@ function MealsBoard({
   return (
     <>
       <View style={styles.mealHero}>
-        <View style={styles.mealHeroIcon}>
-          <Utensils color={mockupGreen} size={22} />
-        </View>
-        <View style={styles.mealHeroText}>
-          <Text style={styles.sectionTitle}>Plan posiłków</Text>
-          <Text style={styles.sectionMeta}>
-            {formatWeekRange(selectedWeekStartDate)}
-          </Text>
+        <View style={styles.mealHeroHeader}>
+          <View style={styles.mealHeroIcon}>
+            <Utensils color={mockupGreen} size={22} />
+          </View>
+          <View style={styles.mealHeroText}>
+            <Text style={styles.sectionTitle}>Plan posiłków</Text>
+            <Text style={styles.sectionMeta}>
+              {formatWeekRange(selectedWeekStartDate)}
+            </Text>
+          </View>
         </View>
       </View>
       {aiNotice ? <InlineAlert text={aiNotice} /> : null}
@@ -1613,7 +1644,14 @@ function MealsBoard({
         <View style={styles.groupList}>
           {groupedEntries.map((group) => (
             <View key={group.day} style={styles.mealDayCard}>
-              <Text style={styles.groupTitle}>{weekdayLabel(group.day)}</Text>
+              <View style={styles.mealDayHeader}>
+                <Text style={styles.groupTitle}>{weekdayLabel(group.day)}</Text>
+                <View style={styles.groupCountPill}>
+                  <Text style={styles.groupCountText}>
+                    {group.entries.length}
+                  </Text>
+                </View>
+              </View>
               {group.entries.map((entry) => (
                 <Pressable
                   key={entry.id}
@@ -1945,11 +1983,8 @@ function ShoppingGroupCard({
   canUpdate,
   group,
   isUpdating,
-  listType,
-  moving,
   onCheck,
   onOpenDetails,
-  onMove,
 }: {
   canUpdate: boolean;
   group: ShoppingGroup;
@@ -1958,7 +1993,6 @@ function ShoppingGroupCard({
   moving: boolean;
   onCheck: (item: ShoppingItem) => void;
   onOpenDetails: (item: ShoppingItem) => void;
-  onMove: (item: ShoppingItem, targetType: ShoppingListType) => void;
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
@@ -2002,24 +2036,6 @@ function ShoppingGroupCard({
                   </Text>
                 ) : null}
               </Pressable>
-              {listType === "long_term" && canUpdate ? (
-                <View style={styles.itemMoveActions}>
-                  <ActionButton
-                    disabled={moving}
-                    onPress={() => onMove(item, "daily")}
-                    size="small"
-                    title="Dziś"
-                    variant="secondary"
-                  />
-                  <ActionButton
-                    disabled={moving}
-                    onPress={() => onMove(item, "tomorrow")}
-                    size="small"
-                    title="Jutro"
-                    variant="secondary"
-                  />
-                </View>
-              ) : null}
             </View>
           ))}
         </View>
@@ -4028,12 +4044,6 @@ function createStyles(colors: AppPalette) {
       gap: spacing.sm,
       minHeight: 29,
     },
-    itemMoveActions: {
-      flexDirection: "column",
-      gap: spacing.xs,
-      justifyContent: "center",
-      maxWidth: 76,
-    },
     itemText: {
       flex: 1,
       gap: 2,
@@ -4045,32 +4055,52 @@ function createStyles(colors: AppPalette) {
       justifyContent: "space-between",
     },
     mealDayCard: {
-      backgroundColor: panelBackground,
-      borderColor: panelBorder,
+      backgroundColor: shoppingCardBackground,
+      borderColor: shoppingCardBorder,
       borderRadius: 12,
       borderWidth: 1,
       elevation: 2,
       gap: spacing.sm,
-      padding: spacing.md,
+      overflow: "hidden",
+      padding: spacing.sm,
       shadowColor: "#000000",
       shadowOffset: { height: 8, width: 0 },
-      shadowOpacity: panelShadowOpacity,
+      shadowOpacity: 0.07,
       shadowRadius: 18,
     },
-    mealHero: {
+    mealDayHeader: {
       alignItems: "center",
-      backgroundColor: panelBackground,
-      borderColor: panelBorder,
+      backgroundColor: shoppingHeaderBackground,
+      borderBottomColor: shoppingRowBorder,
+      borderBottomWidth: 1,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      marginHorizontal: -spacing.sm,
+      marginTop: -spacing.sm,
+      minHeight: 38,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.sm,
+    },
+    mealHero: {
+      backgroundColor: shoppingCardBackground,
+      borderColor: shoppingCardBorder,
       borderRadius: 12,
       borderWidth: 1,
       elevation: 2,
+      overflow: "hidden",
+      shadowColor: "#000000",
+      shadowOffset: { height: 8, width: 0 },
+      shadowOpacity: 0.07,
+      shadowRadius: 18,
+    },
+    mealHeroHeader: {
+      alignItems: "center",
+      backgroundColor: shoppingHeaderBackground,
+      borderBottomColor: shoppingRowBorder,
+      borderBottomWidth: 1,
       flexDirection: "row",
       gap: spacing.md,
       padding: spacing.md,
-      shadowColor: "#000000",
-      shadowOffset: { height: 8, width: 0 },
-      shadowOpacity: panelShadowOpacity,
-      shadowRadius: 18,
     },
     mealHeroIcon: {
       alignItems: "center",
@@ -4101,8 +4131,12 @@ function createStyles(colors: AppPalette) {
     },
     mealRow: {
       alignItems: "center",
+      borderBottomColor: shoppingRowBorder,
+      borderBottomWidth: 1,
       flexDirection: "row",
       gap: spacing.sm,
+      minHeight: 40,
+      paddingRight: spacing.xs,
     },
     mealSlot: {
       alignItems: "center",
@@ -4119,8 +4153,8 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
     },
     mealTile: {
-      backgroundColor: panelBackground,
-      borderColor: panelBorder,
+      backgroundColor: shoppingCardBackground,
+      borderColor: shoppingCardBorder,
       borderRadius: 12,
       borderWidth: 1,
       elevation: 2,
@@ -4129,14 +4163,15 @@ function createStyles(colors: AppPalette) {
       gap: spacing.sm,
       minHeight: 178,
       minWidth: 150,
+      overflow: "hidden",
       padding: spacing.sm,
       shadowColor: "#000000",
       shadowOffset: { height: 8, width: 0 },
-      shadowOpacity: panelShadowOpacity,
+      shadowOpacity: 0.07,
       shadowRadius: 18,
     },
     mealTileActive: {
-      backgroundColor: softGreenPanel,
+      backgroundColor: shoppingCardBackground,
       borderColor: softGreenBorder,
     },
     mealTileAdd: {
@@ -4156,14 +4191,14 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
     },
     mealTileCount: {
-      color: mockupGreen,
+      color: shoppingCountText,
       fontSize: 12,
       fontWeight: "900",
       letterSpacing: 0,
     },
     mealTileCountPill: {
       alignItems: "center",
-      backgroundColor: colors.field,
+      backgroundColor: shoppingCountBackground,
       borderRadius: 999,
       minWidth: 38,
       paddingHorizontal: spacing.xs,
@@ -4190,9 +4225,17 @@ function createStyles(colors: AppPalette) {
     },
     mealTileHeader: {
       alignItems: "center",
+      backgroundColor: shoppingHeaderBackground,
+      borderBottomColor: shoppingRowBorder,
+      borderBottomWidth: 1,
       flexDirection: "row",
       gap: spacing.sm,
       justifyContent: "space-between",
+      marginHorizontal: -spacing.sm,
+      marginTop: -spacing.sm,
+      minHeight: 42,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.sm,
     },
     mealTileList: {
       gap: spacing.xs,
@@ -4215,13 +4258,22 @@ function createStyles(colors: AppPalette) {
     },
     mealTileRow: {
       alignItems: "center",
-      backgroundColor: colors.field,
+      backgroundColor: panelBackground,
+      borderColor: shoppingRowBorder,
       borderRadius: radii.control,
+      borderWidth: 1,
       flexDirection: "row",
       gap: spacing.xs,
       minHeight: 30,
       paddingLeft: spacing.xs,
       paddingRight: 2,
+    },
+    shoppingMoveAction: {
+      flex: 1,
+    },
+    shoppingMoveActions: {
+      flexDirection: "row",
+      gap: spacing.sm,
     },
     mealTileSlot: {
       color: mockupGreen,

@@ -100,7 +100,9 @@ const lightPalette: Palette = {
   softBlue: "#EAF2FF",
   softGreen: "#E9FCD4",
   softOrange: "#FFF4DE",
-  softPurple: "#F4F0FF",
+  shopping: "#4F8D2C",
+  shoppingSoft: "#EEF7E8",
+  softPurple: "#EEF7E8",
   text: "#1C252E",
   textMuted: "#637381",
   textSubtle: "#919EAB",
@@ -121,23 +123,23 @@ const darkPaletteBase: typeof lightPalette = {
   field: darkField,
   finance: "#34D399",
   food: "#FBBF24",
-  info: "#B56CFF",
-  infoSoft: solidDarkSoft("#B56CFF"),
+  info: "#9BD47C",
+  infoSoft: solidDarkSoft("#9BD47C"),
   inverseText: "#050711",
   line: "rgba(238, 244, 255, 0.14)",
   modalSurface: darkModalSurface,
   overlay: darkOverlay,
-  primary: "#B56CFF",
-  primaryDark: "#D7B2FF",
-  primaryDarker: "#EBDCFF",
-  primaryLight: "#CC96FF",
-  primarySoft: solidDarkSoft("#B56CFF"),
-  shopping: "#A78BFA",
-  shoppingSoft: solidDarkSoft("#A78BFA"),
+  primary: "#9BD47C",
+  primaryDark: "#C7F2AE",
+  primaryDarker: "#E6F9DA",
+  primaryLight: "#B8E59F",
+  primarySoft: solidDarkSoft("#9BD47C"),
+  shopping: "#9BD47C",
+  shoppingSoft: solidDarkSoft("#9BD47C"),
   softBlue: solidDarkSoft("#38BDF8"),
   softGreen: solidDarkSoft("#34D399"),
   softOrange: solidDarkSoft("#FFC766"),
-  softPurple: solidDarkSoft("#A78BFA"),
+  softPurple: solidDarkSoft("#9BD47C"),
   successSoft: solidDarkSoft("#34D399"),
   surface: darkCard,
   surfaceMuted: darkCardMuted,
@@ -355,7 +357,7 @@ function createDarkAccentPalette(accentValue: string): AccentPalette {
   const color = normalizeAccentValue(accentValue) ?? homeAccent;
   const rgb = hexToRgb(color);
   const primary = !rgb
-    ? "#B56CFF"
+    ? "#9BD47C"
     : getRelativeLuminance(rgb) < 0.4
       ? mixHex(color, "#FFFFFF", 0.34)
       : color;

@@ -55,6 +55,7 @@ export function AppScreen({
           <ScrollView
             contentContainerStyle={[styles.content, contentStyle]}
             keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
             ref={scrollRef}
             showsVerticalScrollIndicator={false}
           >

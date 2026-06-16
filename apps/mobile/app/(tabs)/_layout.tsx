@@ -325,6 +325,7 @@ const styles = StyleSheet.create({
     elevation: 0,
     height: 42,
     justifyContent: "center",
+    overflow: "hidden",
     width: 42,
   },
   tabBarButton: {
@@ -339,6 +340,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     height: 42,
     justifyContent: "center",
+    overflow: "hidden",
     width: 42,
   },
 });

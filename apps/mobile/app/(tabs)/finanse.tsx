@@ -1083,7 +1083,10 @@ export default function FinanseScreen() {
   });
   const expenseMutation = useMutation({
     mutationFn: async () => {
-      let budgetItemId = selectedExpenseItemId;
+      let budgetItemId =
+        financeModal === "expenseHistory" && historyBudgetItemId
+          ? historyBudgetItemId
+          : selectedExpenseItemId;
 
       if (
         !budgetItemId &&
@@ -1121,7 +1124,9 @@ export default function FinanseScreen() {
       setValue("expenseAmount", "");
       setExpenseQuickItemId(null);
       setExpenseQuickCategoryId(null);
-      setFinanceModal(null);
+      if (financeModal !== "expenseHistory") {
+        setFinanceModal(null);
+      }
       await invalidateFinance();
       await queryClient.invalidateQueries({ queryKey: queryKeys.start });
     },
@@ -1204,6 +1209,12 @@ export default function FinanseScreen() {
 
   function openExpenseHistory(item: BudgetItemWithCategory) {
     setHistoryBudgetItemId(item.id);
+    setSelectedExpenseOwnerId(item.owner?.memberId ?? "");
+    setSelectedExpenseCategoryId(item.category.id);
+    setSelectedExpenseItemId(item.id);
+    setExpenseQuickItemId(null);
+    setExpenseQuickCategoryId(null);
+    setValue("expenseAmount", "");
     setFinanceModal("expenseHistory");
   }
 
@@ -1301,7 +1312,10 @@ export default function FinanseScreen() {
   const canSaveExpense =
     canCreate &&
     isPositiveMoney(expenseAmount) &&
-    (Boolean(selectedExpenseItem) ||
+    (Boolean(
+      financeModal === "expenseHistory" && historyBudgetItemId,
+    ) ||
+      Boolean(selectedExpenseItem) ||
       Boolean(
         expenseQuickCategoryId &&
         selectedExpenseCategory &&
@@ -1553,21 +1567,42 @@ export default function FinanseScreen() {
           />
 
           <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>RAZEM</Text>
-            <Text style={styles.totalValue}>
-              {formatMoney(budgetAmount, currencyCode)}
-            </Text>
-            <Text style={styles.totalValue}>
-              {formatMoney(spentAmount, currencyCode)}
-            </Text>
-            <Text
-              style={[
-                styles.totalValue,
-                remainingAmount < 0 && styles.dangerText,
-              ]}
-            >
-              {formatMoney(remainingAmount, currencyCode)}
-            </Text>
+            <View style={styles.totalMetric}>
+              <Text numberOfLines={1} style={styles.totalMetricLabel}>
+                Budżet
+              </Text>
+              <Text numberOfLines={1} style={styles.totalMetricValue}>
+                {formatMoney(budgetAmount, currencyCode)}
+              </Text>
+            </View>
+            <View style={styles.totalMetric}>
+              <Text numberOfLines={1} style={styles.totalMetricLabel}>
+                Wydano
+              </Text>
+              <Text numberOfLines={1} style={styles.totalMetricValue}>
+                {formatMoney(spentAmount, currencyCode)}
+              </Text>
+            </View>
+            <View style={styles.totalMetric}>
+              <Text
+                numberOfLines={1}
+                style={[
+                  styles.totalMetricLabel,
+                  remainingAmount < 0 && styles.dangerText,
+                ]}
+              >
+                {remainingAmount < 0 ? "Przekroczono" : "Zostaje"}
+              </Text>
+              <Text
+                numberOfLines={1}
+                style={[
+                  styles.totalMetricValue,
+                  remainingAmount < 0 && styles.dangerText,
+                ]}
+              >
+                {formatMoney(remainingAmount, currencyCode)}
+              </Text>
+            </View>
           </View>
 
           <FormModal
@@ -2192,11 +2227,45 @@ export default function FinanseScreen() {
                 ? `${historyBudgetItem.category.name} / ${historyBudgetItem.name}`
                 : undefined
             }
-            title="Historia wpłat"
+            title="Wydatek i historia"
             visible={financeModal === "expenseHistory"}
           >
             {historyBudgetItem ? (
               <View style={styles.selectorGroup}>
+                <View style={styles.expenseHistoryAddCard}>
+                  <View style={styles.expenseHistoryAddHeader}>
+                    <View>
+                      <Text style={styles.expenseContextLabel}>
+                        Dodaj wydatek
+                      </Text>
+                      <Text style={styles.expenseContextTitle}>
+                        {historyBudgetItem.name}
+                      </Text>
+                    </View>
+                    <Text style={styles.expenseContextMeta}>
+                      {formatOwner(historyBudgetItem.owner)}
+                    </Text>
+                  </View>
+                  <TextField
+                    control={control}
+                    keyboardType="decimal-pad"
+                    label="Kwota wydatku"
+                    name="expenseAmount"
+                    placeholder="0,00"
+                  />
+                  <ActionButton
+                    disabled={!canSaveExpense}
+                    loading={expenseMutation.isPending}
+                    onPress={() => expenseMutation.mutate()}
+                    title="Dodaj wydatek"
+                  />
+                  {expenseMutation.error ? (
+                    <InlineAlert
+                      tone="error"
+                      text="Nie udało się dodać wydatku."
+                    />
+                  ) : null}
+                </View>
                 <View style={styles.expenseHistorySummary}>
                   <View>
                     <Text style={styles.expenseContextLabel}>Wydano</Text>
@@ -2250,7 +2319,7 @@ export default function FinanseScreen() {
                     ))}
                   </View>
                 ) : (
-                  <InlineAlert text="Brak wpłat dla tej pozycji." />
+                  <InlineAlert text="Brak wydatków dla tej pozycji." />
                 )}
               </View>
             ) : (
@@ -2579,7 +2648,7 @@ export default function FinanseScreen() {
             {selectedSavingsGoal ? (
               <>
                 <ActionButton
-                  disabled={!canSaveSavingsTransaction}
+                  disabled={!canUpdate || savingsTransactionMutation.isPending}
                   loading={savingsTransactionMutation.isPending}
                   onPress={() =>
                     openSavingsTransaction(selectedSavingsGoal, "add")
@@ -2588,7 +2657,7 @@ export default function FinanseScreen() {
                   title="Dodaj"
                 />
                 <ActionButton
-                  disabled={!canSaveSavingsTransaction}
+                  disabled={!canUpdate || savingsTransactionMutation.isPending}
                   loading={savingsTransactionMutation.isPending}
                   onPress={() =>
                     openSavingsTransaction(selectedSavingsGoal, "subtract")
@@ -5701,6 +5770,20 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
       lineHeight: 21,
     },
+    expenseHistoryAddCard: {
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      gap: spacing.sm,
+      padding: spacing.md,
+    },
+    expenseHistoryAddHeader: {
+      alignItems: "flex-start",
+      flexDirection: "row",
+      gap: spacing.sm,
+      justifyContent: "space-between",
+    },
     expenseHistoryAmount: {
       color: colors.primaryDark,
       fontSize: 14,
@@ -5911,8 +5994,8 @@ function createStyles(colors: AppPalette) {
         ios: "Georgia",
         web: "Georgia",
       }),
-      fontSize: 15,
-      fontWeight: "700",
+      fontSize: 16,
+      fontWeight: "400",
       letterSpacing: 0,
       minWidth: 0,
     },
@@ -6150,10 +6233,10 @@ function createStyles(colors: AppPalette) {
         ios: "Georgia",
         web: "Georgia",
       }),
-      fontSize: 24,
-      fontWeight: "800",
+      fontSize: 27,
+      fontWeight: "400",
       letterSpacing: 0,
-      lineHeight: 28,
+      lineHeight: 31,
     },
     savingsAmount: {
       color: colors.primaryDark,
@@ -6820,7 +6903,7 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
     },
     totalRow: {
-      alignItems: "center",
+      alignItems: "stretch",
       backgroundColor: colors.card,
       borderColor: colors.border,
       borderRadius: radii.card,
@@ -6829,6 +6912,32 @@ function createStyles(colors: AppPalette) {
       gap: spacing.sm,
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.sm,
+    },
+    totalMetric: {
+      backgroundColor: colors.cardMuted,
+      borderColor: colors.line,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      flex: 1,
+      gap: 2,
+      justifyContent: "center",
+      minHeight: 54,
+      minWidth: 0,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
+    },
+    totalMetricLabel: {
+      color: colors.textMuted,
+      fontSize: 10,
+      fontWeight: "900",
+      letterSpacing: 0,
+      textTransform: "uppercase",
+    },
+    totalMetricValue: {
+      color: colors.text,
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 0,
     },
     totalValue: {
       color: colors.text,

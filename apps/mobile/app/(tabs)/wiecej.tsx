@@ -552,6 +552,7 @@ function createStyles(colors: AppPalette) {
     },
     formCard: {
       backgroundColor: colors.cardMuted,
+      borderColor: colors.border,
       borderRadius: radii.control,
       borderWidth: 1,
       gap: spacing.sm,
