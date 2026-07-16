@@ -9,6 +9,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { spacing } from "../theme/tokens";
 import { useAppTheme, type AppPalette } from "../theme/use-app-theme";
@@ -20,6 +21,7 @@ interface FormModalProps extends PropsWithChildren {
   footer?: ReactNode;
   onClose: () => void;
   showCloseButton?: boolean;
+  scrollEnabled?: boolean;
   subtitle?: string;
   title: string;
   visible: boolean;
@@ -31,6 +33,7 @@ export function FormModal({
   footer,
   onClose,
   showCloseButton = true,
+  scrollEnabled = true,
   subtitle,
   title,
   visible,
@@ -45,13 +48,14 @@ export function FormModal({
       transparent
       visible={visible}
     >
-      <SafeAreaView style={styles.safeArea}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={styles.keyboard}
-        >
-          <Pressable onPress={onClose} style={styles.backdrop} />
-          <View style={styles.sheet}>
+      <GestureHandlerRootView style={styles.gestureRoot}>
+        <SafeAreaView style={styles.safeArea}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            style={styles.keyboard}
+          >
+            <Pressable onPress={onClose} style={styles.backdrop} />
+            <View style={styles.sheet}>
             <View style={styles.handle} />
             <View style={[styles.header, compact && styles.headerCompact]}>
               <View style={styles.headerText}>
@@ -71,27 +75,32 @@ export function FormModal({
                 </IconButton>
               ) : null}
             </View>
-            <ScrollView
-              contentContainerStyle={[
-                styles.body,
-                footer ? styles.bodyWithFooter : null,
-                compact && styles.bodyCompact,
-              ]}
-              keyboardShouldPersistTaps="handled"
-              nestedScrollEnabled
-              showsVerticalScrollIndicator={false}
-              style={styles.scroll}
-            >
-              {children}
-            </ScrollView>
+            {scrollEnabled ? (
+              <ScrollView
+                contentContainerStyle={[
+                  styles.body,
+                  footer ? styles.bodyWithFooter : null,
+                  compact && styles.bodyCompact,
+                ]}
+                keyboardShouldPersistTaps="handled"
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={false}
+                style={styles.scroll}
+              >
+                {children}
+              </ScrollView>
+            ) : (
+              <View style={styles.customScrollBody}>{children}</View>
+            )}
             {footer ? (
               <View style={[styles.footer, compact && styles.footerCompact]}>
                 {footer}
               </View>
             ) : null}
-          </View>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
+            </View>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
@@ -123,8 +132,15 @@ function createStyles(colors: AppPalette) {
       padding: spacing.lg,
       paddingTop: spacing.md,
     },
+    customScrollBody: {
+      flexShrink: 1,
+      minHeight: 0,
+    },
     footerCompact: {
       padding: 12,
+    },
+    gestureRoot: {
+      flex: 1,
     },
     handle: {
       alignSelf: "center",

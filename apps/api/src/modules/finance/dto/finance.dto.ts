@@ -77,7 +77,24 @@ export class GenerateNextBudgetMonthCopyItemDto {
   budgetAmount?: number | null;
 }
 
+export class GenerateNextBudgetMonthCategoryDto {
+  @IsUUID()
+  categoryId!: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  displayOrder!: number;
+}
+
 export class GenerateNextBudgetMonthDto {
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(200)
+  @ValidateNested({ each: true })
+  @Type(() => GenerateNextBudgetMonthCategoryDto)
+  categories?: GenerateNextBudgetMonthCategoryDto[];
+
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(500)

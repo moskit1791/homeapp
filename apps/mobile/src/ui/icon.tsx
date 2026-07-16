@@ -55,6 +55,7 @@ export const Cog = createIcon("cog-outline");
 export const Database = createIcon("database-outline");
 export const DotsVertical = createIcon("dots-vertical");
 export const Download = createIcon("download-outline");
+export const DragHandle = createIcon("drag");
 export const Dumbbell = createIcon("dumbbell");
 export const Eye = createIcon("eye-outline");
 export const EyeOff = createIcon("eye-off-outline");

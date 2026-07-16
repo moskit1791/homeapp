@@ -60,6 +60,8 @@ describe('BudgetMonthsService', () => {
           ])
         )
         .mockResolvedValueOnce(queryResult())
+        .mockResolvedValueOnce(queryResult([{ id: 'category-a' }]))
+        .mockResolvedValueOnce(queryResult())
         .mockResolvedValueOnce(queryResult())
         .mockResolvedValueOnce(queryResult())
         .mockResolvedValueOnce(queryResult([monthRow({ id: 'month-next', month: 6 })]))
@@ -70,6 +72,7 @@ describe('BudgetMonthsService', () => {
 
     await expect(
       service.generateNextMonth('household-a', {
+        categories: [{ categoryId: 'category-a', displayOrder: 0 }],
         items: [{ budgetAmount: 125.5, budgetItemId: 'budget-item-a' }]
       })
     ).resolves.toMatchObject({
@@ -81,6 +84,9 @@ describe('BudgetMonthsService', () => {
     expect(client.query.mock.calls[4]?.[1]).toEqual(['month-current', ['budget-item-a']]);
     expect(client.query.mock.calls[5]?.[0]).toContain('insert into budget_items');
     expect(client.query.mock.calls[5]?.[1]).toEqual(['month-next', 'member-a', 'category-a', 'Prad', 125.5, 7]);
+    expect(client.query.mock.calls[6]?.[1]).toEqual(['household-a', ['category-a']]);
+    expect(client.query.mock.calls[7]?.[0]).toContain('budget_month_category_orders');
+    expect(client.query.mock.calls[7]?.[1]).toEqual(['month-next', ['category-a'], [0]]);
     expect(realtime.publish).toHaveBeenCalledWith('household-a', 'finance.month.generated', 'month-next');
   });
 

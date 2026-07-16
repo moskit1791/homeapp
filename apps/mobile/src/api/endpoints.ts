@@ -104,6 +104,7 @@ import type {
   TodoItem,
   UpdateCalendarEventRequest,
   UpdateAttachmentRequest,
+  UpdateBudgetCategoryRequest,
   UpdateBudgetItemRequest,
   UpdateCleaningTaskRequest,
   UpdateFinanceDebtRequest,
@@ -462,7 +463,10 @@ export function generateNextBudgetMonth(
   inputOrOptions?: GenerateNextBudgetMonthRequest | ApiCallOptionsInput,
   options?: ApiCallOptionsInput
 ): Promise<BudgetMonthDetail> {
-  const hasRequestBody = typeof inputOrOptions === 'object' && inputOrOptions !== null && 'items' in inputOrOptions;
+  const hasRequestBody =
+    typeof inputOrOptions === 'object' &&
+    inputOrOptions !== null &&
+    ('items' in inputOrOptions || 'categories' in inputOrOptions);
   const input: GenerateNextBudgetMonthRequest = hasRequestBody
     ? (inputOrOptions as GenerateNextBudgetMonthRequest)
     : {};
@@ -519,6 +523,21 @@ export function createBudgetCategory(
     accessToken: requestOptions.accessToken,
     body: input,
     method: 'POST',
+    signal: requestOptions.signal
+  });
+}
+
+export function updateBudgetCategory(
+  categoryId: string,
+  input: UpdateBudgetCategoryRequest,
+  options?: ApiCallOptionsInput
+): Promise<BudgetCategory> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<BudgetCategory, UpdateBudgetCategoryRequest>(`/finance/categories/${categoryId}`, {
+    accessToken: requestOptions.accessToken,
+    body: input,
+    method: 'PATCH',
     signal: requestOptions.signal
   });
 }

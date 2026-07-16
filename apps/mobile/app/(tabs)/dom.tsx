@@ -17,6 +17,7 @@ import {
   Linking,
   Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -24,6 +25,7 @@ import {
   useWindowDimensions,
   type LayoutChangeEvent,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import {
   Gesture,
   GestureDetector,
@@ -2642,139 +2644,162 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
         onRequestClose={() => setNotificationsVisible(false)}
         visible={notificationsVisible}
       >
-        <AppScreen
-          actions={
-            <IconButton
-              accessibilityLabel="Zamknij powiadomienia"
-              onPress={() => setNotificationsVisible(false)}
-            >
-              <Close color={theme.colors.textMuted} size={18} />
-            </IconButton>
-          }
-          contentStyle={styles.notificationScreenContent}
-          subtitle="Token, test push i typy zdarzeń."
-          title="Powiadomienia"
-        >
-          {toast ? (
-            <View style={styles.settingsToast}>
-              <Text style={styles.settingsToastText}>{toast}</Text>
-            </View>
-          ) : null}
-          <View collapsable={false} style={styles.settingsPanel}>
-            <View style={styles.settingsPanelRow}>
-              <Text style={styles.settingsPanelTitle}>Telefon</Text>
-              <Text style={styles.settingsPanelMeta}>
-                Włącz albo odśwież token push dla tego telefonu.
-              </Text>
-              <ActionButton
-                disabled={!accessToken}
-                loading={registerPushMutation.isPending}
-                onPress={() => registerPushMutation.mutate()}
-                title="Włącz / odśwież powiadomienia"
-                variant="secondary"
-              />
-              {registerPushMutation.data === null ? (
-                <InlineAlert
-                  tone="error"
-                  text="Nie udało się pobrać tokenu push dla tego telefonu."
-                />
-              ) : null}
-              {registerPushMutation.error ? (
-                <InlineAlert
-                  tone="error"
-                  text="Rejestracja powiadomień nie powiodła się."
-                />
-              ) : null}
-            </View>
-            <View style={styles.settingsPanelRow}>
-              <Text style={styles.settingsPanelTitle}>Test</Text>
-              <Text style={styles.settingsPanelMeta}>
-                Wyślij test, żeby potwierdzić, że powiadomienia działają.
-              </Text>
-              <ActionButton
-                disabled={!accessToken}
-                loading={testPushMutation.isPending}
-                onPress={() => testPushMutation.mutate()}
-                title="Wyślij test push"
-                variant="secondary"
-              />
-              {testPushMutation.error ? (
-                <InlineAlert
-                  tone="error"
-                  text="Nie udało się wysłać testowego powiadomienia."
-                />
-              ) : null}
-            </View>
-            <View style={styles.settingsPanelRow}>
-              <Text style={styles.settingsPanelTitle}>Typy powiadomień</Text>
-              <Text style={styles.settingsPanelMeta}>
-                Wybierz, kiedy zmiany innych domowników mają wysyłać
-                powiadomienie.
-              </Text>
-              <QueryState
-                error={notificationPreferencesQuery.error}
-                isLoading={notificationPreferencesQuery.isLoading}
-              />
-              <View
-                collapsable={false}
-                style={styles.notificationPreferenceList}
-              >
-                {notificationPreferences.map((preference) => {
-                  const copy =
-                    notificationPreferenceLabels[preference.eventType];
-
-                  return (
-                    <View
-                      key={preference.eventType}
-                      style={styles.notificationPreferenceRow}
-                    >
-                      <View style={styles.notificationPreferenceText}>
-                        <Text style={styles.itemName}>{copy.label}</Text>
-                        <Text style={styles.itemMeta}>{copy.meta}</Text>
-                      </View>
-                      <View style={styles.notificationPreferenceSwitch}>
-                        <Text style={styles.preferenceToggleLabel}>
-                          {preference.enabled ? "Włączone" : "Wyłączone"}
-                        </Text>
-                        <Pressable
-                          accessibilityRole="switch"
-                          accessibilityState={{ checked: preference.enabled }}
-                          disabled={notificationPreferencesMutation.isPending}
-                          onPress={() =>
-                            toggleNotificationPreference(
-                              preference.eventType,
-                              !preference.enabled,
-                            )
-                          }
-                          style={[
-                            styles.preferenceToggle,
-                            preference.enabled && styles.preferenceToggleActive,
-                            notificationPreferencesMutation.isPending &&
-                              styles.preferenceToggleDisabled,
-                          ]}
-                        >
-                          <View
-                            style={[
-                              styles.preferenceToggleThumb,
-                              preference.enabled &&
-                                styles.preferenceToggleThumbActive,
-                            ]}
-                          />
-                        </Pressable>
-                      </View>
-                    </View>
-                  );
-                })}
+        <View style={styles.notificationModalRoot}>
+          <SafeAreaView style={styles.notificationModalSafe}>
+            <View style={styles.notificationFullCard}>
+              <View style={styles.notificationFullHeader}>
+                <View style={styles.notificationFullTitleBlock}>
+                  <Text style={styles.notificationFullTitle}>
+                    Powiadomienia
+                  </Text>
+                  <Text style={styles.notificationFullSubtitle}>
+                    Token, test push i typy zdarzeń.
+                  </Text>
+                </View>
+                <IconButton
+                  accessibilityLabel="Zamknij powiadomienia"
+                  onPress={() => setNotificationsVisible(false)}
+                >
+                  <Close color={theme.colors.textMuted} size={18} />
+                </IconButton>
               </View>
-              {notificationPreferencesMutation.error ? (
-                <InlineAlert
-                  tone="error"
-                  text="Nie udało się zapisać ustawień powiadomień."
-                />
-              ) : null}
+              <ScrollView
+                contentContainerStyle={styles.notificationScreenContent}
+                keyboardShouldPersistTaps="always"
+                nestedScrollEnabled={false}
+                overScrollMode="always"
+                removeClippedSubviews={false}
+                scrollEventThrottle={16}
+                showsVerticalScrollIndicator
+                style={styles.notificationScroll}
+              >
+                {toast ? (
+                  <View style={styles.settingsToast}>
+                    <Text style={styles.settingsToastText}>{toast}</Text>
+                  </View>
+                ) : null}
+                <View style={styles.settingsPanel}>
+                  <View style={styles.settingsPanelRow}>
+                    <Text style={styles.settingsPanelTitle}>Telefon</Text>
+                    <Text style={styles.settingsPanelMeta}>
+                      Włącz albo odśwież token push dla tego telefonu.
+                    </Text>
+                    <ActionButton
+                      disabled={!accessToken}
+                      loading={registerPushMutation.isPending}
+                      onPress={() => registerPushMutation.mutate()}
+                      title="Włącz / odśwież powiadomienia"
+                      variant="secondary"
+                    />
+                    {registerPushMutation.data === null ? (
+                      <InlineAlert
+                        tone="error"
+                        text="Nie udało się pobrać tokenu push dla tego telefonu."
+                      />
+                    ) : null}
+                    {registerPushMutation.error ? (
+                      <InlineAlert
+                        tone="error"
+                        text="Rejestracja powiadomień nie powiodła się."
+                      />
+                    ) : null}
+                  </View>
+                  <View style={styles.settingsPanelRow}>
+                    <Text style={styles.settingsPanelTitle}>Test</Text>
+                    <Text style={styles.settingsPanelMeta}>
+                      Wyślij test, żeby potwierdzić, że powiadomienia działają.
+                    </Text>
+                    <ActionButton
+                      disabled={!accessToken}
+                      loading={testPushMutation.isPending}
+                      onPress={() => testPushMutation.mutate()}
+                      title="Wyślij test push"
+                      variant="secondary"
+                    />
+                    {testPushMutation.error ? (
+                      <InlineAlert
+                        tone="error"
+                        text="Nie udało się wysłać testowego powiadomienia."
+                      />
+                    ) : null}
+                  </View>
+                  <View style={styles.settingsPanelRow}>
+                    <Text style={styles.settingsPanelTitle}>
+                      Typy powiadomień
+                    </Text>
+                    <Text style={styles.settingsPanelMeta}>
+                      Wybierz, kiedy zmiany innych domowników mają wysyłać
+                      powiadomienie.
+                    </Text>
+                    <QueryState
+                      error={notificationPreferencesQuery.error}
+                      isLoading={notificationPreferencesQuery.isLoading}
+                    />
+                    <View style={styles.notificationPreferenceList}>
+                      {notificationPreferences.map((preference) => {
+                        const copy =
+                          notificationPreferenceLabels[preference.eventType];
+
+                        return (
+                          <View
+                            key={preference.eventType}
+                            style={styles.notificationPreferenceRow}
+                          >
+                            <View style={styles.notificationPreferenceText}>
+                              <Text style={styles.itemName}>{copy.label}</Text>
+                              <Text style={styles.itemMeta}>{copy.meta}</Text>
+                            </View>
+                            <View style={styles.notificationPreferenceSwitch}>
+                              <Text style={styles.preferenceToggleLabel}>
+                                {preference.enabled ? "Włączone" : "Wyłączone"}
+                              </Text>
+                              <Pressable
+                                accessibilityRole="switch"
+                                accessibilityState={{
+                                  checked: preference.enabled,
+                                }}
+                                disabled={
+                                  notificationPreferencesMutation.isPending
+                                }
+                                onPress={() =>
+                                  toggleNotificationPreference(
+                                    preference.eventType,
+                                    !preference.enabled,
+                                  )
+                                }
+                                style={[
+                                  styles.preferenceToggle,
+                                  preference.enabled &&
+                                    styles.preferenceToggleActive,
+                                  notificationPreferencesMutation.isPending &&
+                                    styles.preferenceToggleDisabled,
+                                ]}
+                              >
+                                <View
+                                  style={[
+                                    styles.preferenceToggleThumb,
+                                    preference.enabled &&
+                                      styles.preferenceToggleThumbActive,
+                                  ]}
+                                />
+                              </Pressable>
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+                    {notificationPreferencesMutation.error ? (
+                      <InlineAlert
+                        tone="error"
+                        text="Nie udało się zapisać ustawień powiadomień."
+                      />
+                    ) : null}
+                  </View>
+                </View>
+              </ScrollView>
             </View>
-          </View>
-        </AppScreen>
+          </SafeAreaView>
+        </View>
       </Modal>
       <FormModal
         footer={
@@ -4031,8 +4056,52 @@ function createStyles(colors: AppPalette) {
       gap: 2,
       minWidth: 0,
     },
+    notificationFullCard: {
+      flex: 1,
+    },
+    notificationFullHeader: {
+      alignItems: "center",
+      borderBottomColor: colors.border,
+      borderBottomWidth: 1,
+      flexDirection: "row",
+      gap: spacing.md,
+      justifyContent: "space-between",
+      paddingBottom: spacing.md,
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.md,
+    },
+    notificationFullSubtitle: {
+      color: colors.textMuted,
+      fontSize: 13,
+      letterSpacing: 0,
+      lineHeight: 18,
+    },
+    notificationFullTitle: {
+      color: colors.text,
+      fontSize: 24,
+      fontWeight: "800",
+      letterSpacing: 0,
+      lineHeight: 30,
+    },
+    notificationFullTitleBlock: {
+      flex: 1,
+      gap: spacing.xs,
+      minWidth: 0,
+    },
+    notificationModalRoot: {
+      backgroundColor: colors.background,
+      flex: 1,
+    },
+    notificationModalSafe: {
+      flex: 1,
+    },
+    notificationScroll: {
+      flex: 1,
+    },
     notificationScreenContent: {
-      paddingBottom: 196,
+      gap: spacing.md,
+      padding: spacing.md,
+      paddingBottom: 148,
     },
     preferenceToggleLabel: {
       color: colors.textMuted,

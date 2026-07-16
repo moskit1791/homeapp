@@ -351,6 +351,7 @@ export class BudgetMonthsService {
       const nextMonth = this.mapMonthOrThrow(nextMonthResult.rows[0], 'Expected generated budget month');
 
       await this.copyBudgetItems(client, current.id, nextMonth.id, dto.items);
+      await this.saveCategoryOrder(client, householdId, current.id, nextMonth.id, dto.categories);
       await this.createZeroIncomesForActiveMembers(client, householdId, nextMonth.id);
 
       await client.query(
@@ -430,6 +431,92 @@ export class BudgetMonthsService {
           and bc.copy_budget_to_next_month = true
       `,
       [sourceBudgetMonthId, targetBudgetMonthId]
+    );
+  }
+
+  private async saveCategoryOrder(
+    client: PoolClient,
+    householdId: string,
+    sourceBudgetMonthId: string,
+    targetBudgetMonthId: string,
+    categories?: GenerateNextBudgetMonthDto['categories']
+  ): Promise<void> {
+    if (categories === undefined) {
+      await client.query(
+        `
+          insert into budget_month_category_orders (
+            budget_month_id,
+            category_id,
+            display_order
+          )
+          select
+            $2,
+            bc.id,
+            coalesce(source_order.display_order, bc.display_order)
+          from budget_categories bc
+          left join budget_month_category_orders source_order
+            on source_order.budget_month_id = $1
+            and source_order.category_id = bc.id
+          where bc.household_id = $3
+            and (
+              bc.is_active = true
+              or exists (
+                select 1
+                from budget_items bi
+                where bi.budget_month_id = $1
+                  and bi.category_id = bc.id
+                  and bi.is_deleted = false
+              )
+            )
+          on conflict (budget_month_id, category_id) do update
+          set display_order = excluded.display_order
+        `,
+        [sourceBudgetMonthId, targetBudgetMonthId, householdId]
+      );
+      return;
+    }
+
+    const uniqueCategories = new Map(categories.map((category) => [category.categoryId, category]));
+
+    if (uniqueCategories.size !== categories.length) {
+      throw new BadRequestException('Budget category order contains duplicates');
+    }
+
+    if (categories.length === 0) {
+      return;
+    }
+
+    const categoryIds = categories.map((category) => category.categoryId);
+    const categoryResult = await client.query<{ id: string }>(
+      `
+        select id
+        from budget_categories
+        where household_id = $1
+          and id = any($2::uuid[])
+      `,
+      [householdId, categoryIds]
+    );
+
+    if (categoryResult.rows.length !== categories.length) {
+      throw new BadRequestException('Budget category order contains unavailable categories');
+    }
+
+    await client.query(
+      `
+        insert into budget_month_category_orders (
+          budget_month_id,
+          category_id,
+          display_order
+        )
+        select
+          $1,
+          category_order.category_id,
+          category_order.display_order
+        from unnest($2::uuid[], $3::integer[]) as category_order(category_id, display_order)
+        on conflict (budget_month_id, category_id) do update
+        set display_order = excluded.display_order
+      `,
+      [targetBudgetMonthId, categoryIds, categories.map((category) => category.displayOrder)]
     );
   }
 

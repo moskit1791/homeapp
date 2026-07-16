@@ -108,10 +108,14 @@ export default function TabsLayout() {
           padding: 0,
         },
         tabBarStyle: {
-          backgroundColor: theme.colors.overlay,
-          borderColor: theme.colors.border,
+          backgroundColor: theme.isDark ? "#151C2D" : theme.colors.overlay,
+          borderColor: theme.isDark
+            ? "rgba(238, 244, 255, 0.24)"
+            : theme.colors.border,
           borderRadius: 16,
-          borderTopColor: theme.colors.border,
+          borderTopColor: theme.isDark
+            ? "rgba(238, 244, 255, 0.24)"
+            : theme.colors.border,
           borderTopWidth: 1,
           borderWidth: 1,
           elevation: 0,
@@ -290,14 +294,27 @@ function TabGlyph({
   icon: (color: string) => ReactNode;
 }) {
   const theme = useAppTheme();
-  const color = focused ? theme.colors.primary : theme.colors.textMuted;
+  const activeColor = theme.isDark
+    ? theme.colors.primaryDarker
+    : theme.colors.shopping;
+  const inactiveColor = theme.isDark ? "#D8E0F0" : theme.colors.textMuted;
+  const activeBackground = theme.isDark
+    ? "rgba(155, 212, 124, 0.2)"
+    : theme.colors.shoppingSoft;
+  const activeBorder = theme.isDark
+    ? "rgba(199, 242, 174, 0.48)"
+    : "rgba(79, 141, 44, 0.18)";
+  const color = focused ? activeColor : inactiveColor;
 
   return (
     <View style={styles.tabGlyph}>
       <View
         style={[
           styles.tabIconSlot,
-          focused && { backgroundColor: theme.colors.primarySoft },
+          focused && {
+            backgroundColor: activeBackground,
+            borderColor: activeBorder,
+          },
         ]}
       >
         {icon(color)}
@@ -337,7 +354,9 @@ const styles = StyleSheet.create({
   },
   tabIconSlot: {
     alignItems: "center",
+    borderColor: "transparent",
     borderRadius: 999,
+    borderWidth: 1,
     height: 42,
     justifyContent: "center",
     overflow: "hidden",

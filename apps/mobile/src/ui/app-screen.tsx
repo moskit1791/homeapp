@@ -58,6 +58,7 @@ export function AppScreen({
             nestedScrollEnabled
             ref={scrollRef}
             showsVerticalScrollIndicator={false}
+            style={styles.scroll}
           >
             <View style={styles.header}>
               {leading ? (
@@ -147,6 +148,9 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       flex: 1,
     },
     safeAreaContent: {
+      flex: 1,
+    },
+    scroll: {
       flex: 1,
     },
     title: {

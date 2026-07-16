@@ -93,6 +93,7 @@ export default function DzisiajScreen() {
     (item) => !item.isChecked,
   );
   const todoPreview = (dashboard?.todoPreview ?? []).slice(0, 3);
+  const readableGreen = theme.isDark ? theme.colors.primaryDarker : mockupGreen;
   const openFromNotification = useCallback(
     (
       route:
@@ -272,16 +273,16 @@ export default function DzisiajScreen() {
       <View style={styles.quickSection}>
         <View style={styles.quickGrid}>
           <QuickAction
-            accent={mockupGreen}
+            accent={readableGreen}
             caption="Dodaj wydarzenie"
-            icon={<CalendarDays color={mockupGreen} size={24} />}
+            icon={<CalendarDays color={readableGreen} size={24} />}
             label="Wydarzenie"
             onPress={() => openCalendarForDate(todayIso(), "create")}
           />
           <QuickAction
-            accent={mockupGreen}
+            accent={readableGreen}
             caption="Dodaj wydatek"
-            icon={<ReceiptText color={mockupGreen} size={24} />}
+            icon={<ReceiptText color={readableGreen} size={24} />}
             label="Wydatek"
             onPress={() =>
               router.push({
@@ -620,6 +621,7 @@ function NextEventCard({
   onPress: () => void;
 }) {
   const { styles, theme } = useTodayStyles();
+  const readableGreen = theme.isDark ? theme.colors.primaryDarker : mockupGreen;
   const eventDateTime = event ? formatEventDateTime(event) : "Brak wydarzeń";
   const eventDetails = event?.title ?? "Dodaj wydarzenie do kalendarza";
 
@@ -651,7 +653,7 @@ function NextEventCard({
           <Text style={styles.nextEventCtaText}>
             {event ? "Zobacz szczegóły" : "Dodaj wydarzenie"}
           </Text>
-          <ChevronRight color={mockupGreen} size={18} />
+          <ChevronRight color={readableGreen} size={18} />
         </View>
       </View>
     </Pressable>
@@ -678,6 +680,7 @@ function TodayOverviewGrid({
   tasks: StartTodoItem[];
 }) {
   const { styles, theme } = useTodayStyles();
+  const readableGreen = theme.isDark ? theme.colors.primaryDarker : mockupGreen;
 
   return (
     <View style={styles.todayOverviewGrid}>
@@ -730,7 +733,7 @@ function TodayOverviewGrid({
           >
             Zobacz wszystkie zadania
           </Text>
-          <ChevronRight color={mockupGreen} size={16} />
+          <ChevronRight color={readableGreen} size={16} />
         </View>
       </Pressable>
       <View style={styles.todayMiniColumn}>
@@ -742,7 +745,7 @@ function TodayOverviewGrid({
           title="Zakupy"
         />
         <MiniTodayCard
-          accent={mockupGreen}
+          accent={readableGreen}
           caption={`${mealCount} ${mealLabel(mealCount)}\nna dziś`}
           illustration={mealCardImage}
           onPress={onOpenMeals}
@@ -964,6 +967,13 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
   const todayPanelMuted = isDark ? colors.textMuted : "#5F635F";
   const todayPanelEyebrow = isDark ? colors.finance : mockupGreen;
   const todayPanelShadowOpacity = isDark ? 0.18 : 0.045;
+  const todayAccentText = isDark ? colors.primaryDarker : mockupGreen;
+  const todayPillBackground = isDark
+    ? "rgba(155, 212, 124, 0.24)"
+    : colors.successSoft;
+  const todayPillBorder = isDark
+    ? "rgba(199, 242, 174, 0.5)"
+    : "rgba(79, 141, 44, 0.12)";
   const quickActionBackground = isDark ? colors.card : "#FFFCF6";
   const quickActionPressedBackground = isDark ? colors.cardMuted : "#FFF6EA";
 
@@ -1064,8 +1074,10 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
     },
     nextEventCta: {
       alignItems: "center",
-      backgroundColor: isDark ? colors.cardMuted : colors.successSoft,
+      backgroundColor: todayPillBackground,
+      borderColor: todayPillBorder,
       borderRadius: 999,
+      borderWidth: 1,
       flexDirection: "row",
       gap: spacing.xs,
       minHeight: 36,
@@ -1073,7 +1085,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       paddingRight: spacing.sm,
     },
     nextEventCtaText: {
-      color: mockupGreen,
+      color: todayAccentText,
       fontSize: 12,
       fontWeight: "700",
       letterSpacing: 0,
@@ -1294,15 +1306,17 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
     },
     todoCountPill: {
       alignItems: "center",
-      backgroundColor: colors.successSoft,
+      backgroundColor: todayPillBackground,
+      borderColor: todayPillBorder,
       borderRadius: 999,
+      borderWidth: 1,
       height: isNarrow ? 26 : 28,
       justifyContent: "center",
       minWidth: isNarrow ? 26 : 28,
       paddingHorizontal: spacing.xs,
     },
     todoCountText: {
-      color: mockupGreen,
+      color: todayAccentText,
       fontSize: 13,
       fontWeight: "900",
       letterSpacing: 0,
@@ -1319,7 +1333,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       paddingHorizontal: spacing.md,
     },
     todoSeeAllText: {
-      color: mockupGreen,
+      color: todayAccentText,
       fontSize: 12,
       fontWeight: "600",
       letterSpacing: 0,
@@ -1522,7 +1536,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       opacity: 0.86,
     },
     quickCaption: {
-      color: mockupGreen,
+      color: todayAccentText,
       fontSize: isNarrow ? 11 : 13,
       fontWeight: "600",
       letterSpacing: 0,

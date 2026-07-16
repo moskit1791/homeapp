@@ -283,7 +283,13 @@ export interface GenerateNextBudgetMonthItemRequest {
   budgetItemId: string;
 }
 
+export interface GenerateNextBudgetMonthCategoryRequest {
+  categoryId: string;
+  displayOrder: number;
+}
+
 export interface GenerateNextBudgetMonthRequest {
+  categories?: GenerateNextBudgetMonthCategoryRequest[];
   items?: GenerateNextBudgetMonthItemRequest[];
 }
 
@@ -379,6 +385,13 @@ export interface CreateBudgetCategoryRequest {
   copyBudgetToNextMonth?: boolean;
   displayOrder?: number;
   name: string;
+}
+
+export interface UpdateBudgetCategoryRequest {
+  copyBudgetToNextMonth?: boolean;
+  displayOrder?: number;
+  isActive?: boolean;
+  name?: string;
 }
 
 export interface CreateBudgetItemRequest {

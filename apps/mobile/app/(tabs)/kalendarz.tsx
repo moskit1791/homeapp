@@ -119,6 +119,7 @@ export default function KalendarzScreen() {
   }>();
   const permissionsQuery = usePermissions();
   const { screenBackground, styles, theme } = useCalendarStyles();
+  const readableGreen = theme.isDark ? theme.colors.primaryDarker : mockupGreen;
   const accessToken = session?.accessToken;
   const [visibleMonth, setVisibleMonth] = useState(() =>
     monthAnchor(new Date()),
@@ -469,7 +470,7 @@ export default function KalendarzScreen() {
                 onPress={() => openCreateEvent()}
                 style={[styles.headerIconButton, styles.addHeaderButton]}
               >
-                <CalendarPlus color={mockupGreen} size={20} />
+                <CalendarPlus color={readableGreen} size={20} />
               </IconButton>
             ) : null}
           </View>
@@ -643,7 +644,7 @@ export default function KalendarzScreen() {
         <View style={styles.formGroup}>
           <Text style={styles.formLabel}>Przypomnienie</Text>
           <SegmentedControl
-            accentColor={mockupGreen}
+            accentColor={readableGreen}
             onChange={setEventReminder}
             options={reminderOptions}
             presentation="mockup"
@@ -676,6 +677,7 @@ function CalendarViewToggle({
   value: CalendarViewMode;
 }) {
   const { styles, theme } = useCalendarStyles();
+  const readableGreen = theme.isDark ? theme.colors.primaryDarker : mockupGreen;
 
   return (
     <View style={styles.calendarModeCard}>
@@ -695,7 +697,7 @@ function CalendarViewToggle({
             ]}
           >
             <CalendarDays
-              color={active ? mockupGreen : theme.colors.text}
+              color={active ? readableGreen : theme.colors.text}
               size={16}
             />
             <Text
@@ -739,10 +741,7 @@ function CalendarMonth({
         {weekdayLabels.map((day, index) => (
           <Text
             key={day}
-            style={[
-              styles.weekLabel,
-              index >= 5 && styles.weekLabelWeekend,
-            ]}
+            style={[styles.weekLabel, index >= 5 && styles.weekLabelWeekend]}
           >
             {day}
           </Text>
@@ -760,10 +759,7 @@ function CalendarMonth({
           return (
             <View
               key={`${day.iso}-${day.label}`}
-              style={[
-                styles.dayCell,
-                index >= 7 && styles.dayCellWeekDivider,
-              ]}
+              style={[styles.dayCell, index >= 7 && styles.dayCellWeekDivider]}
             >
               <Pressable
                 disabled={!day.iso}
@@ -839,10 +835,7 @@ function CalendarWeek({
         {weekdayLabels.map((day, index) => (
           <Text
             key={day}
-            style={[
-              styles.weekLabel,
-              index >= 5 && styles.weekLabelWeekend,
-            ]}
+            style={[styles.weekLabel, index >= 5 && styles.weekLabelWeekend]}
           >
             {day}
           </Text>
@@ -1057,6 +1050,7 @@ function UpcomingEvents({
   query: { error: unknown; isLoading: boolean };
 }) {
   const { styles, theme } = useCalendarStyles();
+  const readableGreen = theme.isDark ? theme.colors.primaryDarker : mockupGreen;
 
   const sortedEvents = [...events].sort(compareCalendarEvents);
 
@@ -1147,7 +1141,7 @@ function UpcomingEvents({
             pressed && styles.addEventDashedPressed,
           ]}
         >
-          <Plus color={mockupGreen} size={22} />
+          <Plus color={readableGreen} size={22} />
           <Text style={styles.addEventDashedText}>Dodaj wydarzenie</Text>
         </Pressable>
       ) : null}
@@ -1159,6 +1153,7 @@ function _NotesBoard({ accessToken }: { accessToken?: string | null }) {
   const queryClient = useQueryClient();
   const permission = useModulePermission("notes");
   const { styles, theme } = useCalendarStyles();
+  const readableGreen = theme.isDark ? theme.colors.primaryDarker : mockupGreen;
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -1225,7 +1220,7 @@ function _NotesBoard({ accessToken }: { accessToken?: string | null }) {
             onPress={() => setModalVisible(true)}
             style={styles.sectionIconButton}
           >
-            <Plus color={mockupGreen} size={20} />
+            <Plus color={readableGreen} size={20} />
           </IconButton>
         ) : null}
       </View>
@@ -1338,6 +1333,7 @@ function _TodoBoard({ accessToken }: { accessToken?: string | null }) {
   const queryClient = useQueryClient();
   const permission = useModulePermission("todo");
   const { styles, theme } = useCalendarStyles();
+  const readableGreen = theme.isDark ? theme.colors.primaryDarker : mockupGreen;
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
@@ -1396,7 +1392,7 @@ function _TodoBoard({ accessToken }: { accessToken?: string | null }) {
             onPress={() => setModalVisible(true)}
             style={styles.sectionIconButton}
           >
-            <Plus color={mockupGreen} size={20} />
+            <Plus color={readableGreen} size={20} />
           </IconButton>
         ) : null}
       </View>
@@ -1989,7 +1985,14 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
   const panelBackground = isDark ? colors.card : "#FFFFFF";
   const panelBorder = isDark ? colors.border : "#E8DED2";
   const panelShadowOpacity = isDark ? 0.18 : 0.065;
-  const selectedGreen = "#0F3F35";
+  const selectedDayBackground = isDark ? "rgba(155, 212, 124, 0.2)" : "#EEF7E8";
+  const selectedDayBorder = isDark
+    ? "rgba(199, 242, 174, 0.5)"
+    : "rgba(79, 141, 44, 0.2)";
+  const selectedDayText = isDark ? colors.primaryDarker : "#2F641F";
+  const readableGreen = isDark ? colors.primaryDarker : mockupGreen;
+  const filledGreen = isDark ? colors.primary : mockupGreen;
+  const filledGreenText = isDark ? colors.inverseText : "#FFFFFF";
 
   return StyleSheet.create({
     addEventDashed: {
@@ -2009,7 +2012,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       opacity: 0.76,
     },
     addEventDashedText: {
-      color: mockupGreen,
+      color: readableGreen,
       fontSize: isCompact ? 14 : 16,
       fontWeight: "700",
       letterSpacing: 0,
@@ -2023,15 +2026,15 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       borderColor: isDark ? colors.border : "#DDE7D7",
     },
     calendarCancelButtonLabel: {
-      color: mockupGreen,
+      color: readableGreen,
     },
     calendarSaveButton: {
-      backgroundColor: mockupGreen,
-      borderColor: mockupGreen,
-      shadowColor: mockupGreen,
+      backgroundColor: filledGreen,
+      borderColor: filledGreen,
+      shadowColor: filledGreen,
     },
     calendarSaveButtonLabel: {
-      color: "#FFFFFF",
+      color: filledGreenText,
     },
     calendarCard: {
       backgroundColor: panelBackground,
@@ -2087,7 +2090,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       lineHeight: isCompact ? 21 : 25,
     },
     calendarModeTextActive: {
-      color: mockupGreen,
+      color: readableGreen,
     },
     calendarLoading: {
       color: colors.textMuted,
@@ -2246,7 +2249,9 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       opacity: 0.42,
     },
     dayBubbleSelected: {
-      backgroundColor: selectedGreen,
+      backgroundColor: selectedDayBackground,
+      borderColor: selectedDayBorder,
+      borderWidth: 1,
     },
     dayBubbleToday: {
       backgroundColor: isDark ? colors.cardMuted : "transparent",
@@ -2277,7 +2282,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       color: colors.textSubtle,
     },
     dayTextSelected: {
-      color: colors.inverseText,
+      color: selectedDayText,
     },
     dayTextToday: {
       color: colors.text,
@@ -2840,7 +2845,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       paddingHorizontal: spacing.sm,
     },
     todayBadgeText: {
-      color: mockupGreen,
+      color: readableGreen,
       fontFamily: displayFontFamily,
       fontSize: isCompact ? 14 : 16,
       fontWeight: "400",

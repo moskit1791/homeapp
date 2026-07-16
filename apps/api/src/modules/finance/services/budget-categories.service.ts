@@ -33,10 +33,7 @@ export class BudgetCategoriesService {
     return result.rows.map((row) => this.mapCategory(row));
   }
 
-  async createCategory(
-    householdId: string,
-    dto: CreateBudgetCategoryDto
-  ): Promise<BudgetCategoryRecord> {
+  async createCategory(householdId: string, dto: CreateBudgetCategoryDto): Promise<BudgetCategoryRecord> {
     const result = await this.database.query<BudgetCategoryRow>(
       `
         insert into budget_categories (
@@ -45,7 +42,19 @@ export class BudgetCategoriesService {
           display_order,
           copy_budget_to_next_month
         )
-        values ($1, $2, $3, $4)
+        values (
+          $1,
+          $2,
+          coalesce(
+            $3,
+            (
+              select coalesce(max(display_order), -1) + 1
+              from budget_categories
+              where household_id = $1
+            )
+          ),
+          $4
+        )
         returning
           id,
           household_id,
@@ -56,12 +65,7 @@ export class BudgetCategoriesService {
           created_at,
           updated_at
       `,
-      [
-        householdId,
-        this.normalizeName(dto.name),
-        dto.displayOrder ?? 0,
-        dto.copyBudgetToNextMonth ?? false
-      ]
+      [householdId, this.normalizeName(dto.name), dto.displayOrder ?? null, dto.copyBudgetToNextMonth ?? false]
     );
 
     const category = this.mapCategoryOrThrow(result.rows[0]);

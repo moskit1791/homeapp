@@ -30,10 +30,7 @@ export class FinanceSummaryService {
     };
   }
 
-  async getPersonSummary(
-    householdId: string,
-    budgetMonthId: string
-  ): Promise<PersonSummaryRecord[]> {
+  async getPersonSummary(householdId: string, budgetMonthId: string): Promise<PersonSummaryRecord[]> {
     await this.findMonth(householdId, budgetMonthId);
 
     const result = await this.database.query<PersonSummaryRow>(
@@ -96,10 +93,7 @@ export class FinanceSummaryService {
     return this.mapMonthOrThrow(result.rows[0], 'Current budget month not found');
   }
 
-  private async findMonth(
-    householdId: string,
-    budgetMonthId: string
-  ): Promise<BudgetMonthRecord> {
+  private async findMonth(householdId: string, budgetMonthId: string): Promise<BudgetMonthRecord> {
     const result = await this.database.query<BudgetMonthRow>(
       `
         select
@@ -124,17 +118,14 @@ export class FinanceSummaryService {
     return this.mapMonthOrThrow(result.rows[0], 'Budget month not found');
   }
 
-  private async listCategoryItemRows(
-    householdId: string,
-    budgetMonthId: string
-  ): Promise<CategoryItemRow[]> {
+  private async listCategoryItemRows(householdId: string, budgetMonthId: string): Promise<CategoryItemRow[]> {
     const result = await this.database.query<CategoryItemRow>(
       `
         select
           bc.id as category_id,
           bc.household_id,
           bc.name as category_name,
-          bc.display_order as category_display_order,
+          coalesce(bmco.display_order, bc.display_order) as category_display_order,
           bc.copy_budget_to_next_month,
           bc.is_active as category_is_active,
           bi.id as budget_item_id,
@@ -150,6 +141,9 @@ export class FinanceSummaryService {
           bi.created_at as budget_item_created_at,
           bi.updated_at as budget_item_updated_at
         from budget_categories bc
+        left join budget_month_category_orders bmco
+          on bmco.category_id = bc.id
+          and bmco.budget_month_id = $2
         left join budget_items bi
           on bi.category_id = bc.id
           and bi.budget_month_id = $2
@@ -160,7 +154,7 @@ export class FinanceSummaryService {
         where bc.household_id = $1
           and (bc.is_active = true or bi.id is not null)
         order by
-          bc.display_order asc,
+          coalesce(bmco.display_order, bc.display_order) asc,
           bc.name asc,
           bi.display_order asc nulls last,
           bi.created_at asc nulls last
@@ -171,10 +165,7 @@ export class FinanceSummaryService {
     return result.rows;
   }
 
-  private async listIncomes(
-    householdId: string,
-    budgetMonthId: string
-  ): Promise<IncomeSummaryRecord[]> {
+  private async listIncomes(householdId: string, budgetMonthId: string): Promise<IncomeSummaryRecord[]> {
     const result = await this.database.query<IncomeSummaryRow>(
       `
         select
@@ -204,10 +195,7 @@ export class FinanceSummaryService {
     }));
   }
 
-  private async listExpenses(
-    householdId: string,
-    budgetMonthId: string
-  ): Promise<ExpenseSummaryRecord[]> {
+  private async listExpenses(householdId: string, budgetMonthId: string): Promise<ExpenseSummaryRecord[]> {
     const result = await this.database.query<ExpenseSummaryRow>(
       `
         select
@@ -236,10 +224,7 @@ export class FinanceSummaryService {
     }));
   }
 
-  private groupCategories(
-    rows: CategoryItemRow[],
-    expenses: ExpenseSummaryRecord[]
-  ): CategoryWithItemsRecord[] {
+  private groupCategories(rows: CategoryItemRow[], expenses: ExpenseSummaryRecord[]): CategoryWithItemsRecord[] {
     const categories = new Map<string, CategoryWithItemsRecord>();
     const expensesByItemId = new Map<string, ExpenseSummaryRecord[]>();
 
@@ -296,10 +281,7 @@ export class FinanceSummaryService {
       (summary, person) => ({
         incomeAmount: this.addMoney(summary.incomeAmount, person.incomeAmount),
         totalBudgetAmount: this.addMoney(summary.totalBudgetAmount, person.totalBudgetAmount),
-        totalRemainingAmount: this.addMoney(
-          summary.totalRemainingAmount,
-          person.totalRemainingAmount
-        ),
+        totalRemainingAmount: this.addMoney(summary.totalRemainingAmount, person.totalRemainingAmount),
         totalSpentAmount: this.addMoney(summary.totalSpentAmount, person.totalSpentAmount)
       }),
       {

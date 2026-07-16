@@ -3,6 +3,9 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
+import DraggableFlatList, {
+  ScaleDecorator,
+} from "react-native-draggable-flatlist";
 import {
   Image,
   Platform,
@@ -17,17 +20,18 @@ import {
 } from "react-native";
 import {
   Archive,
-  Banknote,
   Car,
   ChartBar,
   Check,
   CheckCircle2,
   CalendarDays,
+  Close,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
   Dumbbell,
+  DragHandle,
   Filter,
   Gamepad2,
   Gift,
@@ -39,12 +43,15 @@ import {
   PiggyBank,
   Plus,
   ReceiptText,
+  Search,
   ShoppingCart,
   Smartphone,
+  TableLarge,
   Trash2,
   Users,
   Utensils,
   Vacuum,
+  ViewGrid,
   WalletCards,
   Wrench,
 } from "../../src/ui/icon";
@@ -78,6 +85,7 @@ import {
   listFinanceSavings,
   queryKeys,
   updateBudgetItem,
+  updateBudgetCategory,
   updateFinanceDebt,
   type BudgetCategoryWithItems,
   type BudgetMonth,
@@ -164,6 +172,7 @@ type FinanceModal =
   | "savingsDetails"
   | null;
 type FinanceView = "budget" | "debts" | "savings";
+type BudgetViewMode = "cards" | "table";
 type FinanceSortKey =
   | "category"
   | "owner"
@@ -178,6 +187,7 @@ type FinanceFilters = {
   onlyOverBudget: boolean;
   ownerMemberId: string;
   search: string;
+  showEmptyCategories: boolean;
   sortBy: FinanceSortKey;
   sortDirection: FinanceSortDirection;
 };
@@ -202,12 +212,14 @@ type SavingsGoalGroup = {
 };
 
 const financeFilterStorageKey = "homeapp.finance.filters.v1";
+const financeViewStorageKey = "homeapp.finance.view.v1";
 
 const defaultFinanceFilters: FinanceFilters = {
   categoryId: "",
   onlyOverBudget: false,
   ownerMemberId: "",
   search: "",
+  showEmptyCategories: true,
   sortBy: "category",
   sortDirection: "asc",
 };
@@ -298,6 +310,8 @@ export default function FinanseScreen() {
     useState<FinanceView>("budget");
   const [selectedMonthId, setSelectedMonthId] = useState<string | null>(null);
   const [financeModal, setFinanceModal] = useState<FinanceModal>(null);
+  const [editingBudgetCategory, setEditingBudgetCategory] =
+    useState<BudgetCategoryWithItems | null>(null);
   const [editingBudgetItem, setEditingBudgetItem] =
     useState<BudgetItemWithCategory | null>(null);
   const [editingDebt, setEditingDebt] = useState<FinanceDebt | null>(null);
@@ -310,6 +324,12 @@ export default function FinanseScreen() {
   const [generateAmountInputs, setGenerateAmountInputs] = useState<
     Record<string, string>
   >({});
+  const [generateCategoryOrder, setGenerateCategoryOrder] = useState<string[]>(
+    [],
+  );
+  const [budgetViewMode, setBudgetViewMode] = useState<BudgetViewMode>("cards");
+  const [budgetViewModeLoaded, setBudgetViewModeLoaded] = useState(false);
+  const [financeSearchVisible, setFinanceSearchVisible] = useState(false);
   const [financeFilters, setFinanceFilters] = useState<FinanceFilters>(
     defaultFinanceFilters,
   );
@@ -372,9 +392,23 @@ export default function FinanseScreen() {
     selectedMonthId && selectedMonthId !== currentSummary?.month.id
       ? selectedArchiveQuery.data
       : currentSummary;
-  const totals = summary?.summary;
-  const personSummaries = summary?.personSummary ?? [];
   const incomes = summary?.incomes ?? [];
+  const incomeByOwner = new Map(
+    incomes.map((income) => [income.ownerMemberId, income.amount]),
+  );
+  const personSummaries = (summary?.personSummary ?? []).map((person) => ({
+    ...person,
+    incomeAmount:
+      incomeByOwner.get(person.ownerMemberId) ?? person.incomeAmount,
+  }));
+  const totals = summary?.summary
+    ? {
+        ...summary.summary,
+        incomeAmount: incomes
+          .reduce((total, income) => total + Number(income.amount), 0)
+          .toFixed(2),
+      }
+    : undefined;
   const categories = summary?.categories ?? [];
   const visibleFlatItems = useMemo<BudgetItemWithCategory[]>(
     () =>
@@ -399,6 +433,8 @@ export default function FinanseScreen() {
     Boolean(financeFilters.ownerMemberId),
   );
   const budgetAmount = Number(scopedTotals.totalBudgetAmount);
+  const incomeAmountValue = Number(scopedTotals.incomeAmount);
+  const incomeBudgetDifference = incomeAmountValue - budgetAmount;
   const spentAmount = Number(scopedTotals.totalSpentAmount);
   const remainingAmount = Number(scopedTotals.totalRemainingAmount);
   const debts = debtsQuery.data ?? [];
@@ -442,7 +478,13 @@ export default function FinanseScreen() {
   const canGoPreviousMonth = selectedMonthIndex > 0;
   const canGoNextMonth =
     selectedMonthIndex >= 0 && selectedMonthIndex < monthTabs.length - 1;
-  const generateSourceCategories = currentSummary?.categories ?? [];
+  const generateSourceCategories = useMemo(
+    () =>
+      (currentSummary?.categories ?? []).filter(
+        (category) => category.isActive,
+      ),
+    [currentSummary?.categories],
+  );
   const generateSourceItems = useMemo<BudgetItemWithCategory[]>(
     () =>
       generateSourceCategories.flatMap((category) =>
@@ -461,6 +503,18 @@ export default function FinanseScreen() {
       ),
     [generateSelectedItemSet, generateSourceItems],
   );
+  const orderedGenerateCategories = useMemo(() => {
+    const order = new Map(
+      generateCategoryOrder.map((categoryId, index) => [categoryId, index]),
+    );
+
+    return [...generateSourceCategories].sort(
+      (left, right) =>
+        (order.get(left.id) ?? left.displayOrder) -
+          (order.get(right.id) ?? right.displayOrder) ||
+        left.name.localeCompare(right.name, "pl-PL"),
+    );
+  }, [generateCategoryOrder, generateSourceCategories]);
   const financeOwnerOptions = useMemo(() => {
     const owners = new Map<string, string>();
 
@@ -651,6 +705,15 @@ export default function FinanseScreen() {
         ]),
       ),
     );
+    setGenerateCategoryOrder(
+      [...generateSourceCategories]
+        .sort(
+          (left, right) =>
+            left.displayOrder - right.displayOrder ||
+            left.name.localeCompare(right.name, "pl-PL"),
+        )
+        .map((category) => category.id),
+    );
     setFinanceModal("generateMonth");
   }
 
@@ -764,6 +827,31 @@ export default function FinanseScreen() {
 
     saveStoredJson(financeFilterStorageKey, financeFilters);
   }, [financeFilters, financeFiltersLoaded]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    loadStoredJson<BudgetViewMode>(financeViewStorageKey).then((storedView) => {
+      if (!isMounted) {
+        return;
+      }
+
+      if (storedView === "cards" || storedView === "table") {
+        setBudgetViewMode(storedView);
+      }
+      setBudgetViewModeLoaded(true);
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (budgetViewModeLoaded) {
+      saveStoredJson(financeViewStorageKey, budgetViewMode);
+    }
+  }, [budgetViewMode, budgetViewModeLoaded]);
 
   useEffect(() => {
     if (!params.action) {
@@ -926,6 +1014,37 @@ export default function FinanseScreen() {
     onSuccess: async (category) => {
       setValue("categoryName", "");
       setSelectedItemCategoryId(category.id);
+      setFinanceModal(null);
+      await invalidateFinance();
+    },
+  });
+  const updateCategoryMutation = useMutation({
+    mutationFn: () =>
+      updateBudgetCategory(
+        editingBudgetCategory?.id ?? "",
+        {
+          copyBudgetToNextMonth: copyCategory,
+          name: categoryName.trim(),
+        },
+        { accessToken },
+      ),
+    onSuccess: async () => {
+      setEditingBudgetCategory(null);
+      setValue("categoryName", "");
+      setFinanceModal(null);
+      await invalidateFinance();
+    },
+  });
+  const archiveCategoryMutation = useMutation({
+    mutationFn: () =>
+      updateBudgetCategory(
+        editingBudgetCategory?.id ?? "",
+        { isActive: false },
+        { accessToken },
+      ),
+    onSuccess: async () => {
+      setEditingBudgetCategory(null);
+      setValue("categoryName", "");
       setFinanceModal(null);
       await invalidateFinance();
     },
@@ -1135,6 +1254,10 @@ export default function FinanseScreen() {
     mutationFn: () =>
       generateNextBudgetMonth(
         {
+          categories: generateCategoryOrder.map((categoryId, displayOrder) => ({
+            categoryId,
+            displayOrder,
+          })),
           items: selectedGenerateItems.map((item) => {
             const amountInput = generateAmountInputs[item.id]?.trim() ?? "";
 
@@ -1150,6 +1273,7 @@ export default function FinanseScreen() {
       setSelectedMonthId(nextMonth.month.id);
       setGenerateCopyItemIds([]);
       setGenerateAmountInputs({});
+      setGenerateCategoryOrder([]);
       setFinanceModal(null);
       await invalidateFinance();
       await queryClient.invalidateQueries({ queryKey: queryKeys.start });
@@ -1174,6 +1298,7 @@ export default function FinanseScreen() {
 
   function closeFinanceModal() {
     setFinanceModal(null);
+    setEditingBudgetCategory(null);
     setEditingBudgetItem(null);
     setEditingDebt(null);
     setDebtIsSettled(false);
@@ -1187,6 +1312,21 @@ export default function FinanseScreen() {
     setValue("debtPaymentNote", "");
     setGenerateCopyItemIds([]);
     setGenerateAmountInputs({});
+    setGenerateCategoryOrder([]);
+  }
+
+  function openCreateCategory() {
+    setEditingBudgetCategory(null);
+    setValue("categoryName", "");
+    setCopyCategory(true);
+    setFinanceModal("category");
+  }
+
+  function openEditCategory(category: BudgetCategoryWithItems) {
+    setEditingBudgetCategory(category);
+    setValue("categoryName", category.name);
+    setCopyCategory(category.copyBudgetToNextMonth);
+    setFinanceModal("category");
   }
 
   function openExpenseModal() {
@@ -1204,6 +1344,15 @@ export default function FinanseScreen() {
     setSelectedItemCategoryId(category.id);
     setValue("itemName", "");
     setValue("itemAmount", "");
+    setFinanceModal("item");
+  }
+
+  function openEditBudgetItem(item: BudgetItemWithCategory) {
+    setEditingBudgetItem(item);
+    setSelectedItemCategoryId(item.category.id);
+    setSelectedItemOwnerId(item.owner?.memberId ?? "");
+    setValue("itemName", item.name);
+    setValue("itemAmount", formatMoneyInput(item.budgetAmount));
     setFinanceModal("item");
   }
 
@@ -1293,9 +1442,29 @@ export default function FinanseScreen() {
     setFinanceModal("savingsDetails");
   }
 
+  function selectIncomeMember(memberId: string) {
+    const income = incomes.find((entry) => entry.ownerMemberId === memberId);
+
+    setSelectedIncomeMemberId(memberId);
+    setValue("incomeAmount", formatMoneyInput(income?.amount ?? 0));
+  }
+
+  function openIncomeModal() {
+    const memberId =
+      selectedIncomeMemberId || incomes[0]?.ownerMemberId || "";
+
+    if (memberId) {
+      selectIncomeMember(memberId);
+    }
+
+    setFinanceModal("income");
+  }
+
   const canSaveIncome =
     canUpdate && Boolean(selectedIncomeMemberId) && isValidMoney(incomeAmount);
-  const canSaveCategory = canCreate && Boolean(categoryName.trim());
+  const canSaveCategory =
+    (editingBudgetCategory ? canUpdate : canCreate) &&
+    Boolean(categoryName.trim());
   const canSaveItem =
     canCreateVisibleBudgetItem &&
     Boolean(itemName.trim()) &&
@@ -1312,9 +1481,7 @@ export default function FinanseScreen() {
   const canSaveExpense =
     canCreate &&
     isPositiveMoney(expenseAmount) &&
-    (Boolean(
-      financeModal === "expenseHistory" && historyBudgetItemId,
-    ) ||
+    (Boolean(financeModal === "expenseHistory" && historyBudgetItemId) ||
       Boolean(selectedExpenseItem) ||
       Boolean(
         expenseQuickCategoryId &&
@@ -1393,33 +1560,44 @@ export default function FinanseScreen() {
   return (
     <AppScreen
       actions={
-        canOpenFinanceActions ? (
-          <IconButton
-            accessibilityLabel={financeActionLabel}
-            onPress={() => {
-              if (activeFinanceView === "debts") {
-                openCreateDebt();
-                return;
-              }
+        <View style={styles.financeHeaderActions}>
+          {activeFinanceView === "budget" ? (
+            <IconButton
+              accessibilityLabel="Szukaj w budżecie"
+              onPress={() => setFinanceSearchVisible((visible) => !visible)}
+              style={styles.financeHeaderActionButton}
+            >
+              <Search color={mockupGreen} size={23} />
+            </IconButton>
+          ) : null}
+          {canOpenFinanceActions ? (
+            <IconButton
+              accessibilityLabel={financeActionLabel}
+              onPress={() => {
+                if (activeFinanceView === "debts") {
+                  openCreateDebt();
+                  return;
+                }
 
-              if (activeFinanceView === "savings") {
-                openCreateSavingsAccount();
-                return;
-              }
+                if (activeFinanceView === "savings") {
+                  openCreateSavingsAccount();
+                  return;
+                }
 
-              setFinanceModal("menu");
-            }}
-            style={styles.financeHeaderActionButton}
-          >
-            {activeFinanceView === "debts" ? (
-              <ReceiptText color={mockupGreen} size={23} />
-            ) : activeFinanceView === "savings" ? (
-              <PiggyBank color={mockupGreen} size={24} />
-            ) : (
-              <MoreHorizontal color={mockupGreen} size={25} />
-            )}
-          </IconButton>
-        ) : undefined
+                setFinanceModal("menu");
+              }}
+              style={styles.financeHeaderActionButton}
+            >
+              {activeFinanceView === "debts" ? (
+                <ReceiptText color={mockupGreen} size={23} />
+              ) : activeFinanceView === "savings" ? (
+                <PiggyBank color={mockupGreen} size={24} />
+              ) : (
+                <MoreHorizontal color={mockupGreen} size={25} />
+              )}
+            </IconButton>
+          ) : null}
+        </View>
       }
       contentStyle={styles.financeScreenContent}
       backgroundColor={
@@ -1480,6 +1658,30 @@ export default function FinanseScreen() {
         value={activeFinanceView}
       />
 
+      {activeFinanceView === "budget" && financeSearchVisible ? (
+        <View style={styles.financeHeaderSearch}>
+          <Search color={theme.colors.textMuted} size={19} />
+          <TextInput
+            autoFocus
+            onChangeText={(search) => updateFinanceFilters({ search })}
+            placeholder="Szukaj kategorii lub pozycji"
+            placeholderTextColor={theme.colors.textSubtle}
+            style={styles.financeHeaderSearchInput}
+            value={financeFilters.search}
+          />
+          <IconButton
+            accessibilityLabel="Wyczyść i zamknij wyszukiwanie"
+            onPress={() => {
+              updateFinanceFilters({ search: "" });
+              setFinanceSearchVisible(false);
+            }}
+            style={styles.financeSearchCloseButton}
+          >
+            <Close color={theme.colors.textMuted} size={18} />
+          </IconButton>
+        </View>
+      ) : null}
+
       {activeFinanceView === "budget" && summary ? (
         <>
           <View style={styles.monthSwitcherRow}>
@@ -1518,6 +1720,26 @@ export default function FinanseScreen() {
                 />
               </IconButton>
             </View>
+            <IconButton
+              accessibilityLabel="Filtry i sortowanie budżetu"
+              onPress={() => setFinanceFiltersExpanded((value) => !value)}
+              style={[
+                styles.monthFilterButton,
+                (financeFiltersExpanded ||
+                  hasActiveFinanceFilters(financeFilters)) &&
+                  styles.monthFilterButtonActive,
+              ]}
+            >
+              <Filter
+                color={
+                  financeFiltersExpanded ||
+                  hasActiveFinanceFilters(financeFilters)
+                    ? theme.colors.primaryDark
+                    : theme.colors.textMuted
+                }
+                size={19}
+              />
+            </IconButton>
             {canDelete && canRemoveSelectedMonth ? (
               <IconButton
                 accessibilityLabel="Usuń wybrany miesiąc budżetu"
@@ -1540,8 +1762,6 @@ export default function FinanseScreen() {
           <FinanceSummaryCard
             budgetAmount={budgetAmount}
             currencyCode={currencyCode}
-            incomeAmount={Number(scopedTotals.incomeAmount)}
-            onIncomePress={() => setFinanceModal("incomeBreakdown")}
             remainingAmount={remainingAmount}
             spentAmount={spentAmount}
           />
@@ -1551,28 +1771,55 @@ export default function FinanseScreen() {
             expanded={financeFiltersExpanded}
             filters={financeFilters}
             onChange={updateFinanceFilters}
-            onToggleExpanded={() =>
-              setFinanceFiltersExpanded((value) => !value)
-            }
             owners={financeOwnerOptions}
           />
 
-          <FinanceCategoryCards
-            canCreateItem={canCreateVisibleBudgetItem}
-            categories={filteredCategories}
-            currencyCode={currencyCode}
-            onAddCategoryItem={openItemModalForCategory}
-            onHistory={openExpenseHistory}
-            rows={filteredRows}
+          <BudgetViewToggle
+            onChange={setBudgetViewMode}
+            value={budgetViewMode}
           />
+
+          {budgetViewMode === "cards" ? (
+            <FinanceCategoryCards
+              canCreateItem={canCreateVisibleBudgetItem}
+              canEditCategory={canUpdate}
+              categories={filteredCategories}
+              currencyCode={currencyCode}
+              onAddCategoryItem={openItemModalForCategory}
+              onEditCategory={openEditCategory}
+              onHistory={openExpenseHistory}
+              rows={filteredRows}
+              showOwner={!financeFilters.ownerMemberId}
+            />
+          ) : (
+            <FinanceBudgetTable
+              canEditCategory={canUpdate}
+              categories={filteredCategories}
+              currencyCode={currencyCode}
+              onEditCategory={openEditCategory}
+              onHistory={openExpenseHistory}
+              rows={filteredRows}
+              showOwner={!financeFilters.ownerMemberId}
+            />
+          )}
 
           <View style={styles.totalRow}>
             <View style={styles.totalMetric}>
               <Text numberOfLines={1} style={styles.totalMetricLabel}>
-                Budżet
+                Dochód
               </Text>
               <Text numberOfLines={1} style={styles.totalMetricValue}>
-                {formatMoney(budgetAmount, currencyCode)}
+                {formatMoney(incomeAmountValue, currencyCode)}
+              </Text>
+              <Text
+                numberOfLines={1}
+                style={[
+                  styles.totalMetricMeta,
+                  incomeBudgetDifference < 0 && styles.dangerText,
+                  incomeBudgetDifference > 0 && styles.positiveText,
+                ]}
+              >
+                Budżet {formatSignedMoney(incomeBudgetDifference, currencyCode)}
               </Text>
             </View>
             <View style={styles.totalMetric}>
@@ -1616,7 +1863,7 @@ export default function FinanseScreen() {
                   <Text style={styles.financeMenuHeading}>Budżet</Text>
                   <View style={styles.actionPicker}>
                     <ActionButton
-                      onPress={() => setFinanceModal("category")}
+                      onPress={openCreateCategory}
                       title="Dodaj kategorię"
                       variant="secondary"
                     />
@@ -1668,7 +1915,7 @@ export default function FinanseScreen() {
                   <Text style={styles.financeMenuHeading}>Domownicy</Text>
                   <View style={styles.actionPicker}>
                     <ActionButton
-                      onPress={() => setFinanceModal("income")}
+                      onPress={openIncomeModal}
                       title="Zmień dochód"
                       variant="secondary"
                     />
@@ -1703,175 +1950,244 @@ export default function FinanseScreen() {
               </View>
             }
             onClose={closeFinanceModal}
+            scrollEnabled={false}
             subtitle={currentMonth ? formatMonthLong(currentMonth) : undefined}
             title="Wygeneruj nowy miesiąc"
             visible={financeModal === "generateMonth"}
           >
-            {generateSourceItems.length > 0 ? (
-              <View style={styles.generateCopyList}>
-                <View style={styles.generateToolbar}>
-                  <Text style={styles.generateToolbarMeta}>
-                    Wybrano {selectedGenerateItems.length}/
-                    {generateSourceItems.length} pozycji
-                  </Text>
-                  <View style={styles.generateToolbarActions}>
-                    <ActionButton
-                      disabled={
-                        selectedGenerateItems.length ===
-                        generateSourceItems.length
-                      }
-                      onPress={() => setGenerateAllItemsCopy(true)}
-                      size="small"
-                      style={styles.generateToolbarButton}
-                      title="Kopiuj wszystko"
-                      variant="secondary"
-                    />
-                    <ActionButton
-                      disabled={selectedGenerateItems.length === 0}
-                      onPress={() => setGenerateAllItemsCopy(false)}
-                      size="small"
-                      style={styles.generateToolbarButton}
-                      title="Pusty miesiąc"
-                      variant="ghost"
-                    />
-                  </View>
-                </View>
-                {generateSourceCategories.map((category) => {
-                  const categoryItems = getCategoryItems(category).map(
-                    (item) => ({ ...item, category }),
-                  );
+            <View style={styles.generateModalBody}>
+              {generateSourceCategories.length > 0 ? (
+                <View style={styles.generateCopyList}>
+                  {generateSourceItems.length > 0 ? (
+                    <View style={styles.generateToolbar}>
+                      <Text style={styles.generateToolbarMeta}>
+                        Wybrano {selectedGenerateItems.length}/
+                        {generateSourceItems.length} pozycji
+                      </Text>
+                      <View style={styles.generateToolbarActions}>
+                        <ActionButton
+                          disabled={
+                            selectedGenerateItems.length ===
+                            generateSourceItems.length
+                          }
+                          onPress={() => setGenerateAllItemsCopy(true)}
+                          size="small"
+                          style={styles.generateToolbarButton}
+                          title="Kopiuj wszystko"
+                          variant="secondary"
+                        />
+                        <ActionButton
+                          disabled={selectedGenerateItems.length === 0}
+                          onPress={() => setGenerateAllItemsCopy(false)}
+                          size="small"
+                          style={styles.generateToolbarButton}
+                          title="Pusty miesiąc"
+                          variant="ghost"
+                        />
+                      </View>
+                    </View>
+                  ) : null}
+                  <DraggableFlatList
+                    activationDistance={8}
+                    autoscrollSpeed={160}
+                    autoscrollThreshold={90}
+                    data={orderedGenerateCategories}
+                    keyExtractor={(category) => category.id}
+                    onDragEnd={({ data }) =>
+                      setGenerateCategoryOrder(
+                        data.map((category) => category.id),
+                      )
+                    }
+                    renderItem={({ drag, isActive, item: category }) => {
+                      const categoryItems = getCategoryItems(category).map(
+                        (item) => ({ ...item, category }),
+                      );
+                      const selectedCount = categoryItems.filter((item) =>
+                        generateSelectedItemSet.has(item.id),
+                      ).length;
+                      const allSelected =
+                        categoryItems.length > 0 &&
+                        selectedCount === categoryItems.length;
+                      const partiallySelected =
+                        selectedCount > 0 && !allSelected;
 
-                  if (categoryItems.length === 0) {
-                    return null;
-                  }
-
-                  const selectedCount = categoryItems.filter((item) =>
-                    generateSelectedItemSet.has(item.id),
-                  ).length;
-                  const allSelected = selectedCount === categoryItems.length;
-                  const partiallySelected = selectedCount > 0 && !allSelected;
-
-                  return (
-                    <View
-                      key={category.id}
-                      style={styles.generateCategoryGroup}
-                    >
-                      <Pressable
-                        accessibilityRole="checkbox"
-                        accessibilityState={{ checked: allSelected }}
-                        onPress={() =>
-                          setGenerateCategoryCopy(category, !allSelected)
-                        }
-                        style={styles.generateCategoryHeader}
-                      >
-                        <View
-                          style={[
-                            styles.generateCheckbox,
-                            allSelected && styles.generateCheckboxChecked,
-                            partiallySelected && styles.generateCheckboxPartial,
-                          ]}
-                        >
-                          {allSelected ? (
-                            <Check color={theme.colors.inverseText} size={13} />
-                          ) : partiallySelected ? (
-                            <Minus color={theme.colors.inverseText} size={13} />
-                          ) : null}
-                        </View>
-                        <View style={styles.generateCategoryText}>
-                          <Text
-                            numberOfLines={1}
-                            style={styles.generateCategoryTitle}
+                      return (
+                        <ScaleDecorator activeScale={1.015}>
+                          <View
+                            style={[
+                              styles.generateCategoryGroup,
+                              isActive && styles.generateCategoryGroupActive,
+                            ]}
                           >
-                            {category.name}
-                          </Text>
-                          <Text style={styles.generateCategoryMeta}>
-                            {selectedCount}/{categoryItems.length} pozycji
-                          </Text>
-                        </View>
-                      </Pressable>
-
-                      <View style={styles.generateItemList}>
-                        {categoryItems.map((item) => {
-                          const selected = generateSelectedItemSet.has(item.id);
-
-                          return (
-                            <View
-                              key={item.id}
-                              style={[
-                                styles.generateItemRow,
-                                !selected && styles.generateItemRowMuted,
-                              ]}
-                            >
+                            <View style={styles.generateCategoryHeader}>
                               <Pressable
                                 accessibilityRole="checkbox"
-                                accessibilityState={{ checked: selected }}
-                                onPress={() => toggleGenerateItemCopy(item)}
-                                style={styles.generateItemCheckButton}
+                                accessibilityState={{ checked: allSelected }}
+                                disabled={categoryItems.length === 0}
+                                onPress={() =>
+                                  setGenerateCategoryCopy(
+                                    category,
+                                    !allSelected,
+                                  )
+                                }
+                                style={styles.generateCategorySelect}
                               >
                                 <View
                                   style={[
                                     styles.generateCheckbox,
-                                    selected && styles.generateCheckboxChecked,
+                                    allSelected &&
+                                      styles.generateCheckboxChecked,
+                                    partiallySelected &&
+                                      styles.generateCheckboxPartial,
                                   ]}
                                 >
-                                  {selected ? (
+                                  {allSelected ? (
                                     <Check
+                                      color={theme.colors.inverseText}
+                                      size={13}
+                                    />
+                                  ) : partiallySelected ? (
+                                    <Minus
                                       color={theme.colors.inverseText}
                                       size={13}
                                     />
                                   ) : null}
                                 </View>
+                                <View style={styles.generateCategoryText}>
+                                  <Text
+                                    numberOfLines={1}
+                                    style={styles.generateCategoryTitle}
+                                  >
+                                    {category.name}
+                                  </Text>
+                                  <Text style={styles.generateCategoryMeta}>
+                                    {categoryItems.length === 0
+                                      ? "Pusta kategoria"
+                                      : `${selectedCount}/${categoryItems.length} pozycji`}
+                                  </Text>
+                                </View>
                               </Pressable>
-                              <View style={styles.copyAmountText}>
-                                <Text
-                                  numberOfLines={1}
-                                  style={styles.copyAmountTitle}
-                                >
-                                  {item.name}
-                                </Text>
-                                <Text
-                                  numberOfLines={1}
-                                  style={styles.copyAmountMeta}
-                                >
-                                  {formatOwner(item.owner)}
-                                </Text>
-                              </View>
-                              {selected ? (
-                                <TextInput
-                                  keyboardType="decimal-pad"
-                                  onChangeText={(value) =>
-                                    setGenerateAmountInputs((current) => ({
-                                      ...current,
-                                      [item.id]: value,
-                                    }))
+                              <Pressable
+                                accessibilityLabel={`Przeciągnij kategorię ${category.name}`}
+                                accessibilityRole="button"
+                                delayLongPress={180}
+                                disabled={isActive}
+                                onLongPress={drag}
+                                style={({ pressed }) => [
+                                  styles.generateDragHandle,
+                                  (pressed || isActive) &&
+                                    styles.generateDragHandleActive,
+                                ]}
+                              >
+                                <DragHandle
+                                  color={
+                                    isActive
+                                      ? theme.colors.primaryDark
+                                      : theme.colors.textMuted
                                   }
-                                  placeholder="0,00"
-                                  placeholderTextColor={theme.colors.textSubtle}
-                                  style={styles.copyAmountInput}
-                                  value={generateAmountInputs[item.id] ?? ""}
+                                  size={25}
                                 />
-                              ) : null}
+                              </Pressable>
                             </View>
-                          );
-                        })}
-                      </View>
-                    </View>
-                  );
-                })}
-              </View>
-            ) : null}
-            {generateSourceItems.length === 0 ? (
-              <InlineAlert
-                tone="info"
-                text="Bieżący miesiąc nie ma jeszcze pozycji budżetu."
-              />
-            ) : null}
-            {nextMonthMutation.error ? (
-              <InlineAlert
-                tone="error"
-                text="Nie udało się wygenerować nowego miesiąca."
-              />
-            ) : null}
+
+                            <View style={styles.generateItemList}>
+                              {categoryItems.map((item) => {
+                                const selected = generateSelectedItemSet.has(
+                                  item.id,
+                                );
+
+                                return (
+                                  <View
+                                    key={item.id}
+                                    style={[
+                                      styles.generateItemRow,
+                                      !selected && styles.generateItemRowMuted,
+                                    ]}
+                                  >
+                                    <Pressable
+                                      accessibilityRole="checkbox"
+                                      accessibilityState={{ checked: selected }}
+                                      onPress={() =>
+                                        toggleGenerateItemCopy(item)
+                                      }
+                                      style={styles.generateItemCheckButton}
+                                    >
+                                      <View
+                                        style={[
+                                          styles.generateCheckbox,
+                                          selected &&
+                                            styles.generateCheckboxChecked,
+                                        ]}
+                                      >
+                                        {selected ? (
+                                          <Check
+                                            color={theme.colors.inverseText}
+                                            size={13}
+                                          />
+                                        ) : null}
+                                      </View>
+                                    </Pressable>
+                                    <View style={styles.copyAmountText}>
+                                      <Text
+                                        numberOfLines={1}
+                                        style={styles.copyAmountTitle}
+                                      >
+                                        {item.name}
+                                      </Text>
+                                      <Text
+                                        numberOfLines={1}
+                                        style={styles.copyAmountMeta}
+                                      >
+                                        {formatOwner(item.owner)}
+                                      </Text>
+                                    </View>
+                                    {selected ? (
+                                      <TextInput
+                                        keyboardType="decimal-pad"
+                                        onChangeText={(value) =>
+                                          setGenerateAmountInputs(
+                                            (current) => ({
+                                              ...current,
+                                              [item.id]: value,
+                                            }),
+                                          )
+                                        }
+                                        placeholder="0,00"
+                                        placeholderTextColor={
+                                          theme.colors.textSubtle
+                                        }
+                                        style={styles.copyAmountInput}
+                                        value={
+                                          generateAmountInputs[item.id] ?? ""
+                                        }
+                                      />
+                                    ) : null}
+                                  </View>
+                                );
+                              })}
+                            </View>
+                          </View>
+                        </ScaleDecorator>
+                      );
+                    }}
+                    showsVerticalScrollIndicator={false}
+                    style={styles.generateCategoryList}
+                  />
+                </View>
+              ) : null}
+              {generateSourceItems.length === 0 ? (
+                <InlineAlert
+                  tone="info"
+                  text="Bieżący miesiąc nie ma jeszcze pozycji budżetu."
+                />
+              ) : null}
+              {nextMonthMutation.error ? (
+                <InlineAlert
+                  tone="error"
+                  text="Nie udało się wygenerować nowego miesiąca."
+                />
+              ) : null}
+            </View>
           </FormModal>
 
           <FormModal
@@ -1941,7 +2257,7 @@ export default function FinanseScreen() {
                 id: income.ownerMemberId,
                 label: income.displayName,
               }))}
-              onSelect={setSelectedIncomeMemberId}
+              onSelect={selectIncomeMember}
               selectedId={selectedIncomeMemberId}
             />
             <TextField
@@ -1967,16 +2283,30 @@ export default function FinanseScreen() {
                 />
                 <ActionButton
                   disabled={!canSaveCategory}
-                  loading={categoryMutation.isPending}
-                  onPress={() => categoryMutation.mutate()}
+                  loading={
+                    editingBudgetCategory
+                      ? updateCategoryMutation.isPending
+                      : categoryMutation.isPending
+                  }
+                  onPress={() =>
+                    editingBudgetCategory
+                      ? updateCategoryMutation.mutate()
+                      : categoryMutation.mutate()
+                  }
                   style={styles.modalFooterButton}
-                  title="Dodaj"
+                  title={editingBudgetCategory ? "Zapisz" : "Dodaj"}
                 />
               </View>
             }
-            onClose={() => setFinanceModal(null)}
-            subtitle="Kategorie porządkują budżet i mogą przechodzić na następny miesiąc."
-            title="Dodaj kategorię"
+            onClose={closeFinanceModal}
+            subtitle={
+              editingBudgetCategory
+                ? "Zmiana dotyczy kategorii we wszystkich miesiącach. Usunięcie wyłącza ją w przyszłych budżetach, ale zachowuje historię."
+                : "Kategorie porządkują budżet i mogą przechodzić na następny miesiąc."
+            }
+            title={
+              editingBudgetCategory ? "Edytuj kategorię" : "Dodaj kategorię"
+            }
             visible={financeModal === "category"}
           >
             <TextField
@@ -1999,8 +2329,22 @@ export default function FinanseScreen() {
                 value={copyCategory}
               />
             </View>
-            {categoryMutation.error ? (
-              <InlineAlert tone="error" text="Nie udało się dodać kategorii." />
+            {editingBudgetCategory && canDelete ? (
+              <ActionButton
+                disabled={archiveCategoryMutation.isPending}
+                loading={archiveCategoryMutation.isPending}
+                onPress={() => archiveCategoryMutation.mutate()}
+                title="Usuń kategorię z przyszłych miesięcy"
+                variant="ghost"
+              />
+            ) : null}
+            {categoryMutation.error ||
+            updateCategoryMutation.error ||
+            archiveCategoryMutation.error ? (
+              <InlineAlert
+                tone="error"
+                text="Nie udało się zapisać kategorii."
+              />
             ) : null}
           </FormModal>
 
@@ -2321,6 +2665,30 @@ export default function FinanseScreen() {
                 ) : (
                   <InlineAlert text="Brak wydatków dla tej pozycji." />
                 )}
+                {canUpdateVisibleBudgetItem || canDeleteVisibleMonthItems ? (
+                  <View style={styles.expenseHistoryActions}>
+                    {canUpdateVisibleBudgetItem ? (
+                      <ActionButton
+                        onPress={() => openEditBudgetItem(historyBudgetItem)}
+                        title="Edytuj pozycję"
+                        variant="secondary"
+                      />
+                    ) : null}
+                    {canDeleteVisibleMonthItems ? (
+                      <ActionButton
+                        disabled={deleteItemMutation.isPending}
+                        loading={deleteItemMutation.isPending}
+                        onPress={() =>
+                          deleteItemMutation.mutate(historyBudgetItem.id, {
+                            onSuccess: () => closeFinanceModal(),
+                          })
+                        }
+                        title="Usuń pozycję"
+                        variant="ghost"
+                      />
+                    ) : null}
+                  </View>
+                ) : null}
               </View>
             ) : (
               <InlineAlert text="Nie znaleziono wybranej pozycji budżetu." />
@@ -2848,7 +3216,7 @@ export default function FinanseScreen() {
         />
         {canUpdate ? (
           <ActionButton
-            onPress={() => setFinanceModal("income")}
+            onPress={openIncomeModal}
             title="Zmień dochód"
             variant="secondary"
           />
@@ -2861,15 +3229,11 @@ export default function FinanseScreen() {
 function FinanceSummaryCard({
   budgetAmount,
   currencyCode,
-  incomeAmount,
-  onIncomePress,
   remainingAmount,
   spentAmount,
 }: {
   budgetAmount: number;
   currencyCode: SupportedCurrencyCode;
-  incomeAmount: number;
-  onIncomePress: () => void;
   remainingAmount: number;
   spentAmount: number;
 }) {
@@ -2887,25 +3251,28 @@ function FinanceSummaryCard({
 
   return (
     <View style={styles.financeSummaryCard}>
-      <Pressable
-        accessibilityLabel="Dochody domowników"
-        accessibilityRole="button"
-        onPress={onIncomePress}
-        style={({ pressed }) => [
-          styles.financeSummarySide,
-          pressed && styles.metricPressed,
-        ]}
-      >
+      <View style={styles.financeSummarySide}>
         <View style={styles.financeSummaryLabelRow}>
-          <Banknote color="#8CE1BF" size={16} />
-          <Text style={[styles.financeSummaryLabel, { color: "#8CE1BF" }]}>
-            Dochody
+          <WalletCards color={theme.colors.finance} size={16} />
+          <Text
+            style={[
+              styles.financeSummaryLabel,
+              { color: theme.colors.finance },
+            ]}
+          >
+            Do dyspozycji
           </Text>
         </View>
-        <Text numberOfLines={1} style={styles.financeSummaryValue}>
-          {formatMoney(incomeAmount, currencyCode)}
+        <Text
+          numberOfLines={1}
+          style={[
+            styles.financeSummaryValue,
+            isOverBudget && styles.dangerText,
+          ]}
+        >
+          {formatMoney(remainingAmount, currencyCode)}
         </Text>
-      </Pressable>
+      </View>
 
       <View style={styles.financeSummaryCenter}>
         <FinanceSummaryRing spentRatio={spentRatio} />
@@ -2925,22 +3292,18 @@ function FinanceSummaryCard({
 
       <View style={styles.financeSummarySide}>
         <View style={styles.financeSummaryLabelRow}>
-          <ReceiptText color="#FFAD6F" size={16} />
-          <Text style={[styles.financeSummaryLabel, { color: "#FFAD6F" }]}>
-            Wydatki
+          <ReceiptText color={theme.colors.warning} size={16} />
+          <Text
+            style={[
+              styles.financeSummaryLabel,
+              { color: theme.colors.warning },
+            ]}
+          >
+            Wydano
           </Text>
         </View>
         <Text numberOfLines={1} style={styles.financeSummaryValue}>
           {formatMoney(spentAmount, currencyCode)}
-        </Text>
-        <Text
-          numberOfLines={1}
-          style={[
-            styles.financeSummarySideMeta,
-            isOverBudget ? styles.dangerText : styles.positiveText,
-          ]}
-        >
-          {formatMoney(remainingAmount, currencyCode)}
         </Text>
       </View>
 
@@ -3683,22 +4046,25 @@ function FinanceFiltersPanel({
   expanded,
   filters,
   onChange,
-  onToggleExpanded,
   owners,
 }: {
   categories: BudgetCategoryWithItems[];
   expanded: boolean;
   filters: FinanceFilters;
   onChange: (filters: Partial<FinanceFilters>) => void;
-  onToggleExpanded: () => void;
   owners: Array<{ id: string; label: string }>;
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
 
+  if (!expanded) {
+    return null;
+  }
+
   return (
     <View style={styles.filterPanel}>
-      <View style={styles.filterTopRow}>
+      <View style={styles.filterGroup}>
+        <Text style={styles.filterLabel}>Osoba</Text>
         <ScrollView
           contentContainerStyle={styles.filterOwnerRail}
           horizontal
@@ -3706,16 +4072,6 @@ function FinanceFiltersPanel({
         >
           <FilterChip
             active={!filters.ownerMemberId}
-            icon={
-              <Filter
-                color={
-                  !filters.ownerMemberId
-                    ? theme.colors.inverseText
-                    : mockupGreen
-                }
-                size={14}
-              />
-            }
             label="Wszystkie"
             onPress={() => onChange({ ownerMemberId: "" })}
           />
@@ -3728,80 +4084,70 @@ function FinanceFiltersPanel({
             />
           ))}
         </ScrollView>
-        <Pressable
-          accessibilityLabel="Pozostałe filtry"
-          accessibilityRole="button"
-          onPress={onToggleExpanded}
-          style={styles.filterToggleButton}
-        >
-          {expanded ? (
-            <ChevronUp color={mockupGreen} size={17} />
-          ) : (
-            <ChevronDown color={mockupGreen} size={17} />
-          )}
-        </Pressable>
       </View>
-      {expanded ? (
-        <View style={styles.filterDetails}>
-          <TextInput
-            onChangeText={(search) => onChange({ search })}
-            placeholder="Szukaj pozycji"
-            placeholderTextColor={theme.colors.textSubtle}
-            style={styles.filterInput}
-            value={filters.search}
-          />
-          <View style={styles.filterGroup}>
-            <Text style={styles.filterLabel}>Kategoria</Text>
-            <View style={[styles.filterChipRow, styles.filterCategoryGrid]}>
+      <View style={styles.filterDetails}>
+        <View style={styles.filterGroup}>
+          <Text style={styles.filterLabel}>Kategoria</Text>
+          <View style={[styles.filterChipRow, styles.filterCategoryGrid]}>
+            <FilterChip
+              active={!filters.categoryId}
+              compact
+              label="Wszystkie"
+              onPress={() => onChange({ categoryId: "" })}
+            />
+            {categories.map((category) => (
               <FilterChip
-                active={!filters.categoryId}
+                active={filters.categoryId === category.id}
                 compact
-                label="Wszystkie"
-                onPress={() => onChange({ categoryId: "" })}
+                key={category.id}
+                label={category.name}
+                onPress={() => onChange({ categoryId: category.id })}
               />
-              {categories.map((category) => (
-                <FilterChip
-                  active={filters.categoryId === category.id}
-                  compact
-                  key={category.id}
-                  label={category.name}
-                  onPress={() => onChange({ categoryId: category.id })}
-                />
-              ))}
-            </View>
-          </View>
-          <View style={styles.filterGroup}>
-            <Text style={styles.filterLabel}>Sortowanie</Text>
-            <View style={styles.filterChipRow}>
-              {financeSortOptions.map((option) => (
-                <FilterChip
-                  active={filters.sortBy === option.id}
-                  key={option.id}
-                  label={option.label}
-                  onPress={() => onChange({ sortBy: option.id })}
-                />
-              ))}
-              <FilterChip
-                active={filters.sortDirection === "desc"}
-                label={filters.sortDirection === "asc" ? "Rosnąco" : "Malejąco"}
-                onPress={() =>
-                  onChange({
-                    sortDirection:
-                      filters.sortDirection === "asc" ? "desc" : "asc",
-                  })
-                }
-              />
-              <FilterChip
-                active={filters.onlyOverBudget}
-                label="Po limicie"
-                onPress={() =>
-                  onChange({ onlyOverBudget: !filters.onlyOverBudget })
-                }
-              />
-            </View>
+            ))}
           </View>
         </View>
-      ) : null}
+        <View style={styles.filterGroup}>
+          <Text style={styles.filterLabel}>Sortowanie</Text>
+          <View style={styles.filterChipRow}>
+            {financeSortOptions.map((option) => (
+              <FilterChip
+                active={filters.sortBy === option.id}
+                key={option.id}
+                label={option.label}
+                onPress={() => onChange({ sortBy: option.id })}
+              />
+            ))}
+            <FilterChip
+              active={filters.sortDirection === "desc"}
+              label={filters.sortDirection === "asc" ? "Rosnąco" : "Malejąco"}
+              onPress={() =>
+                onChange({
+                  sortDirection:
+                    filters.sortDirection === "asc" ? "desc" : "asc",
+                })
+              }
+            />
+            <FilterChip
+              active={filters.onlyOverBudget}
+              label="Po limicie"
+              onPress={() =>
+                onChange({ onlyOverBudget: !filters.onlyOverBudget })
+              }
+            />
+            <FilterChip
+              active={filters.showEmptyCategories}
+              label={
+                filters.showEmptyCategories ? "Puste widoczne" : "Puste ukryte"
+              }
+              onPress={() =>
+                onChange({
+                  showEmptyCategories: !filters.showEmptyCategories,
+                })
+              }
+            />
+          </View>
+        </View>
+      </View>
     </View>
   );
 }
@@ -3842,20 +4188,264 @@ function FilterChip({
   );
 }
 
+function BudgetViewToggle({
+  onChange,
+  value,
+}: {
+  onChange: (value: BudgetViewMode) => void;
+  value: BudgetViewMode;
+}) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+
+  return (
+    <View style={styles.budgetViewToolbar}>
+      <Text style={styles.budgetViewLabel}>Widok budżetu</Text>
+      <View style={styles.budgetViewToggle}>
+        <IconButton
+          accessibilityLabel="Widok kart"
+          onPress={() => onChange("cards")}
+          style={[
+            styles.budgetViewButton,
+            value === "cards" && styles.budgetViewButtonActive,
+          ]}
+        >
+          <ViewGrid
+            color={
+              value === "cards"
+                ? theme.colors.primaryDark
+                : theme.colors.textMuted
+            }
+            size={19}
+          />
+        </IconButton>
+        <IconButton
+          accessibilityLabel="Widok tabeli"
+          onPress={() => onChange("table")}
+          style={[
+            styles.budgetViewButton,
+            value === "table" && styles.budgetViewButtonActive,
+          ]}
+        >
+          <TableLarge
+            color={
+              value === "table"
+                ? theme.colors.primaryDark
+                : theme.colors.textMuted
+            }
+            size={19}
+          />
+        </IconButton>
+      </View>
+    </View>
+  );
+}
+
+function FinanceBudgetTable({
+  canEditCategory,
+  categories,
+  currencyCode,
+  onEditCategory,
+  onHistory,
+  rows,
+  showOwner,
+}: {
+  canEditCategory: boolean;
+  categories: BudgetCategoryWithItems[];
+  currencyCode: SupportedCurrencyCode;
+  onEditCategory: (category: BudgetCategoryWithItems) => void;
+  onHistory: (item: BudgetItemWithCategory) => void;
+  rows: BudgetItemWithCategory[];
+  showOwner: boolean;
+}) {
+  const theme = useAppTheme();
+  const styles = createStyles(theme.colors);
+  const groups = useMemo(
+    () => groupRowsByCategory(rows, categories),
+    [categories, rows],
+  );
+
+  if (groups.length === 0) {
+    return <InlineAlert text="Brak pozycji pasujących do filtrów." />;
+  }
+
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator>
+      <View
+        style={[
+          styles.budgetTable,
+          !showOwner && styles.budgetTableSingleOwner,
+        ]}
+      >
+        <View style={styles.budgetTableHeader}>
+          <Text
+            style={[styles.budgetTableHeaderText, styles.budgetTableNameCell]}
+          >
+            Pozycja
+          </Text>
+          {showOwner ? (
+            <Text
+              style={[
+                styles.budgetTableHeaderText,
+                styles.budgetTableOwnerCell,
+              ]}
+            >
+              Osoba
+            </Text>
+          ) : null}
+          <Text
+            style={[styles.budgetTableHeaderText, styles.budgetTableMoneyCell]}
+          >
+            Budżet
+          </Text>
+          <Text
+            style={[styles.budgetTableHeaderText, styles.budgetTableMoneyCell]}
+          >
+            Wydano
+          </Text>
+          <Text
+            style={[styles.budgetTableHeaderText, styles.budgetTableMoneyCell]}
+          >
+            Zostaje
+          </Text>
+        </View>
+        {groups.map((group) => {
+          const complete = isBudgetCategoryComplete(group);
+
+          return (
+            <View key={group.category.id}>
+              <View
+                style={[
+                  styles.budgetTableCategoryRow,
+                  complete && styles.completedBudgetRow,
+                ]}
+              >
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.budgetTableCategoryTitle,
+                    complete && styles.completedBudgetText,
+                  ]}
+                >
+                  {group.category.name}
+                </Text>
+                <Text style={styles.budgetTableCategorySummary}>
+                  {formatMoney(group.spent, currencyCode)} /{" "}
+                  {formatMoney(group.planned, currencyCode)}
+                </Text>
+                {canEditCategory ? (
+                  <IconButton
+                    accessibilityLabel={`Edytuj kategorię ${group.category.name}`}
+                    onPress={() => onEditCategory(group.category)}
+                    style={styles.budgetTableCategoryAction}
+                  >
+                    <MoreHorizontal color={theme.colors.textMuted} size={18} />
+                  </IconButton>
+                ) : null}
+              </View>
+              {group.items.length === 0 ? (
+                <Text style={styles.budgetTableEmpty}>Brak pozycji</Text>
+              ) : (
+                group.items.map((item) => {
+                  const completeItem = isBudgetItemComplete(item);
+
+                  const spentPercent = getBudgetSpentPercent(item);
+
+                  return (
+                    <Pressable
+                      accessibilityRole="button"
+                      key={item.id}
+                      onPress={() => onHistory(item)}
+                      style={({ pressed }) => [
+                        styles.budgetTableRow,
+                        pressed && styles.pressedRow,
+                        completeItem && styles.completedBudgetRow,
+                      ]}
+                    >
+                      <Text
+                        numberOfLines={1}
+                        style={[
+                          styles.budgetTableText,
+                          styles.budgetTableNameCell,
+                          completeItem && styles.completedBudgetText,
+                        ]}
+                      >
+                        {item.name}
+                      </Text>
+                      {showOwner ? (
+                        <Text
+                          numberOfLines={1}
+                          style={[
+                            styles.budgetTableMutedText,
+                            styles.budgetTableOwnerCell,
+                          ]}
+                        >
+                          {formatOwner(item.owner)}
+                        </Text>
+                      ) : null}
+                      <Text
+                        style={[
+                          styles.budgetTableText,
+                          styles.budgetTableMoneyCell,
+                        ]}
+                      >
+                        {item.budgetAmount
+                          ? formatMoney(item.budgetAmount, currencyCode)
+                          : "-"}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.budgetTableText,
+                          styles.budgetTableMoneyCell,
+                        ]}
+                      >
+                        {formatMoney(item.spentAmount, currencyCode)}
+                        {spentPercent === null ? "" : ` / ${spentPercent}%`}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.budgetTableText,
+                          styles.budgetTableMoneyCell,
+                          Number(item.remainingAmount ?? 0) < 0 &&
+                            styles.dangerText,
+                        ]}
+                      >
+                        {item.budgetAmount
+                          ? formatMoney(item.remainingAmount ?? 0, currencyCode)
+                          : "-"}
+                      </Text>
+                    </Pressable>
+                  );
+                })
+              )}
+            </View>
+          );
+        })}
+      </View>
+    </ScrollView>
+  );
+}
+
 function FinanceCategoryCards({
   canCreateItem,
+  canEditCategory,
   categories,
   currencyCode,
   onAddCategoryItem,
+  onEditCategory,
   onHistory,
   rows,
+  showOwner,
 }: {
   canCreateItem: boolean;
+  canEditCategory: boolean;
   categories: BudgetCategoryWithItems[];
   currencyCode: SupportedCurrencyCode;
   onAddCategoryItem: (category: BudgetCategoryWithItems) => void;
+  onEditCategory: (category: BudgetCategoryWithItems) => void;
   onHistory: (item: BudgetItemWithCategory) => void;
   rows: BudgetItemWithCategory[];
+  showOwner: boolean;
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
@@ -3901,6 +4491,7 @@ function FinanceCategoryCards({
         const spentProgress = getBudgetSpentProgress(group);
         const progressPercent =
           group.planned > 0 ? Math.round(spentProgress * 100) : 0;
+        const complete = isBudgetCategoryComplete(group);
         const remainingLabel =
           group.remaining >= 0
             ? formatMoney(group.remaining, currencyCode)
@@ -3908,74 +4499,96 @@ function FinanceCategoryCards({
 
         return (
           <View key={group.category.id} style={styles.budgetAccordionCard}>
-            <Pressable
-              accessibilityLabel={
-                expanded
-                  ? `Zwiń kategorię ${group.category.name}`
-                  : `Rozwiń kategorię ${group.category.name}`
-              }
-              accessibilityRole="button"
-              accessibilityState={{ expanded }}
-              onPress={() => toggleCategory(group.category.id)}
-              style={({ pressed }) => [
+            <View
+              style={[
                 styles.budgetAccordionHeader,
-                pressed && styles.pressedRow,
+                complete && styles.completedBudgetRow,
               ]}
             >
-              <View
-                style={[
-                  styles.budgetAccordionIcon,
-                  { backgroundColor: accent.color },
+              <Pressable
+                accessibilityLabel={
+                  expanded
+                    ? `Zwiń kategorię ${group.category.name}`
+                    : `Rozwiń kategorię ${group.category.name}`
+                }
+                accessibilityRole="button"
+                accessibilityState={{ expanded }}
+                onPress={() => toggleCategory(group.category.id)}
+                style={({ pressed }) => [
+                  styles.budgetAccordionToggle,
+                  pressed && styles.pressedRow,
                 ]}
               >
-                {getBudgetCategoryIcon(group.category.name, accent.onColor)}
-              </View>
-              <View style={styles.budgetAccordionText}>
-                <View style={styles.budgetAccordionTitleRow}>
-                  <Text numberOfLines={1} style={styles.budgetAccordionTitle}>
-                    {group.category.name}
-                  </Text>
-                  <Text style={styles.budgetAccordionMeta}>
-                    {group.items.length} pozycje
-                  </Text>
-                </View>
-                <View style={styles.budgetProgressTrack}>
-                  <View
-                    style={[
-                      styles.budgetProgressFill,
-                      {
-                        backgroundColor: accent.color,
-                        width: `${Math.min(spentProgress, 1) * 100}%`,
-                      },
-                    ]}
-                  />
-                </View>
-              </View>
-              <View style={styles.budgetAccordionAmounts}>
-                <Text numberOfLines={1} style={styles.budgetAccordionSpent}>
-                  {formatMoney(group.spent, currencyCode)} /{" "}
-                  {formatMoney(group.planned, currencyCode)}
-                </Text>
-                <Text
-                  numberOfLines={1}
+                <View
                   style={[
-                    styles.budgetAccordionRemaining,
-                    group.remaining < 0 && styles.dangerText,
-                    group.remaining >= 0 && styles.positiveText,
+                    styles.budgetAccordionIcon,
+                    { backgroundColor: accent.color },
                   ]}
                 >
-                  {remainingLabel}
-                </Text>
-                <Text style={styles.budgetAccordionPercent}>
-                  {group.planned > 0 ? `${progressPercent}%` : "bez limitu"}
-                </Text>
-              </View>
-              {expanded ? (
-                <ChevronUp color={theme.colors.textMuted} size={23} />
-              ) : (
-                <ChevronDown color={theme.colors.textMuted} size={23} />
-              )}
-            </Pressable>
+                  {getBudgetCategoryIcon(group.category.name, accent.onColor)}
+                </View>
+                <View style={styles.budgetAccordionText}>
+                  <View style={styles.budgetAccordionTitleRow}>
+                    <Text
+                      numberOfLines={1}
+                      style={[
+                        styles.budgetAccordionTitle,
+                        complete && styles.completedBudgetText,
+                      ]}
+                    >
+                      {group.category.name}
+                    </Text>
+                    <Text style={styles.budgetAccordionMeta}>
+                      {group.items.length} pozycje
+                    </Text>
+                  </View>
+                  <View style={styles.budgetProgressTrack}>
+                    <View
+                      style={[
+                        styles.budgetProgressFill,
+                        {
+                          backgroundColor: accent.color,
+                          width: `${Math.min(spentProgress, 1) * 100}%`,
+                        },
+                      ]}
+                    />
+                  </View>
+                </View>
+                <View style={styles.budgetAccordionAmounts}>
+                  <Text numberOfLines={1} style={styles.budgetAccordionSpent}>
+                    {formatMoney(group.spent, currencyCode)} /{" "}
+                    {formatMoney(group.planned, currencyCode)}
+                  </Text>
+                  <Text
+                    numberOfLines={1}
+                    style={[
+                      styles.budgetAccordionRemaining,
+                      group.remaining < 0 && styles.dangerText,
+                      group.remaining >= 0 && styles.positiveText,
+                    ]}
+                  >
+                    {remainingLabel}
+                  </Text>
+                  <Text style={styles.budgetAccordionPercent}>
+                    {group.planned > 0 ? `${progressPercent}%` : "bez limitu"}
+                  </Text>
+                </View>
+                {expanded ? (
+                  <ChevronUp color={theme.colors.textMuted} size={23} />
+                ) : (
+                  <ChevronDown color={theme.colors.textMuted} size={23} />
+                )}
+              </Pressable>
+              {canEditCategory ? (
+                <IconButton
+                  accessibilityLabel={`Edytuj kategorię ${group.category.name}`}
+                  onPress={() => onEditCategory(group.category)}
+                  style={styles.budgetCategoryMenuButton}
+                >
+                  <MoreHorizontal color={theme.colors.textMuted} size={19} />
+                </IconButton>
+              ) : null}
+            </View>
 
             {expanded ? (
               <View style={styles.budgetAccordionBody}>
@@ -3991,19 +4604,35 @@ function FinanceCategoryCards({
                       style={({ pressed }) => [
                         styles.budgetItemRow,
                         pressed && styles.pressedRow,
+                        isBudgetItemComplete(item) && styles.completedBudgetRow,
                       ]}
                     >
-                      <View style={styles.budgetOwnerPill}>
-                        <Text numberOfLines={1} style={styles.budgetOwnerText}>
-                          {formatOwner(item.owner)}
-                        </Text>
-                      </View>
+                      {showOwner ? (
+                        <View style={styles.budgetOwnerPill}>
+                          <Text
+                            numberOfLines={1}
+                            style={styles.budgetOwnerText}
+                          >
+                            {formatOwner(item.owner)}
+                          </Text>
+                        </View>
+                      ) : null}
                       <View style={styles.budgetItemText}>
-                        <Text numberOfLines={1} style={styles.budgetItemTitle}>
+                        <Text
+                          numberOfLines={1}
+                          style={[
+                            styles.budgetItemTitle,
+                            isBudgetItemComplete(item) &&
+                              styles.completedBudgetText,
+                          ]}
+                        >
                           {item.name}
                         </Text>
                         <Text numberOfLines={1} style={styles.budgetItemMeta}>
                           wydano {formatMoney(item.spentAmount, currencyCode)}
+                          {getBudgetSpentPercent(item) === null
+                            ? ""
+                            : ` / ${getBudgetSpentPercent(item)}%`}
                         </Text>
                       </View>
                       <View style={styles.budgetItemAmounts}>
@@ -4159,6 +4788,18 @@ function applyFinanceFilters(
   );
 }
 
+function hasActiveFinanceFilters(filters: FinanceFilters): boolean {
+  return (
+    Boolean(filters.categoryId) ||
+    filters.onlyOverBudget ||
+    Boolean(filters.ownerMemberId) ||
+    Boolean(filters.search.trim()) ||
+    !filters.showEmptyCategories ||
+    filters.sortBy !== defaultFinanceFilters.sortBy ||
+    filters.sortDirection !== defaultFinanceFilters.sortDirection
+  );
+}
+
 function applyFinanceCategoryFilters(
   categories: BudgetCategoryWithItems[],
   filters: FinanceFilters,
@@ -4171,6 +4812,13 @@ function applyFinanceCategoryFilters(
     const categoryName = category.name.toLocaleLowerCase("pl-PL");
 
     if (filters.categoryId && category.id !== filters.categoryId) {
+      return false;
+    }
+
+    if (
+      !filters.showEmptyCategories &&
+      getCategoryItems(category).length === 0
+    ) {
       return false;
     }
 
@@ -4194,6 +4842,13 @@ function compareFinanceRows(
   right: BudgetItemWithCategory,
   filters: FinanceFilters,
 ): number {
+  const completionCompare =
+    Number(isBudgetItemComplete(left)) - Number(isBudgetItemComplete(right));
+
+  if (completionCompare !== 0) {
+    return completionCompare;
+  }
+
   const direction = filters.sortDirection === "asc" ? 1 : -1;
   const textCompare = (a: string, b: string) =>
     a.localeCompare(b, "pl-PL") * direction;
@@ -4222,8 +4877,9 @@ function compareFinanceRows(
     case "category":
     default:
       return (
-        textCompare(left.category.name, right.category.name) ||
-        numberCompare(left.displayOrder, right.displayOrder) ||
+        left.category.displayOrder - right.category.displayOrder ||
+        left.category.name.localeCompare(right.category.name, "pl-PL") ||
+        left.displayOrder - right.displayOrder ||
         textCompare(left.name, right.name)
       );
   }
@@ -4261,7 +4917,66 @@ function groupRowsByCategory(
     groups.set(row.category.id, group);
   });
 
-  return [...groups.values()];
+  return [...groups.values()]
+    .map((group) => ({
+      ...group,
+      items: [...group.items].sort((left, right) => {
+        const completionCompare =
+          Number(isBudgetItemComplete(left)) -
+          Number(isBudgetItemComplete(right));
+
+        return (
+          completionCompare ||
+          left.displayOrder - right.displayOrder ||
+          left.name.localeCompare(right.name, "pl-PL")
+        );
+      }),
+    }))
+    .sort((left, right) => {
+      const completionCompare =
+        Number(isBudgetCategoryComplete(left.category)) -
+        Number(isBudgetCategoryComplete(right.category));
+
+      return (
+        completionCompare ||
+        left.category.displayOrder - right.category.displayOrder ||
+        left.category.name.localeCompare(right.category.name, "pl-PL")
+      );
+    });
+}
+
+function isBudgetItemComplete(item: BudgetItem): boolean {
+  const budget = Number(item.budgetAmount ?? 0);
+  return budget > 0 && Number(item.spentAmount ?? 0) >= budget;
+}
+
+function getBudgetSpentPercent(item: BudgetItem): number | null {
+  const budget = Number(item.budgetAmount ?? 0);
+
+  if (budget <= 0) {
+    return null;
+  }
+
+  return Math.round((Number(item.spentAmount ?? 0) / budget) * 100);
+}
+
+function isBudgetCategoryComplete(
+  categoryOrGroup: BudgetCategoryWithItems | BudgetCategoryGroup,
+): boolean {
+  const items =
+    "category" in categoryOrGroup
+      ? getCategoryItems(categoryOrGroup.category)
+      : getCategoryItems(categoryOrGroup);
+  const planned = items.reduce(
+    (total, item) => total + Number(item.budgetAmount ?? 0),
+    0,
+  );
+  const spent = items.reduce(
+    (total, item) => total + Number(item.spentAmount ?? 0),
+    0,
+  );
+
+  return planned > 0 && spent >= planned;
 }
 
 function groupDebtsByLender(debts: FinanceDebt[]): FinanceDebtGroup[] {
@@ -4637,6 +5352,15 @@ function formatMoney(
   return formatCurrencyAmount(value, currencyCode);
 }
 
+function formatSignedMoney(
+  value: number,
+  currencyCode: SupportedCurrencyCode,
+): string {
+  const formatted = formatMoney(value, currencyCode);
+
+  return value > 0 ? `+${formatted}` : formatted;
+}
+
 function formatMoneyInput(value: string | number | null | undefined): string {
   const amount = Number(value ?? 0);
 
@@ -4811,10 +5535,17 @@ function createStyles(colors: AppPalette) {
     budgetAccordionHeader: {
       alignItems: "center",
       flexDirection: "row",
-      gap: spacing.sm,
+      gap: 4,
       minHeight: 54,
       paddingHorizontal: 10,
       paddingVertical: 6,
+    },
+    budgetAccordionToggle: {
+      alignItems: "center",
+      flex: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      minWidth: 0,
     },
     budgetAccordionIcon: {
       alignItems: "center",
@@ -4822,6 +5553,10 @@ function createStyles(colors: AppPalette) {
       height: 34,
       justifyContent: "center",
       width: 34,
+    },
+    budgetCategoryMenuButton: {
+      height: 32,
+      width: 32,
     },
     budgetAccordionMeta: {
       color: colors.textMuted,
@@ -4959,6 +5694,124 @@ function createStyles(colors: AppPalette) {
       height: 5,
       overflow: "hidden",
       width: "100%",
+    },
+    budgetTable: {
+      backgroundColor: panelBackground,
+      borderColor: panelBorder,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      minWidth: 650,
+      overflow: "hidden",
+    },
+    budgetTableSingleOwner: {
+      minWidth: 505,
+    },
+    budgetTableCategoryAction: {
+      height: 30,
+      width: 30,
+    },
+    budgetTableCategoryRow: {
+      alignItems: "center",
+      backgroundColor: colors.cardMuted,
+      borderColor: colors.line,
+      borderTopWidth: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      minHeight: 38,
+      paddingHorizontal: spacing.sm,
+    },
+    budgetTableCategorySummary: {
+      color: colors.textMuted,
+      fontSize: 11,
+      fontWeight: "700",
+      letterSpacing: 0,
+    },
+    budgetTableCategoryTitle: {
+      color: colors.text,
+      flex: 1,
+      fontSize: 12,
+      fontWeight: "900",
+      letterSpacing: 0,
+    },
+    budgetTableEmpty: {
+      color: colors.textMuted,
+      fontSize: 11,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.md,
+    },
+    budgetTableHeader: {
+      backgroundColor: colors.cardMuted,
+      flexDirection: "row",
+      minHeight: 36,
+    },
+    budgetTableHeaderText: {
+      color: colors.textMuted,
+      fontSize: 10,
+      fontWeight: "900",
+      letterSpacing: 0,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 10,
+      textTransform: "uppercase",
+    },
+    budgetTableMoneyCell: {
+      textAlign: "right",
+      width: 108,
+    },
+    budgetTableMutedText: {
+      color: colors.textMuted,
+      fontSize: 11,
+      letterSpacing: 0,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 10,
+    },
+    budgetTableNameCell: {
+      width: 170,
+    },
+    budgetTableOwnerCell: {
+      width: 145,
+    },
+    budgetTableRow: {
+      backgroundColor: colors.card,
+      borderColor: colors.line,
+      borderTopWidth: 1,
+      flexDirection: "row",
+      minHeight: 40,
+    },
+    budgetTableText: {
+      color: colors.text,
+      fontSize: 11,
+      fontWeight: "700",
+      letterSpacing: 0,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 10,
+    },
+    budgetViewButton: {
+      borderRadius: 7,
+      height: 34,
+      width: 38,
+    },
+    budgetViewButtonActive: {
+      backgroundColor: colors.softGreen,
+    },
+    budgetViewLabel: {
+      color: colors.textMuted,
+      fontSize: 11,
+      fontWeight: "800",
+      letterSpacing: 0,
+    },
+    budgetViewToggle: {
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: 9,
+      borderWidth: 1,
+      flexDirection: "row",
+      padding: 2,
+    },
+    budgetViewToolbar: {
+      alignItems: "center",
+      flexDirection: "row",
+      justifyContent: "space-between",
     },
     categoryCard: {
       alignItems: "center",
@@ -5240,6 +6093,14 @@ function createStyles(colors: AppPalette) {
     },
     dangerText: {
       color: colors.danger,
+    },
+    completedBudgetText: {
+      color: colors.textMuted,
+      textDecorationLine: "line-through",
+    },
+    completedBudgetRow: {
+      backgroundColor: colors.cardMuted,
+      opacity: 0.62,
     },
     deleteWarning: {
       alignItems: "flex-start",
@@ -5784,6 +6645,10 @@ function createStyles(colors: AppPalette) {
       gap: spacing.sm,
       justifyContent: "space-between",
     },
+    expenseHistoryActions: {
+      gap: spacing.sm,
+      paddingTop: spacing.sm,
+    },
     expenseHistoryAmount: {
       color: colors.primaryDark,
       fontSize: 14,
@@ -5854,6 +6719,36 @@ function createStyles(colors: AppPalette) {
       shadowOpacity: panelShadowOpacity,
       shadowRadius: 10,
       width: 48,
+    },
+    financeHeaderActions: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.sm,
+    },
+    financeHeaderSearch: {
+      alignItems: "center",
+      backgroundColor: colors.field,
+      borderColor: colors.border,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      minHeight: 44,
+      paddingLeft: spacing.md,
+      paddingRight: 4,
+    },
+    financeHeaderSearchInput: {
+      color: colors.text,
+      flex: 1,
+      fontSize: 13,
+      letterSpacing: 0,
+      minHeight: 42,
+      minWidth: 0,
+      paddingVertical: 0,
+    },
+    financeSearchCloseButton: {
+      height: 36,
+      width: 36,
     },
     financeMenuGrid: {
       gap: spacing.sm,
@@ -6346,7 +7241,16 @@ function createStyles(colors: AppPalette) {
       borderColor: colors.border,
       borderRadius: radii.card,
       borderWidth: 1,
+      marginBottom: spacing.sm,
       overflow: "hidden",
+    },
+    generateCategoryGroupActive: {
+      borderColor: colors.primary,
+      elevation: 5,
+      shadowColor: "#000000",
+      shadowOffset: { height: 8, width: 0 },
+      shadowOpacity: isDark ? 0.28 : 0.14,
+      shadowRadius: 16,
     },
     generateCategoryHeader: {
       alignItems: "center",
@@ -6354,6 +7258,17 @@ function createStyles(colors: AppPalette) {
       flexDirection: "row",
       gap: spacing.sm,
       padding: spacing.sm,
+    },
+    generateCategoryList: {
+      flexShrink: 1,
+      minHeight: 0,
+    },
+    generateCategorySelect: {
+      alignItems: "center",
+      flex: 1,
+      flexDirection: "row",
+      gap: spacing.sm,
+      minWidth: 0,
     },
     generateCategoryMeta: {
       color: colors.textMuted,
@@ -6390,7 +7305,9 @@ function createStyles(colors: AppPalette) {
       borderColor: colors.textMuted,
     },
     generateCopyList: {
+      flexShrink: 1,
       gap: spacing.sm,
+      minHeight: 0,
     },
     generateToolbar: {
       backgroundColor: colors.cardMuted,
@@ -6436,6 +7353,27 @@ function createStyles(colors: AppPalette) {
     },
     generateItemRowMuted: {
       opacity: 0.64,
+    },
+    generateModalBody: {
+      flexShrink: 1,
+      gap: spacing.md,
+      minHeight: 0,
+      padding: spacing.lg,
+      paddingBottom: spacing.lg,
+    },
+    generateDragHandle: {
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: 8,
+      borderWidth: 1,
+      height: 38,
+      justifyContent: "center",
+      width: 40,
+    },
+    generateDragHandleActive: {
+      backgroundColor: colors.softGreen,
+      borderColor: colors.primary,
     },
     filterChip: {
       alignItems: "center",
@@ -6535,12 +7473,12 @@ function createStyles(colors: AppPalette) {
       textTransform: "uppercase",
     },
     filterPanel: {
-      backgroundColor: "transparent",
-      borderColor: "transparent",
-      borderRadius: 0,
-      borderWidth: 0,
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderRadius: radii.card,
+      borderWidth: 1,
       gap: spacing.sm,
-      padding: 0,
+      padding: spacing.sm,
     },
     headerCell: {
       backgroundColor: colors.cardMuted,
@@ -6658,9 +7596,11 @@ function createStyles(colors: AppPalette) {
       top: 25,
     },
     financeSummaryLabel: {
+      flexShrink: 1,
       fontSize: 10,
       fontWeight: "800",
       letterSpacing: 0,
+      textAlign: "center",
     },
     financeSummaryLabelRow: {
       alignItems: "center",
@@ -6805,6 +7745,17 @@ function createStyles(colors: AppPalette) {
       height: 34,
       width: 34,
     },
+    monthFilterButton: {
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderWidth: 1,
+      height: 38,
+      width: 38,
+    },
+    monthFilterButtonActive: {
+      backgroundColor: colors.softGreen,
+      borderColor: colors.primary,
+    },
     monthDeleteButton: {
       backgroundColor: colors.card,
       borderColor: `${colors.danger}55`,
@@ -6932,6 +7883,12 @@ function createStyles(colors: AppPalette) {
       fontWeight: "900",
       letterSpacing: 0,
       textTransform: "uppercase",
+    },
+    totalMetricMeta: {
+      color: colors.textMuted,
+      fontSize: 9,
+      fontWeight: "800",
+      letterSpacing: 0,
     },
     totalMetricValue: {
       color: colors.text,
