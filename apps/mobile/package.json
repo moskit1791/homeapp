@@ -6,6 +6,7 @@
   "scripts": {
     "build": "expo export --platform all",
     "dev": "expo start",
+    "eas-build-post-install": "cd ../.. && pnpm --filter @homeapp/shared-types build && pnpm --filter @homeapp/shared-validation build",
     "lint": "eslint .",
     "test": "jest --passWithNoTests",
     "typecheck": "tsc -p tsconfig.json --noEmit",
