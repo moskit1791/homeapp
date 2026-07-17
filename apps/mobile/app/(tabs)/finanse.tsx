@@ -5671,14 +5671,16 @@ function createStyles(colors: AppPalette) {
     },
     budgetOwnerPill: {
       alignItems: "center",
-      backgroundColor: colors.softGreen,
+      backgroundColor: isDark ? colors.cardMuted : colors.softGreen,
+      borderColor: isDark ? colors.primary : "transparent",
       borderRadius: 999,
+      borderWidth: 1,
       maxWidth: 82,
       minHeight: 20,
       paddingHorizontal: spacing.sm,
     },
     budgetOwnerText: {
-      color: mockupGreen,
+      color: isDark ? colors.primaryDarker : mockupGreen,
       fontSize: 9,
       fontWeight: "700",
       letterSpacing: 0,

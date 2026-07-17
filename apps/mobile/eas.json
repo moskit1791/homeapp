@@ -27,9 +27,18 @@
       "android": {
         "buildType": "app-bundle"
       },
+      "environment": "production",
       "env": {
         "EXPO_PUBLIC_API_URL": "https://app.porabkihome.pl/api"
       }
+    },
+    "production-apk": {
+      "android": {
+        "buildType": "apk"
+      },
+      "distribution": "internal",
+      "environment": "production",
+      "extends": "production"
     }
   },
   "submit": {
