@@ -69,7 +69,7 @@ import googleGImage from "../../assets/google-logo.webp";
 
 type CalendarViewMode = "month" | "week";
 type _AgendaSegment = "notes" | "todo";
-type ReminderValue = "none" | "15" | "60" | "1440";
+type ReminderValue = "none" | "15" | "30" | "60" | "1440";
 
 const _agendaSegments: Array<{
   label: string;
@@ -83,8 +83,9 @@ const _agendaSegments: Array<{
 const reminderOptions: Array<{ label: string; value: ReminderValue }> = [
   { label: "Brak", value: "none" },
   { label: "15 min", value: "15" },
+  { label: "30 min", value: "30" },
   { label: "1 h", value: "60" },
-  { label: "Dzień wcześniej", value: "1440" },
+  { label: "1 dzień", value: "1440" },
 ];
 
 const calendarViewOptions: Array<{ label: string; value: CalendarViewMode }> = [
@@ -455,7 +456,7 @@ export default function KalendarzScreen() {
                 ]}
               >
                 <Image
-                  resizeMode="cover"
+                  resizeMode="contain"
                   source={googleGImage}
                   style={[
                     styles.googleHeaderImage,
@@ -1949,7 +1950,7 @@ function reminderValueToMinutes(value: ReminderValue): number | null {
 function minutesToReminderValue(
   value: number | null | undefined,
 ): ReminderValue {
-  if (value === 15 || value === 60 || value === 1440) {
+  if (value === 15 || value === 30 || value === 60 || value === 1440) {
     return String(value) as ReminderValue;
   }
 

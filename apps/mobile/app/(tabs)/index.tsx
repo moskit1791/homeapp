@@ -93,6 +93,7 @@ export default function DzisiajScreen() {
     (item) => !item.isChecked,
   );
   const todoPreview = (dashboard?.todoPreview ?? []).slice(0, 3);
+  const todoCount = dashboard?.todoCount ?? todoPreview.length;
   const readableGreen = theme.isDark ? theme.colors.primaryDarker : mockupGreen;
   const openFromNotification = useCallback(
     (
@@ -352,6 +353,7 @@ export default function DzisiajScreen() {
           }
           shoppingCount={openShopping.length}
           tasks={todoPreview}
+          todoCount={todoCount}
         />
       ) : null}
     </AppScreen>
@@ -669,6 +671,7 @@ function TodayOverviewGrid({
   onOpenTodo,
   shoppingCount,
   tasks,
+  todoCount,
 }: {
   error: unknown;
   isLoading: boolean;
@@ -678,6 +681,7 @@ function TodayOverviewGrid({
   onOpenTodo: () => void;
   shoppingCount: number;
   tasks: StartTodoItem[];
+  todoCount: number;
 }) {
   const { styles, theme } = useTodayStyles();
   const readableGreen = theme.isDark ? theme.colors.primaryDarker : mockupGreen;
@@ -697,7 +701,7 @@ function TodayOverviewGrid({
           <View style={styles.todoTitleRow}>
             <Text style={styles.todoCompactTitle}>Do zrobienia</Text>
             <View style={styles.todoCountPill}>
-              <Text style={styles.todoCountText}>{tasks.length}</Text>
+              <Text style={styles.todoCountText}>{todoCount}</Text>
             </View>
           </View>
           <MoreHorizontal color={theme.colors.textMuted} size={20} />

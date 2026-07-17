@@ -54,6 +54,51 @@ describe("NotificationsService", () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     expect(database.query).toHaveBeenCalledTimes(3);
   });
+
+  it.each([
+    {
+      eventTitle: "Wizyta u lekarza",
+      expectedTitle: "Jutro: Wizyta u lekarza",
+      reminderOffsetMinutes: 1440,
+    },
+    {
+      eventTitle: "Ginekolog",
+      expectedTitle: "Za 30 min: Ginekolog",
+      reminderOffsetMinutes: 30,
+    },
+  ])(
+    "sends a relative calendar reminder: $expectedTitle",
+    async ({ eventTitle, expectedTitle, reminderOffsetMinutes }) => {
+      const database = {
+        query: vi.fn().mockResolvedValue({ rows: [pushTokenRow()] }),
+      };
+      const fetchSpy = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValue(okExpoResponse() as never);
+      const service = new NotificationsService(database as never);
+
+      await service.sendCalendarEventReminder({
+        eventDate: "2026-07-18",
+        eventTime: "10:30:00",
+        householdId: "22222222-2222-2222-2222-222222222222",
+        reminderOffsetMinutes,
+        title: eventTitle,
+      });
+
+      const request = fetchSpy.mock.calls[0]?.[1];
+      const messages = JSON.parse(String(request?.body)) as Array<{
+        body: string;
+        data: { reminderOffsetMinutes: string };
+        title: string;
+      }>;
+
+      expect(messages[0]).toMatchObject({
+        body: "18.07.2026 o 10:30",
+        data: { reminderOffsetMinutes: String(reminderOffsetMinutes) },
+        title: expectedTitle,
+      });
+    },
+  );
 });
 
 function pushTokenRow() {

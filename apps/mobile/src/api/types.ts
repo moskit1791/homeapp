@@ -125,6 +125,7 @@ export interface CreateHouseholdResponse {
 export interface StartDashboard {
   finance: StartFinanceSummary | null;
   mealPlan: StartMealPlan | null;
+  todoCount: number;
   todoPreview: StartTodoItem[];
   upcomingEvents: StartCalendarEvent[];
 }

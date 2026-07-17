@@ -254,6 +254,7 @@ export class NotificationsService {
     eventDate: string;
     eventTime: string | null;
     householdId: string;
+    reminderOffsetMinutes: number | null;
     title: string;
   }): Promise<PushSendResult> {
     const recipients = await this.listEnabledTokensForHouseholdEvent(
@@ -269,16 +270,21 @@ export class NotificationsService {
       input.eventDate,
       input.eventTime,
     );
+    const reminderTitle = formatCalendarReminderTitle(
+      input.reminderOffsetMinutes,
+      input.title,
+    );
     const messages = recipients.map((token) => ({
-      body: input.title,
+      body: startsAt,
       data: {
         eventDate: input.eventDate,
         eventTime: input.eventTime ?? "",
         eventType: "calendar.changed",
         kind: "calendar-reminder",
+        reminderOffsetMinutes: String(input.reminderOffsetMinutes ?? ""),
       },
       sound: "default" as const,
-      title: `Start: ${startsAt}`,
+      title: reminderTitle,
       to: token.expoPushToken,
     }));
 
@@ -606,6 +612,25 @@ function formatCalendarReminderStart(
   const time = eventTime?.slice(0, 5).trim();
 
   return time ? `${date} o ${time}` : date;
+}
+
+function formatCalendarReminderTitle(
+  reminderOffsetMinutes: number | null,
+  eventTitle: string,
+): string {
+  if (reminderOffsetMinutes === 1440) {
+    return `Jutro: ${eventTitle}`;
+  }
+
+  if (reminderOffsetMinutes === 60) {
+    return `Za 1 godz.: ${eventTitle}`;
+  }
+
+  if (reminderOffsetMinutes && reminderOffsetMinutes > 0) {
+    return `Za ${reminderOffsetMinutes} min: ${eventTitle}`;
+  }
+
+  return `Wkrótce: ${eventTitle}`;
 }
 
 function formatCalendarReminderDate(eventDate: string): string {

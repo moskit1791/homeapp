@@ -10,7 +10,7 @@ export class StartService {
   ) {}
 
   async getDashboard(householdId: string): Promise<StartDashboardRecord> {
-    const [finance, upcomingEvents, mealPlan, todoPreview] = await Promise.all([
+    const [finance, upcomingEvents, mealPlan, todo] = await Promise.all([
       this.getFinanceSummary(householdId),
       this.getUpcomingEvents(householdId),
       this.getCurrentMealPlan(householdId),
@@ -20,7 +20,8 @@ export class StartService {
     return {
       finance,
       mealPlan,
-      todoPreview,
+      todoCount: todo.totalCount,
+      todoPreview: todo.items,
       upcomingEvents,
     };
   }
@@ -135,10 +136,20 @@ export class StartService {
     };
   }
 
-  private async getTodoPreview(householdId: string): Promise<StartTodoItem[]> {
+  private async getTodoPreview(householdId: string): Promise<{
+    items: StartTodoItem[];
+    totalCount: number;
+  }> {
     const result = await this.database.query<TodoItemRow>(
       `
-        select id, title, scope_type, owner_member_id, sort_order, created_at
+        select
+          id,
+          title,
+          scope_type,
+          owner_member_id,
+          sort_order,
+          created_at,
+          count(*) over()::integer as total_count
         from todo_items
         where household_id = $1
           and scope_type = 'household'
@@ -149,14 +160,17 @@ export class StartService {
       [householdId],
     );
 
-    return result.rows.map((row) => ({
-      createdAt: row.created_at,
-      id: row.id,
-      ownerMemberId: row.owner_member_id,
-      scopeType: row.scope_type,
-      sortOrder: row.sort_order,
-      title: row.title,
-    }));
+    return {
+      items: result.rows.map((row) => ({
+        createdAt: row.created_at,
+        id: row.id,
+        ownerMemberId: row.owner_member_id,
+        scopeType: row.scope_type,
+        sortOrder: row.sort_order,
+        title: row.title,
+      })),
+      totalCount: Number(result.rows[0]?.total_count ?? 0),
+    };
   }
 
   private formatDateOnly(value: Date | string): string {
@@ -204,11 +218,13 @@ interface TodoItemRow {
   scope_type: "household" | "member";
   sort_order: number;
   title: string;
+  total_count: number | string;
 }
 
 export interface StartDashboardRecord {
   finance: StartFinanceSummary | null;
   mealPlan: StartMealPlan | null;
+  todoCount: number;
   todoPreview: StartTodoItem[];
   upcomingEvents: StartCalendarEvent[];
 }

@@ -508,7 +508,7 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
       return null;
     }
 
-    if (![15, 60, 1440].includes(value)) {
+    if (![15, 30, 60, 1440].includes(value)) {
       throw new BadRequestException("Invalid reminder offset");
     }
 
@@ -567,6 +567,7 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
           eventDate: event.eventDate,
           eventTime: event.eventTime,
           householdId: event.householdId,
+          reminderOffsetMinutes: event.reminderOffsetMinutes,
           title: event.title,
         }),
       ),
