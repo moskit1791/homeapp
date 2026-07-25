@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -14,6 +15,7 @@ import {
 import { CurrentHousehold } from '../../shared/decorators/current-household.decorator';
 import { HouseholdContext } from '../../shared/request-context';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { EncryptionService } from '../encryption/encryption.service';
 import { HouseholdContextGuard } from '../households/guards/household-context.guard';
 import { RequirePermission } from '../permissions/decorators/require-permission.decorator';
 import { PermissionGuard } from '../permissions/guards/permission.guard';
@@ -59,13 +61,16 @@ export class FinanceController {
     private readonly financeDebtsService: FinanceDebtsService,
     private readonly financeSavingsService: FinanceSavingsService,
     private readonly financeSummaryService: FinanceSummaryService,
-    private readonly incomesService: IncomesService
+    private readonly incomesService: IncomesService,
+    private readonly encryptionService: EncryptionService
   ) {}
 
   @Get('current-month')
   @RequirePermission('finances', 'read')
   getCurrentMonth(@CurrentHousehold() household: HouseholdContext | undefined) {
-    return this.financeSummaryService.getCurrentMonthDetail(this.requireHousehold(household).householdId);
+    return this.financeSummaryService.getCurrentMonthDetail(
+      this.requireHousehold(household).householdId
+    );
   }
 
   @Post('months/generate-next')
@@ -74,20 +79,32 @@ export class FinanceController {
     @CurrentHousehold() household: HouseholdContext | undefined,
     @Body() dto: GenerateNextBudgetMonthDto = {}
   ) {
-    const generated = await this.budgetMonthsService.generateNextMonth(
-      this.requireHousehold(household).householdId,
-      dto
+    const context = this.requireHousehold(household);
+    await Promise.all(
+      (dto.items ?? []).map((item) =>
+        this.assertFinancePayload(context.householdId, item, item.budgetAmount !== undefined)
+      )
     );
+    const generated = await this.budgetMonthsService.generateNextMonth(context.householdId, dto);
 
-    return this.financeSummaryService.getMonthDetail(this.requireHousehold(household).householdId, generated.id);
+    return this.financeSummaryService.getMonthDetail(context.householdId, generated.id);
   }
 
   @Post('months')
   @RequirePermission('finances', 'create')
-  async createMonth(@CurrentHousehold() household: HouseholdContext | undefined, @Body() dto: CreateBudgetMonthDto) {
-    const created = await this.budgetMonthsService.createMonth(this.requireHousehold(household).householdId, dto);
+  async createMonth(
+    @CurrentHousehold() household: HouseholdContext | undefined,
+    @Body() dto: CreateBudgetMonthDto
+  ) {
+    const created = await this.budgetMonthsService.createMonth(
+      this.requireHousehold(household).householdId,
+      dto
+    );
 
-    return this.financeSummaryService.getMonthDetail(this.requireHousehold(household).householdId, created.id);
+    return this.financeSummaryService.getMonthDetail(
+      this.requireHousehold(household).householdId,
+      created.id
+    );
   }
 
   @Get('months/archive')
@@ -98,8 +115,14 @@ export class FinanceController {
 
   @Get('months/:id')
   @RequirePermission('finances', 'read')
-  getMonth(@CurrentHousehold() household: HouseholdContext | undefined, @Param() params: FinanceMonthIdParamDto) {
-    return this.financeSummaryService.getMonthDetail(this.requireHousehold(household).householdId, params.id);
+  getMonth(
+    @CurrentHousehold() household: HouseholdContext | undefined,
+    @Param() params: FinanceMonthIdParamDto
+  ) {
+    return this.financeSummaryService.getMonthDetail(
+      this.requireHousehold(household).householdId,
+      params.id
+    );
   }
 
   @Delete('months/:id')
@@ -108,7 +131,10 @@ export class FinanceController {
     @CurrentHousehold() household: HouseholdContext | undefined,
     @Param() params: FinanceMonthIdParamDto
   ) {
-    const deleted = await this.budgetMonthsService.deleteMonth(this.requireHousehold(household).householdId, params.id);
+    const deleted = await this.budgetMonthsService.deleteMonth(
+      this.requireHousehold(household).householdId,
+      params.id
+    );
 
     if (!deleted) {
       throw new NotFoundException('Budget month not found');
@@ -123,19 +149,30 @@ export class FinanceController {
     @CurrentHousehold() household: HouseholdContext | undefined,
     @Param() params: FinanceMonthIdParamDto
   ) {
-    return this.financeSummaryService.getPersonSummary(this.requireHousehold(household).householdId, params.id);
+    return this.financeSummaryService.getPersonSummary(
+      this.requireHousehold(household).householdId,
+      params.id
+    );
   }
 
   @Get('categories')
   @RequirePermission('finances', 'read')
   listCategories(@CurrentHousehold() household: HouseholdContext | undefined) {
-    return this.budgetCategoriesService.listCategories(this.requireHousehold(household).householdId);
+    return this.budgetCategoriesService.listCategories(
+      this.requireHousehold(household).householdId
+    );
   }
 
   @Post('categories')
   @RequirePermission('finances', 'create')
-  createCategory(@CurrentHousehold() household: HouseholdContext | undefined, @Body() dto: CreateBudgetCategoryDto) {
-    return this.budgetCategoriesService.createCategory(this.requireHousehold(household).householdId, dto);
+  async createCategory(
+    @CurrentHousehold() household: HouseholdContext | undefined,
+    @Body() dto: CreateBudgetCategoryDto
+  ) {
+    const context = this.requireHousehold(household);
+    await this.assertFinancePayload(context.householdId, dto, true);
+
+    return this.budgetCategoriesService.createCategory(context.householdId, dto);
   }
 
   @Patch('categories/:id')
@@ -145,8 +182,10 @@ export class FinanceController {
     @Param() params: FinanceCategoryIdParamDto,
     @Body() dto: UpdateBudgetCategoryDto
   ) {
+    const context = this.requireHousehold(household);
+    await this.assertFinancePayload(context.householdId, dto, dto.name !== undefined);
     const category = await this.budgetCategoriesService.updateCategory(
-      this.requireHousehold(household).householdId,
+      context.householdId,
       params.id,
       dto
     );
@@ -160,8 +199,14 @@ export class FinanceController {
 
   @Post('budget-items')
   @RequirePermission('finances', 'create')
-  createBudgetItem(@CurrentHousehold() household: HouseholdContext | undefined, @Body() dto: CreateBudgetItemDto) {
-    return this.budgetItemsService.createBudgetItem(this.requireHousehold(household).householdId, dto);
+  async createBudgetItem(
+    @CurrentHousehold() household: HouseholdContext | undefined,
+    @Body() dto: CreateBudgetItemDto
+  ) {
+    const context = this.requireHousehold(household);
+    await this.assertFinancePayload(context.householdId, dto, true);
+
+    return this.budgetItemsService.createBudgetItem(context.householdId, dto);
   }
 
   @Patch('budget-items/:id')
@@ -171,8 +216,14 @@ export class FinanceController {
     @Param() params: FinanceBudgetItemIdParamDto,
     @Body() dto: UpdateBudgetItemDto
   ) {
+    const context = this.requireHousehold(household);
+    await this.assertFinancePayload(
+      context.householdId,
+      dto,
+      dto.name !== undefined || dto.budgetAmount !== undefined
+    );
     const item = await this.budgetItemsService.updateBudgetItem(
-      this.requireHousehold(household).householdId,
+      context.householdId,
       params.id,
       dto
     );
@@ -204,8 +255,14 @@ export class FinanceController {
 
   @Post('expenses')
   @RequirePermission('finances', 'create')
-  createExpense(@CurrentHousehold() household: HouseholdContext | undefined, @Body() dto: CreateExpenseDto) {
-    return this.expensesService.createExpense(this.requireHousehold(household).householdId, dto);
+  async createExpense(
+    @CurrentHousehold() household: HouseholdContext | undefined,
+    @Body() dto: CreateExpenseDto
+  ) {
+    const context = this.requireHousehold(household);
+    await this.assertFinancePayload(context.householdId, dto, true);
+
+    return this.expensesService.createExpense(context.householdId, dto);
   }
 
   @Delete('expenses/:id')
@@ -214,7 +271,10 @@ export class FinanceController {
     @CurrentHousehold() household: HouseholdContext | undefined,
     @Param() params: FinanceExpenseIdParamDto
   ) {
-    const deleted = await this.expensesService.deleteExpense(this.requireHousehold(household).householdId, params.id);
+    const deleted = await this.expensesService.deleteExpense(
+      this.requireHousehold(household).householdId,
+      params.id
+    );
 
     if (!deleted) {
       throw new NotFoundException('Expense not found');
@@ -225,12 +285,15 @@ export class FinanceController {
 
   @Put('incomes/:memberId')
   @RequirePermission('finances', 'update')
-  upsertIncome(
+  async upsertIncome(
     @CurrentHousehold() household: HouseholdContext | undefined,
     @Param() params: FinanceMemberIdParamDto,
     @Body() dto: UpsertIncomeDto
   ) {
-    return this.incomesService.upsertCurrentIncome(this.requireHousehold(household).householdId, params.memberId, dto);
+    const context = this.requireHousehold(household);
+    await this.assertFinancePayload(context.householdId, dto, true);
+
+    return this.incomesService.upsertCurrentIncome(context.householdId, params.memberId, dto);
   }
 
   @Get('debts')
@@ -241,8 +304,14 @@ export class FinanceController {
 
   @Post('debts')
   @RequirePermission('finances', 'create')
-  createDebt(@CurrentHousehold() household: HouseholdContext | undefined, @Body() dto: CreateFinanceDebtDto) {
-    return this.financeDebtsService.createDebt(this.requireHousehold(household).householdId, dto);
+  async createDebt(
+    @CurrentHousehold() household: HouseholdContext | undefined,
+    @Body() dto: CreateFinanceDebtDto
+  ) {
+    const context = this.requireHousehold(household);
+    await this.assertFinancePayload(context.householdId, dto, true);
+
+    return this.financeDebtsService.createDebt(context.householdId, dto);
   }
 
   @Post('debts/:id/payments')
@@ -252,11 +321,9 @@ export class FinanceController {
     @Param() params: FinanceDebtIdParamDto,
     @Body() dto: CreateFinanceDebtPaymentDto
   ) {
-    const debt = await this.financeDebtsService.createPayment(
-      this.requireHousehold(household).householdId,
-      params.id,
-      dto
-    );
+    const context = this.requireHousehold(household);
+    await this.assertFinancePayload(context.householdId, dto, true);
+    const debt = await this.financeDebtsService.createPayment(context.householdId, params.id, dto);
 
     if (!debt) {
       throw new NotFoundException('Finance debt not found');
@@ -272,11 +339,16 @@ export class FinanceController {
     @Param() params: FinanceDebtIdParamDto,
     @Body() dto: UpdateFinanceDebtDto
   ) {
-    const debt = await this.financeDebtsService.updateDebt(
-      this.requireHousehold(household).householdId,
-      params.id,
-      dto
+    const context = this.requireHousehold(household);
+    await this.assertFinancePayload(
+      context.householdId,
+      dto,
+      dto.amount !== undefined ||
+        dto.lenderName !== undefined ||
+        dto.note !== undefined ||
+        dto.purpose !== undefined
     );
+    const debt = await this.financeDebtsService.updateDebt(context.householdId, params.id, dto);
 
     if (!debt) {
       throw new NotFoundException('Finance debt not found');
@@ -291,7 +363,10 @@ export class FinanceController {
     @CurrentHousehold() household: HouseholdContext | undefined,
     @Param() params: FinanceDebtIdParamDto
   ) {
-    const deleted = await this.financeDebtsService.deleteDebt(this.requireHousehold(household).householdId, params.id);
+    const deleted = await this.financeDebtsService.deleteDebt(
+      this.requireHousehold(household).householdId,
+      params.id
+    );
 
     if (!deleted) {
       throw new NotFoundException('Finance debt not found');
@@ -308,11 +383,22 @@ export class FinanceController {
 
   @Post('savings')
   @RequirePermission('finances', 'create')
-  createSavingsAccount(
+  async createSavingsAccount(
     @CurrentHousehold() household: HouseholdContext | undefined,
     @Body() dto: CreateFinanceSavingsAccountDto
   ) {
     const context = this.requireHousehold(household);
+    await this.assertFinancePayload(context.householdId, dto, true);
+    if (dto.amount > 0) {
+      await this.assertFinancePayload(
+        context.householdId,
+        {
+          encryptedPayload: dto.transactionEncryptedPayload,
+          encryptionVersion: dto.encryptionVersion
+        },
+        true
+      );
+    }
 
     return this.financeSavingsService.createAccount(context.householdId, context.memberId, dto);
   }
@@ -324,8 +410,10 @@ export class FinanceController {
     @Param() params: FinanceSavingsAccountIdParamDto,
     @Body() dto: CreateFinanceSavingsTransactionDto
   ) {
+    const context = this.requireHousehold(household);
+    await this.assertFinancePayload(context.householdId, dto, true);
     const account = await this.financeSavingsService.createTransaction(
-      this.requireHousehold(household).householdId,
+      context.householdId,
       params.id,
       dto
     );
@@ -361,5 +449,31 @@ export class FinanceController {
     }
 
     return household;
+  }
+
+  private async assertFinancePayload(
+    householdId: string,
+    dto: { encryptedPayload?: string; encryptionVersion?: number },
+    requiredWhenEncrypted: boolean
+  ): Promise<void> {
+    const settings = await this.encryptionService.getSettings(householdId);
+    const enabled = settings.enabledModules.includes('finances');
+    const hasEnvelope = dto.encryptedPayload !== undefined || dto.encryptionVersion !== undefined;
+
+    if (!enabled) {
+      if (hasEnvelope) {
+        throw new BadRequestException('Finance encryption is not enabled for this household');
+      }
+
+      return;
+    }
+
+    if (requiredWhenEncrypted && (!dto.encryptedPayload || dto.encryptionVersion === undefined)) {
+      throw new BadRequestException('Finance content must be encrypted on the client');
+    }
+
+    if (hasEnvelope && (!dto.encryptedPayload || dto.encryptionVersion !== settings.keyVersion)) {
+      throw new BadRequestException('Outdated or incomplete household encryption envelope');
+    }
   }
 }

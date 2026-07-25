@@ -3,15 +3,15 @@ import {
   ForbiddenException,
   Injectable,
   NotImplementedException,
-  UnauthorizedException
-} from '@nestjs/common';
-import { compare, hash } from 'bcryptjs';
-import { OAuth2Client } from 'google-auth-library';
-import { randomBytes, createHash } from 'node:crypto';
-import { sign, verify } from 'jsonwebtoken';
-import { AppEnv, loadEnv } from '../../shared/env';
-import { MailService } from '../mail/mail.service';
-import { UsersService } from '../users/users.service';
+  UnauthorizedException,
+} from "@nestjs/common";
+import { compare, hash } from "bcryptjs";
+import { OAuth2Client } from "google-auth-library";
+import { randomBytes, createHash } from "node:crypto";
+import { sign, verify } from "jsonwebtoken";
+import { AppEnv, loadEnv } from "../../shared/env";
+import { MailService } from "../mail/mail.service";
+import { UsersService } from "../users/users.service";
 import {
   ForgotPasswordDto,
   GoogleLoginDto,
@@ -20,8 +20,8 @@ import {
   RegisterDto,
   ResendVerificationDto,
   ResetPasswordDto,
-  VerifyEmailDto
-} from './dto/auth.dto';
+  VerifyEmailDto,
+} from "./dto/auth.dto";
 
 @Injectable()
 export class AuthService {
@@ -29,7 +29,7 @@ export class AuthService {
 
   constructor(
     private readonly usersService: UsersService,
-    private readonly mailService: MailService
+    private readonly mailService: MailService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -41,40 +41,44 @@ export class AuthService {
       displayName,
       email,
       emailVerificationTokenHash: this.hashToken(verificationToken),
-      passwordHash
+      passwordHash,
     });
 
     await this.mailService.sendEmailVerification({
       displayName,
       email,
-      token: verificationToken
+      token: verificationToken,
     });
 
     return {
-      ...(this.shouldExposeDevTokens(loadEnv()) ? { devVerificationToken: verificationToken } : {}),
-      user
+      ...(this.shouldExposeDevTokens(loadEnv())
+        ? { devVerificationToken: verificationToken }
+        : {}),
+      user,
     };
   }
 
   async login(dto: LoginDto) {
-    const user = await this.usersService.findByEmailForAuth(this.normalizeEmail(dto.email));
+    const user = await this.usersService.findByEmailForAuth(
+      this.normalizeEmail(dto.email),
+    );
 
     if (!user?.passwordHash) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException("Invalid credentials");
     }
 
-    if (user.accountStatus === 'banned') {
-      throw new ForbiddenException('Account is banned');
+    if (user.accountStatus === "banned") {
+      throw new ForbiddenException("Account is banned");
     }
 
     if (!user.emailVerifiedAt) {
-      throw new ForbiddenException('Email is not verified');
+      throw new ForbiddenException("Email is not verified");
     }
 
     const validPassword = await compare(dto.password, user.passwordHash);
 
     if (!validPassword) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException("Invalid credentials");
     }
 
     return this.issueSession(user.id);
@@ -86,20 +90,27 @@ export class AuthService {
     const googleAudiences = this.getGoogleAudiences(env);
 
     if (googleAudiences.length === 0) {
-      throw new NotImplementedException('Google OAuth requires GOOGLE_OAUTH_CLIENT_ID');
+      throw new NotImplementedException(
+        "Google OAuth requires GOOGLE_OAUTH_CLIENT_ID",
+      );
     }
 
-    const payload = await this.verifyGoogleIdToken(dto.idToken, googleAudiences);
+    const payload = await this.verifyGoogleIdToken(
+      dto.idToken,
+      googleAudiences,
+    );
     const email = this.normalizeEmail(payload.email);
-    const displayName = this.normalizeText(payload.name || (email.split('@')[0] ?? email));
+    const displayName = this.normalizeText(
+      payload.name || (email.split("@")[0] ?? email),
+    );
     const user = await this.usersService.upsertGoogleUser({
       displayName,
       email,
-      googleSubject: payload.sub
+      googleSubject: payload.sub,
     });
 
-    if (user.accountStatus === 'banned') {
-      throw new ForbiddenException('Account is banned');
+    if (user.accountStatus === "banned") {
+      throw new ForbiddenException("Account is banned");
     }
 
     return this.issueSession(user.id);
@@ -108,28 +119,36 @@ export class AuthService {
   async forgotPassword(dto: ForgotPasswordDto) {
     const email = this.normalizeEmail(dto.email);
     const resetToken = this.createOpaqueToken();
-    const user = await this.usersService.setPasswordResetToken(email, this.hashToken(resetToken));
+    const user = await this.usersService.setPasswordResetToken(
+      email,
+      this.hashToken(resetToken),
+    );
 
     if (user) {
       await this.mailService.sendPasswordReset({
         displayName: user.displayName,
         email: user.email,
-        token: resetToken
+        token: resetToken,
       });
     }
 
     return {
-      ...(user && this.shouldExposeDevTokens(loadEnv()) ? { devResetToken: resetToken } : {}),
-      ok: true
+      ...(user && this.shouldExposeDevTokens(loadEnv())
+        ? { devResetToken: resetToken }
+        : {}),
+      ok: true,
     };
   }
 
   async resetPassword(dto: ResetPasswordDto) {
     const passwordHash = await hash(dto.password, 12);
-    const changed = await this.usersService.resetPassword(this.hashToken(dto.token), passwordHash);
+    const changed = await this.usersService.resetPassword(
+      this.hashToken(dto.token),
+      passwordHash,
+    );
 
     if (!changed) {
-      throw new BadRequestException('Invalid or expired reset token');
+      throw new BadRequestException("Invalid or expired reset token");
     }
 
     return { ok: true };
@@ -138,11 +157,11 @@ export class AuthService {
   async verifyEmail(dto: VerifyEmailDto) {
     const verified = await this.usersService.verifyEmail(
       this.normalizeEmail(dto.email),
-      this.hashToken(dto.token)
+      this.hashToken(dto.token),
     );
 
     if (!verified) {
-      throw new BadRequestException('Invalid or expired verification token');
+      throw new BadRequestException("Invalid or expired verification token");
     }
 
     return { ok: true };
@@ -153,14 +172,14 @@ export class AuthService {
     const verificationToken = this.createOpaqueToken();
     const user = await this.usersService.setEmailVerificationToken(
       email,
-      this.hashToken(verificationToken)
+      this.hashToken(verificationToken),
     );
 
     if (user) {
       await this.mailService.sendEmailVerification({
         displayName: user.displayName,
         email: user.email,
-        token: verificationToken
+        token: verificationToken,
       });
     }
 
@@ -168,7 +187,7 @@ export class AuthService {
       ...(user && this.shouldExposeDevTokens(loadEnv())
         ? { devVerificationToken: verificationToken }
         : {}),
-      ok: true
+      ok: true,
     };
   }
 
@@ -177,26 +196,35 @@ export class AuthService {
     const user = await this.usersService.consumeRefreshToken(tokenHash);
 
     if (!user) {
-      throw new UnauthorizedException('Invalid refresh token');
+      throw new UnauthorizedException("Invalid refresh token");
     }
 
-    if (user.accountStatus === 'banned') {
+    if (user.accountStatus === "banned") {
       await this.usersService.revokeRefreshTokensForUser(user.id);
-      throw new ForbiddenException('Account is banned');
+      throw new ForbiddenException("Account is banned");
     }
 
-    return this.issueSession(user.id);
+    return this.issueSession(user.id, user.sessionVersion);
   }
 
   async logout(accessToken: string) {
     const payload = this.verifyAccessToken(accessToken);
-    await this.usersService.revokeRefreshTokensForUser(payload.userId);
+    const sessionVersion = await this.requireActiveSessionVersion(payload);
+    const revoked = await this.usersService.revokeSessionsForUser(
+      payload.userId,
+      sessionVersion,
+    );
+
+    if (!revoked) {
+      throw new UnauthorizedException("Session is no longer active");
+    }
 
     return { ok: true };
   }
 
   async deleteAccount(accessToken: string) {
     const payload = this.verifyAccessToken(accessToken);
+    await this.requireActiveSessionVersion(payload);
     await this.usersService.deleteAccount(payload.userId);
 
     return { ok: true };
@@ -213,54 +241,98 @@ export class AuthService {
       const payload = verify(token, env.JWT_ACCESS_SECRET);
 
       if (
-        typeof payload === 'object' &&
-        payload.type === 'access' &&
-        typeof payload.sub === 'string'
+        typeof payload === "object" &&
+        payload.type === "access" &&
+        typeof payload.sub === "string"
       ) {
+        const sessionVersion =
+          payload.sessionVersion === undefined
+            ? null
+            : Number(payload.sessionVersion);
+
+        if (
+          sessionVersion !== null &&
+          (!Number.isInteger(sessionVersion) || sessionVersion < 1)
+        ) {
+          throw new UnauthorizedException("Invalid access token");
+        }
+
         return {
-          userId: payload.sub
+          sessionVersion,
+          userId: payload.sub,
         };
       }
     } catch {
-      throw new UnauthorizedException('Invalid access token');
+      throw new UnauthorizedException("Invalid access token");
     }
 
-    throw new UnauthorizedException('Invalid access token');
+    throw new UnauthorizedException("Invalid access token");
   }
 
-  private async issueSession(userId: string) {
+  private async requireActiveSessionVersion(
+    payload: AccessTokenPayload,
+  ): Promise<number> {
+    const currentSessionVersion = await this.usersService.getSessionVersion(
+      payload.userId,
+    );
+    const tokenSessionVersion = payload.sessionVersion ?? 1;
+
+    if (currentSessionVersion !== tokenSessionVersion) {
+      throw new UnauthorizedException("Session is no longer active");
+    }
+
+    return tokenSessionVersion;
+  }
+
+  private async issueSession(userId: string, expectedSessionVersion?: number) {
     const env = loadEnv();
+    const sessionVersion =
+      expectedSessionVersion ??
+      (await this.usersService.getSessionVersion(userId));
+
+    if (!sessionVersion) {
+      throw new UnauthorizedException("User session is unavailable");
+    }
+
     const refreshToken = this.createOpaqueToken();
-    const refreshExpiresAt = new Date(Date.now() + env.JWT_REFRESH_TTL_SECONDS * 1000);
-    await this.usersService.storeRefreshToken({
+    const refreshExpiresAt = new Date(
+      Date.now() + env.JWT_REFRESH_TTL_SECONDS * 1000,
+    );
+    const stored = await this.usersService.storeRefreshToken({
       expiresAt: refreshExpiresAt,
+      sessionVersion,
       tokenHash: this.hashToken(refreshToken),
-      userId
+      userId,
     });
+
+    if (!stored) {
+      throw new UnauthorizedException("Session is no longer active");
+    }
 
     return {
       accessToken: sign(
         {
-          type: 'access'
+          sessionVersion,
+          type: "access",
         },
         env.JWT_ACCESS_SECRET,
         {
           expiresIn: env.JWT_ACCESS_TTL_SECONDS,
-          subject: userId
-        }
+          subject: userId,
+        },
       ),
       expiresIn: env.JWT_ACCESS_TTL_SECONDS,
       refreshToken,
-      refreshTokenExpiresAt: refreshExpiresAt.toISOString()
+      refreshTokenExpiresAt: refreshExpiresAt.toISOString(),
     };
   }
 
   private createOpaqueToken(): string {
-    return randomBytes(32).toString('base64url');
+    return randomBytes(32).toString("base64url");
   }
 
   private hashToken(token: string): string {
-    return createHash('sha256').update(token).digest('hex');
+    return createHash("sha256").update(token).digest("hex");
   }
 
   private normalizeEmail(email: string): string {
@@ -272,50 +344,48 @@ export class AuthService {
   }
 
   private shouldExposeDevTokens(env: AppEnv): boolean {
-    return env.NODE_ENV !== 'production';
+    return env.NODE_ENV !== "production";
   }
 
   private getGoogleAudiences(env: AppEnv): string[] {
     return Array.from(
       new Set(
-        [...(env.GOOGLE_OAUTH_CLIENT_IDS ?? []), env.GOOGLE_OAUTH_CLIENT_ID].filter(
-          (audience): audience is string => Boolean(audience)
-        )
-      )
+        [
+          ...(env.GOOGLE_OAUTH_CLIENT_IDS ?? []),
+          env.GOOGLE_OAUTH_CLIENT_ID,
+        ].filter((audience): audience is string => Boolean(audience)),
+      ),
     );
   }
 
   private async verifyGoogleIdToken(
     idToken: string,
-    audience: string[]
+    audience: string[],
   ): Promise<GoogleIdentityPayload> {
     try {
       const ticket = await this.googleClient.verifyIdToken({
         audience,
-        idToken
+        idToken,
       });
       const payload = ticket.getPayload();
 
-      if (
-        payload?.sub &&
-        payload.email &&
-        payload.email_verified === true
-      ) {
+      if (payload?.sub && payload.email && payload.email_verified === true) {
         return {
           email: payload.email,
           name: payload.name,
-          sub: payload.sub
+          sub: payload.sub,
         };
       }
     } catch {
-      throw new UnauthorizedException('Invalid Google token');
+      throw new UnauthorizedException("Invalid Google token");
     }
 
-    throw new UnauthorizedException('Invalid Google token');
+    throw new UnauthorizedException("Invalid Google token");
   }
 }
 
 export interface AccessTokenPayload {
+  sessionVersion: number | null;
   userId: string;
 }
 

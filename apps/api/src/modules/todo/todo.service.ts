@@ -24,6 +24,8 @@ export class TodoService {
           owner_member_id,
           title,
           description,
+          encrypted_payload,
+          encryption_version,
           status,
           sort_order,
           created_at,
@@ -57,6 +59,8 @@ export class TodoService {
           owner_member_id,
           title,
           description,
+          encrypted_payload,
+          encryption_version,
           sort_order
         )
         values (
@@ -65,6 +69,8 @@ export class TodoService {
           $3,
           $4,
           $5,
+          $6,
+          $7,
           (
             select coalesce(min(sort_order), 0) - 1000
             from todo_items
@@ -80,6 +86,8 @@ export class TodoService {
           owner_member_id,
           title,
           description,
+          encrypted_payload,
+          encryption_version,
           status,
           sort_order,
           created_at,
@@ -91,6 +99,8 @@ export class TodoService {
         null,
         dto.title.trim(),
         dto.description?.trim() ?? "",
+        dto.encryptedPayload ?? null,
+        dto.encryptionVersion ?? null,
       ],
     );
 
@@ -127,7 +137,9 @@ export class TodoService {
           owner_member_id = $4,
           title = $5,
           description = $6,
-          status = $7
+          encrypted_payload = $7,
+          encryption_version = $8,
+          status = $9
         where household_id = $1
           and id = $2
         returning
@@ -137,6 +149,8 @@ export class TodoService {
           owner_member_id,
           title,
           description,
+          encrypted_payload,
+          encryption_version,
           status,
           sort_order,
           created_at,
@@ -149,6 +163,8 @@ export class TodoService {
         null,
         dto.title?.trim() ?? current.title,
         dto.description?.trim() ?? current.description,
+        dto.encryptedPayload ?? current.encryptedPayload,
+        dto.encryptionVersion ?? current.encryptionVersion,
         dto.status ?? current.status,
       ],
     );
@@ -192,6 +208,8 @@ export class TodoService {
           owner_member_id,
           title,
           description,
+          encrypted_payload,
+          encryption_version,
           status,
           sort_order,
           created_at,
@@ -244,6 +262,8 @@ export class TodoService {
             owner_member_id,
             title,
             description,
+            encrypted_payload,
+            encryption_version,
             status,
             sort_order,
             created_at,
@@ -275,6 +295,8 @@ export class TodoService {
             owner_member_id,
             title,
             description,
+            encrypted_payload,
+            encryption_version,
             status,
             sort_order,
             created_at,
@@ -321,6 +343,8 @@ export class TodoService {
             owner_member_id,
             title,
             description,
+            encrypted_payload,
+            encryption_version,
             status,
             sort_order,
             created_at,
@@ -357,6 +381,8 @@ export class TodoService {
           owner_member_id,
           title,
           description,
+          encrypted_payload,
+          encryption_version,
           status,
           sort_order,
           created_at,
@@ -377,6 +403,9 @@ export class TodoService {
     return {
       createdAt: row.created_at,
       description: row.description,
+      encryptedPayload: row.encrypted_payload,
+      encryptionEntity: "todo-item",
+      encryptionVersion: row.encryption_version,
       householdId: row.household_id,
       id: row.id,
       ownerMemberId: row.owner_member_id,
@@ -392,6 +421,8 @@ export class TodoService {
 interface TodoItemRow {
   created_at: string;
   description: string;
+  encrypted_payload: string | null;
+  encryption_version: number | null;
   household_id: string;
   id: string;
   owner_member_id: string | null;
@@ -405,6 +436,9 @@ interface TodoItemRow {
 export interface TodoItemRecord {
   createdAt: string;
   description: string;
+  encryptedPayload: string | null;
+  encryptionEntity: "todo-item";
+  encryptionVersion: number | null;
   householdId: string;
   id: string;
   ownerMemberId: string | null;

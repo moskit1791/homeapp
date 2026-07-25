@@ -27,6 +27,9 @@ import {
   type ShoppingListType,
 } from "../../src/api";
 import { useModulePermission } from "../../src/permissions/use-permissions";
+import { useEncryption } from "../../src/encryption/encryption-context";
+import { EncryptionUnlockCard } from "../../src/encryption/encryption-unlock-card";
+import { confirmSensitiveAiTransfer } from "../../src/encryption/ai-data-disclosure";
 import { useSession } from "../../src/session/session-context";
 import { useAppTheme, type AppPalette } from "../../src/theme/use-app-theme";
 import { radii, spacing } from "../../src/theme/tokens";
@@ -56,6 +59,7 @@ export default function ZakupyScreen() {
   const { session } = useSession();
   const params = useLocalSearchParams<{ action?: string }>();
   const queryClient = useQueryClient();
+  const encryption = useEncryption();
   const router = useRouter();
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
@@ -186,8 +190,11 @@ export default function ZakupyScreen() {
     }
   }
 
-  function handleAiImport() {
-    if (canImportAi) {
+  async function handleAiImport() {
+    if (
+      canImportAi &&
+      (await confirmSensitiveAiTransfer(encryption.isModuleEnabled("shopping")))
+    ) {
       aiImportMutation.mutate();
     }
   }
@@ -222,6 +229,14 @@ export default function ZakupyScreen() {
           tone="info"
           text="Nie masz uprawnienia do czytania list zakupów."
         />
+      </AppScreen>
+    );
+  }
+
+  if (encryption.isModuleEnabled("shopping") && encryption.lockState === "locked") {
+    return (
+      <AppScreen title="Zakupy">
+        <EncryptionUnlockCard modules={["shopping"]} />
       </AppScreen>
     );
   }
@@ -355,7 +370,7 @@ export default function ZakupyScreen() {
             <ActionButton
               disabled={!canImportAi}
               loading={aiImportMutation.isPending}
-              onPress={handleAiImport}
+              onPress={() => void handleAiImport()}
               style={styles.modalFooterButton}
               title="Uporządkuj"
             />

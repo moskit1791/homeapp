@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsDateString,
   IsIn,
   IsInt,
@@ -23,7 +24,19 @@ export class ShoppingItemIdParamDto {
   id!: string;
 }
 
-export class CreateShoppingItemDto {
+class EncryptedShoppingItemDto {
+  @IsOptional()
+  @IsString()
+  @Length(1, 50000)
+  encryptedPayload?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  encryptionVersion?: number;
+}
+
+export class CreateShoppingItemDto extends EncryptedShoppingItemDto {
   @IsString()
   @Length(1, 180)
   name!: string;
@@ -48,7 +61,7 @@ export class CreateShoppingItemDto {
   displayOrder?: number;
 }
 
-export class UpdateShoppingItemDto {
+export class UpdateShoppingItemDto extends EncryptedShoppingItemDto {
   @IsOptional()
   @IsString()
   @Length(1, 180)
@@ -83,4 +96,8 @@ export class ImportShoppingItemsWithAiDto {
   @IsString()
   @Length(3, 5000)
   message!: string;
+
+  @IsOptional()
+  @IsBoolean()
+  planOnly?: boolean;
 }

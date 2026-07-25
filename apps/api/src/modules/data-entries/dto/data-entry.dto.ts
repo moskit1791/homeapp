@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsUUID, Length, MaxLength } from 'class-validator';
+import { IsInt, IsOptional, IsString, IsUUID, Length, MaxLength, Min } from 'class-validator';
 
 export class DataEntrySearchDto {
   @IsOptional()
@@ -7,7 +7,19 @@ export class DataEntrySearchDto {
   search?: string;
 }
 
-export class CreateDataEntryDto {
+class EncryptedDataEntryDto {
+  @IsOptional()
+  @IsString()
+  @Length(1, 50000)
+  encryptedPayload?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  encryptionVersion?: number;
+}
+
+export class CreateDataEntryDto extends EncryptedDataEntryDto {
   @IsString()
   @Length(1, 200)
   title!: string;
@@ -17,7 +29,7 @@ export class CreateDataEntryDto {
   value!: string;
 }
 
-export class UpdateDataEntryDto {
+export class UpdateDataEntryDto extends EncryptedDataEntryDto {
   @IsOptional()
   @IsString()
   @Length(1, 200)

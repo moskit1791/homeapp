@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { EncryptionModule } from '../encryption/encryption.module';
 import { HouseholdsModule } from '../households/households.module';
 import { PermissionsModule } from '../permissions/permissions.module';
 import { UsersModule } from '../users/users.module';
@@ -25,7 +26,7 @@ const services = [
 ];
 
 @Module({
-  imports: [AuthModule, HouseholdsModule, PermissionsModule, UsersModule],
+  imports: [AuthModule, EncryptionModule, HouseholdsModule, PermissionsModule, UsersModule],
   controllers: [FinanceController],
   providers: services,
   exports: services

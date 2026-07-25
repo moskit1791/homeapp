@@ -314,78 +314,102 @@ export class UsersService {
   }
 
   async resetPassword(tokenHash: string, passwordHash: string): Promise<boolean> {
-    const result = await this.database.query(
-      `
-        update users
-        set
-          password_hash = $2,
-          password_reset_token_hash = null,
-          password_reset_expires_at = null
-        where password_reset_token_hash = $1
-          and password_reset_expires_at > now()
-      `,
-      [tokenHash, passwordHash]
-    );
+    return this.database.transaction(async (client) => {
+      const result = await client.query<{ id: string }>(
+        `
+          update users
+          set
+            password_hash = $2,
+            password_reset_token_hash = null,
+            password_reset_expires_at = null,
+            session_version = session_version + 1
+          where password_reset_token_hash = $1
+            and password_reset_expires_at > now()
+          returning id
+        `,
+        [tokenHash, passwordHash]
+      );
+      const userId = result.rows[0]?.id;
 
-    return Boolean(result.rowCount && result.rowCount > 0);
+      if (!userId) {
+        return false;
+      }
+
+      await client.query(
+        `
+          update auth_refresh_tokens
+          set revoked_at = now()
+          where user_id = $1
+            and revoked_at is null
+        `,
+        [userId]
+      );
+
+      return true;
+    });
   }
 
-  async storeRefreshToken(input: StoreRefreshTokenInput): Promise<void> {
-    await this.database.query(
+  async getSessionVersion(userId: string): Promise<number | null> {
+    const result = await this.database.query<{ session_version: number }>(
+      `select session_version from users where id = $1 limit 1`,
+      [userId]
+    );
+
+    return result.rows[0]?.session_version ?? null;
+  }
+
+  async storeRefreshToken(input: StoreRefreshTokenInput): Promise<boolean> {
+    const result = await this.database.query(
       `
         insert into auth_refresh_tokens (
           user_id,
           token_hash,
-          expires_at
+          expires_at,
+          session_version
         )
-        values ($1, $2, $3)
+        select $1, $2, $3, $4
+        from users
+        where id = $1
+          and session_version = $4
+        returning id
       `,
-      [input.userId, input.tokenHash, input.expiresAt]
+      [input.userId, input.tokenHash, input.expiresAt, input.sessionVersion]
     );
+
+    return Boolean(result.rowCount);
   }
 
-  async consumeRefreshToken(tokenHash: string): Promise<UserRecord | null> {
-    return this.database.transaction(async (client) => {
-      const tokenResult = await client.query<{ user_id: string }>(
-        `
-          update auth_refresh_tokens
-          set revoked_at = now()
-          where token_hash = $1
-            and revoked_at is null
-            and expires_at > now()
-          returning user_id
-        `,
-        [tokenHash]
-      );
-      const token = tokenResult.rows[0];
+  async consumeRefreshToken(tokenHash: string): Promise<SessionUserRecord | null> {
+    const result = await this.database.query<SessionUserRecordRow>(
+      `
+        update auth_refresh_tokens token
+        set revoked_at = now()
+        from users app_user
+        where token.token_hash = $1
+          and token.revoked_at is null
+          and token.expires_at > now()
+          and app_user.id = token.user_id
+          and app_user.session_version = token.session_version
+        returning
+          app_user.id,
+          app_user.auth_provider_user_id,
+          app_user.email,
+          app_user.display_name,
+          app_user.account_status,
+          app_user.session_version
+      `,
+      [tokenHash]
+    );
+    const user = result.rows[0];
 
-      if (!token) {
-        return null;
-      }
+    if (!user) {
+      return null;
+    }
 
-      const userResult = await client.query<UserRecordRow>(
-        `
-          select
-            id,
-            auth_provider_user_id,
-            email,
-            display_name,
-            account_status
-          from users
-          where id = $1
-          limit 1
-        `,
-        [token.user_id]
-      );
-
-      const user = userResult.rows[0];
-
-      if (!user) {
-        return null;
-      }
-
-      return this.mapUserRecord(user);
-    });
+    return {
+      ...this.mapUserRecord(user),
+      sessionVersion: user.session_version
+    };
   }
 
   async revokeRefreshTokensForUser(userId: string): Promise<void> {
@@ -398,6 +422,36 @@ export class UsersService {
       `,
       [userId]
     );
+  }
+
+  async revokeSessionsForUser(userId: string, expectedSessionVersion: number): Promise<boolean> {
+    return this.database.transaction(async (client) => {
+      const user = await client.query(
+        `
+          update users
+          set session_version = session_version + 1
+          where id = $1
+            and session_version = $2
+        `,
+        [userId, expectedSessionVersion]
+      );
+
+      if (!user.rowCount) {
+        return false;
+      }
+
+      await client.query(
+        `
+          update auth_refresh_tokens
+          set revoked_at = now()
+          where user_id = $1
+            and revoked_at is null
+        `,
+        [userId]
+      );
+
+      return true;
+    });
   }
 
   async deleteAccount(userId: string): Promise<void> {
@@ -584,6 +638,7 @@ interface CreateLocalUserInput {
 
 interface StoreRefreshTokenInput {
   expiresAt: Date;
+  sessionVersion: number;
   tokenHash: string;
   userId: string;
 }
@@ -603,6 +658,10 @@ interface UserRecordRow {
   id: string;
 }
 
+interface SessionUserRecordRow extends UserRecordRow {
+  session_version: number;
+}
+
 interface UserEmailRecordRow {
   display_name: string;
   email: string;
@@ -619,6 +678,10 @@ export interface UserRecord {
   displayName: string;
   email: string;
   id: string;
+}
+
+export interface SessionUserRecord extends UserRecord {
+  sessionVersion: number;
 }
 
 export interface AuthUserRecord extends UserRecord {

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { EncryptionModule } from '../encryption/encryption.module';
 import { HouseholdsModule } from '../households/households.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PermissionsModule } from '../permissions/permissions.module';
@@ -10,7 +11,14 @@ import { CalendarController } from './calendar.controller';
 import { CalendarService } from './calendar.service';
 
 @Module({
-  imports: [AuthModule, HouseholdsModule, NotificationsModule, PermissionsModule, UsersModule],
+  imports: [
+    AuthModule,
+    EncryptionModule,
+    HouseholdsModule,
+    NotificationsModule,
+    PermissionsModule,
+    UsersModule
+  ],
   controllers: [CalendarController, CalendarGoogleController],
   providers: [CalendarService, CalendarGoogleService],
   exports: [CalendarService]

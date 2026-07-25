@@ -11,7 +11,7 @@ const realtimeInvalidationKeys: Record<RealtimeEventType, QueryKey[]> = {
   'finance.changed': [queryKeys.start, queryKeys.finances],
   'finance.month.deleted': [queryKeys.start, queryKeys.finances],
   'finance.month.generated': [queryKeys.start, queryKeys.finances],
-  'household.changed': [queryKeys.household, queryKeys.permissions],
+  'household.changed': [queryKeys.household, queryKeys.permissions, queryKeys.encryption],
   'meal.changed': [queryKeys.start, queryKeys.meal],
   'note.changed': [queryKeys.notes],
   'permissions.changed': [queryKeys.household, queryKeys.permissions],

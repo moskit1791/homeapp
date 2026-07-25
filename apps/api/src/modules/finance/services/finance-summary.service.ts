@@ -30,7 +30,10 @@ export class FinanceSummaryService {
     };
   }
 
-  async getPersonSummary(householdId: string, budgetMonthId: string): Promise<PersonSummaryRecord[]> {
+  async getPersonSummary(
+    householdId: string,
+    budgetMonthId: string
+  ): Promise<PersonSummaryRecord[]> {
     await this.findMonth(householdId, budgetMonthId);
 
     const result = await this.database.query<PersonSummaryRow>(
@@ -118,13 +121,18 @@ export class FinanceSummaryService {
     return this.mapMonthOrThrow(result.rows[0], 'Budget month not found');
   }
 
-  private async listCategoryItemRows(householdId: string, budgetMonthId: string): Promise<CategoryItemRow[]> {
+  private async listCategoryItemRows(
+    householdId: string,
+    budgetMonthId: string
+  ): Promise<CategoryItemRow[]> {
     const result = await this.database.query<CategoryItemRow>(
       `
         select
           bc.id as category_id,
           bc.household_id,
           bc.name as category_name,
+          bc.encrypted_payload as category_encrypted_payload,
+          bc.encryption_version as category_encryption_version,
           coalesce(bmco.display_order, bc.display_order) as category_display_order,
           bc.copy_budget_to_next_month,
           bc.is_active as category_is_active,
@@ -135,6 +143,8 @@ export class FinanceSummaryService {
           owner_user.email as owner_email,
           bi.name as budget_item_name,
           bi.budget_amount,
+          bi.encrypted_payload as budget_item_encrypted_payload,
+          bi.encryption_version as budget_item_encryption_version,
           bit.spent_amount,
           bit.remaining_amount,
           bi.display_order as budget_item_display_order,
@@ -165,7 +175,10 @@ export class FinanceSummaryService {
     return result.rows;
   }
 
-  private async listIncomes(householdId: string, budgetMonthId: string): Promise<IncomeSummaryRecord[]> {
+  private async listIncomes(
+    householdId: string,
+    budgetMonthId: string
+  ): Promise<IncomeSummaryRecord[]> {
     const result = await this.database.query<IncomeSummaryRow>(
       `
         select
@@ -173,6 +186,8 @@ export class FinanceSummaryService {
           u.display_name,
           u.email,
           coalesce(mi.amount, 0)::numeric(12, 2) as amount
+          ,mi.encrypted_payload
+          ,mi.encryption_version
         from household_members hm
         join users u on u.id = hm.user_id
         left join monthly_incomes mi
@@ -191,17 +206,24 @@ export class FinanceSummaryService {
       amount: row.amount,
       displayName: row.display_name,
       email: row.email,
+      encryptedPayload: row.encrypted_payload,
+      encryptionVersion: row.encryption_version,
       ownerMemberId: row.owner_member_id
     }));
   }
 
-  private async listExpenses(householdId: string, budgetMonthId: string): Promise<ExpenseSummaryRecord[]> {
+  private async listExpenses(
+    householdId: string,
+    budgetMonthId: string
+  ): Promise<ExpenseSummaryRecord[]> {
     const result = await this.database.query<ExpenseSummaryRow>(
       `
         select
           e.id,
           e.budget_item_id,
           e.amount,
+          e.encrypted_payload,
+          e.encryption_version,
           e.created_at,
           e.updated_at
         from expenses e
@@ -219,12 +241,17 @@ export class FinanceSummaryService {
       amount: row.amount,
       budgetItemId: row.budget_item_id,
       createdAt: row.created_at,
+      encryptedPayload: row.encrypted_payload,
+      encryptionVersion: row.encryption_version,
       id: row.id,
       updatedAt: row.updated_at
     }));
   }
 
-  private groupCategories(rows: CategoryItemRow[], expenses: ExpenseSummaryRecord[]): CategoryWithItemsRecord[] {
+  private groupCategories(
+    rows: CategoryItemRow[],
+    expenses: ExpenseSummaryRecord[]
+  ): CategoryWithItemsRecord[] {
     const categories = new Map<string, CategoryWithItemsRecord>();
     const expensesByItemId = new Map<string, ExpenseSummaryRecord[]>();
 
@@ -242,6 +269,8 @@ export class FinanceSummaryService {
         category = {
           copyBudgetToNextMonth: row.copy_budget_to_next_month,
           displayOrder: row.category_display_order,
+          encryptedPayload: row.category_encrypted_payload,
+          encryptionVersion: row.category_encryption_version,
           householdId: row.household_id,
           id: row.category_id,
           isActive: row.category_is_active,
@@ -258,6 +287,8 @@ export class FinanceSummaryService {
           categoryId: row.category_id,
           createdAt: this.required(row.budget_item_created_at, 'budget item created at'),
           displayOrder: this.required(row.budget_item_display_order, 'budget item display order'),
+          encryptedPayload: row.budget_item_encrypted_payload,
+          encryptionVersion: row.budget_item_encryption_version,
           expenses: expensesByItemId.get(row.budget_item_id) ?? [],
           id: row.budget_item_id,
           name: this.required(row.budget_item_name, 'budget item name'),
@@ -281,7 +312,10 @@ export class FinanceSummaryService {
       (summary, person) => ({
         incomeAmount: this.addMoney(summary.incomeAmount, person.incomeAmount),
         totalBudgetAmount: this.addMoney(summary.totalBudgetAmount, person.totalBudgetAmount),
-        totalRemainingAmount: this.addMoney(summary.totalRemainingAmount, person.totalRemainingAmount),
+        totalRemainingAmount: this.addMoney(
+          summary.totalRemainingAmount,
+          person.totalRemainingAmount
+        ),
         totalSpentAmount: this.addMoney(summary.totalSpentAmount, person.totalSpentAmount)
       }),
       {
@@ -342,11 +376,15 @@ interface CategoryItemRow {
   budget_amount: string | null;
   budget_item_created_at: string | null;
   budget_item_display_order: number | null;
+  budget_item_encrypted_payload: string | null;
+  budget_item_encryption_version: number | null;
   budget_item_id: string | null;
   budget_item_name: string | null;
   budget_item_updated_at: string | null;
   budget_month_id: string | null;
   category_display_order: number;
+  category_encrypted_payload: string | null;
+  category_encryption_version: number | null;
   category_id: string;
   category_is_active: boolean;
   category_name: string;
@@ -363,6 +401,8 @@ interface ExpenseSummaryRow {
   amount: string;
   budget_item_id: string;
   created_at: string;
+  encrypted_payload: string | null;
+  encryption_version: number | null;
   id: string;
   updated_at: string;
 }
@@ -371,6 +411,8 @@ interface IncomeSummaryRow {
   amount: string;
   display_name: string;
   email: string;
+  encrypted_payload: string | null;
+  encryption_version: number | null;
   owner_member_id: string;
 }
 
@@ -396,6 +438,8 @@ export interface BudgetMonthDetail {
 export interface CategoryWithItemsRecord {
   copyBudgetToNextMonth: boolean;
   displayOrder: number;
+  encryptedPayload: string | null;
+  encryptionVersion: number | null;
   householdId: string;
   id: string;
   isActive: boolean;
@@ -409,14 +453,12 @@ export interface BudgetItemSummaryRecord {
   categoryId: string;
   createdAt: string;
   displayOrder: number;
+  encryptedPayload: string | null;
+  encryptionVersion: number | null;
   expenses: ExpenseSummaryRecord[];
   id: string;
   name: string;
-  owner: {
-    displayName: string;
-    email: string;
-    memberId: string;
-  };
+  owner: { displayName: string; email: string; memberId: string };
   remainingAmount: string | null;
   spentAmount: string;
   updatedAt: string;
@@ -426,6 +468,8 @@ export interface ExpenseSummaryRecord {
   amount: string;
   budgetItemId: string;
   createdAt: string;
+  encryptedPayload: string | null;
+  encryptionVersion: number | null;
   id: string;
   updatedAt: string;
 }
@@ -434,6 +478,8 @@ export interface IncomeSummaryRecord {
   amount: string;
   displayName: string;
   email: string;
+  encryptedPayload: string | null;
+  encryptionVersion: number | null;
   ownerMemberId: string;
 }
 

@@ -75,6 +75,9 @@ import {
   type NotificationPreference,
 } from "../../src/api";
 import { registerForPushNotifications } from "../../src/notifications/register-push-notifications";
+import { EncryptionSettingsCard } from "../../src/encryption/encryption-settings-card";
+import { useEncryption } from "../../src/encryption/encryption-context";
+import { EncryptionUnlockCard } from "../../src/encryption/encryption-unlock-card";
 import {
   useModulePermission,
   usePermissions,
@@ -264,8 +267,12 @@ export default function DomScreen() {
     settings?: string;
   }>();
   const permissionsQuery = usePermissions();
+  const encryption = useEncryption();
   const theme = useAppTheme();
   const [activeSegment, setActiveSegment] = useState<HomeSegment>("cleaning");
+  const activeSegmentLocked =
+    encryption.isModuleEnabled(activeSegment) &&
+    encryption.lockState === "locked";
   const availableTiles = useMemo(
     () =>
       moduleTiles.filter(
@@ -343,7 +350,9 @@ export default function DomScreen() {
         />
       )}
 
-      {availableTiles.length > 0 ? (
+      {availableTiles.length > 0 && activeSegmentLocked ? (
+        <EncryptionUnlockCard modules={[activeSegment]} />
+      ) : availableTiles.length > 0 ? (
         <ActiveModule segment={activeSegment} />
       ) : null}
     </AppScreen>
@@ -915,9 +924,13 @@ function AnnualCostsPanel() {
       };
       const optimisticHistory: AnnualCostHistory = {
         amount: parsedAmount === null ? null : String(parsedAmount),
+        annualCostEncryptedPayload: paymentCost.encryptedPayload,
         annualCostId: paymentCost.id,
         annualCostName: paymentCost.name,
         createdAt: updatedAt,
+        encryptedPayload: null,
+        encryptionEntity: "annual-cost-history",
+        encryptionVersion: null,
         executedAt: paymentDate,
         id: `pending-${paymentCost.id}-${paymentDate}`,
       };
@@ -1384,7 +1397,7 @@ function AttachmentsPanel() {
       return createAttachmentRecord(
         {
           caption: caption.trim() || undefined,
-          fileName: uploadContract.fileName,
+          fileName: pickedPhoto.fileName,
           mimeType: uploadContract.mimeType,
           storagePath: uploadContract.storagePath,
         },
@@ -2061,6 +2074,7 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
   const accessToken = session?.accessToken;
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [settingsView, setSettingsView] = useState<SettingsView>("main");
+  const [encryptionVisible, setEncryptionVisible] = useState(false);
   const [notificationsVisible, setNotificationsVisible] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [homeName, setHomeName] = useState("");
@@ -2249,6 +2263,12 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
     setNotificationsVisible(true);
   }
 
+  function openEncryptionConfiguration() {
+    setSettingsVisible(false);
+    setSettingsView("main");
+    setEncryptionVisible(true);
+  }
+
   function openMemberPermissions(member: HouseholdMember) {
     setSettingsVisible(false);
     router.push({
@@ -2384,6 +2404,11 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
                 />
               ) : null}
             </View>
+          ) : null}
+          {settingsView === "main" ? (
+            <EncryptionSettingsCard
+              onOpenConfiguration={openEncryptionConfiguration}
+            />
           ) : null}
           {settingsView === "main" && householdPermission.canRead ? (
             <View style={styles.settingsPanelRow}>
@@ -2639,6 +2664,42 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
           ) : null}
         </View>
       </FormModal>
+      <Modal
+        animationType="slide"
+        onRequestClose={() => setEncryptionVisible(false)}
+        visible={encryptionVisible}
+      >
+        <View style={styles.notificationModalRoot}>
+          <SafeAreaView style={styles.notificationModalSafe}>
+            <View style={styles.notificationFullCard}>
+              <View style={styles.notificationFullHeader}>
+                <View style={styles.notificationFullTitleBlock}>
+                  <Text style={styles.notificationFullTitle}>
+                    Szyfrowanie danych
+                  </Text>
+                  <Text style={styles.notificationFullSubtitle}>
+                    Zakres ochrony, klucz i odzyskiwanie dostępu.
+                  </Text>
+                </View>
+                <IconButton
+                  accessibilityLabel="Zamknij szyfrowanie danych"
+                  onPress={() => setEncryptionVisible(false)}
+                >
+                  <Close color={theme.colors.textMuted} size={18} />
+                </IconButton>
+              </View>
+              <ScrollView
+                contentContainerStyle={styles.notificationScreenContent}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator
+                style={styles.notificationScroll}
+              >
+                <EncryptionSettingsCard mode="configuration" />
+              </ScrollView>
+            </View>
+          </SafeAreaView>
+        </View>
+      </Modal>
       <Modal
         animationType="slide"
         onRequestClose={() => setNotificationsVisible(false)}
@@ -2999,17 +3060,34 @@ function CleaningRow({
       ]}
     >
       <View style={[styles.itemMarker, { backgroundColor: markerColor }]} />
-      <Pressable
-        accessibilityLabel={`Edytuj sprzątanie ${task.name}`}
-        accessibilityRole="button"
-        disabled={!canUpdate}
-        onPress={onEdit}
-        style={({ pressed }) => [styles.itemText, pressed && styles.pressed]}
-      >
-        <View style={styles.cleaningTitleRow}>
+      <View style={styles.cleaningContent}>
+        <Pressable
+          accessibilityLabel={`Edytuj sprzątanie ${task.name}`}
+          accessibilityRole="button"
+          disabled={!canUpdate}
+          onPress={onEdit}
+          style={({ pressed }) => [
+            styles.cleaningDetails,
+            pressed && styles.pressed,
+          ]}
+        >
           <Text numberOfLines={2} style={styles.itemName}>
             {task.name}
           </Text>
+          {task.location ? (
+            <View style={styles.cleaningLocationBadge}>
+              <MapPin color={theme.colors.primaryDark} size={14} />
+              <Text numberOfLines={1} style={styles.cleaningLocationText}>
+                {task.location}
+              </Text>
+            </View>
+          ) : null}
+          <Text style={styles.itemMeta}>
+            Termin: {formatDateFull(task.nextDueAt)} / co {task.frequencyDays}{" "}
+            dni
+          </Text>
+        </Pressable>
+        <View style={styles.cleaningActionsRow}>
           <View
             style={[
               styles.cleaningStatusPill,
@@ -3026,29 +3104,19 @@ function CleaningRow({
               {formatCleaningStatus(daysRemaining)}
             </Text>
           </View>
+          {canCompleteNow ? (
+            <ActionButton
+              disabled={!canUpdate}
+              loading={completing}
+              onPress={onComplete}
+              size="small"
+              style={styles.cleaningCompleteButton}
+              title="Wykonane"
+              variant="secondary"
+            />
+          ) : null}
         </View>
-        {task.location ? (
-          <View style={styles.cleaningLocationBadge}>
-            <MapPin color={theme.colors.primaryDark} size={14} />
-            <Text numberOfLines={1} style={styles.cleaningLocationText}>
-              {task.location}
-            </Text>
-          </View>
-        ) : null}
-        <Text style={styles.itemMeta}>
-          Termin: {formatDateFull(task.nextDueAt)} / co {task.frequencyDays} dni
-        </Text>
-      </Pressable>
-      {canCompleteNow ? (
-        <ActionButton
-          disabled={!canUpdate}
-          loading={completing}
-          onPress={onComplete}
-          size="small"
-          title="Wykonane"
-          variant="secondary"
-        />
-      ) : null}
+      </View>
     </Animated.View>
   );
 }
@@ -3721,6 +3789,25 @@ function createStyles(colors: AppPalette) {
       paddingHorizontal: spacing.sm,
       paddingVertical: 4,
     },
+    cleaningActionsRow: {
+      alignItems: "center",
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: spacing.sm,
+      justifyContent: "space-between",
+    },
+    cleaningCompleteButton: {
+      minWidth: 104,
+    },
+    cleaningContent: {
+      flex: 1,
+      gap: spacing.sm,
+      minWidth: 0,
+    },
+    cleaningDetails: {
+      gap: 3,
+      minWidth: 0,
+    },
     cleaningLocationText: {
       color: colors.primaryDark,
       flexShrink: 1,
@@ -3761,12 +3848,6 @@ function createStyles(colors: AppPalette) {
     },
     cleaningStatusTextDanger: {
       color: colors.danger,
-    },
-    cleaningTitleRow: {
-      alignItems: "flex-start",
-      flexDirection: "row",
-      gap: spacing.sm,
-      justifyContent: "space-between",
     },
     dateInput: {
       minWidth: 132,

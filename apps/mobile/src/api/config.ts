@@ -4,7 +4,7 @@ const DEFAULT_API_BASE_URL = 'https://app.porabkihome.pl/api';
 
 function readConfiguredApiBaseUrl(): string | undefined {
   const extra = Constants.expoConfig?.extra as { apiUrl?: string } | undefined;
-  const configuredUrl = extra?.apiUrl ?? readEnvApiBaseUrl();
+  const configuredUrl = readEnvApiBaseUrl() ?? extra?.apiUrl;
 
   return configuredUrl?.trim() ? configuredUrl.trim() : undefined;
 }

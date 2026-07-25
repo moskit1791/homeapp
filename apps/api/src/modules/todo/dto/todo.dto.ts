@@ -22,7 +22,17 @@ export class ListTodoItemsQueryDto {
   status?: TodoStatus;
 }
 
-export class CreateTodoItemDto {
+class EncryptedTodoItemDto {
+  @IsOptional()
+  @IsString()
+  @Length(1, 50000)
+  encryptedPayload?: string;
+
+  @IsOptional()
+  encryptionVersion?: number;
+}
+
+export class CreateTodoItemDto extends EncryptedTodoItemDto {
   @IsString()
   @Length(1, 180)
   title!: string;
@@ -36,7 +46,7 @@ export class CreateTodoItemDto {
   scopeType!: Extract<ScopeType, "household">;
 }
 
-export class UpdateTodoItemDto {
+export class UpdateTodoItemDto extends EncryptedTodoItemDto {
   @IsOptional()
   @IsString()
   @Length(1, 180)

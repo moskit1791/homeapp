@@ -20,6 +20,9 @@ import {
   type StartMealEntry,
   type StartTodoItem,
 } from "../../src/api";
+import { decryptStartCalendarEvents } from "../../src/encryption/calendar-crypto";
+import { useEncryption } from "../../src/encryption/encryption-context";
+import { EncryptionUnlockCard } from "../../src/encryption/encryption-unlock-card";
 import {
   clearStoredNotifications,
   listUnreadStoredNotifications,
@@ -57,6 +60,7 @@ const mockupGreen = "#4F8D2C";
 
 export default function DzisiajScreen() {
   const { session } = useSession();
+  const encryption = useEncryption();
   const router = useRouter();
   const { screenBackground, styles, theme } = useTodayStyles();
   const accessToken = session?.accessToken;
@@ -80,7 +84,26 @@ export default function DzisiajScreen() {
     queryKey: [...queryKeys.shopping, "daily", "today-preview"],
   });
   const dashboard = dashboardQuery.data;
-  const upcomingEvents = dashboard?.upcomingEvents ?? [];
+  const rawUpcomingEvents = dashboard?.upcomingEvents ?? [];
+  const upcomingEvents = useMemo(() => {
+    if (!encryption.isModuleEnabled("calendar")) {
+      return rawUpcomingEvents;
+    }
+
+    if (encryption.lockState !== "unlocked") {
+      return rawUpcomingEvents.map((event) => ({
+        ...event,
+        locationName: null,
+        locationUrl: null,
+        title: "Zaszyfrowane wydarzenie",
+      }));
+    }
+
+    return decryptStartCalendarEvents(
+      rawUpcomingEvents,
+      encryption.decryptPayload,
+    );
+  }, [encryption, rawUpcomingEvents]);
   const todayEvents = upcomingEvents.filter(isTodayEvent);
   const nextEvent = todayEvents[0] ?? upcomingEvents[0];
   const mealEntries = dashboard?.mealPlan?.entries ?? [];
@@ -250,6 +273,9 @@ export default function DzisiajScreen() {
       <QueryState
         error={dashboardQuery.error}
         isLoading={dashboardQuery.isLoading}
+      />
+      <EncryptionUnlockCard
+        modules={["calendar", "meal_planner", "shopping", "todo"]}
       />
 
       {notificationsVisible ? (
@@ -786,11 +812,13 @@ function MiniTodayCard({
         pressed && styles.pressed,
       ]}
     >
-      <Image
-        resizeMode="contain"
-        source={illustration}
-        style={styles.miniTodayImage}
-      />
+      <View style={styles.miniTodayImageFrame}>
+        <Image
+          resizeMode="contain"
+          source={illustration}
+          style={styles.miniTodayImage}
+        />
+      </View>
       <Text numberOfLines={2} style={styles.miniTodayTitle}>
         {title}
       </Text>
@@ -1008,10 +1036,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       gap: isNarrow ? 11 : spacing.lg,
       paddingHorizontal: contentPadding,
     },
-    greetingBlock: {
-      gap: spacing.xs,
-      paddingTop: spacing.xs,
-    },
+    greetingBlock: { gap: spacing.xs, paddingTop: spacing.xs },
     greetingSubtitle: {
       color: todayPanelMuted,
       fontSize: 14,
@@ -1169,8 +1194,17 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       shadowRadius: 16,
     },
     miniTodayImage: {
+      height: "100%",
+      width: "100%",
+    },
+    miniTodayImageFrame: {
+      alignItems: "center",
+      backgroundColor: isDark ? "#F6F1E8" : "transparent",
+      borderRadius: 999,
       bottom: -6,
       height: isNarrow ? 68 : 92,
+      justifyContent: "center",
+      overflow: "hidden",
       position: "absolute",
       right: 0,
       width: isNarrow ? 78 : 104,
@@ -1277,10 +1311,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       gap: spacing.xs,
       justifyContent: "space-between",
     },
-    todoCompactList: {
-      flex: 1,
-      gap: 0,
-    },
+    todoCompactList: { flex: 1, gap: 0 },
     todoCompactRow: {
       alignItems: "center",
       flexDirection: "row",
@@ -1384,11 +1415,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       letterSpacing: 0,
       lineHeight: 17,
     },
-    dashboardText: {
-      flex: 1,
-      gap: 3,
-      minWidth: 0,
-    },
+    dashboardText: { flex: 1, gap: 3, minWidth: 0 },
     dashboardTitle: {
       color: colors.text,
       fontSize: 16,
@@ -1420,10 +1447,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       borderBottomColor: colors.border,
       borderBottomWidth: 1,
     },
-    todoPreviewSection: {
-      gap: spacing.sm,
-      marginTop: spacing.sm,
-    },
+    todoPreviewSection: { gap: spacing.sm, marginTop: spacing.sm },
     notificationBody: {
       color: colors.textMuted,
       fontSize: 12,
@@ -1440,9 +1464,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       justifyContent: "center",
       width: 38,
     },
-    notificationList: {
-      gap: spacing.sm,
-    },
+    notificationList: { gap: spacing.sm },
     notificationPanel: {
       backgroundColor: colors.overlay,
       borderColor: colors.border,
@@ -1474,11 +1496,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       letterSpacing: 0,
       lineHeight: 22,
     },
-    notificationPanelTitleWrap: {
-      flex: 1,
-      gap: 2,
-      minWidth: 0,
-    },
+    notificationPanelTitleWrap: { flex: 1, gap: 2, minWidth: 0 },
     notificationRow: {
       alignItems: "center",
       backgroundColor: colors.cardMuted,
@@ -1491,11 +1509,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.sm,
     },
-    notificationText: {
-      flex: 1,
-      gap: 2,
-      minWidth: 0,
-    },
+    notificationText: { flex: 1, gap: 2, minWidth: 0 },
     notificationTitle: {
       color: colors.text,
       fontSize: 13,
@@ -1508,9 +1522,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       fontWeight: "700",
       letterSpacing: 0,
     },
-    pressed: {
-      opacity: 0.76,
-    },
+    pressed: { opacity: 0.76 },
     quickAction: {
       alignItems: "center",
       backgroundColor: quickActionBackground,
@@ -1552,11 +1564,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       top: "50%",
       transform: [{ translateY: -10 }],
     },
-    quickGrid: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: compactGap,
-    },
+    quickGrid: { flexDirection: "row", flexWrap: "wrap", gap: compactGap },
     quickIcon: {
       alignItems: "center",
       borderRadius: isNarrow ? 15 : 16,
@@ -1571,15 +1579,8 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       letterSpacing: 0,
       lineHeight: isNarrow ? 18 : 22,
     },
-    quickSection: {
-      gap: spacing.md,
-    },
-    quickText: {
-      flex: 1,
-      gap: 2,
-      minWidth: 0,
-      paddingRight: 0,
-    },
+    quickSection: { gap: spacing.md },
+    quickText: { flex: 1, gap: 2, minWidth: 0, paddingRight: 0 },
     sectionHeader: {
       alignItems: "flex-end",
       flexDirection: "row",
@@ -1634,11 +1635,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       letterSpacing: 0,
       lineHeight: 15,
     },
-    tileText: {
-      flex: 1,
-      gap: 2,
-      minWidth: 0,
-    },
+    tileText: { flex: 1, gap: 2, minWidth: 0 },
     tileTitle: {
       color: colors.textMuted,
       fontSize: 12,

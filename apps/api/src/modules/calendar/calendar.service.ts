@@ -3,38 +3,41 @@ import {
   Injectable,
   Logger,
   OnModuleDestroy,
-  OnModuleInit,
-} from "@nestjs/common";
-import { DatabaseService } from "../database/database.service";
-import { NotificationsService } from "../notifications/notifications.service";
-import { RealtimeService } from "../realtime/realtime.service";
+  OnModuleInit
+} from '@nestjs/common';
+import { DatabaseService } from '../database/database.service';
+import { EncryptionService } from '../encryption/encryption.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { RealtimeService } from '../realtime/realtime.service';
 import {
   CalendarScopeType,
   CreateCalendarEventDto,
-  UpdateCalendarEventDto,
-} from "./dto/calendar.dto";
+  UpdateCalendarEventDto
+} from './dto/calendar.dto';
 
 @Injectable()
 export class CalendarService implements OnModuleInit, OnModuleDestroy {
+  private static readonly encryptedTitle = '[Zaszyfrowane wydarzenie]';
   private readonly logger = new Logger(CalendarService.name);
   private reminderTimer: NodeJS.Timeout | null = null;
 
   constructor(
     private readonly database: DatabaseService,
+    private readonly encryption: EncryptionService,
     private readonly notifications: NotificationsService,
-    private readonly realtime: RealtimeService,
+    private readonly realtime: RealtimeService
   ) {}
 
   onModuleInit(): void {
     this.reminderTimer = setInterval(() => {
       this.dispatchDueReminders().catch((error) => {
-        this.logger.warn("Failed to dispatch calendar reminders", error);
+        this.logger.warn('Failed to dispatch calendar reminders', error);
       });
     }, 60_000);
     this.reminderTimer.unref?.();
 
     this.dispatchDueReminders().catch((error) => {
-      this.logger.warn("Failed to dispatch calendar reminders", error);
+      this.logger.warn('Failed to dispatch calendar reminders', error);
     });
   }
 
@@ -45,42 +48,33 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  async listEvents(
-    householdId: string,
-    from: string,
-    to: string,
-  ): Promise<CalendarEventRecord[]> {
+  async listEvents(householdId: string, from: string, to: string): Promise<CalendarEventRecord[]> {
     this.ensureDateRange(from, to);
 
     return this.listExpandedEvents(householdId, from, to);
   }
 
-  async listUpcoming(
-    householdId: string,
-    limit: number,
-  ): Promise<CalendarEventRecord[]> {
+  async listUpcoming(householdId: string, limit: number): Promise<CalendarEventRecord[]> {
     const now = await this.getCurrentDateTime();
     const windowEnd = this.addDays(now.date, 365);
-    const events = await this.listExpandedEvents(
-      householdId,
-      now.date,
-      windowEnd,
-    );
+    const events = await this.listExpandedEvents(householdId, now.date, windowEnd);
 
-    return events
-      .filter((event) => this.isUpcomingEvent(event, now))
-      .slice(0, limit);
+    return events.filter((event) => this.isUpcomingEvent(event, now)).slice(0, limit);
   }
 
   async createEvent(
     householdId: string,
-    dto: CreateCalendarEventDto,
+    dto: CreateCalendarEventDto
   ): Promise<CalendarEventRecord> {
-    const scope = await this.resolveScope(
-      householdId,
-      dto.scopeType,
-      dto.ownerMemberId,
+    const encryptionSettings = await this.encryption.getSettings(householdId);
+    const encrypted = encryptionSettings.enabledModules.includes('calendar');
+    this.validateEncryptionInput(
+      encrypted,
+      dto.encryptedPayload,
+      dto.encryptionVersion,
+      encryptionSettings.keyVersion
     );
+    const scope = await this.resolveScope(householdId, dto.scopeType, dto.ownerMemberId);
     const result = await this.database.query<CalendarEventRow>(
       `
         insert into calendar_events (
@@ -94,32 +88,36 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
           location_name,
           location_url,
           recurrence_rule,
-          reminder_offset_minutes
+          reminder_offset_minutes,
+          encrypted_payload,
+          encryption_version
         )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         returning id, household_id, scope_type, owner_member_id, title, event_date, event_time,
           note, location_name, location_url, recurrence_rule, reminder_offset_minutes,
-          reminder_sent_at, created_at, updated_at
+          reminder_sent_at, encrypted_payload, encryption_version, created_at, updated_at
       `,
       [
         householdId,
         scope.scopeType,
         scope.ownerMemberId,
-        this.normalizeTitle(dto.title),
+        encrypted ? CalendarService.encryptedTitle : this.normalizeTitle(dto.title),
         dto.eventDate,
         this.normalizeNullableText(dto.eventTime),
-        this.normalizeNullableText(dto.note),
-        this.normalizeNullableText(dto.locationName),
-        this.normalizeNullableText(dto.locationUrl),
+        encrypted ? null : this.normalizeNullableText(dto.note),
+        encrypted ? null : this.normalizeNullableText(dto.locationName),
+        encrypted ? null : this.normalizeNullableText(dto.locationUrl),
         this.normalizeRecurrenceRule(dto.recurrenceRule),
         dto.reminderOffsetMinutes === undefined
           ? 1440
           : this.normalizeReminderOffset(dto.reminderOffsetMinutes),
-      ],
+        encrypted ? dto.encryptedPayload : null,
+        encrypted ? dto.encryptionVersion : null
+      ]
     );
 
     const event = this.mapEvent(result.rows[0]);
-    this.realtime.publish(householdId, "calendar.changed", event.id);
+    this.realtime.publish(householdId, 'calendar.changed', event.id);
 
     return event;
   }
@@ -127,7 +125,7 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
   async updateEvent(
     householdId: string,
     eventId: string,
-    dto: UpdateCalendarEventDto,
+    dto: UpdateCalendarEventDto
   ): Promise<CalendarEventRecord | null> {
     if (
       dto.title === undefined &&
@@ -139,9 +137,11 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
       dto.recurrenceRule === undefined &&
       dto.reminderOffsetMinutes === undefined &&
       dto.scopeType === undefined &&
-      dto.ownerMemberId === undefined
+      dto.ownerMemberId === undefined &&
+      dto.encryptedPayload === undefined &&
+      dto.encryptionVersion === undefined
     ) {
-      throw new BadRequestException("No calendar event fields to update");
+      throw new BadRequestException('No calendar event fields to update');
     }
 
     const current = await this.findEvent(householdId, eventId);
@@ -150,12 +150,31 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
       return null;
     }
 
+    const encryptionSettings = await this.encryption.getSettings(householdId);
+    const encrypted = encryptionSettings.enabledModules.includes('calendar');
+    const changesSensitivePlaintext =
+      dto.title !== undefined ||
+      dto.note !== undefined ||
+      dto.locationName !== undefined ||
+      dto.locationUrl !== undefined;
+
+    if (encrypted && changesSensitivePlaintext && !dto.encryptedPayload) {
+      throw new BadRequestException('Calendar content must be encrypted on the client');
+    }
+
+    if (dto.encryptedPayload !== undefined || dto.encryptionVersion !== undefined) {
+      this.validateEncryptionInput(
+        encrypted,
+        dto.encryptedPayload,
+        dto.encryptionVersion,
+        encryptionSettings.keyVersion
+      );
+    }
+
     const scope = await this.resolveScope(
       householdId,
       dto.scopeType ?? current.scopeType,
-      dto.ownerMemberId === undefined
-        ? current.ownerMemberId
-        : dto.ownerMemberId,
+      dto.ownerMemberId === undefined ? current.ownerMemberId : dto.ownerMemberId
     );
 
     const result = await this.database.query<CalendarEventRow>(
@@ -172,6 +191,8 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
           location_url = $10,
           recurrence_rule = $11,
           reminder_offset_minutes = $12,
+          encrypted_payload = $13,
+          encryption_version = $14,
           reminder_sent_at = case
             when $6 <> event_date
               or $7 is distinct from event_time
@@ -183,36 +204,44 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
           and id = $2
         returning id, household_id, scope_type, owner_member_id, title, event_date, event_time,
           note, location_name, location_url, recurrence_rule, reminder_offset_minutes,
-          reminder_sent_at, created_at, updated_at
+          reminder_sent_at, encrypted_payload, encryption_version, created_at, updated_at
       `,
       [
         householdId,
         eventId,
         scope.scopeType,
         scope.ownerMemberId,
-        dto.title === undefined
-          ? current.title
-          : this.normalizeTitle(dto.title),
+        encrypted && dto.encryptedPayload
+          ? CalendarService.encryptedTitle
+          : dto.title === undefined
+            ? current.title
+            : this.normalizeTitle(dto.title),
         dto.eventDate ?? current.eventDate,
-        dto.eventTime === undefined
-          ? current.eventTime
-          : this.normalizeNullableText(dto.eventTime),
-        dto.note === undefined
-          ? current.note
-          : this.normalizeNullableText(dto.note),
-        dto.locationName === undefined
-          ? current.locationName
-          : this.normalizeNullableText(dto.locationName),
-        dto.locationUrl === undefined
-          ? current.locationUrl
-          : this.normalizeNullableText(dto.locationUrl),
+        dto.eventTime === undefined ? current.eventTime : this.normalizeNullableText(dto.eventTime),
+        encrypted && dto.encryptedPayload
+          ? null
+          : dto.note === undefined
+            ? current.note
+            : this.normalizeNullableText(dto.note),
+        encrypted && dto.encryptedPayload
+          ? null
+          : dto.locationName === undefined
+            ? current.locationName
+            : this.normalizeNullableText(dto.locationName),
+        encrypted && dto.encryptedPayload
+          ? null
+          : dto.locationUrl === undefined
+            ? current.locationUrl
+            : this.normalizeNullableText(dto.locationUrl),
         dto.recurrenceRule === undefined
           ? current.recurrenceRule
           : this.normalizeRecurrenceRule(dto.recurrenceRule),
         dto.reminderOffsetMinutes === undefined
           ? current.reminderOffsetMinutes
           : this.normalizeReminderOffset(dto.reminderOffsetMinutes),
-      ],
+        dto.encryptedPayload === undefined ? current.encryptedPayload : dto.encryptedPayload,
+        dto.encryptionVersion === undefined ? current.encryptionVersion : dto.encryptionVersion
+      ]
     );
 
     const row = result.rows[0];
@@ -220,7 +249,7 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
     const event = row ? this.mapEvent(row) : null;
 
     if (event) {
-      this.realtime.publish(householdId, "calendar.changed", event.id);
+      this.realtime.publish(householdId, 'calendar.changed', event.id);
     }
 
     return event;
@@ -233,13 +262,13 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
         where household_id = $1
           and id = $2
       `,
-      [householdId, eventId],
+      [householdId, eventId]
     );
 
     const deleted = Boolean(result.rowCount && result.rowCount > 0);
 
     if (deleted) {
-      this.realtime.publish(householdId, "calendar.changed", eventId);
+      this.realtime.publish(householdId, 'calendar.changed', eventId);
     }
 
     return deleted;
@@ -247,7 +276,7 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
 
   private async findEvent(
     householdId: string,
-    eventId: string,
+    eventId: string
   ): Promise<CalendarEventRecord | null> {
     const result = await this.database.query<CalendarEventRow>(
       `
@@ -265,6 +294,8 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
           ce.recurrence_rule,
           ce.reminder_offset_minutes,
           ce.reminder_sent_at,
+          ce.encrypted_payload,
+          ce.encryption_version,
           ce.created_at,
           ce.updated_at,
           cgem.connection_id as google_connection_id,
@@ -278,7 +309,7 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
         where ce.household_id = $1
           and ce.id = $2
       `,
-      [householdId, eventId],
+      [householdId, eventId]
     );
 
     const row = result.rows[0];
@@ -289,7 +320,7 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
   private async listExpandedEvents(
     householdId: string,
     from: string,
-    to: string,
+    to: string
   ): Promise<CalendarEventRecord[]> {
     const result = await this.database.query<CalendarEventRow>(
       `
@@ -307,6 +338,8 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
           ce.recurrence_rule,
           ce.reminder_offset_minutes,
           ce.reminder_sent_at,
+          ce.encrypted_payload,
+          ce.encryption_version,
           ce.created_at,
           ce.updated_at,
           cgem.connection_id as google_connection_id,
@@ -322,20 +355,14 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
           and (ce.event_date >= $2 or ce.recurrence_rule is not null)
         order by ce.event_date asc, ce.event_time asc nulls first, ce.created_at asc
       `,
-      [householdId, from, to],
+      [householdId, from, to]
     );
-    const expanded = result.rows.flatMap((row) =>
-      this.expandEvent(row, from, to),
-    );
+    const expanded = result.rows.flatMap((row) => this.expandEvent(row, from, to));
 
     return expanded.sort((left, right) => this.compareEvents(left, right));
   }
 
-  private expandEvent(
-    row: CalendarEventRow,
-    from: string,
-    to: string,
-  ): CalendarEventRecord[] {
+  private expandEvent(row: CalendarEventRow, from: string, to: string): CalendarEventRecord[] {
     const event = this.mapEvent(row);
 
     if (!event.recurrenceRule) {
@@ -359,11 +386,8 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
         occurrences.push({
           ...event,
           eventDate: occurrenceDate,
-          id:
-            occurrenceDate === event.eventDate
-              ? event.id
-              : `${event.id}:${occurrenceDate}`,
-          sourceEventId: event.id,
+          id: occurrenceDate === event.eventDate ? event.id : `${event.id}:${occurrenceDate}`,
+          sourceEventId: event.id
         });
       }
 
@@ -373,20 +397,17 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
     return occurrences;
   }
 
-  private compareEvents(
-    left: CalendarEventRecord,
-    right: CalendarEventRecord,
-  ): number {
+  private compareEvents(left: CalendarEventRecord, right: CalendarEventRecord): number {
     return (
       left.eventDate.localeCompare(right.eventDate) ||
-      (left.eventTime ?? "").localeCompare(right.eventTime ?? "") ||
+      (left.eventTime ?? '').localeCompare(right.eventTime ?? '') ||
       left.createdAt.localeCompare(right.createdAt)
     );
   }
 
   private isUpcomingEvent(
     event: CalendarEventRecord,
-    now: { date: string; time: string },
+    now: { date: string; time: string }
   ): boolean {
     if (event.eventDate > now.date) {
       return true;
@@ -402,22 +423,18 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
   private async resolveScope(
     householdId: string,
     scopeType: CalendarScopeType,
-    ownerMemberId: string | null | undefined,
+    ownerMemberId: string | null | undefined
   ): Promise<{ ownerMemberId: string | null; scopeType: CalendarScopeType }> {
-    if (scopeType === "household") {
+    if (scopeType === 'household') {
       if (ownerMemberId) {
-        throw new BadRequestException(
-          "ownerMemberId must be empty for household calendar events",
-        );
+        throw new BadRequestException('ownerMemberId must be empty for household calendar events');
       }
 
       return { ownerMemberId: null, scopeType };
     }
 
     if (!ownerMemberId) {
-      throw new BadRequestException(
-        "ownerMemberId is required for member calendar events",
-      );
+      throw new BadRequestException('ownerMemberId is required for member calendar events');
     }
 
     await this.ensureActiveMember(householdId, ownerMemberId);
@@ -425,10 +442,7 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
     return { ownerMemberId, scopeType };
   }
 
-  private async ensureActiveMember(
-    householdId: string,
-    memberId: string,
-  ): Promise<void> {
+  private async ensureActiveMember(householdId: string, memberId: string): Promise<void> {
     const result = await this.database.query<{ id: string }>(
       `
         select id
@@ -438,19 +452,17 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
           and is_active = true
         limit 1
       `,
-      [householdId, memberId],
+      [householdId, memberId]
     );
 
     if (!result.rows[0]) {
-      throw new BadRequestException(
-        "Owner member must be an active household member",
-      );
+      throw new BadRequestException('Owner member must be an active household member');
     }
   }
 
   private ensureDateRange(from: string, to: string): void {
     if (from > to) {
-      throw new BadRequestException("from must be before or equal to to");
+      throw new BadRequestException('from must be before or equal to to');
     }
   }
 
@@ -458,15 +470,13 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
     const normalized = title.trim();
 
     if (!normalized) {
-      throw new BadRequestException("Calendar event title is required");
+      throw new BadRequestException('Calendar event title is required');
     }
 
     return normalized;
   }
 
-  private normalizeNullableText(
-    value: string | null | undefined,
-  ): string | null {
+  private normalizeNullableText(value: string | null | undefined): string | null {
     if (value === undefined || value === null) {
       return null;
     }
@@ -474,9 +484,7 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
     return value.trim();
   }
 
-  private normalizeRecurrenceRule(
-    value: string | null | undefined,
-  ): string | null {
+  private normalizeRecurrenceRule(value: string | null | undefined): string | null {
     const normalized = this.normalizeNullableText(value);
 
     if (!normalized) {
@@ -498,21 +506,42 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
       parts.push(`COUNT=${recurrence.count}`);
     }
 
-    return parts.join(";");
+    return parts.join(';');
   }
 
-  private normalizeReminderOffset(
-    value: number | null | undefined,
-  ): number | null {
+  private normalizeReminderOffset(value: number | null | undefined): number | null {
     if (value === undefined || value === null) {
       return null;
     }
 
     if (![15, 30, 60, 1440].includes(value)) {
-      throw new BadRequestException("Invalid reminder offset");
+      throw new BadRequestException('Invalid reminder offset');
     }
 
     return value;
+  }
+
+  private validateEncryptionInput(
+    encrypted: boolean,
+    encryptedPayload: string | undefined,
+    encryptionVersion: number | undefined,
+    configuredKeyVersion: number | null
+  ): void {
+    if (!encrypted) {
+      if (encryptedPayload !== undefined || encryptionVersion !== undefined) {
+        throw new BadRequestException('Calendar encryption is not enabled for this household');
+      }
+
+      return;
+    }
+
+    if (!encryptedPayload || encryptionVersion === undefined) {
+      throw new BadRequestException('Calendar content must be encrypted on the client');
+    }
+
+    if (encryptionVersion !== configuredKeyVersion) {
+      throw new BadRequestException('Outdated household encryption key');
+    }
   }
 
   private async dispatchDueReminders(): Promise<void> {
@@ -553,9 +582,11 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
             ce.recurrence_rule,
             ce.reminder_offset_minutes,
             ce.reminder_sent_at,
+            ce.encrypted_payload,
+            ce.encryption_version,
             ce.created_at,
             ce.updated_at
-        `,
+        `
       );
 
       return result.rows.map((row) => this.mapEvent(row));
@@ -568,77 +599,63 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
           eventTime: event.eventTime,
           householdId: event.householdId,
           reminderOffsetMinutes: event.reminderOffsetMinutes,
-          title: event.title,
-        }),
-      ),
+          title: event.encryptedPayload ? 'Zaszyfrowane wydarzenie' : event.title
+        })
+      )
     );
   }
 
   private parseRecurrenceRule(rule: string): RecurrenceRule {
     const values = new Map<string, string>();
 
-    for (const part of rule.split(";")) {
-      const [rawKey, rawValue] = part.split("=");
+    for (const part of rule.split(';')) {
+      const [rawKey, rawValue] = part.split('=');
       const key = rawKey?.trim().toUpperCase();
       const value = rawValue?.trim().toUpperCase();
 
       if (!key || !value || values.has(key)) {
-        throw new BadRequestException("Invalid recurrence rule");
+        throw new BadRequestException('Invalid recurrence rule');
       }
 
       values.set(key, value);
     }
 
-    const frequency = values.get("FREQ");
+    const frequency = values.get('FREQ');
 
     if (!isRecurrenceFrequency(frequency)) {
-      throw new BadRequestException(
-        "Recurrence rule requires FREQ=DAILY, WEEKLY or MONTHLY",
-      );
+      throw new BadRequestException('Recurrence rule requires FREQ=DAILY, WEEKLY or MONTHLY');
     }
 
-    const interval = this.parsePositiveInteger(
-      values.get("INTERVAL") ?? "1",
-      "INTERVAL",
-    );
-    const until = values.get("UNTIL");
-    const count = values.get("COUNT")
-      ? this.parsePositiveInteger(this.required(values.get("COUNT")), "COUNT")
+    const interval = this.parsePositiveInteger(values.get('INTERVAL') ?? '1', 'INTERVAL');
+    const until = values.get('UNTIL');
+    const count = values.get('COUNT')
+      ? this.parsePositiveInteger(this.required(values.get('COUNT')), 'COUNT')
       : undefined;
 
     if (interval > 365) {
-      throw new BadRequestException("Recurrence INTERVAL is too large");
+      throw new BadRequestException('Recurrence INTERVAL is too large');
     }
 
     if (count !== undefined && count > 500) {
-      throw new BadRequestException("Recurrence COUNT is too large");
+      throw new BadRequestException('Recurrence COUNT is too large');
     }
 
     if (until && !this.isDateOnly(until)) {
-      throw new BadRequestException("Recurrence UNTIL must be YYYY-MM-DD");
+      throw new BadRequestException('Recurrence UNTIL must be YYYY-MM-DD');
     }
 
-    return {
-      count,
-      frequency,
-      interval,
-      until,
-    };
+    return { count, frequency, interval, until };
   }
 
   private parsePositiveInteger(value: string, label: string): number {
     if (!/^\d+$/.test(value)) {
-      throw new BadRequestException(
-        `Recurrence ${label} must be a positive integer`,
-      );
+      throw new BadRequestException(`Recurrence ${label} must be a positive integer`);
     }
 
     const parsed = Number(value);
 
     if (!Number.isSafeInteger(parsed) || parsed < 1) {
-      throw new BadRequestException(
-        `Recurrence ${label} must be a positive integer`,
-      );
+      throw new BadRequestException(`Recurrence ${label} must be a positive integer`);
     }
 
     return parsed;
@@ -646,32 +663,26 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
 
   private nextOccurrenceDate(date: string, recurrence: RecurrenceRule): string {
     switch (recurrence.frequency) {
-      case "DAILY":
+      case 'DAILY':
         return this.addDays(date, recurrence.interval);
-      case "WEEKLY":
+      case 'WEEKLY':
         return this.addDays(date, recurrence.interval * 7);
-      case "MONTHLY":
+      case 'MONTHLY':
         return this.addMonths(date, recurrence.interval);
     }
   }
 
   private async getCurrentDateTime(): Promise<{ date: string; time: string }> {
-    const result = await this.database.query<{
-      current_time: string;
-      today: string;
-    }>(
+    const result = await this.database.query<{ current_time: string; today: string }>(
       `
         select
           to_char(timezone('Europe/Warsaw', now()), 'YYYY-MM-DD') as today,
           to_char(timezone('Europe/Warsaw', now()), 'HH24:MI') as current_time
-      `,
+      `
     );
     const row = result.rows[0];
 
-    return {
-      date: this.required(row?.today),
-      time: this.required(row?.current_time),
-    };
+    return { date: this.required(row?.today), time: this.required(row?.current_time) };
   }
 
   private addDays(date: string, days: number): string {
@@ -687,7 +698,7 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
     parsed.setUTCDate(1);
     parsed.setUTCMonth(parsed.getUTCMonth() + months);
     const lastDay = new Date(
-      Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth() + 1, 0),
+      Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth() + 1, 0)
     ).getUTCDate();
     parsed.setUTCDate(Math.min(originalDay, lastDay));
 
@@ -696,7 +707,7 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
 
   private parseDateOnly(value: string): Date {
     if (!this.isDateOnly(value)) {
-      throw new BadRequestException("Invalid date");
+      throw new BadRequestException('Invalid date');
     }
 
     return new Date(`${value}T00:00:00.000Z`);
@@ -709,15 +720,12 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
 
     const parsed = new Date(`${value}T00:00:00.000Z`);
 
-    return (
-      !Number.isNaN(parsed.getTime()) &&
-      parsed.toISOString().slice(0, 10) === value
-    );
+    return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
   }
 
   private required<T>(value: T | null | undefined): T {
     if (value === null || value === undefined) {
-      throw new BadRequestException("Invalid recurrence rule");
+      throw new BadRequestException('Invalid recurrence rule');
     }
 
     return value;
@@ -725,11 +733,13 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
 
   private mapEvent(row: CalendarEventRow | undefined): CalendarEventRecord {
     if (!row) {
-      throw new Error("Expected calendar event record");
+      throw new Error('Expected calendar event record');
     }
 
     return {
       createdAt: this.formatTimestamp(row.created_at),
+      encryptedPayload: row.encrypted_payload,
+      encryptionVersion: row.encryption_version,
       eventDate: this.formatDateOnly(row.event_date),
       eventTime: row.event_time,
       googleCalendarAccountEmail: row.google_account_email ?? null,
@@ -743,30 +753,28 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
       ownerMemberId: row.owner_member_id,
       recurrenceRule: row.recurrence_rule,
       reminderOffsetMinutes: row.reminder_offset_minutes,
-      reminderSentAt: row.reminder_sent_at
-        ? this.formatTimestamp(row.reminder_sent_at)
-        : null,
+      reminderSentAt: row.reminder_sent_at ? this.formatTimestamp(row.reminder_sent_at) : null,
       scopeType: row.scope_type,
-      sourceType: row.google_connection_id ? "google" : "manual",
+      sourceType: row.google_connection_id ? 'google' : 'manual',
       title: row.title,
-      updatedAt: this.formatTimestamp(row.updated_at),
+      updatedAt: this.formatTimestamp(row.updated_at)
     };
   }
 
   private formatDateOnly(value: Date | string): string {
-    if (typeof value === "string") {
+    if (typeof value === 'string') {
       return value.slice(0, 10);
     }
 
     const year = value.getFullYear();
-    const month = String(value.getMonth() + 1).padStart(2, "0");
-    const day = String(value.getDate()).padStart(2, "0");
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
 
     return `${year}-${month}-${day}`;
   }
 
   private formatTimestamp(value: Date | string): string {
-    if (typeof value === "string") {
+    if (typeof value === 'string') {
       return value;
     }
 
@@ -776,6 +784,8 @@ export class CalendarService implements OnModuleInit, OnModuleDestroy {
 
 interface CalendarEventRow {
   created_at: Date | string;
+  encrypted_payload: string | null;
+  encryption_version: number | null;
   event_date: Date | string;
   event_time: string | null;
   google_account_email?: string | null;
@@ -797,6 +807,8 @@ interface CalendarEventRow {
 
 export interface CalendarEventRecord {
   createdAt: string;
+  encryptedPayload: string | null;
+  encryptionVersion: number | null;
   eventDate: string;
   eventTime: string | null;
   googleCalendarAccountEmail: string | null;
@@ -813,12 +825,12 @@ export interface CalendarEventRecord {
   reminderSentAt: string | null;
   scopeType: CalendarScopeType;
   sourceEventId?: string;
-  sourceType: "google" | "manual";
+  sourceType: 'google' | 'manual';
   title: string;
   updatedAt: string;
 }
 
-type RecurrenceFrequency = "DAILY" | "WEEKLY" | "MONTHLY";
+type RecurrenceFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY';
 
 interface RecurrenceRule {
   count?: number;
@@ -827,8 +839,6 @@ interface RecurrenceRule {
   until?: string;
 }
 
-function isRecurrenceFrequency(
-  value: string | undefined,
-): value is RecurrenceFrequency {
-  return value === "DAILY" || value === "WEEKLY" || value === "MONTHLY";
+function isRecurrenceFrequency(value: string | undefined): value is RecurrenceFrequency {
+  return value === 'DAILY' || value === 'WEEKLY' || value === 'MONTHLY';
 }

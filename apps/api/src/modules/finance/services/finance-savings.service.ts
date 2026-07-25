@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { DatabaseService } from '../../database/database.service';
 import { RealtimeService } from '../../realtime/realtime.service';
@@ -26,6 +27,8 @@ export class FinanceSavingsService {
           fsa.last_changed_at,
           fsa.target_amount,
           fsa.target_date,
+          fsa.encrypted_payload,
+          fsa.encryption_version,
           fsa.created_at,
           fsa.updated_at
         from finance_savings_accounts fsa
@@ -60,9 +63,11 @@ export class FinanceSavingsService {
             current_amount,
             last_changed_at,
             target_amount,
-            target_date
+            target_date,
+            encrypted_payload,
+            encryption_version
           )
-          values ($1, $2, $3, $4, $5, $6, $7)
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
           returning
             id,
             household_id,
@@ -72,17 +77,23 @@ export class FinanceSavingsService {
             last_changed_at,
             target_amount,
             target_date,
+            encrypted_payload,
+            encryption_version,
             created_at,
             updated_at
         `,
         [
           householdId,
           ownerMemberId,
-          this.normalizeText(dto.name, 'Savings name'),
-          dto.amount,
+          dto.encryptedPayload
+            ? `[Zaszyfrowany cel ${randomUUID()}]`
+            : this.normalizeText(dto.name, 'Savings name'),
+          dto.encryptedPayload ? 0 : dto.amount,
           changedAt,
-          dto.targetAmount ?? null,
-          dto.targetDate ?? null
+          dto.encryptedPayload ? null : (dto.targetAmount ?? null),
+          dto.targetDate ?? null,
+          dto.encryptedPayload ?? null,
+          dto.encryptionVersion ?? null
         ]
       );
 
@@ -90,10 +101,12 @@ export class FinanceSavingsService {
 
       if (dto.amount > 0) {
         await this.insertTransaction(client, row.id, {
-          amount: dto.amount,
+          amount: dto.encryptedPayload ? 0.01 : dto.amount,
           changedAt,
           direction: 'add',
-          note: dto.note ?? null
+          encryptedPayload: dto.transactionEncryptedPayload ?? null,
+          encryptionVersion: dto.encryptionVersion ?? null,
+          note: dto.encryptedPayload ? null : (dto.note ?? null)
         });
       }
 
@@ -122,6 +135,8 @@ export class FinanceSavingsService {
             last_changed_at,
             target_amount,
             target_date,
+            encrypted_payload,
+            encryption_version,
             created_at,
             updated_at
           from finance_savings_accounts
@@ -141,17 +156,19 @@ export class FinanceSavingsService {
       const delta = dto.direction === 'add' ? dto.amount : -dto.amount;
       const nextAmount = Math.round((currentAmount + delta) * 100) / 100;
 
-      if (nextAmount < 0) {
+      if (!dto.encryptedPayload && nextAmount < 0) {
         throw new BadRequestException('Savings amount cannot be negative');
       }
 
       const changedAt = dto.changedAt ?? this.todayIso();
 
       await this.insertTransaction(client, accountId, {
-        amount: dto.amount,
+        amount: dto.encryptedPayload ? 0.01 : dto.amount,
         changedAt,
         direction: dto.direction,
-        note: dto.note ?? null
+        encryptedPayload: dto.encryptedPayload ?? null,
+        encryptionVersion: dto.encryptionVersion ?? null,
+        note: dto.encryptedPayload ? null : (dto.note ?? null)
       });
 
       const update = await client.query<FinanceSavingsAccountRow>(
@@ -170,10 +187,12 @@ export class FinanceSavingsService {
             last_changed_at,
             target_amount,
             target_date,
+            encrypted_payload,
+            encryption_version,
             created_at,
             updated_at
         `,
-        [householdId, accountId, nextAmount, changedAt]
+        [householdId, accountId, dto.encryptedPayload ? 0 : nextAmount, changedAt]
       );
 
       return this.mapAccountRowOrThrow(update.rows[0]);
@@ -221,6 +240,8 @@ export class FinanceSavingsService {
           last_changed_at,
           target_amount,
           target_date,
+          encrypted_payload,
+          encryption_version,
           created_at,
           updated_at
         from finance_savings_accounts
@@ -258,6 +279,8 @@ export class FinanceSavingsService {
           fst.amount,
           fst.changed_at,
           fst.note,
+          fst.encrypted_payload,
+          fst.encryption_version,
           fst.created_at
         from finance_savings_transactions fst
         join finance_savings_accounts fsa
@@ -290,6 +313,8 @@ export class FinanceSavingsService {
       amount: number;
       changedAt: string;
       direction: 'add' | 'subtract';
+      encryptedPayload: string | null;
+      encryptionVersion: number | null;
       note: string | null;
     }
   ) {
@@ -300,11 +325,21 @@ export class FinanceSavingsService {
           direction,
           amount,
           changed_at,
-          note
+          note,
+          encrypted_payload,
+          encryption_version
         )
-        values ($1, $2, $3, $4, $5)
+        values ($1, $2, $3, $4, $5, $6, $7)
       `,
-      [savingsAccountId, input.direction, input.amount, input.changedAt, this.normalizeOptionalText(input.note)]
+      [
+        savingsAccountId,
+        input.direction,
+        input.amount,
+        input.changedAt,
+        this.normalizeOptionalText(input.note),
+        input.encryptedPayload,
+        input.encryptionVersion
+      ]
     );
   }
 
@@ -350,7 +385,9 @@ export class FinanceSavingsService {
     return new Date().toISOString().slice(0, 10);
   }
 
-  private mapAccountRowOrThrow(row: FinanceSavingsAccountRow | undefined): FinanceSavingsAccountRecord {
+  private mapAccountRowOrThrow(
+    row: FinanceSavingsAccountRow | undefined
+  ): FinanceSavingsAccountRecord {
     if (!row) {
       throw new Error('Expected finance savings account');
     }
@@ -358,6 +395,8 @@ export class FinanceSavingsService {
     return {
       createdAt: row.created_at,
       currentAmount: String(row.current_amount),
+      encryptedPayload: row.encrypted_payload,
+      encryptionVersion: row.encryption_version,
       householdId: row.household_id,
       id: row.id,
       lastChangedAt: this.formatDateOnly(row.last_changed_at),
@@ -376,6 +415,8 @@ export class FinanceSavingsService {
       changedAt: this.formatDateOnly(row.changed_at),
       createdAt: row.created_at,
       direction: row.direction,
+      encryptedPayload: row.encrypted_payload,
+      encryptionVersion: row.encryption_version,
       id: row.id,
       note: row.note,
       savingsAccountId: row.savings_account_id
@@ -394,6 +435,8 @@ export class FinanceSavingsService {
 interface FinanceSavingsAccountRow {
   created_at: string;
   current_amount: string;
+  encrypted_payload: string | null;
+  encryption_version: number | null;
   household_id: string;
   id: string;
   last_changed_at: Date | string;
@@ -409,6 +452,8 @@ interface FinanceSavingsTransactionRow {
   changed_at: Date | string;
   created_at: string;
   direction: 'add' | 'subtract';
+  encrypted_payload: string | null;
+  encryption_version: number | null;
   id: string;
   note: string | null;
   savings_account_id: string;
@@ -417,6 +462,8 @@ interface FinanceSavingsTransactionRow {
 export interface FinanceSavingsAccountRecord {
   createdAt: string;
   currentAmount: string;
+  encryptedPayload: string | null;
+  encryptionVersion: number | null;
   householdId: string;
   id: string;
   lastChangedAt: string;
@@ -433,6 +480,8 @@ export interface FinanceSavingsTransactionRecord {
   changedAt: string;
   createdAt: string;
   direction: 'add' | 'subtract';
+  encryptedPayload: string | null;
+  encryptionVersion: number | null;
   id: string;
   note: string | null;
   savingsAccountId: string;

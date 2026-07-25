@@ -1,5 +1,9 @@
 import { buildApiUrl, getApiBaseUrl } from './config';
 import { ApiNetworkError, createApiErrorFromResponse } from './errors';
+import {
+  prepareEncryptedApiBody,
+  transformEncryptedApiResponse
+} from '../encryption/runtime-transport';
 
 export type ApiMethod = 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT';
 
@@ -31,7 +35,9 @@ export async function apiRequest<TResponse, TBody = unknown>(
 
   if (options.body !== undefined) {
     headers['Content-Type'] = headers['Content-Type'] ?? 'application/json';
-    requestInit.body = JSON.stringify(options.body);
+    requestInit.body = JSON.stringify(
+      await prepareEncryptedApiBody(path, requestInit.method ?? 'GET', options.body)
+    );
   }
 
   const url = buildApiUrl(path);
@@ -58,7 +64,7 @@ export async function apiRequest<TResponse, TBody = unknown>(
     throw await createApiErrorFromResponse(response);
   }
 
-  return readJsonResponse<TResponse>(response);
+  return transformEncryptedApiResponse(await readJsonResponse<TResponse>(response));
 }
 
 async function readJsonResponse<TResponse>(response: Response): Promise<TResponse> {

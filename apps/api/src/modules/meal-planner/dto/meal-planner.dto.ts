@@ -45,7 +45,20 @@ export class CreateMealPlanDto {
   weekStartDate!: string;
 }
 
-export class MealPlanEntryDto {
+class EncryptedMealPlannerDto {
+  @IsOptional()
+  @IsString()
+  @Length(1, 50000)
+  encryptedPayload?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  encryptionVersion?: number;
+}
+
+export class MealPlanEntryDto extends EncryptedMealPlannerDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
@@ -172,7 +185,7 @@ export class RandomizeMealPlanDto {
   slotIndex?: number;
 }
 
-export class CreateMealIdeaDto {
+export class CreateMealIdeaDto extends EncryptedMealPlannerDto {
   @IsString()
   @Length(1, 180)
   title!: string;
@@ -188,7 +201,7 @@ export class CreateMealIdeaDto {
   linkUrl?: string | null;
 }
 
-export class UpdateMealIdeaDto {
+export class UpdateMealIdeaDto extends EncryptedMealPlannerDto {
   @IsOptional()
   @IsString()
   @Length(1, 180)

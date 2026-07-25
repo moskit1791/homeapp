@@ -11,7 +11,20 @@ export class CleaningTaskIdParamDto {
   id!: string;
 }
 
-export class CreateCleaningTaskDto {
+class EncryptedCleaningTaskDto {
+  @IsOptional()
+  @IsString()
+  @Length(1, 50000)
+  encryptedPayload?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  encryptionVersion?: number;
+}
+
+export class CreateCleaningTaskDto extends EncryptedCleaningTaskDto {
   @IsString()
   @Length(1, 180)
   name!: string;
@@ -39,7 +52,7 @@ export class CreateCleaningTaskDto {
   location?: string;
 }
 
-export class UpdateCleaningTaskDto {
+export class UpdateCleaningTaskDto extends EncryptedCleaningTaskDto {
   @IsOptional()
   @IsString()
   @Length(1, 180)

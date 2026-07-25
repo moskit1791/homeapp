@@ -8,6 +8,8 @@ import { CalendarModule } from './modules/calendar/calendar.module';
 import { CleaningModule } from './modules/cleaning/cleaning.module';
 import { DataEntriesModule } from './modules/data-entries/data-entries.module';
 import { DatabaseModule } from './modules/database/database.module';
+import { EncryptionModule } from './modules/encryption/encryption.module';
+import { EncryptionWriteInterceptor } from './modules/encryption/encryption-write.interceptor';
 import { FinanceModule } from './modules/finance/finance.module';
 import { HealthController } from './modules/health/health.controller';
 import { HouseholdsModule } from './modules/households/households.module';
@@ -29,6 +31,7 @@ import { RequestContextModule } from './shared/request-context.module';
     ConfigModule.forRoot({ isGlobal: true }),
     RequestContextModule,
     DatabaseModule,
+    EncryptionModule,
     AuthModule,
     UsersModule,
     HouseholdsModule,
@@ -50,10 +53,8 @@ import { RequestContextModule } from './shared/request-context.module';
   ],
   controllers: [HealthController],
   providers: [
-    {
-      provide: APP_INTERCEPTOR,
-      useClass: RequestContextInterceptor
-    }
+    { provide: APP_INTERCEPTOR, useClass: RequestContextInterceptor },
+    { provide: APP_INTERCEPTOR, useClass: EncryptionWriteInterceptor }
   ]
 })
 export class AppModule {}

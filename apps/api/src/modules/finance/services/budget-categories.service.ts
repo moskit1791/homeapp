@@ -20,6 +20,8 @@ export class BudgetCategoriesService {
           display_order,
           copy_budget_to_next_month,
           is_active,
+          encrypted_payload,
+          encryption_version,
           created_at,
           updated_at
         from budget_categories
@@ -33,18 +35,26 @@ export class BudgetCategoriesService {
     return result.rows.map((row) => this.mapCategory(row));
   }
 
-  async createCategory(householdId: string, dto: CreateBudgetCategoryDto): Promise<BudgetCategoryRecord> {
+  async createCategory(
+    householdId: string,
+    dto: CreateBudgetCategoryDto
+  ): Promise<BudgetCategoryRecord> {
     const result = await this.database.query<BudgetCategoryRow>(
       `
         insert into budget_categories (
           household_id,
           name,
           display_order,
-          copy_budget_to_next_month
+          copy_budget_to_next_month,
+          encrypted_payload,
+          encryption_version
         )
         values (
           $1,
-          $2,
+          case
+            when $5::text is not null then '[Zaszyfrowana kategoria ' || gen_random_uuid()::text || ']'
+            else $2
+          end,
           coalesce(
             $3,
             (
@@ -53,7 +63,9 @@ export class BudgetCategoriesService {
               where household_id = $1
             )
           ),
-          $4
+          $4,
+          $5,
+          $6
         )
         returning
           id,
@@ -62,10 +74,19 @@ export class BudgetCategoriesService {
           display_order,
           copy_budget_to_next_month,
           is_active,
+          encrypted_payload,
+          encryption_version,
           created_at,
           updated_at
       `,
-      [householdId, this.normalizeName(dto.name), dto.displayOrder ?? null, dto.copyBudgetToNextMonth ?? false]
+      [
+        householdId,
+        dto.encryptedPayload ? '[Zaszyfrowana kategoria]' : this.normalizeName(dto.name),
+        dto.displayOrder ?? null,
+        dto.copyBudgetToNextMonth ?? false,
+        dto.encryptedPayload ?? null,
+        dto.encryptionVersion ?? null
+      ]
     );
 
     const category = this.mapCategoryOrThrow(result.rows[0]);
@@ -83,7 +104,9 @@ export class BudgetCategoriesService {
       dto.name === undefined &&
       dto.displayOrder === undefined &&
       dto.copyBudgetToNextMonth === undefined &&
-      dto.isActive === undefined
+      dto.isActive === undefined &&
+      dto.encryptedPayload === undefined &&
+      dto.encryptionVersion === undefined
     ) {
       throw new BadRequestException('No budget category fields to update');
     }
@@ -92,10 +115,15 @@ export class BudgetCategoriesService {
       `
         update budget_categories
         set
-          name = coalesce($3, name),
+          name = case
+            when $7::text is not null then '[Zaszyfrowana kategoria ' || id::text || ']'
+            else coalesce($3, name)
+          end,
           display_order = coalesce($4, display_order),
           copy_budget_to_next_month = coalesce($5, copy_budget_to_next_month),
-          is_active = coalesce($6, is_active)
+          is_active = coalesce($6, is_active),
+          encrypted_payload = coalesce($7, encrypted_payload),
+          encryption_version = coalesce($8, encryption_version)
         where household_id = $1
           and id = $2
         returning
@@ -105,6 +133,8 @@ export class BudgetCategoriesService {
           display_order,
           copy_budget_to_next_month,
           is_active,
+          encrypted_payload,
+          encryption_version,
           created_at,
           updated_at
       `,
@@ -114,7 +144,9 @@ export class BudgetCategoriesService {
         dto.name === undefined ? null : this.normalizeName(dto.name),
         dto.displayOrder ?? null,
         dto.copyBudgetToNextMonth ?? null,
-        dto.isActive ?? null
+        dto.isActive ?? null,
+        dto.encryptedPayload ?? null,
+        dto.encryptionVersion ?? null
       ]
     );
 
@@ -153,6 +185,8 @@ export class BudgetCategoriesService {
       householdId: row.household_id,
       id: row.id,
       isActive: row.is_active,
+      encryptedPayload: row.encrypted_payload,
+      encryptionVersion: row.encryption_version,
       name: row.name,
       updatedAt: row.updated_at
     };
@@ -163,6 +197,8 @@ interface BudgetCategoryRow {
   copy_budget_to_next_month: boolean;
   created_at: string;
   display_order: number;
+  encrypted_payload: string | null;
+  encryption_version: number | null;
   household_id: string;
   id: string;
   is_active: boolean;
@@ -174,6 +210,8 @@ export interface BudgetCategoryRecord {
   copyBudgetToNextMonth: boolean;
   createdAt: string;
   displayOrder: number;
+  encryptedPayload: string | null;
+  encryptionVersion: number | null;
   householdId: string;
   id: string;
   isActive: boolean;

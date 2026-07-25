@@ -2,7 +2,11 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import type { PoolClient } from 'pg';
 import { DatabaseService } from '../../database/database.service';
 import { RealtimeService } from '../../realtime/realtime.service';
-import { CreateFinanceDebtDto, CreateFinanceDebtPaymentDto, UpdateFinanceDebtDto } from '../dto/finance.dto';
+import {
+  CreateFinanceDebtDto,
+  CreateFinanceDebtPaymentDto,
+  UpdateFinanceDebtDto
+} from '../dto/finance.dto';
 
 @Injectable()
 export class FinanceDebtsService {
@@ -14,7 +18,8 @@ export class FinanceDebtsService {
   async listDebts(householdId: string, includeSettled = false): Promise<FinanceDebtRecord[]> {
     const result = await this.database.query<FinanceDebtRow>(
       `
-        select id, household_id, lender_name, purpose, amount, due_date, note, is_settled, settled_at, created_at, updated_at
+        select id, household_id, lender_name, purpose, amount, due_date, note, is_settled, settled_at,
+          encrypted_payload, encryption_version, created_at, updated_at
         from finance_debts
         where household_id = $1
           and ($2 = true or is_settled = false)
@@ -29,11 +34,25 @@ export class FinanceDebtsService {
   async createDebt(householdId: string, dto: CreateFinanceDebtDto): Promise<FinanceDebtRecord> {
     const result = await this.database.query<FinanceDebtRow>(
       `
-        insert into finance_debts (household_id, lender_name, purpose, amount, due_date, note)
-        values ($1, $2, $3, $4, $5, $6)
-        returning id, household_id, lender_name, purpose, amount, due_date, note, is_settled, settled_at, created_at, updated_at
+        insert into finance_debts (
+          household_id, lender_name, purpose, amount, due_date, note, encrypted_payload, encryption_version
+        )
+        values ($1, $2, $3, $4, $5, $6, $7, $8)
+        returning id, household_id, lender_name, purpose, amount, due_date, note, is_settled, settled_at,
+          encrypted_payload, encryption_version, created_at, updated_at
       `,
-      [householdId, this.normalizeText(dto.lenderName, 'Lender name'), this.normalizeText(dto.purpose, 'Purpose'), dto.amount, dto.dueDate ?? null, this.normalizeOptionalText(dto.note)]
+      [
+        householdId,
+        dto.encryptedPayload
+          ? '[Zaszyfrowany pożyczkodawca]'
+          : this.normalizeText(dto.lenderName, 'Lender name'),
+        dto.encryptedPayload ? '[Zaszyfrowany cel]' : this.normalizeText(dto.purpose, 'Purpose'),
+        dto.encryptedPayload ? 0.01 : dto.amount,
+        dto.dueDate ?? null,
+        dto.encryptedPayload ? null : this.normalizeOptionalText(dto.note),
+        dto.encryptedPayload ?? null,
+        dto.encryptionVersion ?? null
+      ]
     );
 
     const debt = await this.getDebtOrThrow(householdId, this.mapDebtRowOrThrow(result.rows[0]).id);
@@ -42,8 +61,21 @@ export class FinanceDebtsService {
     return debt;
   }
 
-  async updateDebt(householdId: string, debtId: string, dto: UpdateFinanceDebtDto): Promise<FinanceDebtRecord | null> {
-    if (dto.amount === undefined && dto.dueDate === undefined && dto.isSettled === undefined && dto.lenderName === undefined && dto.note === undefined && dto.purpose === undefined) {
+  async updateDebt(
+    householdId: string,
+    debtId: string,
+    dto: UpdateFinanceDebtDto
+  ): Promise<FinanceDebtRecord | null> {
+    if (
+      dto.amount === undefined &&
+      dto.dueDate === undefined &&
+      dto.isSettled === undefined &&
+      dto.lenderName === undefined &&
+      dto.note === undefined &&
+      dto.purpose === undefined &&
+      dto.encryptedPayload === undefined &&
+      dto.encryptionVersion === undefined
+    ) {
       throw new BadRequestException('No finance debt fields to update');
     }
 
@@ -55,22 +87,31 @@ export class FinanceDebtsService {
 
     const nextAmount = dto.amount ?? Number(current.amount);
 
-    if (this.roundMoney(nextAmount) < this.roundMoney(Number(current.paidAmount))) {
+    if (
+      !dto.encryptedPayload &&
+      this.roundMoney(nextAmount) < this.roundMoney(Number(current.paidAmount))
+    ) {
       throw new BadRequestException('Debt amount cannot be lower than paid amount');
     }
 
     const nextRemainingAmount = this.roundMoney(nextAmount - Number(current.paidAmount));
-    const nextSettled = nextRemainingAmount <= 0 ? true : (dto.isSettled ?? current.isSettled);
+    const nextSettled = dto.encryptedPayload
+      ? (dto.isSettled ?? current.isSettled)
+      : nextRemainingAmount <= 0
+        ? true
+        : (dto.isSettled ?? current.isSettled);
     const result = await this.database.query<FinanceDebtRow>(
       `
         update finance_debts
         set
-          lender_name = coalesce($3, lender_name),
-          purpose = coalesce($4, purpose),
-          amount = coalesce($5, amount),
+          lender_name = case when $9::text is not null then '[Zaszyfrowany pożyczkodawca]' else coalesce($3, lender_name) end,
+          purpose = case when $9::text is not null then '[Zaszyfrowany cel]' else coalesce($4, purpose) end,
+          amount = case when $9::text is not null then 0.01 else coalesce($5, amount) end,
           due_date = $6,
           note = $7,
           is_settled = $8,
+          encrypted_payload = coalesce($9, encrypted_payload),
+          encryption_version = coalesce($10, encryption_version),
           settled_at = case
             when $8 = true and is_settled = false then now()
             when $8 = false then null
@@ -78,7 +119,8 @@ export class FinanceDebtsService {
           end
         where household_id = $1
           and id = $2
-        returning id, household_id, lender_name, purpose, amount, due_date, note, is_settled, settled_at, created_at, updated_at
+        returning id, household_id, lender_name, purpose, amount, due_date, note, is_settled, settled_at,
+          encrypted_payload, encryption_version, created_at, updated_at
       `,
       [
         householdId,
@@ -87,12 +129,20 @@ export class FinanceDebtsService {
         dto.purpose === undefined ? null : this.normalizeText(dto.purpose, 'Purpose'),
         dto.amount ?? null,
         dto.dueDate === undefined ? current.dueDate : dto.dueDate,
-        dto.note === undefined ? current.note : this.normalizeOptionalText(dto.note),
-        nextSettled
+        dto.encryptedPayload
+          ? null
+          : dto.note === undefined
+            ? current.note
+            : this.normalizeOptionalText(dto.note),
+        nextSettled,
+        dto.encryptedPayload ?? null,
+        dto.encryptionVersion ?? null
       ]
     );
 
-    const debt = result.rows[0] ? ((await this.attachPayments(householdId, [result.rows[0]]))[0] ?? null) : null;
+    const debt = result.rows[0]
+      ? ((await this.attachPayments(householdId, [result.rows[0]]))[0] ?? null)
+      : null;
 
     if (debt) {
       this.realtime.publish(householdId, 'finance.changed', debt.id);
@@ -101,11 +151,16 @@ export class FinanceDebtsService {
     return debt;
   }
 
-  async createPayment(householdId: string, debtId: string, dto: CreateFinanceDebtPaymentDto): Promise<FinanceDebtRecord | null> {
+  async createPayment(
+    householdId: string,
+    debtId: string,
+    dto: CreateFinanceDebtPaymentDto
+  ): Promise<FinanceDebtRecord | null> {
     const updated = await this.database.transaction(async (client) => {
       const debt = await client.query<FinanceDebtRow>(
         `
-          select id, household_id, lender_name, purpose, amount, due_date, note, is_settled, settled_at, created_at, updated_at
+          select id, household_id, lender_name, purpose, amount, due_date, note, is_settled, settled_at,
+            encrypted_payload, encryption_version, created_at, updated_at
           from finance_debts
           where household_id = $1
             and id = $2
@@ -131,21 +186,23 @@ export class FinanceDebtsService {
       const paymentAmount = this.roundMoney(dto.amount);
       const remainingAmount = this.roundMoney(Number(current.amount) - paidAmount);
 
-      if (paymentAmount > remainingAmount) {
+      if (!dto.encryptedPayload && paymentAmount > remainingAmount) {
         throw new BadRequestException('Debt payment cannot exceed remaining amount');
       }
 
       const paidAt = dto.paidAt ?? this.todayIso();
 
       await this.insertPayment(client, debtId, {
-        amount: paymentAmount,
-        note: dto.note ?? null,
+        amount: dto.encryptedPayload ? 0.01 : paymentAmount,
+        encryptedPayload: dto.encryptedPayload ?? null,
+        encryptionVersion: dto.encryptionVersion ?? null,
+        note: dto.encryptedPayload ? null : (dto.note ?? null),
         paidAt
       });
 
       const nextPaidAmount = this.roundMoney(paidAmount + paymentAmount);
       const nextRemainingAmount = this.roundMoney(Number(current.amount) - nextPaidAmount);
-      const shouldSettle = nextRemainingAmount <= 0;
+      const shouldSettle = dto.encryptedPayload ? false : nextRemainingAmount <= 0;
       const update = await client.query<FinanceDebtRow>(
         `
           update finance_debts
@@ -157,7 +214,8 @@ export class FinanceDebtsService {
             end
           where household_id = $1
             and id = $2
-          returning id, household_id, lender_name, purpose, amount, due_date, note, is_settled, settled_at, created_at, updated_at
+          returning id, household_id, lender_name, purpose, amount, due_date, note, is_settled, settled_at,
+            encrypted_payload, encryption_version, created_at, updated_at
         `,
         [householdId, debtId, shouldSettle]
       );
@@ -195,7 +253,8 @@ export class FinanceDebtsService {
   private async findDebt(householdId: string, debtId: string): Promise<FinanceDebtRecord | null> {
     const result = await this.database.query<FinanceDebtRow>(
       `
-        select id, household_id, lender_name, purpose, amount, due_date, note, is_settled, settled_at, created_at, updated_at
+        select id, household_id, lender_name, purpose, amount, due_date, note, is_settled, settled_at,
+          encrypted_payload, encryption_version, created_at, updated_at
         from finance_debts
         where household_id = $1
           and id = $2
@@ -204,7 +263,9 @@ export class FinanceDebtsService {
       [householdId, debtId]
     );
 
-    return result.rows[0] ? ((await this.attachPayments(householdId, [result.rows[0]]))[0] ?? null) : null;
+    return result.rows[0]
+      ? ((await this.attachPayments(householdId, [result.rows[0]]))[0] ?? null)
+      : null;
   }
 
   private async getDebtOrThrow(householdId: string, debtId: string): Promise<FinanceDebtRecord> {
@@ -217,7 +278,10 @@ export class FinanceDebtsService {
     return debt;
   }
 
-  private async attachPayments(householdId: string, debtRows: FinanceDebtRow[]): Promise<FinanceDebtRecord[]> {
+  private async attachPayments(
+    householdId: string,
+    debtRows: FinanceDebtRow[]
+  ): Promise<FinanceDebtRecord[]> {
     if (debtRows.length === 0) {
       return [];
     }
@@ -231,6 +295,8 @@ export class FinanceDebtsService {
           fdp.amount,
           fdp.paid_at,
           fdp.note,
+          fdp.encrypted_payload,
+          fdp.encryption_version,
           fdp.created_at
         from finance_debt_payments fdp
         join finance_debts fd
@@ -253,18 +319,37 @@ export class FinanceDebtsService {
     return debtRows.map((row) => this.mapDebt(row, byDebt.get(row.id) ?? []));
   }
 
-  private async insertPayment(client: PoolClient, debtId: string, input: { amount: number; note: string | null; paidAt: string }): Promise<void> {
+  private async insertPayment(
+    client: PoolClient,
+    debtId: string,
+    input: {
+      amount: number;
+      encryptedPayload: string | null;
+      encryptionVersion: number | null;
+      note: string | null;
+      paidAt: string;
+    }
+  ): Promise<void> {
     await client.query(
       `
         insert into finance_debt_payments (
           finance_debt_id,
           amount,
           paid_at,
-          note
+          note,
+          encrypted_payload,
+          encryption_version
         )
-        values ($1, $2, $3, $4)
+        values ($1, $2, $3, $4, $5, $6)
       `,
-      [debtId, input.amount, input.paidAt, this.normalizeOptionalText(input.note)]
+      [
+        debtId,
+        input.amount,
+        input.paidAt,
+        this.normalizeOptionalText(input.note),
+        input.encryptedPayload,
+        input.encryptionVersion
+      ]
     );
   }
 
@@ -300,6 +385,8 @@ export class FinanceDebtsService {
       amount: String(row.amount),
       createdAt: row.created_at,
       dueDate: this.formatDateOnly(row.due_date),
+      encryptedPayload: row.encrypted_payload,
+      encryptionVersion: row.encryption_version,
       householdId: row.household_id,
       id: row.id,
       isSettled: row.is_settled,
@@ -319,6 +406,8 @@ export class FinanceDebtsService {
       amount: String(row.amount),
       createdAt: row.created_at,
       debtId: row.finance_debt_id,
+      encryptedPayload: row.encrypted_payload,
+      encryptionVersion: row.encryption_version,
       id: row.id,
       note: row.note,
       paidAt: this.formatDateOnly(row.paid_at)
@@ -354,6 +443,8 @@ interface FinanceDebtRow {
   amount: string;
   created_at: string;
   due_date: Date | string | null;
+  encrypted_payload: string | null;
+  encryption_version: number | null;
   household_id: string;
   id: string;
   is_settled: boolean;
@@ -367,6 +458,8 @@ interface FinanceDebtRow {
 interface FinanceDebtPaymentRow {
   amount: string;
   created_at: string;
+  encrypted_payload: string | null;
+  encryption_version: number | null;
   finance_debt_id: string;
   id: string;
   note: string | null;
@@ -377,6 +470,8 @@ export interface FinanceDebtRecord {
   amount: string;
   createdAt: string;
   dueDate: string | null;
+  encryptedPayload: string | null;
+  encryptionVersion: number | null;
   householdId: string;
   id: string;
   isSettled: boolean;
@@ -394,6 +489,8 @@ export interface FinanceDebtPaymentRecord {
   amount: string;
   createdAt: string;
   debtId: string;
+  encryptedPayload: string | null;
+  encryptionVersion: number | null;
   id: string;
   note: string | null;
   paidAt: string | null;

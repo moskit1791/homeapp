@@ -2,6 +2,44 @@ import { describe, expect, it, vi } from 'vitest';
 import { ShoppingService } from './shopping.service';
 
 describe('ShoppingService', () => {
+  it('returns an AI plan without storing plaintext items when the client encrypts results', async () => {
+    const database = { query: vi.fn() };
+    const realtime = { publish: vi.fn() };
+    const shoppingAi = {
+      planImport: vi.fn().mockResolvedValue({
+        ignoredSourceFragments: [],
+        items: [
+          {
+            category: 'Nabiał',
+            name: 'Mleko',
+            orderIndex: 0,
+            quantity: '2 l',
+            sourceFragmentIds: ['fragment-1']
+          }
+        ],
+        sourceFragments: [{ id: 'fragment-1', text: 'mleko 2 l' }]
+      })
+    };
+    const service = new ShoppingService(
+      database as never,
+      realtime as never,
+      shoppingAi as never
+    );
+
+    const result = await service.importItemsWithAi('household-id', 'daily', {
+      message: 'mleko 2 l',
+      planOnly: true
+    });
+
+    expect(result).toMatchObject({
+      importedCount: 0,
+      items: [],
+      plannedItems: [{ category: 'Nabiał', name: 'Mleko', quantity: '2 l' }]
+    });
+    expect(database.query).not.toHaveBeenCalled();
+    expect(realtime.publish).not.toHaveBeenCalled();
+  });
+
   it('marks an item as checked idempotently instead of toggling it', async () => {
     const database = {
       query: vi.fn().mockResolvedValueOnce({

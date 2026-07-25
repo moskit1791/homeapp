@@ -1,4 +1,6 @@
 import {
+  BadRequestException,
+  Body,
   Controller,
   Get,
   Post,
@@ -12,14 +14,19 @@ import { CurrentHousehold } from '../../shared/decorators/current-household.deco
 import { CurrentUser } from '../../shared/decorators/current-user.decorator';
 import { HouseholdContext, UserContext } from '../../shared/request-context';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { EncryptionService } from '../encryption/encryption.service';
 import { HouseholdContextGuard } from '../households/guards/household-context.guard';
 import { RequirePermission } from '../permissions/decorators/require-permission.decorator';
 import { PermissionGuard } from '../permissions/guards/permission.guard';
 import { CalendarGoogleService } from './calendar-google.service';
+import { CommitGoogleCalendarEncryptedSyncDto } from './dto/calendar.dto';
 
 @Controller('calendar/google')
 export class CalendarGoogleController {
-  constructor(private readonly calendarGoogleService: CalendarGoogleService) {}
+  constructor(
+    private readonly calendarGoogleService: CalendarGoogleService,
+    private readonly encryptionService: EncryptionService
+  ) {}
 
   @Get('status')
   @UseGuards(JwtAuthGuard, HouseholdContextGuard, PermissionGuard)
@@ -37,12 +44,14 @@ export class CalendarGoogleController {
   @Post('connect')
   @UseGuards(JwtAuthGuard, HouseholdContextGuard, PermissionGuard)
   @RequirePermission('calendar', 'read')
-  connect(
+  async connect(
     @CurrentHousehold() household: HouseholdContext | undefined,
     @CurrentUser() user: UserContext | undefined
   ) {
+    const householdContext = this.requireHousehold(household);
+
     return this.calendarGoogleService.createAuthorizationUrl(
-      this.requireHousehold(household),
+      householdContext,
       this.requireUser(user)
     );
   }
@@ -50,11 +59,53 @@ export class CalendarGoogleController {
   @Post('sync')
   @UseGuards(JwtAuthGuard, HouseholdContextGuard, PermissionGuard)
   @RequirePermission('calendar', 'create')
-  sync(
+  async sync(
     @CurrentHousehold() household: HouseholdContext | undefined,
     @CurrentUser() user: UserContext | undefined
   ) {
-    return this.calendarGoogleService.sync(this.requireHousehold(household), this.requireUser(user));
+    const householdContext = this.requireHousehold(household);
+    const encryptionState =
+      await this.encryptionService.getModuleEncryptionState(
+        householdContext.householdId,
+        'calendar'
+      );
+
+    return this.calendarGoogleService.sync(
+      householdContext,
+      this.requireUser(user),
+      {
+        clientEncryption: encryptionState.enabled
+      }
+    );
+  }
+
+  @Post('sync/encrypted')
+  @UseGuards(JwtAuthGuard, HouseholdContextGuard, PermissionGuard)
+  @RequirePermission('calendar', 'create')
+  async commitEncryptedSync(
+    @CurrentHousehold() household: HouseholdContext | undefined,
+    @CurrentUser() user: UserContext | undefined,
+    @Body() dto: CommitGoogleCalendarEncryptedSyncDto
+  ) {
+    const householdContext = this.requireHousehold(household);
+    const encryptionState =
+      await this.encryptionService.getModuleEncryptionState(
+        householdContext.householdId,
+        'calendar'
+      );
+
+    if (!encryptionState.enabled || !encryptionState.keyVersion) {
+      throw new BadRequestException(
+        'Calendar encryption is not enabled for this household'
+      );
+    }
+
+    return this.calendarGoogleService.commitEncryptedSync(
+      householdContext,
+      this.requireUser(user),
+      dto,
+      encryptionState.keyVersion
+    );
   }
 
   @Get('callback')
@@ -64,14 +115,20 @@ export class CalendarGoogleController {
     @Query('state') state: string | undefined,
     @Res({ passthrough: true }) response: Response
   ) {
-    const result = await this.calendarGoogleService.handleOAuthCallback({ code, error, state });
+    const result = await this.calendarGoogleService.handleOAuthCallback({
+      code,
+      error,
+      state
+    });
 
     response.type('html');
 
     return renderGoogleCalendarCallbackPage(result.googleAccountEmail);
   }
 
-  private requireHousehold(household: HouseholdContext | undefined): HouseholdContext {
+  private requireHousehold(
+    household: HouseholdContext | undefined
+  ): HouseholdContext {
     if (!household) {
       throw new UnauthorizedException('Missing household context');
     }
@@ -89,7 +146,9 @@ export class CalendarGoogleController {
 }
 
 function renderGoogleCalendarCallbackPage(email: string | null) {
-  const account = email ? `<strong>${escapeHtml(email)}</strong>` : 'wybrane konto Google';
+  const account = email
+    ? `<strong>${escapeHtml(email)}</strong>`
+    : 'wybrane konto Google';
 
   return `<!doctype html>
 <html lang="pl">

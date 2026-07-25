@@ -1,4 +1,4 @@
-import { IsIn, IsOptional, IsString, IsUUID, Length, MaxLength } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, IsUUID, Length, MaxLength, Min } from 'class-validator';
 
 export const ATTACHMENT_MIME_TYPES = [
   'image/jpeg',
@@ -30,7 +30,19 @@ export class CreateAttachmentUploadUrlDto {
   mimeType!: AttachmentMimeType;
 }
 
-export class CreateAttachmentDto {
+class EncryptedAttachmentDto {
+  @IsOptional()
+  @IsString()
+  @Length(1, 50000)
+  encryptedPayload?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  encryptionVersion?: number;
+}
+
+export class CreateAttachmentDto extends EncryptedAttachmentDto {
   @IsString()
   @Length(1, 1000)
   storagePath!: string;
@@ -57,7 +69,7 @@ export class LocalAttachmentUploadDto {
   mimeType!: AttachmentMimeType;
 }
 
-export class UpdateAttachmentDto {
+export class UpdateAttachmentDto extends EncryptedAttachmentDto {
   @IsOptional()
   @IsString()
   @Length(1, 255)

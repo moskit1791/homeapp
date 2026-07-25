@@ -97,6 +97,15 @@ import {
   type PersonFinanceSummary,
   upsertIncome,
 } from "../../src/api";
+import {
+  decryptBudgetCategories,
+  decryptBudgetMonthDetail,
+  decryptFinanceDebts,
+  decryptFinanceSavings,
+  sealFinanceEnvelope,
+} from "../../src/encryption/finance-crypto";
+import { useEncryption } from "../../src/encryption/encryption-context";
+import { EncryptionUnlockCard } from "../../src/encryption/encryption-unlock-card";
 import { useModulePermission } from "../../src/permissions/use-permissions";
 import {
   loadStoredJson,
@@ -237,6 +246,7 @@ const mockupGreen = "#4F8D2C";
 
 export default function FinanseScreen() {
   const { session } = useSession();
+  const encryption = useEncryption();
   const queryClient = useQueryClient();
   const params = useLocalSearchParams<{ action?: string; intent?: string }>();
   const router = useRouter();
@@ -245,6 +255,10 @@ export default function FinanseScreen() {
   const { canCreate, canDelete, canRead, canUpdate, permissionsQuery } =
     useModulePermission("finances");
   const accessToken = session?.accessToken;
+  const financeEncryptionEnabled = encryption.isModuleEnabled("finances");
+  const financeContentReady =
+    encryption.lockState !== "loading" &&
+    (!financeEncryptionEnabled || encryption.lockState === "unlocked");
   const { control, setValue, watch } = useForm<FinanceFormValues>({
     defaultValues: {
       categoryName: "",
@@ -342,8 +356,12 @@ export default function FinanseScreen() {
   );
 
   const currentQuery = useQuery({
-    enabled: canRead && Boolean(accessToken),
-    queryFn: () => getFinanceSummary({ accessToken }),
+    enabled: canRead && Boolean(accessToken) && financeContentReady,
+    queryFn: async () =>
+      decryptBudgetMonthDetail(
+        await getFinanceSummary({ accessToken }),
+        encryption.decryptPayload,
+      ),
     queryKey: [...queryKeys.finances, "current"],
   });
   const archiveQuery = useQuery({
@@ -355,24 +373,41 @@ export default function FinanseScreen() {
     enabled:
       canRead &&
       Boolean(accessToken) &&
+      financeContentReady &&
       Boolean(selectedMonthId) &&
       selectedMonthId !== currentQuery.data?.month.id,
-    queryFn: () => getBudgetMonth(selectedMonthId ?? "", { accessToken }),
+    queryFn: async () =>
+      decryptBudgetMonthDetail(
+        await getBudgetMonth(selectedMonthId ?? "", { accessToken }),
+        encryption.decryptPayload,
+      ),
     queryKey: [...queryKeys.finances, "month", selectedMonthId],
   });
   const categoriesQuery = useQuery({
-    enabled: canRead && Boolean(accessToken),
-    queryFn: () => listBudgetCategories({ accessToken }),
+    enabled: canRead && Boolean(accessToken) && financeContentReady,
+    queryFn: async () =>
+      decryptBudgetCategories(
+        await listBudgetCategories({ accessToken }),
+        encryption.decryptPayload,
+      ),
     queryKey: [...queryKeys.finances, "categories"],
   });
   const debtsQuery = useQuery({
-    enabled: canRead && Boolean(accessToken),
-    queryFn: () => listFinanceDebts({ accessToken }),
+    enabled: canRead && Boolean(accessToken) && financeContentReady,
+    queryFn: async () =>
+      decryptFinanceDebts(
+        await listFinanceDebts({ accessToken }),
+        encryption.decryptPayload,
+      ),
     queryKey: [...queryKeys.finances, "debts"],
   });
   const savingsQuery = useQuery({
-    enabled: canRead && Boolean(accessToken),
-    queryFn: () => listFinanceSavings({ accessToken }),
+    enabled: canRead && Boolean(accessToken) && financeContentReady,
+    queryFn: async () =>
+      decryptFinanceSavings(
+        await listFinanceSavings({ accessToken }),
+        encryption.decryptPayload,
+      ),
     queryKey: [...queryKeys.finances, "savings"],
   });
   const householdMembersQuery = useQuery({
@@ -829,6 +864,31 @@ export default function FinanseScreen() {
   }, [financeFilters, financeFiltersLoaded]);
 
   useEffect(() => {
+    if (!financeFiltersLoaded) {
+      return;
+    }
+
+    setFinanceFilters((current) => {
+      const ownerIsValid =
+        !current.ownerMemberId ||
+        financeOwnerOptions.some((owner) => owner.id === current.ownerMemberId);
+      const categoryIsValid =
+        !current.categoryId ||
+        categories.some((category) => category.id === current.categoryId);
+
+      if (ownerIsValid && categoryIsValid) {
+        return current;
+      }
+
+      return {
+        ...current,
+        categoryId: categoryIsValid ? current.categoryId : "",
+        ownerMemberId: ownerIsValid ? current.ownerMemberId : "",
+      };
+    });
+  }, [categories, financeFiltersLoaded, financeOwnerOptions]);
+
+  useEffect(() => {
     let isMounted = true;
 
     loadStoredJson<BudgetViewMode>(financeViewStorageKey).then((storedView) => {
@@ -990,12 +1050,29 @@ export default function FinanseScreen() {
   const invalidateFinance = () =>
     queryClient.invalidateQueries({ queryKey: queryKeys.finances });
   const incomeMutation = useMutation({
-    mutationFn: () =>
-      upsertIncome(
+    mutationFn: async () => {
+      const amount = parseMoney(incomeAmount);
+      const envelope = financeEncryptionEnabled
+        ? await sealFinanceEnvelope(
+            "income",
+            { amount },
+            {
+              encryptPayload: encryption.encryptPayload,
+              keyVersion: encryption.settings?.keyVersion,
+            },
+          )
+        : {};
+
+      return upsertIncome(
         selectedIncomeMemberId,
-        { amount: parseMoney(incomeAmount), budgetMonthId: visibleMonth?.id },
+        {
+          amount: financeEncryptionEnabled ? 0 : amount,
+          budgetMonthId: visibleMonth?.id,
+          ...envelope,
+        },
         { accessToken },
-      ),
+      );
+    },
     onSuccess: async () => {
       setValue("incomeAmount", "");
       setFinanceModal(null);
@@ -1003,14 +1080,28 @@ export default function FinanseScreen() {
     },
   });
   const categoryMutation = useMutation({
-    mutationFn: () =>
-      createBudgetCategory(
+    mutationFn: async () => {
+      const name = categoryName.trim();
+      const envelope = financeEncryptionEnabled
+        ? await sealFinanceEnvelope(
+            "budget-category",
+            { name },
+            {
+              encryptPayload: encryption.encryptPayload,
+              keyVersion: encryption.settings?.keyVersion,
+            },
+          )
+        : {};
+
+      return createBudgetCategory(
         {
           copyBudgetToNextMonth: copyCategory,
-          name: categoryName.trim(),
+          name: financeEncryptionEnabled ? "[Zaszyfrowana kategoria]" : name,
+          ...envelope,
         },
         { accessToken },
-      ),
+      );
+    },
     onSuccess: async (category) => {
       setValue("categoryName", "");
       setSelectedItemCategoryId(category.id);
@@ -1019,15 +1110,29 @@ export default function FinanseScreen() {
     },
   });
   const updateCategoryMutation = useMutation({
-    mutationFn: () =>
-      updateBudgetCategory(
+    mutationFn: async () => {
+      const name = categoryName.trim();
+      const envelope = financeEncryptionEnabled
+        ? await sealFinanceEnvelope(
+            "budget-category",
+            { name },
+            {
+              encryptPayload: encryption.encryptPayload,
+              keyVersion: encryption.settings?.keyVersion,
+            },
+          )
+        : {};
+
+      return updateBudgetCategory(
         editingBudgetCategory?.id ?? "",
         {
           copyBudgetToNextMonth: copyCategory,
-          name: categoryName.trim(),
+          name: financeEncryptionEnabled ? "[Zaszyfrowana kategoria]" : name,
+          ...envelope,
         },
         { accessToken },
-      ),
+      );
+    },
     onSuccess: async () => {
       setEditingBudgetCategory(null);
       setValue("categoryName", "");
@@ -1050,17 +1155,32 @@ export default function FinanseScreen() {
     },
   });
   const itemMutation = useMutation({
-    mutationFn: () =>
-      createBudgetItem(
+    mutationFn: async () => {
+      const budgetAmount = itemAmount.trim() ? parseMoney(itemAmount) : null;
+      const name = itemName.trim();
+      const envelope = financeEncryptionEnabled
+        ? await sealFinanceEnvelope(
+            "budget-item",
+            { budgetAmount, name },
+            {
+              encryptPayload: encryption.encryptPayload,
+              keyVersion: encryption.settings?.keyVersion,
+            },
+          )
+        : {};
+
+      return createBudgetItem(
         {
-          budgetAmount: itemAmount.trim() ? parseMoney(itemAmount) : null,
+          budgetAmount: financeEncryptionEnabled ? null : budgetAmount,
           budgetMonthId: visibleMonth?.id ?? "",
           categoryId: selectedItemCategoryId,
-          name: itemName.trim(),
+          name: financeEncryptionEnabled ? "[Zaszyfrowana pozycja]" : name,
           ownerMemberId: selectedItemOwnerId,
+          ...envelope,
         },
         { accessToken },
-      ),
+      );
+    },
     onSuccess: async (item) => {
       setValue("itemName", "");
       setValue("itemAmount", "");
@@ -1070,17 +1190,32 @@ export default function FinanseScreen() {
     },
   });
   const updateItemMutation = useMutation({
-    mutationFn: () =>
-      updateBudgetItem(
+    mutationFn: async () => {
+      const budgetAmount = itemAmount.trim() ? parseMoney(itemAmount) : null;
+      const name = itemName.trim();
+      const envelope = financeEncryptionEnabled
+        ? await sealFinanceEnvelope(
+            "budget-item",
+            { budgetAmount, name },
+            {
+              encryptPayload: encryption.encryptPayload,
+              keyVersion: encryption.settings?.keyVersion,
+            },
+          )
+        : {};
+
+      return updateBudgetItem(
         editingBudgetItem?.id ?? "",
         {
-          budgetAmount: itemAmount.trim() ? parseMoney(itemAmount) : null,
+          budgetAmount: financeEncryptionEnabled ? null : budgetAmount,
           categoryId: selectedItemCategoryId,
-          name: itemName.trim(),
+          name: financeEncryptionEnabled ? "[Zaszyfrowana pozycja]" : name,
           ownerMemberId: selectedItemOwnerId,
+          ...envelope,
         },
         { accessToken },
-      ),
+      );
+    },
     onSuccess: async (item) => {
       setValue("itemName", "");
       setValue("itemAmount", "");
@@ -1102,13 +1237,30 @@ export default function FinanseScreen() {
     },
   });
   const saveDebtMutation = useMutation({
-    mutationFn: () => {
-      const input = {
+    mutationFn: async () => {
+      const privateFields = {
         amount: parseMoney(debtAmount),
-        dueDate: debtDueDate.trim() ? debtDueDate.trim() : null,
         lenderName: debtLenderName.trim(),
         note: debtNote.trim() || null,
         purpose: debtPurpose.trim(),
+      };
+      const envelope = financeEncryptionEnabled
+        ? await sealFinanceEnvelope("finance-debt", privateFields, {
+            encryptPayload: encryption.encryptPayload,
+            keyVersion: encryption.settings?.keyVersion,
+          })
+        : {};
+      const input = {
+        amount: financeEncryptionEnabled ? 0.01 : privateFields.amount,
+        dueDate: debtDueDate.trim() ? debtDueDate.trim() : null,
+        lenderName: financeEncryptionEnabled
+          ? "[Zaszyfrowany pożyczkodawca]"
+          : privateFields.lenderName,
+        note: financeEncryptionEnabled ? null : privateFields.note,
+        purpose: financeEncryptionEnabled
+          ? "[Zaszyfrowany cel]"
+          : privateFields.purpose,
+        ...envelope,
       };
 
       return editingDebt
@@ -1134,38 +1286,85 @@ export default function FinanseScreen() {
     },
   });
   const debtPaymentMutation = useMutation({
-    mutationFn: () =>
-      createFinanceDebtPayment(
+    mutationFn: async () => {
+      const amount = parseMoney(debtPaymentAmount);
+      const note = debtPaymentNote.trim() || null;
+      const envelope = financeEncryptionEnabled
+        ? await sealFinanceEnvelope(
+            "finance-debt-payment",
+            { amount, note },
+            {
+              encryptPayload: encryption.encryptPayload,
+              keyVersion: encryption.settings?.keyVersion,
+            },
+          )
+        : {};
+
+      return createFinanceDebtPayment(
         editingDebt?.id ?? "",
         {
-          amount: parseMoney(debtPaymentAmount),
-          note: debtPaymentNote.trim() || null,
+          amount: financeEncryptionEnabled ? 0.01 : amount,
+          note: financeEncryptionEnabled ? null : note,
           paidAt: todayIso(),
+          ...envelope,
         },
         { accessToken },
-      ),
+      );
+    },
     onSuccess: async (debt) => {
-      setEditingDebt(debt);
-      setDebtIsSettled(debt.isSettled);
+      const decryptedDebt = financeEncryptionEnabled
+        ? (decryptFinanceDebts([debt], encryption.decryptPayload)[0] ?? debt)
+        : debt;
+      setEditingDebt(decryptedDebt);
+      setDebtIsSettled(decryptedDebt.isSettled);
       setValue("debtPaymentAmount", "");
       setValue("debtPaymentNote", "");
       await invalidateFinance();
     },
   });
   const savingsAccountMutation = useMutation({
-    mutationFn: () =>
-      createFinanceSavingsAccount(
+    mutationFn: async () => {
+      const amount = parseMoney(savingsAmount);
+      const name = savingsName.trim();
+      const note = savingsNote.trim() || null;
+      const targetAmount = parseMoney(savingsTargetAmount);
+      const accountEnvelope = financeEncryptionEnabled
+        ? await sealFinanceEnvelope(
+            "finance-savings-account",
+            { currentAmount: amount, name, targetAmount },
+            {
+              encryptPayload: encryption.encryptPayload,
+              keyVersion: encryption.settings?.keyVersion,
+            },
+          )
+        : {};
+      const transactionEnvelope =
+        financeEncryptionEnabled && amount > 0
+          ? await sealFinanceEnvelope(
+              "finance-savings-transaction",
+              { amount, note },
+              {
+                encryptPayload: encryption.encryptPayload,
+                keyVersion: encryption.settings?.keyVersion,
+              },
+            )
+          : null;
+
+      return createFinanceSavingsAccount(
         {
-          amount: parseMoney(savingsAmount),
+          amount: financeEncryptionEnabled ? (amount > 0 ? 0.01 : 0) : amount,
           changedAt: todayIso(),
           ownerMemberId: selectedSavingsOwnerId || null,
-          name: savingsName.trim(),
-          note: savingsNote.trim() || null,
-          targetAmount: parseMoney(savingsTargetAmount),
+          name: financeEncryptionEnabled ? "[Zaszyfrowany cel]" : name,
+          note: financeEncryptionEnabled ? null : note,
+          targetAmount: financeEncryptionEnabled ? null : targetAmount,
           targetDate: savingsTargetDate.trim() || null,
+          transactionEncryptedPayload: transactionEnvelope?.encryptedPayload,
+          ...accountEnvelope,
         },
         { accessToken },
-      ),
+      );
+    },
     onSuccess: async () => {
       resetSavingsAccountForm();
       setSelectedSavingsOwnerId(householdMembers[0]?.id ?? "");
@@ -1174,17 +1373,32 @@ export default function FinanseScreen() {
     },
   });
   const savingsTransactionMutation = useMutation({
-    mutationFn: () =>
-      createFinanceSavingsTransaction(
+    mutationFn: async () => {
+      const amount = parseMoney(savingsTransactionAmount);
+      const note = savingsTransactionNote.trim() || null;
+      const envelope = financeEncryptionEnabled
+        ? await sealFinanceEnvelope(
+            "finance-savings-transaction",
+            { amount, note },
+            {
+              encryptPayload: encryption.encryptPayload,
+              keyVersion: encryption.settings?.keyVersion,
+            },
+          )
+        : {};
+
+      return createFinanceSavingsTransaction(
         selectedSavingsAccount?.id ?? "",
         {
-          amount: parseMoney(savingsTransactionAmount),
+          amount: financeEncryptionEnabled ? 0.01 : amount,
           changedAt: todayIso(),
           direction: savingsDirection,
-          note: savingsTransactionNote.trim() || null,
+          note: financeEncryptionEnabled ? null : note,
+          ...envelope,
         },
         { accessToken },
-      ),
+      );
+    },
     onSuccess: async () => {
       resetSavingsTransactionForm();
       setFinanceModal(null);
@@ -1213,13 +1427,26 @@ export default function FinanseScreen() {
         selectedExpenseCategory &&
         visibleMonth?.id
       ) {
+        const quickItemEnvelope = financeEncryptionEnabled
+          ? await sealFinanceEnvelope(
+              "budget-item",
+              { budgetAmount: null, name: selectedExpenseCategory.name },
+              {
+                encryptPayload: encryption.encryptPayload,
+                keyVersion: encryption.settings?.keyVersion,
+              },
+            )
+          : {};
         const createdItem = await createBudgetItem(
           {
             budgetAmount: null,
             budgetMonthId: visibleMonth.id,
             categoryId: selectedExpenseCategory.id,
-            name: selectedExpenseCategory.name,
+            name: financeEncryptionEnabled
+              ? "[Zaszyfrowana pozycja]"
+              : selectedExpenseCategory.name,
             ownerMemberId: selectedExpenseOwnerId,
+            ...quickItemEnvelope,
           },
           { accessToken },
         );
@@ -1231,10 +1458,23 @@ export default function FinanseScreen() {
         throw new Error("Missing budget item");
       }
 
+      const amount = parseMoney(expenseAmount);
+      const envelope = financeEncryptionEnabled
+        ? await sealFinanceEnvelope(
+            "expense",
+            { amount },
+            {
+              encryptPayload: encryption.encryptPayload,
+              keyVersion: encryption.settings?.keyVersion,
+            },
+          )
+        : {};
+
       return createExpense(
         {
-          amount: parseMoney(expenseAmount),
+          amount: financeEncryptionEnabled ? 0.01 : amount,
           budgetItemId,
+          ...envelope,
         },
         { accessToken },
       );
@@ -1251,24 +1491,41 @@ export default function FinanseScreen() {
     },
   });
   const nextMonthMutation = useMutation({
-    mutationFn: () =>
-      generateNextBudgetMonth(
+    mutationFn: async () => {
+      const items = await Promise.all(
+        selectedGenerateItems.map(async (item) => {
+          const amountInput = generateAmountInputs[item.id]?.trim() ?? "";
+          const budgetAmount = amountInput ? parseMoney(amountInput) : null;
+          const envelope = financeEncryptionEnabled
+            ? await sealFinanceEnvelope(
+                "budget-item",
+                { budgetAmount, name: item.name },
+                {
+                  encryptPayload: encryption.encryptPayload,
+                  keyVersion: encryption.settings?.keyVersion,
+                },
+              )
+            : {};
+
+          return {
+            budgetAmount: financeEncryptionEnabled ? null : budgetAmount,
+            budgetItemId: item.id,
+            ...envelope,
+          };
+        }),
+      );
+
+      return generateNextBudgetMonth(
         {
           categories: generateCategoryOrder.map((categoryId, displayOrder) => ({
             categoryId,
             displayOrder,
           })),
-          items: selectedGenerateItems.map((item) => {
-            const amountInput = generateAmountInputs[item.id]?.trim() ?? "";
-
-            return {
-              budgetAmount: amountInput ? parseMoney(amountInput) : null,
-              budgetItemId: item.id,
-            };
-          }),
+          items,
         },
         { accessToken },
-      ),
+      );
+    },
     onSuccess: async (nextMonth) => {
       setSelectedMonthId(nextMonth.month.id);
       setGenerateCopyItemIds([]);
@@ -1450,8 +1707,7 @@ export default function FinanseScreen() {
   }
 
   function openIncomeModal() {
-    const memberId =
-      selectedIncomeMemberId || incomes[0]?.ownerMemberId || "";
+    const memberId = selectedIncomeMemberId || incomes[0]?.ownerMemberId || "";
 
     if (memberId) {
       selectIncomeMember(memberId);
@@ -1553,6 +1809,22 @@ export default function FinanseScreen() {
     return (
       <AppScreen title="Finanse">
         <InlineAlert tone="error" text="Nie masz uprawnienia do finansów." />
+      </AppScreen>
+    );
+  }
+
+  if (encryption.lockState === "loading") {
+    return (
+      <AppScreen title="Finanse">
+        <QueryState isLoading />
+      </AppScreen>
+    );
+  }
+
+  if (financeEncryptionEnabled && encryption.lockState === "locked") {
+    return (
+      <AppScreen title="Finanse">
+        <EncryptionUnlockCard modules={["finances"]} />
       </AppScreen>
     );
   }
@@ -2000,7 +2272,10 @@ export default function FinanseScreen() {
                     }
                     renderItem={({ drag, isActive, item: category }) => {
                       const categoryItems = getCategoryItems(category).map(
-                        (item) => ({ ...item, category }),
+                        (item) => ({
+                          ...item,
+                          category,
+                        }),
                       );
                       const selectedCount = categoryItems.filter((item) =>
                         generateSelectedItemSet.has(item.id),
@@ -3472,10 +3747,7 @@ function SavingsGoalGroupCard({
         <View
           style={[
             styles.savingsGroupAvatar,
-            {
-              backgroundColor: accent.background,
-              borderColor: accent.border,
-            },
+            { backgroundColor: accent.background, borderColor: accent.border },
           ]}
         >
           <Text
@@ -4140,9 +4412,7 @@ function FinanceFiltersPanel({
                 filters.showEmptyCategories ? "Puste widoczne" : "Puste ukryte"
               }
               onPress={() =>
-                onChange({
-                  showEmptyCategories: !filters.showEmptyCategories,
-                })
+                onChange({ showEmptyCategories: !filters.showEmptyCategories })
               }
             />
           </View>
@@ -5415,12 +5685,8 @@ function createStyles(colors: AppPalette) {
   const panelShadowOpacity = isDark ? 0.18 : 0.065;
 
   return StyleSheet.create({
-    actionPicker: {
-      gap: spacing.sm,
-    },
-    financeMenu: {
-      gap: spacing.lg,
-    },
+    actionPicker: { gap: spacing.sm },
+    financeMenu: { gap: spacing.lg },
     financeMenuHeading: {
       color: colors.textMuted,
       fontSize: 11,
@@ -5428,9 +5694,7 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
       textTransform: "uppercase",
     },
-    financeMenuSection: {
-      gap: spacing.sm,
-    },
+    financeMenuSection: { gap: spacing.sm },
     actionCell: {
       alignItems: "center",
       borderColor: colors.line,
@@ -5441,10 +5705,7 @@ function createStyles(colors: AppPalette) {
       minHeight: 38,
       width: 78,
     },
-    sheetActionButton: {
-      height: 32,
-      width: 32,
-    },
+    sheetActionButton: { height: 32, width: 32 },
     actionHeaderCell: {
       backgroundColor: colors.cardMuted,
       borderColor: colors.line,
@@ -5458,11 +5719,7 @@ function createStyles(colors: AppPalette) {
       textAlign: "center",
       width: 78,
     },
-    actionSumCell: {
-      borderColor: colors.line,
-      borderLeftWidth: 1,
-      width: 78,
-    },
+    actionSumCell: { borderColor: colors.line, borderLeftWidth: 1, width: 78 },
     amountCell: {
       borderColor: colors.line,
       borderLeftWidth: 1,
@@ -5508,14 +5765,8 @@ function createStyles(colors: AppPalette) {
       paddingHorizontal: spacing.sm,
       paddingVertical: 7,
     },
-    categoryCell: {
-      width: 92,
-    },
-    budgetAccordionAmounts: {
-      alignItems: "flex-end",
-      gap: 1,
-      minWidth: 88,
-    },
+    categoryCell: { width: 92 },
+    budgetAccordionAmounts: { alignItems: "flex-end", gap: 1, minWidth: 88 },
     budgetAccordionBody: {
       backgroundColor: colors.card,
       paddingBottom: spacing.sm,
@@ -5554,10 +5805,7 @@ function createStyles(colors: AppPalette) {
       justifyContent: "center",
       width: 34,
     },
-    budgetCategoryMenuButton: {
-      height: 32,
-      width: 32,
-    },
+    budgetCategoryMenuButton: { height: 32, width: 32 },
     budgetAccordionMeta: {
       color: colors.textMuted,
       fontSize: 9,
@@ -5582,11 +5830,7 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
       textAlign: "right",
     },
-    budgetAccordionText: {
-      flex: 1,
-      gap: 5,
-      minWidth: 0,
-    },
+    budgetAccordionText: { flex: 1, gap: 5, minWidth: 0 },
     budgetAccordionTitle: {
       color: colors.text,
       flex: 1,
@@ -5595,9 +5839,7 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
       minWidth: 0,
     },
-    budgetAccordionTitleRow: {
-      gap: 1,
-    },
+    budgetAccordionTitleRow: { gap: 1 },
     budgetAddItemRow: {
       alignItems: "center",
       borderColor: colors.line,
@@ -5627,20 +5869,9 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
       textAlign: "right",
     },
-    budgetItemAmounts: {
-      alignItems: "flex-end",
-      gap: 2,
-      minWidth: 72,
-    },
-    budgetItemIconButton: {
-      height: 34,
-      width: 34,
-    },
-    budgetItemMeta: {
-      color: colors.textMuted,
-      fontSize: 9,
-      letterSpacing: 0,
-    },
+    budgetItemAmounts: { alignItems: "flex-end", gap: 2, minWidth: 72 },
+    budgetItemIconButton: { height: 34, width: 34 },
+    budgetItemMeta: { color: colors.textMuted, fontSize: 9, letterSpacing: 0 },
     budgetItemRemaining: {
       fontSize: 10,
       fontWeight: "700",
@@ -5658,11 +5889,7 @@ function createStyles(colors: AppPalette) {
       paddingHorizontal: spacing.md,
       paddingVertical: 5,
     },
-    budgetItemText: {
-      flex: 1,
-      gap: 2,
-      minWidth: 0,
-    },
+    budgetItemText: { flex: 1, gap: 2, minWidth: 0 },
     budgetItemTitle: {
       color: colors.text,
       fontSize: 11,
@@ -5686,10 +5913,7 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
       lineHeight: 20,
     },
-    budgetProgressFill: {
-      borderRadius: 999,
-      height: "100%",
-    },
+    budgetProgressFill: { borderRadius: 999, height: "100%" },
     budgetProgressTrack: {
       backgroundColor: colors.cardMuted,
       borderRadius: 999,
@@ -5705,13 +5929,8 @@ function createStyles(colors: AppPalette) {
       minWidth: 650,
       overflow: "hidden",
     },
-    budgetTableSingleOwner: {
-      minWidth: 505,
-    },
-    budgetTableCategoryAction: {
-      height: 30,
-      width: 30,
-    },
+    budgetTableSingleOwner: { minWidth: 505 },
+    budgetTableCategoryAction: { height: 30, width: 30 },
     budgetTableCategoryRow: {
       alignItems: "center",
       backgroundColor: colors.cardMuted,
@@ -5755,10 +5974,7 @@ function createStyles(colors: AppPalette) {
       paddingVertical: 10,
       textTransform: "uppercase",
     },
-    budgetTableMoneyCell: {
-      textAlign: "right",
-      width: 108,
-    },
+    budgetTableMoneyCell: { textAlign: "right", width: 108 },
     budgetTableMutedText: {
       color: colors.textMuted,
       fontSize: 11,
@@ -5766,12 +5982,8 @@ function createStyles(colors: AppPalette) {
       paddingHorizontal: spacing.sm,
       paddingVertical: 10,
     },
-    budgetTableNameCell: {
-      width: 170,
-    },
-    budgetTableOwnerCell: {
-      width: 145,
-    },
+    budgetTableNameCell: { width: 170 },
+    budgetTableOwnerCell: { width: 145 },
     budgetTableRow: {
       backgroundColor: colors.card,
       borderColor: colors.line,
@@ -5787,14 +5999,8 @@ function createStyles(colors: AppPalette) {
       paddingHorizontal: spacing.sm,
       paddingVertical: 10,
     },
-    budgetViewButton: {
-      borderRadius: 7,
-      height: 34,
-      width: 38,
-    },
-    budgetViewButtonActive: {
-      backgroundColor: colors.softGreen,
-    },
+    budgetViewButton: { borderRadius: 7, height: 34, width: 38 },
+    budgetViewButtonActive: { backgroundColor: colors.softGreen },
     budgetViewLabel: {
       color: colors.textMuted,
       fontSize: 11,
@@ -5833,10 +6039,7 @@ function createStyles(colors: AppPalette) {
       shadowRadius: 14,
       width: "100%",
     },
-    categoryCardActive: {
-      borderWidth: 2,
-      shadowOpacity: 0.18,
-    },
+    categoryCardActive: { borderWidth: 2, shadowOpacity: 0.18 },
     categoryCardAddButton: {
       backgroundColor: colors.primary,
       height: 34,
@@ -5858,14 +6061,8 @@ function createStyles(colors: AppPalette) {
       maxWidth: 82,
       textAlign: "right",
     },
-    categoryCardContent: {
-      flex: 1,
-      gap: 7,
-      minWidth: 0,
-    },
-    categoryCardGrid: {
-      gap: spacing.sm,
-    },
+    categoryCardContent: { flex: 1, gap: 7, minWidth: 0 },
+    categoryCardGrid: { gap: spacing.sm },
     categoryCardIcon: {
       alignItems: "center",
       backgroundColor: "#151A27",
@@ -5892,9 +6089,7 @@ function createStyles(colors: AppPalette) {
       gap: 1,
       minWidth: 70,
     },
-    categoryCardsSection: {
-      gap: spacing.sm,
-    },
+    categoryCardsSection: { gap: spacing.sm },
     categoryCardTitle: {
       color: colors.text,
       flex: 1,
@@ -5909,11 +6104,7 @@ function createStyles(colors: AppPalette) {
       flexDirection: "row",
       gap: spacing.sm,
     },
-    categoryColorBar: {
-      borderRadius: 999,
-      height: 30,
-      width: 4,
-    },
+    categoryColorBar: { borderRadius: 999, height: 30, width: 4 },
     categoryDetails: {
       backgroundColor: colors.card,
       borderColor: colors.border,
@@ -5934,14 +6125,8 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
       textAlign: "right",
     },
-    categoryDetailsAmounts: {
-      alignItems: "flex-end",
-      gap: 2,
-      minWidth: 92,
-    },
-    categoryDetailsHeader: {
-      gap: 2,
-    },
+    categoryDetailsAmounts: { alignItems: "flex-end", gap: 2, minWidth: 92 },
+    categoryDetailsHeader: { gap: 2 },
     categoryDetailsHeaderTop: {
       alignItems: "center",
       flexDirection: "row",
@@ -5988,29 +6173,16 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
       textAlign: "right",
     },
-    categoryDetailsText: {
-      flex: 1,
-      gap: 2,
-      minWidth: 0,
-    },
-    categoryDetailsTitleBlock: {
-      flex: 1,
-      gap: 2,
-      minWidth: 0,
-    },
+    categoryDetailsText: { flex: 1, gap: 2, minWidth: 0 },
+    categoryDetailsTitleBlock: { flex: 1, gap: 2, minWidth: 0 },
     categoryDetailsTitle: {
       color: colors.text,
       fontSize: 15,
       fontWeight: "900",
       letterSpacing: 0,
     },
-    pressedRow: {
-      opacity: 0.82,
-    },
-    categoryProgressFill: {
-      borderRadius: 999,
-      height: "100%",
-    },
+    pressedRow: { opacity: 0.82 },
+    categoryProgressFill: { borderRadius: 999, height: "100%" },
     categoryProgressTrack: {
       backgroundColor: colors.cardMuted,
       borderRadius: 999,
@@ -6057,11 +6229,7 @@ function createStyles(colors: AppPalette) {
       fontWeight: "900",
       letterSpacing: 0,
     },
-    categoryRowTitleBlock: {
-      flex: 1,
-      gap: 1,
-      minWidth: 0,
-    },
+    categoryRowTitleBlock: { flex: 1, gap: 1, minWidth: 0 },
     categoryToggleCell: {
       alignItems: "center",
       borderColor: colors.line,
@@ -6078,14 +6246,8 @@ function createStyles(colors: AppPalette) {
       justifyContent: "center",
       width: 32,
     },
-    chipRow: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: spacing.sm,
-    },
-    selectorGroup: {
-      gap: spacing.xs,
-    },
+    chipRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+    selectorGroup: { gap: spacing.xs },
     selectorLabel: {
       color: colors.textMuted,
       fontSize: 11,
@@ -6093,17 +6255,12 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
       textTransform: "uppercase",
     },
-    dangerText: {
-      color: colors.danger,
-    },
+    dangerText: { color: colors.danger },
     completedBudgetText: {
       color: colors.textMuted,
       textDecorationLine: "line-through",
     },
-    completedBudgetRow: {
-      backgroundColor: colors.cardMuted,
-      opacity: 0.62,
-    },
+    completedBudgetRow: { backgroundColor: colors.cardMuted, opacity: 0.62 },
     deleteWarning: {
       alignItems: "flex-start",
       backgroundColor: colors.warningSoft,
@@ -6134,11 +6291,7 @@ function createStyles(colors: AppPalette) {
       gap: spacing.xs,
       justifyContent: "flex-end",
     },
-    debtCardText: {
-      flex: 1,
-      gap: 3,
-      minWidth: 0,
-    },
+    debtCardText: { flex: 1, gap: 3, minWidth: 0 },
     debtEditorIcon: {
       alignItems: "center",
       backgroundColor: colors.softGreen,
@@ -6173,29 +6326,16 @@ function createStyles(colors: AppPalette) {
       fontWeight: "800",
       letterSpacing: 0,
     },
-    debtEditorPreviewText: {
-      flex: 1,
-      gap: 2,
-      minWidth: 0,
-    },
+    debtEditorPreviewText: { flex: 1, gap: 2, minWidth: 0 },
     debtEditorPreviewTitle: {
       color: colors.text,
       fontSize: 13,
       fontWeight: "900",
       letterSpacing: 0,
     },
-    debtFormGrid: {
-      flexDirection: "row",
-      gap: spacing.sm,
-    },
-    debtFormField: {
-      flex: 1,
-      minWidth: 0,
-    },
-    debtFormInput: {
-      fontSize: 13,
-      minHeight: 40,
-    },
+    debtFormGrid: { flexDirection: "row", gap: spacing.sm },
+    debtFormField: { flex: 1, minWidth: 0 },
+    debtFormInput: { fontSize: 13, minHeight: 40 },
     debtGroupAmount: {
       color: colors.finance,
       fontSize: 15,
@@ -6257,28 +6397,16 @@ function createStyles(colors: AppPalette) {
       paddingHorizontal: 10,
       paddingVertical: 7,
     },
-    debtGroupList: {
-      gap: spacing.sm,
-    },
-    debtList: {
-      gap: spacing.sm,
-    },
-    debtMeta: {
-      color: colors.textMuted,
-      fontSize: 12,
-      letterSpacing: 0,
-    },
+    debtGroupList: { gap: spacing.sm },
+    debtList: { gap: spacing.sm },
+    debtMeta: { color: colors.textMuted, fontSize: 12, letterSpacing: 0 },
     debtGroupMeta: {
       color: colors.textMuted,
       display: "none",
       fontSize: 9,
       letterSpacing: 0,
     },
-    debtGroupText: {
-      flex: 1,
-      gap: 1,
-      minWidth: 0,
-    },
+    debtGroupText: { flex: 1, gap: 1, minWidth: 0 },
     debtGroupTitle: {
       color: colors.text,
       flex: 1,
@@ -6298,13 +6426,8 @@ function createStyles(colors: AppPalette) {
       flexDirection: "row",
       gap: spacing.sm,
     },
-    debtModalFooter: {
-      flexDirection: "row",
-      gap: spacing.sm,
-    },
-    debtPaymentHistory: {
-      gap: spacing.xs,
-    },
+    debtModalFooter: { flexDirection: "row", gap: spacing.sm },
+    debtPaymentHistory: { gap: spacing.xs },
     debtPaymentPanel: {
       backgroundColor: colors.card,
       borderColor: colors.line,
@@ -6334,21 +6457,14 @@ function createStyles(colors: AppPalette) {
       fontSize: 11,
       letterSpacing: 0,
     },
-    debtPaymentRowText: {
-      flex: 1,
-      gap: 2,
-      minWidth: 0,
-    },
+    debtPaymentRowText: { flex: 1, gap: 2, minWidth: 0 },
     debtPaymentRowTitle: {
       color: colors.text,
       fontSize: 12,
       fontWeight: "800",
       letterSpacing: 0,
     },
-    debtPaymentSummary: {
-      flexDirection: "row",
-      gap: spacing.xs,
-    },
+    debtPaymentSummary: { flexDirection: "row", gap: spacing.xs },
     debtPaymentSummaryItem: {
       backgroundColor: colors.cardMuted,
       borderColor: colors.line,
@@ -6430,21 +6546,13 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
       textTransform: "uppercase",
     },
-    debtOverviewMain: {
-      flex: 1,
-      gap: 2,
-      minWidth: 0,
-    },
+    debtOverviewMain: { flex: 1, gap: 2, minWidth: 0 },
     debtOverviewMeta: {
       color: colors.textMuted,
       fontSize: 9,
       letterSpacing: 0,
     },
-    debtOverviewStat: {
-      alignItems: "center",
-      flex: 1,
-      gap: 2,
-    },
+    debtOverviewStat: { alignItems: "center", flex: 1, gap: 2 },
     debtOverviewStatLabel: {
       color: colors.textMuted,
       fontSize: 9,
@@ -6491,32 +6599,12 @@ function createStyles(colors: AppPalette) {
       justifyContent: "center",
       width: 36,
     },
-    debtRowMeta: {
-      color: colors.textMuted,
-      fontSize: 10,
-      letterSpacing: 0,
-    },
-    debtRowSettled: {
-      opacity: 0.62,
-    },
-    debtRows: {
-      backgroundColor: colors.card,
-    },
-    debtRowSide: {
-      alignItems: "flex-end",
-      gap: 2,
-      minWidth: 68,
-    },
-    debtSide: {
-      alignItems: "flex-end",
-      gap: spacing.sm,
-      minWidth: 104,
-    },
-    debtRowText: {
-      flex: 1,
-      gap: 1,
-      minWidth: 0,
-    },
+    debtRowMeta: { color: colors.textMuted, fontSize: 10, letterSpacing: 0 },
+    debtRowSettled: { opacity: 0.62 },
+    debtRows: { backgroundColor: colors.card },
+    debtRowSide: { alignItems: "flex-end", gap: 2, minWidth: 68 },
+    debtSide: { alignItems: "flex-end", gap: spacing.sm, minWidth: 104 },
+    debtRowText: { flex: 1, gap: 1, minWidth: 0 },
     debtRowTitle: {
       color: colors.text,
       fontSize: 12,
@@ -6538,17 +6626,9 @@ function createStyles(colors: AppPalette) {
       height: 6,
       width: 6,
     },
-    debtStatusDotDone: {
-      backgroundColor: colors.finance,
-    },
-    debtStatusGroup: {
-      gap: spacing.xs,
-    },
-    debtStatusLine: {
-      alignItems: "center",
-      flexDirection: "row",
-      gap: 5,
-    },
+    debtStatusDotDone: { backgroundColor: colors.finance },
+    debtStatusGroup: { gap: spacing.xs },
+    debtStatusLine: { alignItems: "center", flexDirection: "row", gap: 5 },
     debtStatusText: {
       color: colors.textMuted,
       fontSize: 9,
@@ -6647,10 +6727,7 @@ function createStyles(colors: AppPalette) {
       gap: spacing.sm,
       justifyContent: "space-between",
     },
-    expenseHistoryActions: {
-      gap: spacing.sm,
-      paddingTop: spacing.sm,
-    },
+    expenseHistoryActions: { gap: spacing.sm, paddingTop: spacing.sm },
     expenseHistoryAmount: {
       color: colors.primaryDark,
       fontSize: 14,
@@ -6658,9 +6735,7 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
       textAlign: "right",
     },
-    expenseHistoryList: {
-      gap: spacing.xs,
-    },
+    expenseHistoryList: { gap: spacing.xs },
     expenseHistoryMeta: {
       color: colors.textMuted,
       fontSize: 12,
@@ -6688,21 +6763,14 @@ function createStyles(colors: AppPalette) {
       justifyContent: "space-between",
       padding: spacing.md,
     },
-    expenseHistorySummarySide: {
-      alignItems: "flex-end",
-      gap: 2,
-    },
+    expenseHistorySummarySide: { alignItems: "flex-end", gap: 2 },
     expenseHistorySummaryValue: {
       color: colors.text,
       fontSize: 20,
       fontWeight: "900",
       letterSpacing: 0,
     },
-    expenseHistoryText: {
-      flex: 1,
-      gap: 2,
-      minWidth: 0,
-    },
+    expenseHistoryText: { flex: 1, gap: 2, minWidth: 0 },
     expenseHistoryTitle: {
       color: colors.text,
       fontSize: 13,
@@ -6748,18 +6816,9 @@ function createStyles(colors: AppPalette) {
       minWidth: 0,
       paddingVertical: 0,
     },
-    financeSearchCloseButton: {
-      height: 36,
-      width: 36,
-    },
-    financeMenuGrid: {
-      gap: spacing.sm,
-    },
-    financeScreenContent: {
-      gap: 12,
-      paddingBottom: 128,
-      paddingTop: 2,
-    },
+    financeSearchCloseButton: { height: 36, width: 36 },
+    financeMenuGrid: { gap: spacing.sm },
+    financeScreenContent: { gap: 12, paddingBottom: 128, paddingTop: 2 },
     savingsDetailsCard: {
       backgroundColor: colors.cardMuted,
       borderColor: colors.line,
@@ -6768,14 +6827,8 @@ function createStyles(colors: AppPalette) {
       gap: spacing.sm,
       padding: spacing.md,
     },
-    savingsDetailsImage: {
-      height: 64,
-      width: 64,
-    },
-    savingsDetailsImageFrame: {
-      height: 72,
-      width: 72,
-    },
+    savingsDetailsImage: { height: 64, width: 64 },
+    savingsDetailsImageFrame: { height: 72, width: 72 },
     savingsDetailsHeader: {
       alignItems: "center",
       flexDirection: "row",
@@ -6792,15 +6845,8 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
       lineHeight: 17,
     },
-    savingsTransactionList: {
-      gap: spacing.xs,
-      marginTop: spacing.xs,
-    },
-    savingsDetailsText: {
-      flex: 1,
-      gap: 2,
-      minWidth: 0,
-    },
+    savingsTransactionList: { gap: spacing.xs, marginTop: spacing.xs },
+    savingsDetailsText: { flex: 1, gap: 2, minWidth: 0 },
     savingsDetailsTitle: {
       color: colors.finance,
       fontSize: 24,
@@ -6814,10 +6860,7 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
       textAlign: "right",
     },
-    savingsGroupAmountBlock: {
-      alignItems: "flex-end",
-      minWidth: 72,
-    },
+    savingsGroupAmountBlock: { alignItems: "flex-end", minWidth: 72 },
     savingsGroupAvatar: {
       alignItems: "center",
       borderRadius: 999,
@@ -6869,19 +6912,13 @@ function createStyles(colors: AppPalette) {
       gap: 7,
       padding: spacing.sm,
     },
-    savingsGroupList: {
-      gap: spacing.sm,
-    },
+    savingsGroupList: { gap: spacing.sm },
     savingsGroupMeta: {
       color: colors.textMuted,
       fontSize: 11,
       letterSpacing: 0,
     },
-    savingsGroupText: {
-      flex: 1,
-      gap: 2,
-      minWidth: 0,
-    },
+    savingsGroupText: { flex: 1, gap: 2, minWidth: 0 },
     savingsGroupTitle: {
       color: colors.text,
       flex: 1,
@@ -6908,49 +6945,26 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
       textAlign: "right",
     },
-    savingsGoalAmountBlock: {
-      alignItems: "flex-end",
-      gap: 2,
-      minWidth: 78,
-    },
-    savingsGoalImage: {
-      height: 48,
-      width: 48,
-    },
+    savingsGoalAmountBlock: { alignItems: "flex-end", gap: 2, minWidth: 78 },
+    savingsGoalImage: { height: 48, width: 48 },
     savingsGoalImageFrame: {
       alignItems: "center",
       height: 52,
       justifyContent: "center",
       width: 52,
     },
-    savingsGoalList: {
-      gap: 0,
-      paddingBottom: spacing.sm,
-    },
-    savingsGoalMeta: {
-      color: colors.textMuted,
-      fontSize: 9,
-      letterSpacing: 0,
-    },
-    savingsGoalProgressFill: {
-      borderRadius: 999,
-      height: "100%",
-    },
+    savingsGoalList: { gap: 0, paddingBottom: spacing.sm },
+    savingsGoalMeta: { color: colors.textMuted, fontSize: 9, letterSpacing: 0 },
+    savingsGoalProgressFill: { borderRadius: 999, height: "100%" },
     savingsGoalProgressLabel: {
       fontSize: 9,
       fontWeight: "800",
       letterSpacing: 0,
       textAlign: "right",
     },
-    savingsGoalProgressLabelNormal: {
-      color: colors.finance,
-    },
-    savingsGoalProgressLabelSuccess: {
-      color: colors.finance,
-    },
-    savingsGoalProgressLabelWarning: {
-      color: colors.warning,
-    },
+    savingsGoalProgressLabelNormal: { color: colors.finance },
+    savingsGoalProgressLabelSuccess: { color: colors.finance },
+    savingsGoalProgressLabelWarning: { color: colors.warning },
     savingsGoalProgressTrack: {
       backgroundColor: colors.cardMuted,
       borderRadius: 999,
@@ -6968,11 +6982,7 @@ function createStyles(colors: AppPalette) {
       paddingHorizontal: spacing.sm,
       paddingVertical: 9,
     },
-    savingsGoalText: {
-      flex: 1,
-      gap: 2,
-      minWidth: 0,
-    },
+    savingsGoalText: { flex: 1, gap: 2, minWidth: 0 },
     savingsGoalTitle: {
       color: colors.text,
       fontSize: 11,
@@ -6994,9 +7004,7 @@ function createStyles(colors: AppPalette) {
       borderColor: colors.finance,
       minWidth: 106,
     },
-    savingsNextGoalButtonLabel: {
-      color: colors.finance,
-    },
+    savingsNextGoalButtonLabel: { color: colors.finance },
     savingsNextGoalIconWrap: {
       alignItems: "center",
       backgroundColor: colors.card,
@@ -7020,20 +7028,14 @@ function createStyles(colors: AppPalette) {
       fontWeight: "800",
       letterSpacing: 0,
     },
-    savingsNextGoalText: {
-      flex: 1,
-      gap: 2,
-      minWidth: 0,
-    },
+    savingsNextGoalText: { flex: 1, gap: 2, minWidth: 0 },
     savingsNextGoalTitle: {
       color: colors.text,
       fontSize: 13,
       fontWeight: "900",
       letterSpacing: 0,
     },
-    savingsOverview: {
-      gap: spacing.md,
-    },
+    savingsOverview: { gap: spacing.md },
     savingsSummaryCard: {
       alignItems: "center",
       backgroundColor: panelBackground,
@@ -7110,18 +7112,9 @@ function createStyles(colors: AppPalette) {
       fontWeight: "800",
       letterSpacing: 0,
     },
-    savingsSummaryText: {
-      flex: 1,
-      gap: 2,
-      minWidth: 0,
-    },
-    dangerButton: {
-      borderColor: colors.danger,
-      backgroundColor: colors.card,
-    },
-    dangerButtonLabel: {
-      color: colors.danger,
-    },
+    savingsSummaryText: { flex: 1, gap: 2, minWidth: 0 },
+    dangerButton: { borderColor: colors.danger, backgroundColor: colors.card },
+    dangerButtonLabel: { color: colors.danger },
     savingsSummaryValue: {
       color: colors.finance,
       fontFamily: Platform.select({
@@ -7161,12 +7154,8 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
       minWidth: 78,
     },
-    savingsDeltaAdd: {
-      color: colors.primaryDark,
-    },
-    savingsDeltaSubtract: {
-      color: colors.danger,
-    },
+    savingsDeltaAdd: { color: colors.primaryDark },
+    savingsDeltaSubtract: { color: colors.danger },
     savingsHistory: {
       backgroundColor: colors.cardMuted,
       borderColor: colors.line,
@@ -7175,10 +7164,7 @@ function createStyles(colors: AppPalette) {
       gap: spacing.xs,
       padding: spacing.sm,
     },
-    savingsIconButton: {
-      height: 34,
-      width: 34,
-    },
+    savingsIconButton: { height: 34, width: 34 },
     savingsSummaryTitle: {
       alignItems: "center",
       flexDirection: "row",
@@ -7209,14 +7195,8 @@ function createStyles(colors: AppPalette) {
       textAlign: "right",
       width: 92,
     },
-    copyAmountList: {
-      gap: spacing.xs,
-    },
-    copyAmountMeta: {
-      color: colors.textMuted,
-      fontSize: 11,
-      letterSpacing: 0,
-    },
+    copyAmountList: { gap: spacing.xs },
+    copyAmountMeta: { color: colors.textMuted, fontSize: 11, letterSpacing: 0 },
     copyAmountRow: {
       alignItems: "center",
       backgroundColor: colors.cardMuted,
@@ -7227,11 +7207,7 @@ function createStyles(colors: AppPalette) {
       gap: spacing.sm,
       padding: spacing.sm,
     },
-    copyAmountText: {
-      flex: 1,
-      gap: 2,
-      minWidth: 0,
-    },
+    copyAmountText: { flex: 1, gap: 2, minWidth: 0 },
     copyAmountTitle: {
       color: colors.text,
       fontSize: 13,
@@ -7261,10 +7237,7 @@ function createStyles(colors: AppPalette) {
       gap: spacing.sm,
       padding: spacing.sm,
     },
-    generateCategoryList: {
-      flexShrink: 1,
-      minHeight: 0,
-    },
+    generateCategoryList: { flexShrink: 1, minHeight: 0 },
     generateCategorySelect: {
       alignItems: "center",
       flex: 1,
@@ -7277,11 +7250,7 @@ function createStyles(colors: AppPalette) {
       fontSize: 11,
       letterSpacing: 0,
     },
-    generateCategoryText: {
-      flex: 1,
-      gap: 2,
-      minWidth: 0,
-    },
+    generateCategoryText: { flex: 1, gap: 2, minWidth: 0 },
     generateCategoryTitle: {
       color: colors.text,
       fontSize: 13,
@@ -7306,11 +7275,7 @@ function createStyles(colors: AppPalette) {
       backgroundColor: colors.textMuted,
       borderColor: colors.textMuted,
     },
-    generateCopyList: {
-      flexShrink: 1,
-      gap: spacing.sm,
-      minHeight: 0,
-    },
+    generateCopyList: { flexShrink: 1, gap: spacing.sm, minHeight: 0 },
     generateToolbar: {
       backgroundColor: colors.cardMuted,
       borderColor: colors.border,
@@ -7319,13 +7284,8 @@ function createStyles(colors: AppPalette) {
       gap: spacing.sm,
       padding: spacing.sm,
     },
-    generateToolbarActions: {
-      flexDirection: "row",
-      gap: spacing.sm,
-    },
-    generateToolbarButton: {
-      flex: 1,
-    },
+    generateToolbarActions: { flexDirection: "row", gap: spacing.sm },
+    generateToolbarButton: { flex: 1 },
     generateToolbarMeta: {
       color: colors.textMuted,
       fontSize: 12,
@@ -7338,10 +7298,7 @@ function createStyles(colors: AppPalette) {
       justifyContent: "center",
       paddingRight: 2,
     },
-    generateItemList: {
-      gap: spacing.xs,
-      padding: spacing.sm,
-    },
+    generateItemList: { gap: spacing.xs, padding: spacing.sm },
     generateItemRow: {
       alignItems: "center",
       backgroundColor: colors.card,
@@ -7353,9 +7310,7 @@ function createStyles(colors: AppPalette) {
       minHeight: 52,
       padding: spacing.sm,
     },
-    generateItemRowMuted: {
-      opacity: 0.64,
-    },
+    generateItemRowMuted: { opacity: 0.64 },
     generateModalBody: {
       flexShrink: 1,
       gap: spacing.md,
@@ -7405,21 +7360,15 @@ function createStyles(colors: AppPalette) {
       gap: spacing.xs,
       paddingRight: spacing.md,
     },
-    filterCategoryGrid: {
-      paddingRight: 0,
-    },
+    filterCategoryGrid: { paddingRight: 0 },
     filterChipText: {
       color: colors.textMuted,
       fontSize: 10,
       fontWeight: "700",
       letterSpacing: 0,
     },
-    filterChipTextActive: {
-      color: colors.inverseText,
-    },
-    filterDetails: {
-      gap: spacing.sm,
-    },
+    filterChipTextActive: { color: colors.inverseText },
+    filterDetails: { gap: spacing.sm },
     filterSummary: {
       color: colors.textMuted,
       flex: 1,
@@ -7454,9 +7403,7 @@ function createStyles(colors: AppPalette) {
       flexDirection: "row",
       gap: spacing.xs,
     },
-    filterGroup: {
-      gap: spacing.xs,
-    },
+    filterGroup: { gap: spacing.xs },
     filterInput: {
       backgroundColor: colors.field,
       borderColor: colors.border,
@@ -7491,9 +7438,7 @@ function createStyles(colors: AppPalette) {
       paddingHorizontal: spacing.sm,
       paddingVertical: 8,
     },
-    incomeBreakdownList: {
-      gap: spacing.sm,
-    },
+    incomeBreakdownList: { gap: spacing.sm },
     incomeBreakdownMeta: {
       color: colors.textMuted,
       fontSize: 11,
@@ -7516,15 +7461,8 @@ function createStyles(colors: AppPalette) {
       gap: spacing.sm,
       padding: spacing.sm,
     },
-    incomeBreakdownRowActive: {
-      borderColor: colors.primary,
-      borderWidth: 2,
-    },
-    incomeBreakdownText: {
-      flex: 1,
-      gap: 2,
-      minWidth: 0,
-    },
+    incomeBreakdownRowActive: { borderColor: colors.primary, borderWidth: 2 },
+    incomeBreakdownText: { flex: 1, gap: 2, minWidth: 0 },
     incomeBreakdownTotal: {
       alignItems: "center",
       backgroundColor: colors.card,
@@ -7679,36 +7617,18 @@ function createStyles(colors: AppPalette) {
       paddingHorizontal: spacing.sm,
       paddingVertical: spacing.sm,
     },
-    metricPressed: {
-      opacity: 0.78,
-    },
+    metricPressed: { opacity: 0.78 },
     metricLabel: {
       color: colors.textMuted,
       fontSize: 10,
       fontWeight: "900",
       letterSpacing: 0,
     },
-    metricRow: {
-      flexDirection: "row",
-      gap: spacing.xs,
-    },
-    metricTop: {
-      alignItems: "center",
-      flexDirection: "row",
-      gap: 3,
-    },
-    metricValue: {
-      fontSize: 13,
-      fontWeight: "900",
-      letterSpacing: 0,
-    },
-    modalFooter: {
-      flexDirection: "row",
-      gap: spacing.sm,
-    },
-    modalFooterButton: {
-      flex: 1,
-    },
+    metricRow: { flexDirection: "row", gap: spacing.xs },
+    metricTop: { alignItems: "center", flexDirection: "row", gap: 3 },
+    metricValue: { fontSize: 13, fontWeight: "900", letterSpacing: 0 },
+    modalFooter: { flexDirection: "row", gap: spacing.sm },
+    modalFooterButton: { flex: 1 },
     monthSwitcher: {
       alignItems: "center",
       backgroundColor: colors.card,
@@ -7789,9 +7709,7 @@ function createStyles(colors: AppPalette) {
       fontWeight: "900",
       letterSpacing: 0,
     },
-    monthTabTextActive: {
-      color: colors.inverseText,
-    },
+    monthTabTextActive: { color: colors.inverseText },
     muted: {
       color: colors.textMuted,
       flex: 1,
@@ -7799,12 +7717,8 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
       lineHeight: 18,
     },
-    personCell: {
-      width: 64,
-    },
-    positiveText: {
-      color: mockupGreen,
-    },
+    personCell: { width: 64 },
+    positiveText: { color: mockupGreen },
     sheet: {
       backgroundColor: colors.card,
       borderColor: colors.border,
@@ -7813,21 +7727,15 @@ function createStyles(colors: AppPalette) {
       minWidth: 414,
       overflow: "hidden",
     },
-    sheetHeader: {
-      flexDirection: "row",
-    },
+    sheetHeader: { flexDirection: "row" },
     sheetRow: {
       backgroundColor: colors.card,
       borderColor: colors.line,
       borderTopWidth: 1,
       flexDirection: "row",
     },
-    sheetRowContent: {
-      flexDirection: "row",
-    },
-    sheetScroller: {
-      marginRight: -spacing.md,
-    },
+    sheetRowContent: { flexDirection: "row" },
+    sheetScroller: { marginRight: -spacing.md },
     sumCell: {
       color: colors.text,
       fontSize: 11,

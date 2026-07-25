@@ -17,7 +17,8 @@ export class DataEntriesService {
       : [householdId];
     const result = await this.database.query<DataEntryRow>(
       `
-        select id, household_id, title, value, created_at, updated_at
+        select id, household_id, title, value, encrypted_payload, encryption_version,
+          created_at, updated_at
         from data_entries
         where household_id = $1
           ${
@@ -40,12 +41,15 @@ export class DataEntriesService {
         insert into data_entries (
           household_id,
           title,
-          value
+          value,
+          encrypted_payload,
+          encryption_version
         )
-        values ($1, $2, $3)
-        returning id, household_id, title, value, created_at, updated_at
+        values ($1, $2, $3, $4, $5)
+        returning id, household_id, title, value, encrypted_payload, encryption_version,
+          created_at, updated_at
       `,
-      [householdId, title, dto.value]
+      [householdId, title, dto.value, dto.encryptedPayload ?? null, dto.encryptionVersion ?? null]
     );
 
     const entry = this.mapEntry(result.rows[0]);
@@ -59,7 +63,12 @@ export class DataEntriesService {
     entryId: string,
     dto: UpdateDataEntryDto
   ): Promise<DataEntryRecord | null> {
-    if (dto.title === undefined && dto.value === undefined) {
+    if (
+      dto.title === undefined &&
+      dto.value === undefined &&
+      dto.encryptedPayload === undefined &&
+      dto.encryptionVersion === undefined
+    ) {
       throw new BadRequestException('No data entry fields to update');
     }
 
@@ -68,16 +77,21 @@ export class DataEntriesService {
         update data_entries
         set
           title = coalesce($3, title),
-          value = coalesce($4, value)
+          value = coalesce($4, value),
+          encrypted_payload = coalesce($5, encrypted_payload),
+          encryption_version = coalesce($6, encryption_version)
         where household_id = $1
           and id = $2
-        returning id, household_id, title, value, created_at, updated_at
+        returning id, household_id, title, value, encrypted_payload, encryption_version,
+          created_at, updated_at
       `,
       [
         householdId,
         entryId,
         dto.title === undefined ? null : this.normalizeTitle(dto.title),
-        dto.value ?? null
+        dto.value ?? null,
+        dto.encryptedPayload ?? null,
+        dto.encryptionVersion ?? null
       ]
     );
 
@@ -132,6 +146,9 @@ export class DataEntriesService {
 
     return {
       createdAt: row.created_at,
+      encryptedPayload: row.encrypted_payload,
+      encryptionEntity: 'data-entry',
+      encryptionVersion: row.encryption_version,
       householdId: row.household_id,
       id: row.id,
       title: row.title,
@@ -143,6 +160,8 @@ export class DataEntriesService {
 
 interface DataEntryRow {
   created_at: string;
+  encrypted_payload: string | null;
+  encryption_version: number | null;
   household_id: string;
   id: string;
   title: string;
@@ -152,6 +171,9 @@ interface DataEntryRow {
 
 export interface DataEntryRecord {
   createdAt: string;
+  encryptedPayload: string | null;
+  encryptionEntity: 'data-entry';
+  encryptionVersion: number | null;
   householdId: string;
   id: string;
   title: string;

@@ -39,6 +39,8 @@ export class AttachmentsService {
           mime_type,
           file_name,
           caption,
+          encrypted_payload,
+          encryption_version,
           created_by_member_id,
           created_at,
           updated_at
@@ -114,9 +116,11 @@ export class AttachmentsService {
           mime_type,
           file_name,
           caption,
+          encrypted_payload,
+          encryption_version,
           created_by_member_id
         )
-        values ($1, $2, $3, $4, $5, $6)
+        values ($1, $2, $3, $4, $5, $6, $7, $8)
         returning
           id,
           household_id,
@@ -124,6 +128,8 @@ export class AttachmentsService {
           mime_type,
           file_name,
           caption,
+          encrypted_payload,
+          encryption_version,
           created_by_member_id,
           created_at,
           updated_at
@@ -134,6 +140,8 @@ export class AttachmentsService {
         dto.mimeType,
         this.normalizeFileName(dto.fileName),
         this.normalizeCaption(dto.caption),
+        dto.encryptedPayload ?? null,
+        dto.encryptionVersion ?? null,
         memberId
       ]
     );
@@ -155,7 +163,12 @@ export class AttachmentsService {
     id: string,
     dto: UpdateAttachmentDto
   ): Promise<AttachmentRecord | null> {
-    if (dto.caption === undefined && dto.fileName === undefined) {
+    if (
+      dto.caption === undefined &&
+      dto.fileName === undefined &&
+      dto.encryptedPayload === undefined &&
+      dto.encryptionVersion === undefined
+    ) {
       throw new BadRequestException('No attachment fields to update');
     }
 
@@ -170,7 +183,9 @@ export class AttachmentsService {
         update attachments
         set
           file_name = $3,
-          caption = $4
+          caption = $4,
+          encrypted_payload = $5,
+          encryption_version = $6
         where household_id = $1
           and id = $2
         returning
@@ -180,6 +195,8 @@ export class AttachmentsService {
           mime_type,
           file_name,
           caption,
+          encrypted_payload,
+          encryption_version,
           created_by_member_id,
           created_at,
           updated_at
@@ -188,7 +205,9 @@ export class AttachmentsService {
         householdId,
         id,
         dto.fileName === undefined ? current.fileName : this.normalizeFileName(dto.fileName),
-        dto.caption === undefined ? current.caption : this.normalizeCaption(dto.caption)
+        dto.caption === undefined ? current.caption : this.normalizeCaption(dto.caption),
+        dto.encryptedPayload ?? current.encryptedPayload,
+        dto.encryptionVersion ?? current.encryptionVersion
       ]
     );
 
@@ -270,6 +289,8 @@ export class AttachmentsService {
           mime_type,
           file_name,
           caption,
+          encrypted_payload,
+          encryption_version,
           created_by_member_id,
           created_at,
           updated_at
@@ -398,6 +419,9 @@ export class AttachmentsService {
       caption: row.caption,
       createdAt: row.created_at,
       createdByMemberId: row.created_by_member_id,
+      encryptedPayload: row.encrypted_payload,
+      encryptionEntity: 'attachment',
+      encryptionVersion: row.encryption_version,
       fileName: row.file_name,
       householdId: row.household_id,
       id: row.id,
@@ -412,6 +436,8 @@ interface AttachmentRow {
   caption: string;
   created_at: string;
   created_by_member_id: string | null;
+  encrypted_payload: string | null;
+  encryption_version: number | null;
   file_name: string;
   household_id: string;
   id: string;
@@ -424,6 +450,9 @@ export interface AttachmentRecord {
   caption: string;
   createdAt: string;
   createdByMemberId: string | null;
+  encryptedPayload: string | null;
+  encryptionEntity: 'attachment';
+  encryptionVersion: number | null;
   fileName: string;
   householdId: string;
   id: string;

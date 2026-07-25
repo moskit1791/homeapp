@@ -17,12 +17,19 @@ export class ExpensesService {
       `
         insert into expenses (
           budget_item_id,
-          amount
+          amount,
+          encrypted_payload,
+          encryption_version
         )
-        values ($1, $2)
-        returning id, budget_item_id, amount, created_at, updated_at
+        values ($1, $2, $3, $4)
+        returning id, budget_item_id, amount, encrypted_payload, encryption_version, created_at, updated_at
       `,
-      [dto.budgetItemId, dto.amount]
+      [
+        dto.budgetItemId,
+        dto.encryptedPayload ? 0.01 : dto.amount,
+        dto.encryptedPayload ?? null,
+        dto.encryptionVersion ?? null
+      ]
     );
 
     const expense = this.mapExpenseOrThrow(result.rows[0]);
@@ -53,10 +60,7 @@ export class ExpensesService {
     return deleted;
   }
 
-  private async ensureMutableBudgetItem(
-    householdId: string,
-    budgetItemId: string
-  ): Promise<void> {
+  private async ensureMutableBudgetItem(householdId: string, budgetItemId: string): Promise<void> {
     const result = await this.database.query<{ id: string }>(
       `
         select bi.id
@@ -84,6 +88,8 @@ export class ExpensesService {
       amount: row.amount,
       budgetItemId: row.budget_item_id,
       createdAt: row.created_at,
+      encryptedPayload: row.encrypted_payload,
+      encryptionVersion: row.encryption_version,
       id: row.id,
       updatedAt: row.updated_at
     };
@@ -94,6 +100,8 @@ interface ExpenseRow {
   amount: string;
   budget_item_id: string;
   created_at: string;
+  encrypted_payload: string | null;
+  encryption_version: number | null;
   id: string;
   updated_at: string;
 }
@@ -102,6 +110,8 @@ export interface ExpenseRecord {
   amount: string;
   budgetItemId: string;
   createdAt: string;
+  encryptedPayload: string | null;
+  encryptionVersion: number | null;
   id: string;
   updatedAt: string;
 }

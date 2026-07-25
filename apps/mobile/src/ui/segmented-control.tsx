@@ -102,6 +102,7 @@ function createStyles(colors: AppPalette) {
     },
     label: {
       color: colors.textMuted,
+      flexShrink: 1,
       fontSize: 13,
       fontWeight: "800",
       letterSpacing: 0,
@@ -114,7 +115,9 @@ function createStyles(colors: AppPalette) {
       flexDirection: "row",
       gap: spacing.xs,
       justifyContent: "center",
+      maxWidth: "100%",
       minWidth: 0,
+      width: "100%",
     },
     option: {
       alignItems: "center",

@@ -142,14 +142,18 @@ export class MealPlannerService {
               slot_index,
               meal_name,
               link_url,
-              note
+              note,
+              encrypted_payload,
+              encryption_version
             )
-            values ($1, $2, $3, $4, $5, $6)
+            values ($1, $2, $3, $4, $5, $6, $7, $8)
             on conflict (meal_plan_week_id, weekday, slot_index) do update
             set
               meal_name = excluded.meal_name,
               link_url = excluded.link_url,
-              note = excluded.note
+              note = excluded.note,
+              encrypted_payload = excluded.encrypted_payload,
+              encryption_version = excluded.encryption_version
           `,
           [
             plan.id,
@@ -157,7 +161,9 @@ export class MealPlannerService {
             entry.slotIndex,
             this.normalizeText(entry.mealName, 'Meal name'),
             this.normalizeOptionalText(entry.linkUrl),
-            this.normalizeOptionalText(entry.note)
+            this.normalizeOptionalText(entry.note),
+            entry.encryptedPayload ?? null,
+            entry.encryptionVersion ?? null
           ]
         );
       }
@@ -220,7 +226,9 @@ export class MealPlannerService {
             slot_index,
             meal_name,
             link_url,
-            note
+            note,
+            encrypted_payload,
+            encryption_version
           )
           select
             $3,
@@ -228,7 +236,9 @@ export class MealPlannerService {
             mpe.slot_index,
             mpe.meal_name,
             mpe.link_url,
-            mpe.note
+            mpe.note,
+            mpe.encrypted_payload,
+            mpe.encryption_version
           from meal_plan_entries mpe
           join meal_plan_weeks mpw on mpw.id = mpe.meal_plan_week_id
           where mpw.household_id = $1
@@ -330,7 +340,8 @@ export class MealPlannerService {
   async listIdeas(householdId: string): Promise<MealIdeaRecord[]> {
     const result = await this.database.query<MealIdeaRow>(
       `
-        select id, household_id, title, note, link_url, created_at, updated_at
+        select id, household_id, title, note, link_url, encrypted_payload,
+          encryption_version, created_at, updated_at
         from meal_ideas
         where household_id = $1
         order by updated_at desc, title asc
@@ -348,16 +359,21 @@ export class MealPlannerService {
           household_id,
           title,
           note,
-          link_url
+          link_url,
+          encrypted_payload,
+          encryption_version
         )
-        values ($1, $2, $3, $4)
-        returning id, household_id, title, note, link_url, created_at, updated_at
+        values ($1, $2, $3, $4, $5, $6)
+        returning id, household_id, title, note, link_url, encrypted_payload,
+          encryption_version, created_at, updated_at
       `,
       [
         householdId,
         this.normalizeText(dto.title, 'Meal idea title'),
         this.normalizeOptionalText(dto.note),
-        this.normalizeOptionalText(dto.linkUrl)
+        this.normalizeOptionalText(dto.linkUrl),
+        dto.encryptedPayload ?? null,
+        dto.encryptionVersion ?? null
       ]
     );
 
@@ -372,7 +388,13 @@ export class MealPlannerService {
     ideaId: string,
     dto: UpdateMealIdeaDto
   ): Promise<MealIdeaRecord | null> {
-    if (dto.title === undefined && dto.note === undefined && dto.linkUrl === undefined) {
+    if (
+      dto.title === undefined &&
+      dto.note === undefined &&
+      dto.linkUrl === undefined &&
+      dto.encryptedPayload === undefined &&
+      dto.encryptionVersion === undefined
+    ) {
       throw new BadRequestException('No meal idea fields to update');
     }
 
@@ -388,17 +410,22 @@ export class MealPlannerService {
         set
           title = $3,
           note = $4,
-          link_url = $5
+          link_url = $5,
+          encrypted_payload = $6,
+          encryption_version = $7
         where household_id = $1
           and id = $2
-        returning id, household_id, title, note, link_url, created_at, updated_at
+        returning id, household_id, title, note, link_url, encrypted_payload,
+          encryption_version, created_at, updated_at
       `,
       [
         householdId,
         ideaId,
         dto.title === undefined ? current.title : this.normalizeText(dto.title, 'Meal idea title'),
         dto.note === undefined ? current.note : this.normalizeOptionalText(dto.note),
-        dto.linkUrl === undefined ? current.linkUrl : this.normalizeOptionalText(dto.linkUrl)
+        dto.linkUrl === undefined ? current.linkUrl : this.normalizeOptionalText(dto.linkUrl),
+        dto.encryptedPayload ?? current.encryptedPayload,
+        dto.encryptionVersion ?? current.encryptionVersion
       ]
     );
 
@@ -498,6 +525,8 @@ export class MealPlannerService {
           mpe.meal_name,
           mpe.link_url,
           mpe.note,
+          mpe.encrypted_payload,
+          mpe.encryption_version,
           mpe.created_at,
           mpe.updated_at
         from meal_plan_entries mpe
@@ -662,7 +691,8 @@ export class MealPlannerService {
   ): Promise<MealIdeaRecord | null> {
     const result = await this.database.query<MealIdeaRow>(
       `
-        select id, household_id, title, note, link_url, created_at, updated_at
+        select id, household_id, title, note, link_url, encrypted_payload,
+          encryption_version, created_at, updated_at
         from meal_ideas
         where household_id = $1
           and id = $2
@@ -703,6 +733,9 @@ export class MealPlannerService {
   private mapEntry(row: MealPlanEntryRow): MealPlanEntryRecord {
     return {
       createdAt: row.created_at,
+      encryptedPayload: row.encrypted_payload,
+      encryptionEntity: 'meal-plan-entry',
+      encryptionVersion: row.encryption_version,
       id: row.id,
       linkUrl: row.link_url,
       mealName: row.meal_name,
@@ -725,6 +758,9 @@ export class MealPlannerService {
   private mapIdea(row: MealIdeaRow): MealIdeaRecord {
     return {
       createdAt: row.created_at,
+      encryptedPayload: row.encrypted_payload,
+      encryptionEntity: 'meal-idea',
+      encryptionVersion: row.encryption_version,
       householdId: row.household_id,
       id: row.id,
       linkUrl: row.link_url,
@@ -816,6 +852,8 @@ interface MealPlanSummaryRow extends MealPlanWeekRow {
 
 interface MealPlanEntryRow {
   created_at: string;
+  encrypted_payload: string | null;
+  encryption_version: number | null;
   id: string;
   link_url: string | null;
   meal_name: string;
@@ -828,6 +866,8 @@ interface MealPlanEntryRow {
 
 interface MealIdeaRow {
   created_at: string;
+  encrypted_payload: string | null;
+  encryption_version: number | null;
   household_id: string;
   id: string;
   link_url: string | null;
@@ -860,6 +900,9 @@ export interface MealPlanSummary extends MealPlanWeekRecord {
 
 export interface MealPlanEntryRecord {
   createdAt: string;
+  encryptedPayload: string | null;
+  encryptionEntity: 'meal-plan-entry';
+  encryptionVersion: number | null;
   id: string;
   linkUrl: string | null;
   mealName: string;
@@ -877,6 +920,9 @@ export interface MealPlanDetail {
 
 export interface MealIdeaRecord {
   createdAt: string;
+  encryptedPayload: string | null;
+  encryptionEntity: 'meal-idea';
+  encryptionVersion: number | null;
   householdId: string;
   id: string;
   linkUrl: string | null;

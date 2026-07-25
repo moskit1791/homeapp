@@ -58,6 +58,8 @@ export class CleaningService implements OnModuleInit, OnModuleDestroy {
           ct.frequency_days,
           ct.completion_window_days,
           ct.location,
+          ct.encrypted_payload,
+          ct.encryption_version,
           ct.next_due_at,
           coalesce(vco.is_overdue, false) as is_overdue,
           ct.reminder_sent_at,
@@ -90,9 +92,11 @@ export class CleaningService implements OnModuleInit, OnModuleDestroy {
           frequency_days,
           completion_window_days,
           location,
+          encrypted_payload,
+          encryption_version,
           next_due_at
         )
-        values ($1, $2, $3, $4, $5, $6, $7)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         returning
           id,
           household_id,
@@ -101,6 +105,8 @@ export class CleaningService implements OnModuleInit, OnModuleDestroy {
           frequency_days,
           completion_window_days,
           location,
+          encrypted_payload,
+          encryption_version,
           next_due_at,
           (next_due_at < current_date) as is_overdue,
           reminder_sent_at,
@@ -114,6 +120,8 @@ export class CleaningService implements OnModuleInit, OnModuleDestroy {
         dto.frequencyDays,
         dto.completionWindowDays ?? 0,
         dto.location ?? null,
+        dto.encryptedPayload ?? null,
+        dto.encryptionVersion ?? null,
         dto.nextDueAt,
       ],
     );
@@ -135,7 +143,9 @@ export class CleaningService implements OnModuleInit, OnModuleDestroy {
       dto.frequencyDays === undefined &&
       dto.completionWindowDays === undefined &&
       dto.location === undefined &&
-      dto.nextDueAt === undefined
+      dto.nextDueAt === undefined &&
+      dto.encryptedPayload === undefined &&
+      dto.encryptionVersion === undefined
     ) {
       throw new BadRequestException("No cleaning task fields to update");
     }
@@ -156,6 +166,8 @@ export class CleaningService implements OnModuleInit, OnModuleDestroy {
           completion_window_days = $6,
           location = $7,
           next_due_at = $8,
+          encrypted_payload = $9,
+          encryption_version = $10,
           reminder_sent_at = case
             when $8::date <> next_due_at then null
             else reminder_sent_at
@@ -170,6 +182,8 @@ export class CleaningService implements OnModuleInit, OnModuleDestroy {
           frequency_days,
           completion_window_days,
           location,
+          encrypted_payload,
+          encryption_version,
           next_due_at,
           (next_due_at < current_date) as is_overdue,
           reminder_sent_at,
@@ -185,6 +199,8 @@ export class CleaningService implements OnModuleInit, OnModuleDestroy {
         dto.completionWindowDays ?? current.completionWindowDays,
         dto.location !== undefined ? dto.location : current.location,
         dto.nextDueAt ?? current.nextDueAt,
+        dto.encryptedPayload ?? current.encryptedPayload,
+        dto.encryptionVersion ?? current.encryptionVersion,
       ],
     );
 
@@ -233,6 +249,8 @@ export class CleaningService implements OnModuleInit, OnModuleDestroy {
             frequency_days,
             completion_window_days,
             location,
+            encrypted_payload,
+            encryption_version,
             next_due_at,
             (next_due_at < current_date) as is_overdue,
             reminder_sent_at,
@@ -281,6 +299,8 @@ export class CleaningService implements OnModuleInit, OnModuleDestroy {
             frequency_days,
             completion_window_days,
             location,
+            encrypted_payload,
+            encryption_version,
             next_due_at,
             (next_due_at < current_date) as is_overdue,
             reminder_sent_at,
@@ -358,6 +378,8 @@ export class CleaningService implements OnModuleInit, OnModuleDestroy {
           ct.frequency_days,
           ct.completion_window_days,
           ct.location,
+          ct.encrypted_payload,
+          ct.encryption_version,
           ct.next_due_at,
           coalesce(vco.is_overdue, false) as is_overdue,
           ct.reminder_sent_at,
@@ -417,6 +439,8 @@ export class CleaningService implements OnModuleInit, OnModuleDestroy {
             ct.frequency_days,
             ct.completion_window_days,
             ct.location,
+            ct.encrypted_payload,
+            ct.encryption_version,
             ct.next_due_at,
             (ct.next_due_at < current_date) as is_overdue,
             ct.reminder_sent_at,
@@ -462,6 +486,9 @@ export class CleaningService implements OnModuleInit, OnModuleDestroy {
     return {
       completionWindowDays: row.completion_window_days,
       createdAt: row.created_at,
+      encryptedPayload: row.encrypted_payload,
+      encryptionEntity: "cleaning-task",
+      encryptionVersion: row.encryption_version,
       frequencyDays: row.frequency_days,
       frequencyMode: row.frequency_mode,
       householdId: row.household_id,
@@ -501,6 +528,8 @@ export class CleaningService implements OnModuleInit, OnModuleDestroy {
 interface CleaningTaskRow {
   completion_window_days: number;
   created_at: string;
+  encrypted_payload: string | null;
+  encryption_version: number | null;
   frequency_days: number;
   frequency_mode: CleaningFrequencyMode;
   household_id: string;
@@ -525,6 +554,9 @@ interface CleaningHistoryRow {
 export interface CleaningTaskRecord {
   completionWindowDays: number;
   createdAt: string;
+  encryptedPayload: string | null;
+  encryptionEntity: "cleaning-task";
+  encryptionVersion: number | null;
   frequencyDays: number;
   frequencyMode: CleaningFrequencyMode;
   householdId: string;

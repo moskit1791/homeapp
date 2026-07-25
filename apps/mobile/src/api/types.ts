@@ -1,12 +1,14 @@
 import type {
   AccountStatus,
   CleaningFrequencyMode,
+  EncryptableModuleKey,
   HouseholdMemberRole,
   ModuleKey,
   PermissionSet,
   RealtimeEvent as SharedRealtimeEvent,
   RealtimeEventType,
   ScopeType,
+  ShoppingCategory,
   ShoppingListType,
 } from "@homeapp/shared-types";
 
@@ -14,7 +16,18 @@ export type RealtimeEvent = SharedRealtimeEvent;
 
 export type EffectivePermission = PermissionSet;
 
-export type { ModuleKey, ShoppingListType };
+export type { EncryptableModuleKey, ModuleKey, ShoppingListType };
+
+export interface ClientEncryptedRecord {
+  encryptedPayload: string | null;
+  encryptionEntity: string;
+  encryptionVersion: number | null;
+}
+
+export interface ClientEncryptedWrite {
+  encryptedPayload?: string;
+  encryptionVersion?: number;
+}
 
 export interface ApiUser {
   accountStatus: AccountStatus;
@@ -111,6 +124,73 @@ export interface Household {
   weekStartsOn: number;
 }
 
+export interface HouseholdEncryptionSettings {
+  canManage: boolean;
+  configured: boolean;
+  enabledModules: EncryptableModuleKey[];
+  householdId: string;
+  kdfSalt: string | null;
+  keyVersion: number | null;
+  recoveryWrappedKey: string | null;
+  updatedAt: string | null;
+  wrappedKey: string | null;
+}
+
+export interface UpdateHouseholdEncryptionRequest {
+  enabledModules: EncryptableModuleKey[];
+  expectedUpdatedAt?: string | null;
+  kdfSalt: string;
+  keyVersion: number;
+  recoveryWrappedKey: string;
+  wrappedKey: string;
+  migrationItems?: EncryptionMigrationItem[];
+}
+
+export interface RemoveHouseholdEncryptionRequest {
+  expectedUpdatedAt: string;
+  keyVersion: number;
+  migrationItems?: EncryptionMigrationItem[];
+}
+
+export type EncryptionMigrationEntity =
+  | "calendar-event"
+  | "budget-category"
+  | "budget-item"
+  | "expense"
+  | "income"
+  | "finance-debt"
+  | "finance-debt-payment"
+  | "finance-savings-account"
+  | "finance-savings-transaction"
+  | "meal-plan-entry"
+  | "meal-idea"
+  | "shopping-item"
+  | "todo-item"
+  | "note-item"
+  | "cleaning-task"
+  | "annual-cost"
+  | "annual-cost-history"
+  | "data-entry"
+  | "attachment";
+
+export interface EncryptionMigrationItem {
+  encryptedPayload?: string;
+  encryptionVersion: number;
+  entity: EncryptionMigrationEntity;
+  id: string;
+  sourceRevision: string;
+  plaintextPayload?: Record<string, unknown>;
+}
+
+export interface EncryptionExportItem {
+  encryptedPayload: string | null;
+  encryptionVersion: number | null;
+  entity: EncryptionMigrationEntity;
+  id: string;
+  plaintextPayload: Record<string, unknown> | null;
+  sourceRevision: string;
+}
+
 export interface HouseholdMembership {
   householdId: string;
   memberId: string;
@@ -145,6 +225,8 @@ export interface StartFinanceMonth {
 }
 
 export interface StartCalendarEvent {
+  encryptedPayload: string | null;
+  encryptionVersion: number | null;
   eventDate: string;
   eventTime: string | null;
   googleCalendarAccountEmail: string | null;
@@ -165,14 +247,14 @@ export interface StartMealPlan {
   weekStartDate: string;
 }
 
-export interface StartMealEntry {
+export interface StartMealEntry extends ClientEncryptedRecord {
   id: string;
   mealName: string;
   slotIndex: number;
   weekday: number;
 }
 
-export interface StartTodoItem {
+export interface StartTodoItem extends ClientEncryptedRecord {
   createdAt: string;
   id: string;
   ownerMemberId: string | null;
@@ -190,7 +272,7 @@ export interface ShoppingList {
   updatedAt: string;
 }
 
-export interface ShoppingItem {
+export interface ShoppingItem extends ClientEncryptedRecord {
   category: string | null;
   checkedAt: string | null;
   createdAt: string;
@@ -206,7 +288,7 @@ export interface ShoppingItem {
   updatedAt: string;
 }
 
-export interface CreateShoppingItemRequest {
+export interface CreateShoppingItemRequest extends ClientEncryptedWrite {
   category?: string | null;
   displayOrder?: number;
   expirationDate?: string | null;
@@ -214,7 +296,7 @@ export interface CreateShoppingItemRequest {
   quantity?: string;
 }
 
-export interface UpdateShoppingItemRequest {
+export interface UpdateShoppingItemRequest extends ClientEncryptedWrite {
   category?: string | null;
   displayOrder?: number;
   expirationDate?: string | null;
@@ -243,6 +325,7 @@ export interface BulkShoppingResult {
 
 export interface ImportShoppingItemsWithAiRequest {
   message: string;
+  planOnly?: boolean;
 }
 
 export interface ShoppingAiSourceFragment {
@@ -251,12 +334,14 @@ export interface ShoppingAiSourceFragment {
 }
 
 export interface ImportShoppingItemsWithAiResponse {
-  ignoredSourceFragments: Array<{
-    id: string;
-    reason: string;
-  }>;
+  ignoredSourceFragments: Array<{ id: string; reason: string }>;
   importedCount: number;
   items: ShoppingItem[];
+  plannedItems: Array<{
+    category: ShoppingCategory;
+    name: string;
+    quantity: string;
+  }>;
   sourceFragments: ShoppingAiSourceFragment[];
 }
 
@@ -282,6 +367,8 @@ export interface CreateBudgetMonthRequest {
 export interface GenerateNextBudgetMonthItemRequest {
   budgetAmount?: number | null;
   budgetItemId: string;
+  encryptedPayload?: string;
+  encryptionVersion?: number;
 }
 
 export interface GenerateNextBudgetMonthCategoryRequest {
@@ -313,6 +400,8 @@ export interface BudgetItemSummary {
   categoryId: string;
   createdAt: string;
   displayOrder: number;
+  encryptedPayload: string | null;
+  encryptionVersion: number | null;
   expenses: Expense[];
   id: string;
   name: string;
@@ -325,6 +414,8 @@ export interface BudgetItemSummary {
 export interface BudgetCategoryWithItems {
   copyBudgetToNextMonth: boolean;
   displayOrder: number;
+  encryptedPayload: string | null;
+  encryptionVersion: number | null;
   householdId: string;
   id: string;
   isActive: boolean;
@@ -336,6 +427,8 @@ export interface BudgetCategory {
   copyBudgetToNextMonth: boolean;
   createdAt: string;
   displayOrder: number;
+  encryptedPayload: string | null;
+  encryptionVersion: number | null;
   householdId: string;
   id: string;
   isActive: boolean;
@@ -349,6 +442,8 @@ export interface BudgetItem {
   categoryId: string;
   createdAt: string;
   displayOrder: number;
+  encryptedPayload: string | null;
+  encryptionVersion: number | null;
   id: string;
   isDeleted: boolean;
   name: string;
@@ -360,6 +455,8 @@ export interface IncomeSummary {
   amount: string;
   displayName: string;
   email: string;
+  encryptedPayload: string | null;
+  encryptionVersion: number | null;
   ownerMemberId: string;
 }
 
@@ -385,12 +482,16 @@ export interface BudgetMonthDetail {
 export interface CreateBudgetCategoryRequest {
   copyBudgetToNextMonth?: boolean;
   displayOrder?: number;
+  encryptedPayload?: string;
+  encryptionVersion?: number;
   name: string;
 }
 
 export interface UpdateBudgetCategoryRequest {
   copyBudgetToNextMonth?: boolean;
   displayOrder?: number;
+  encryptedPayload?: string;
+  encryptionVersion?: number;
   isActive?: boolean;
   name?: string;
 }
@@ -400,6 +501,8 @@ export interface CreateBudgetItemRequest {
   budgetMonthId: string;
   categoryId: string;
   displayOrder?: number;
+  encryptedPayload?: string;
+  encryptionVersion?: number;
   name: string;
   ownerMemberId: string;
 }
@@ -408,6 +511,8 @@ export interface UpdateBudgetItemRequest {
   budgetAmount?: number | null;
   categoryId?: string;
   displayOrder?: number;
+  encryptedPayload?: string;
+  encryptionVersion?: number;
   name?: string;
   ownerMemberId?: string;
 }
@@ -415,12 +520,16 @@ export interface UpdateBudgetItemRequest {
 export interface CreateExpenseRequest {
   amount: number;
   budgetItemId: string;
+  encryptedPayload?: string;
+  encryptionVersion?: number;
 }
 
 export interface Expense {
   amount: string;
   budgetItemId: string;
   createdAt: string;
+  encryptedPayload: string | null;
+  encryptionVersion: number | null;
   id: string;
   updatedAt: string;
 }
@@ -428,12 +537,16 @@ export interface Expense {
 export interface UpsertIncomeRequest {
   amount: number;
   budgetMonthId?: string;
+  encryptedPayload?: string;
+  encryptionVersion?: number;
 }
 
 export interface Income {
   amount: string;
   budgetMonthId: string;
   createdAt: string;
+  encryptedPayload: string | null;
+  encryptionVersion: number | null;
   id: string;
   ownerMemberId: string;
   updatedAt: string;
@@ -443,6 +556,8 @@ export interface FinanceDebt {
   amount: string;
   createdAt: string;
   dueDate: string | null;
+  encryptedPayload: string | null;
+  encryptionVersion: number | null;
   householdId: string;
   id: string;
   isSettled: boolean;
@@ -460,6 +575,8 @@ export interface FinanceDebtPayment {
   amount: string;
   createdAt: string;
   debtId: string;
+  encryptedPayload: string | null;
+  encryptionVersion: number | null;
   id: string;
   note: string | null;
   paidAt: string | null;
@@ -468,6 +585,8 @@ export interface FinanceDebtPayment {
 export interface CreateFinanceDebtRequest {
   amount: number;
   dueDate?: string | null;
+  encryptedPayload?: string;
+  encryptionVersion?: number;
   lenderName: string;
   note?: string | null;
   purpose: string;
@@ -475,6 +594,8 @@ export interface CreateFinanceDebtRequest {
 
 export interface CreateFinanceDebtPaymentRequest {
   amount: number;
+  encryptedPayload?: string;
+  encryptionVersion?: number;
   note?: string | null;
   paidAt?: string;
 }
@@ -482,6 +603,8 @@ export interface CreateFinanceDebtPaymentRequest {
 export interface UpdateFinanceDebtRequest {
   amount?: number;
   dueDate?: string | null;
+  encryptedPayload?: string;
+  encryptionVersion?: number;
   isSettled?: boolean;
   lenderName?: string;
   note?: string | null;
@@ -495,6 +618,8 @@ export interface FinanceSavingsTransaction {
   changedAt: string;
   createdAt: string;
   direction: FinanceSavingsDirection;
+  encryptedPayload: string | null;
+  encryptionVersion: number | null;
   id: string;
   locationName: string | null;
   locationUrl: string | null;
@@ -505,6 +630,8 @@ export interface FinanceSavingsTransaction {
 export interface FinanceSavingsAccount {
   createdAt: string;
   currentAmount: string;
+  encryptedPayload: string | null;
+  encryptionVersion: number | null;
   householdId: string;
   id: string;
   lastChangedAt: string;
@@ -519,17 +646,22 @@ export interface FinanceSavingsAccount {
 export interface CreateFinanceSavingsAccountRequest {
   amount: number;
   changedAt?: string;
+  encryptedPayload?: string;
+  encryptionVersion?: number;
   ownerMemberId?: string | null;
   name: string;
   note?: string | null;
   targetAmount?: number | null;
   targetDate?: string | null;
+  transactionEncryptedPayload?: string;
 }
 
 export interface CreateFinanceSavingsTransactionRequest {
   amount: number;
   changedAt?: string;
   direction: FinanceSavingsDirection;
+  encryptedPayload?: string;
+  encryptionVersion?: number;
   note?: string | null;
 }
 
@@ -541,7 +673,7 @@ export interface MealPlanWeek {
   weekStartDate: string;
 }
 
-export interface MealPlanEntry {
+export interface MealPlanEntry extends ClientEncryptedRecord {
   createdAt: string;
   id: string;
   linkUrl: string | null;
@@ -567,7 +699,7 @@ export interface CreateMealPlanRequest {
   weekStartDate: string;
 }
 
-export interface MealPlanEntryRequest {
+export interface MealPlanEntryRequest extends ClientEncryptedWrite {
   linkUrl?: string | null;
   mealName: string;
   note?: string | null;
@@ -635,7 +767,7 @@ export interface CopyMealPlanRequest {
   targetWeekStartDate: string;
 }
 
-export interface MealIdea {
+export interface MealIdea extends ClientEncryptedRecord {
   createdAt: string;
   householdId: string;
   id: string;
@@ -645,7 +777,7 @@ export interface MealIdea {
   updatedAt: string;
 }
 
-export interface CreateMealIdeaRequest {
+export interface CreateMealIdeaRequest extends ClientEncryptedWrite {
   linkUrl?: string | null;
   note?: string | null;
   title: string;
@@ -673,6 +805,8 @@ export interface MealRandomizeResult {
 }
 
 export interface CalendarEvent {
+  encryptedPayload: string | null;
+  encryptionVersion: number | null;
   eventDate: string;
   eventTime: string | null;
   googleCalendarAccountEmail: string | null;
@@ -693,6 +827,8 @@ export interface CalendarEvent {
 }
 
 export interface CreateCalendarEventRequest {
+  encryptedPayload?: string;
+  encryptionVersion?: number;
   eventDate: string;
   eventTime?: string | null;
   locationName?: string | null;
@@ -718,7 +854,8 @@ export interface GoogleCalendarConnectResponse {
   authorizationUrl: string;
 }
 
-export interface GoogleCalendarSyncResponse {
+export interface GoogleCalendarSyncResult {
+  clientEncryptionRequired: false;
   eventDates: string[];
   from: string;
   importedCount: number;
@@ -727,7 +864,51 @@ export interface GoogleCalendarSyncResponse {
   updatedCount: number;
 }
 
-export interface TodoItem {
+export interface GoogleCalendarSyncPlanEvent {
+  eventDate: string;
+  eventTime: string | null;
+  googleEventId: string;
+  googleUpdatedAt: string | null;
+  locationName: string | null;
+  locationUrl: string | null;
+  note: string | null;
+  title: string;
+}
+
+export interface GoogleCalendarSyncPlan {
+  clientEncryptionRequired: true;
+  events: GoogleCalendarSyncPlanEvent[];
+  from: string;
+  skippedCount: number;
+  to: string;
+}
+
+export type GoogleCalendarSyncResponse =
+  | GoogleCalendarSyncResult
+  | GoogleCalendarSyncPlan;
+
+export interface GoogleCalendarEncryptedSyncItem {
+  encryptedPayload: string;
+  encryptionVersion: number;
+  eventDate: string;
+  eventTime: string | null;
+  googleEventId: string;
+  googleUpdatedAt: string | null;
+}
+
+export interface CommitGoogleCalendarEncryptedSyncRequest {
+  events: GoogleCalendarEncryptedSyncItem[];
+  finalize: boolean;
+}
+
+export interface GoogleCalendarEncryptedSyncBatchResult {
+  eventDates: string[];
+  importedCount: number;
+  skippedCount: number;
+  updatedCount: number;
+}
+
+export interface TodoItem extends ClientEncryptedRecord {
   createdAt: string;
   description: string | null;
   doneAt: string | null;
@@ -741,13 +922,13 @@ export interface TodoItem {
   updatedAt: string;
 }
 
-export interface CreateTodoItemRequest {
+export interface CreateTodoItemRequest extends ClientEncryptedWrite {
   description?: string;
   scopeType: ScopeType;
   title: string;
 }
 
-export interface UpdateTodoItemRequest {
+export interface UpdateTodoItemRequest extends ClientEncryptedWrite {
   description?: string;
   scopeType?: "household";
   status?: "todo" | "done";
@@ -758,7 +939,7 @@ export interface MoveTodoItemRequest {
   direction: "down" | "up";
 }
 
-export interface Note {
+export interface Note extends ClientEncryptedRecord {
   createdAt: string;
   description: string | null;
   householdId: string;
@@ -768,14 +949,14 @@ export interface Note {
   updatedAt: string;
 }
 
-export interface CreateNoteRequest {
+export interface CreateNoteRequest extends ClientEncryptedWrite {
   description?: string;
   title: string;
 }
 
 export type UpdateNoteRequest = Partial<CreateNoteRequest>;
 
-export interface CleaningTask {
+export interface CleaningTask extends ClientEncryptedRecord {
   completionWindowDays: number;
   createdAt: string;
   frequencyDays: number;
@@ -790,7 +971,7 @@ export interface CleaningTask {
   updatedAt: string;
 }
 
-export interface CreateCleaningTaskRequest {
+export interface CreateCleaningTaskRequest extends ClientEncryptedWrite {
   completionWindowDays: number;
   frequencyDays: number;
   frequencyMode: CleaningFrequencyMode;
@@ -805,7 +986,7 @@ export interface CompleteCleaningTaskRequest {
   completedAt?: string;
 }
 
-export interface AnnualCost {
+export interface AnnualCost extends ClientEncryptedRecord {
   createdAt: string;
   defaultAmount: string | null;
   householdId: string;
@@ -815,19 +996,20 @@ export interface AnnualCost {
   updatedAt: string;
 }
 
-export interface CreateAnnualCostRequest {
+export interface CreateAnnualCostRequest extends ClientEncryptedWrite {
   defaultAmount?: number | null;
   name: string;
   nextDueDate: string;
 }
 
-export interface CompleteAnnualCostRequest {
+export interface CompleteAnnualCostRequest extends ClientEncryptedWrite {
   amount?: number | null;
   executedAt: string;
 }
 
-export interface AnnualCostHistory {
+export interface AnnualCostHistory extends ClientEncryptedRecord {
   amount: string | null;
+  annualCostEncryptedPayload: string | null;
   annualCostId: string;
   annualCostName: string;
   createdAt: string;
@@ -840,7 +1022,7 @@ export interface AnnualCostCompletion {
   history: AnnualCostHistory;
 }
 
-export interface DataEntry {
+export interface DataEntry extends ClientEncryptedRecord {
   createdAt: string;
   householdId: string;
   id: string;
@@ -849,12 +1031,12 @@ export interface DataEntry {
   value: string;
 }
 
-export interface CreateDataEntryRequest {
+export interface CreateDataEntryRequest extends ClientEncryptedWrite {
   title: string;
   value: string;
 }
 
-export interface Attachment {
+export interface Attachment extends ClientEncryptedRecord {
   caption: string;
   createdAt: string;
   createdByMemberId: string | null;
@@ -866,14 +1048,14 @@ export interface Attachment {
   updatedAt: string;
 }
 
-export interface CreateAttachmentRequest {
+export interface CreateAttachmentRequest extends ClientEncryptedWrite {
   caption?: string;
   fileName: string;
   mimeType: Attachment["mimeType"];
   storagePath: string;
 }
 
-export interface UpdateAttachmentRequest {
+export interface UpdateAttachmentRequest extends ClientEncryptedWrite {
   caption?: string;
   fileName?: string;
 }
@@ -936,9 +1118,7 @@ export interface SendTestPushRequest {
 export interface PushSendResult {
   sent: number;
   tickets: Array<{
-    details?: {
-      error?: string;
-    };
+    details?: { error?: string };
     id?: string;
     message?: string;
     status: "ok" | "error";

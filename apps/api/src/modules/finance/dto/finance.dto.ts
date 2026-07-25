@@ -10,10 +10,24 @@ import {
   IsString,
   IsUUID,
   Length,
+  MaxLength,
   Min,
   ValidateNested
 } from 'class-validator';
 import { Type } from 'class-transformer';
+
+export class FinanceEncryptedPayloadDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(50000)
+  encryptedPayload?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  encryptionVersion?: number;
+}
 
 export class FinanceMonthIdParamDto {
   @IsUUID()
@@ -66,7 +80,7 @@ export class CreateBudgetMonthDto {
   year!: number;
 }
 
-export class GenerateNextBudgetMonthCopyItemDto {
+export class GenerateNextBudgetMonthCopyItemDto extends FinanceEncryptedPayloadDto {
   @IsUUID()
   budgetItemId!: string;
 
@@ -103,7 +117,7 @@ export class GenerateNextBudgetMonthDto {
   items?: GenerateNextBudgetMonthCopyItemDto[];
 }
 
-export class CreateBudgetCategoryDto {
+export class CreateBudgetCategoryDto extends FinanceEncryptedPayloadDto {
   @IsString()
   @Length(1, 120)
   name!: string;
@@ -119,7 +133,7 @@ export class CreateBudgetCategoryDto {
   copyBudgetToNextMonth?: boolean;
 }
 
-export class UpdateBudgetCategoryDto {
+export class UpdateBudgetCategoryDto extends FinanceEncryptedPayloadDto {
   @IsOptional()
   @IsString()
   @Length(1, 120)
@@ -140,7 +154,7 @@ export class UpdateBudgetCategoryDto {
   isActive?: boolean;
 }
 
-export class CreateBudgetItemDto {
+export class CreateBudgetItemDto extends FinanceEncryptedPayloadDto {
   @IsUUID()
   budgetMonthId!: string;
 
@@ -167,7 +181,7 @@ export class CreateBudgetItemDto {
   displayOrder?: number;
 }
 
-export class UpdateBudgetItemDto {
+export class UpdateBudgetItemDto extends FinanceEncryptedPayloadDto {
   @IsOptional()
   @IsUUID()
   ownerMemberId?: string;
@@ -194,7 +208,7 @@ export class UpdateBudgetItemDto {
   displayOrder?: number;
 }
 
-export class CreateExpenseDto {
+export class CreateExpenseDto extends FinanceEncryptedPayloadDto {
   @IsUUID()
   budgetItemId!: string;
 
@@ -204,7 +218,7 @@ export class CreateExpenseDto {
   amount!: number;
 }
 
-export class UpsertIncomeDto {
+export class UpsertIncomeDto extends FinanceEncryptedPayloadDto {
   @IsOptional()
   @IsUUID()
   budgetMonthId?: string;
@@ -215,7 +229,7 @@ export class UpsertIncomeDto {
   amount!: number;
 }
 
-export class CreateFinanceDebtDto {
+export class CreateFinanceDebtDto extends FinanceEncryptedPayloadDto {
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.01)
@@ -239,7 +253,7 @@ export class CreateFinanceDebtDto {
   purpose!: string;
 }
 
-export class UpdateFinanceDebtDto {
+export class UpdateFinanceDebtDto extends FinanceEncryptedPayloadDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
@@ -270,7 +284,7 @@ export class UpdateFinanceDebtDto {
   purpose?: string;
 }
 
-export class CreateFinanceDebtPaymentDto {
+export class CreateFinanceDebtPaymentDto extends FinanceEncryptedPayloadDto {
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.01)
@@ -286,7 +300,7 @@ export class CreateFinanceDebtPaymentDto {
   note?: string | null;
 }
 
-export class CreateFinanceSavingsAccountDto {
+export class CreateFinanceSavingsAccountDto extends FinanceEncryptedPayloadDto {
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
@@ -318,9 +332,14 @@ export class CreateFinanceSavingsAccountDto {
   @IsOptional()
   @IsDateString()
   targetDate?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50000)
+  transactionEncryptedPayload?: string;
 }
 
-export class CreateFinanceSavingsTransactionDto {
+export class CreateFinanceSavingsTransactionDto extends FinanceEncryptedPayloadDto {
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.01)

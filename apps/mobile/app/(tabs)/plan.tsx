@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ModuleKey } from "@homeapp/shared-types";
+import type { EncryptableModuleKey, ModuleKey } from "@homeapp/shared-types";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   CalendarDays,
@@ -12,7 +12,14 @@ import {
   Utensils,
 } from "../../src/ui/icon";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import {
   completeTodoItem,
   copyMealPlanWeek,
@@ -47,6 +54,12 @@ import {
   hasModuleRead,
   usePermissions,
 } from "../../src/permissions/use-permissions";
+import {
+  decryptCalendarEvents,
+  protectCalendarRequest,
+} from "../../src/encryption/calendar-crypto";
+import { useEncryption } from "../../src/encryption/encryption-context";
+import { EncryptionUnlockCard } from "../../src/encryption/encryption-unlock-card";
 import { useSession } from "../../src/session/session-context";
 import { radii, spacing } from "../../src/theme/tokens";
 import { useAppTheme, type AppPalette } from "../../src/theme/use-app-theme";
@@ -90,11 +103,14 @@ export default function PlanScreen() {
   const { session } = useSession();
   const params = useLocalSearchParams<{ action?: string }>();
   const permissionsQuery = usePermissions();
+  const encryption = useEncryption();
   const router = useRouter();
   const theme = useAppTheme();
   const styles = useMemo(() => createStyles(theme.colors), [theme.colors]);
   const [activeSegment, setActiveSegment] = useState<SegmentKey>("food");
-  const [handledRouteAction, setHandledRouteAction] = useState<string | null>(null);
+  const [handledRouteAction, setHandledRouteAction] = useState<string | null>(
+    null,
+  );
   const permissions = permissionsQuery.data;
   const accessToken = session?.accessToken;
 
@@ -107,6 +123,11 @@ export default function PlanScreen() {
   const activeConfig =
     segments.find((segment) => segment.key === activeSegment) ?? segments[0]!;
   const activePermission = getPermission(permissions, activeConfig.moduleKey);
+  const activeEncryptionModule: EncryptableModuleKey =
+    activeSegment === "food" ? "meal_planner" : activeSegment;
+  const activeSegmentLocked =
+    encryption.isModuleEnabled(activeEncryptionModule) &&
+    encryption.lockState === "locked";
   const readableSegments = segments.filter(
     (segment) => getPermission(permissions, segment.moduleKey).canRead,
   );
@@ -135,21 +156,36 @@ export default function PlanScreen() {
       return;
     }
 
-    if (!permissionsQuery.isSuccess || !params.action || handledRouteAction === params.action) {
+    if (
+      !permissionsQuery.isSuccess ||
+      !params.action ||
+      handledRouteAction === params.action
+    ) {
       return;
     }
 
-    if (params.action === "meal" && getPermission(permissions, "meal_planner").canRead) {
+    if (
+      params.action === "meal" &&
+      getPermission(permissions, "meal_planner").canRead
+    ) {
       setActiveSegment("food");
       setHandledRouteAction(params.action);
       return;
     }
 
-    if (params.action === "note" && getPermission(permissions, "notes").canRead) {
+    if (
+      params.action === "note" &&
+      getPermission(permissions, "notes").canRead
+    ) {
       setActiveSegment("notes");
       setHandledRouteAction(params.action);
     }
-  }, [handledRouteAction, params.action, permissions, permissionsQuery.isSuccess]);
+  }, [
+    handledRouteAction,
+    params.action,
+    permissions,
+    permissionsQuery.isSuccess,
+  ]);
 
   if (permissionsQuery.isLoading) {
     return (
@@ -211,13 +247,17 @@ export default function PlanScreen() {
       </View>
       {!activePermission.canRead ? (
         <NoAccess moduleName={activeConfig.label} />
+      ) : activeSegmentLocked ? (
+        <EncryptionUnlockCard modules={[activeEncryptionModule]} />
       ) : activeSegment === "food" ? (
         <FoodSegment
           accessToken={accessToken}
           canCreate={activePermission.canCreate}
           canDelete={activePermission.canDelete}
           canUpdate={activePermission.canUpdate}
-          openCreateAction={params.action === "meal" && handledRouteAction === "meal"}
+          openCreateAction={
+            params.action === "meal" && handledRouteAction === "meal"
+          }
           onCreateActionHandled={() => router.setParams({ action: undefined })}
         />
       ) : activeSegment === "calendar" ? (
@@ -238,7 +278,9 @@ export default function PlanScreen() {
           canCreate={activePermission.canCreate}
           canDelete={activePermission.canDelete}
           canUpdate={activePermission.canUpdate}
-          openCreateAction={params.action === "note" && handledRouteAction === "note"}
+          openCreateAction={
+            params.action === "note" && handledRouteAction === "note"
+          }
           onCreateActionHandled={() => router.setParams({ action: undefined })}
         />
       )}
@@ -313,7 +355,13 @@ function FoodSegment({
         },
         { accessToken },
       ),
-    queryKey: [...queryKeys.meal, "inspirations", activePlan?.week.weekStartDate, weekday, slotIndex],
+    queryKey: [
+      ...queryKeys.meal,
+      "inspirations",
+      activePlan?.week.weekStartDate,
+      weekday,
+      slotIndex,
+    ],
   });
 
   useEffect(() => {
@@ -464,7 +512,11 @@ function FoodSegment({
         <QueryState
           emptyText="Brak wpisów w planie."
           error={currentQuery.error ?? selectedPlanQuery.error}
-          isEmpty={!currentQuery.isLoading && !selectedPlanQuery.isLoading && entries.length === 0}
+          isEmpty={
+            !currentQuery.isLoading &&
+            !selectedPlanQuery.isLoading &&
+            entries.length === 0
+          }
           isLoading={currentQuery.isLoading || selectedPlanQuery.isLoading}
         />
         <View style={styles.itemList}>
@@ -586,11 +638,15 @@ function FoodSegment({
         <View style={styles.deleteWarning}>
           <Trash2 color={theme.colors.danger} size={18} />
           <Text style={styles.deleteWarningText}>
-            Ta akcja usuwa cały tydzień planu posiłków. Nie usuwa inspiracji ani historii innych tygodni.
+            Ta akcja usuwa cały tydzień planu posiłków. Nie usuwa inspiracji ani
+            historii innych tygodni.
           </Text>
         </View>
         {deletePlanMutation.error ? (
-          <InlineAlert text="Nie udało się usunąć planu posiłków." tone="error" />
+          <InlineAlert
+            text="Nie udało się usunąć planu posiłków."
+            tone="error"
+          />
         ) : null}
       </FormModal>
 
@@ -622,7 +678,10 @@ function FoodSegment({
               value={weekStartInput}
             />
             <ActionButton
-              disabled={!/^\d{4}-\d{2}-\d{2}$/.test(weekStartInput) || createWeekMutation.isPending}
+              disabled={
+                !/^\d{4}-\d{2}-\d{2}$/.test(weekStartInput) ||
+                createWeekMutation.isPending
+              }
               loading={createWeekMutation.isPending}
               onPress={() => createWeekMutation.mutate()}
               title="Utwórz tydzień"
@@ -630,7 +689,10 @@ function FoodSegment({
             />
           </View>
           {createWeekMutation.error ? (
-            <InlineAlert text="Nie udało się utworzyć tygodnia. Podaj datę z wybranego tygodnia." tone="error" />
+            <InlineAlert
+              text="Nie udało się utworzyć tygodnia. Podaj datę z wybranego tygodnia."
+              tone="error"
+            />
           ) : null}
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={styles.chips}>
@@ -684,6 +746,7 @@ function CalendarSegment({
   canCreate: boolean;
 }) {
   const queryClient = useQueryClient();
+  const encryption = useEncryption();
   const theme = useAppTheme();
   const styles = useMemo(() => createStyles(theme.colors), [theme.colors]);
   const [title, setTitle] = useState("");
@@ -692,20 +755,32 @@ function CalendarSegment({
   const [note, setNote] = useState("");
   const [eventModalVisible, setEventModalVisible] = useState(false);
   const range = useMemo(() => currentWeekRange(), []);
+  const calendarEncryptionEnabled = encryption.isModuleEnabled("calendar");
+  const calendarContentReady =
+    encryption.lockState !== "loading" &&
+    (!calendarEncryptionEnabled || encryption.lockState === "unlocked");
 
   const upcomingQuery = useQuery({
-    enabled: Boolean(accessToken),
-    queryFn: () => listCalendarUpcoming(8, { accessToken }),
+    enabled: Boolean(accessToken) && calendarContentReady,
+    queryFn: async () =>
+      decryptCalendarEvents(
+        await listCalendarUpcoming(8, { accessToken }),
+        encryption.decryptPayload,
+      ),
     queryKey: [...queryKeys.calendar, "upcoming"],
   });
   const weekQuery = useQuery({
-    enabled: Boolean(accessToken),
-    queryFn: () => listCalendarEvents(range.from, range.to, { accessToken }),
+    enabled: Boolean(accessToken) && calendarContentReady,
+    queryFn: async () =>
+      decryptCalendarEvents(
+        await listCalendarEvents(range.from, range.to, { accessToken }),
+        encryption.decryptPayload,
+      ),
     queryKey: [...queryKeys.calendar, "week", range.from, range.to],
   });
   const createMutation = useMutation({
-    mutationFn: () =>
-      createCalendarEvent(
+    mutationFn: async () => {
+      const input = await protectCalendarRequest(
         {
           eventDate,
           eventTime: normalizeEventTime(eventTime),
@@ -713,8 +788,15 @@ function CalendarSegment({
           scopeType: "household",
           title: title.trim(),
         },
-        { accessToken },
-      ),
+        {
+          enabled: calendarEncryptionEnabled,
+          encryptPayload: encryption.encryptPayload,
+          keyVersion: encryption.settings?.keyVersion,
+        },
+      );
+
+      return createCalendarEvent(input, { accessToken });
+    },
     onSuccess: async () => {
       setTitle("");
       setEventTime("");
@@ -728,7 +810,8 @@ function CalendarSegment({
     canCreate &&
     Boolean(title.trim()) &&
     /^\d{4}-\d{2}-\d{2}$/.test(eventDate) &&
-    isOptionalTimeInputValid(eventTime);
+    isOptionalTimeInputValid(eventTime) &&
+    calendarContentReady;
 
   return (
     <>
@@ -736,6 +819,7 @@ function CalendarSegment({
         action={
           canCreate ? (
             <ActionButton
+              disabled={!calendarContentReady}
               onPress={() => setEventModalVisible(true)}
               size="small"
               title="+ Dodaj"
@@ -839,7 +923,10 @@ function TodoSegment({
   const [description, setDescription] = useState("");
   const [todoModalVisible, setTodoModalVisible] = useState(false);
   const [toggleError, setToggleError] = useState("");
-  const todoItemsQueryKey = useMemo(() => [...queryKeys.todo, "items"] as const, []);
+  const todoItemsQueryKey = useMemo(
+    () => [...queryKeys.todo, "items"] as const,
+    [],
+  );
   const todoQuery = useQuery({
     enabled: Boolean(accessToken),
     queryFn: () => listTodoItems(undefined, { accessToken }),
@@ -878,7 +965,9 @@ function TodoSegment({
     queryKey: todoItemsQueryKey,
     setValue: setTodoDoneValue,
     sync: (id, done) =>
-      done ? completeTodoItem(id, { accessToken }) : reopenTodoItem(id, { accessToken }),
+      done
+        ? completeTodoItem(id, { accessToken })
+        : reopenTodoItem(id, { accessToken }),
   });
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteTodoItem(id, { accessToken }),
@@ -975,7 +1064,10 @@ function TodoSegment({
           value={description}
         />
         {createMutation.error ? (
-          <InlineAlert text="Nie udało się dodać rzeczy do zrobienia." tone="error" />
+          <InlineAlert
+            text="Nie udało się dodać rzeczy do zrobienia."
+            tone="error"
+          />
         ) : null}
       </FormModal>
     </>
@@ -1299,22 +1391,14 @@ function NoteRow({
   );
 }
 
-function Toolbar({
-  action,
-  title,
-}: {
-  action?: ReactNode;
-  title: string;
-}) {
+function Toolbar({ action, title }: { action?: ReactNode; title: string }) {
   const theme = useAppTheme();
   const styles = useMemo(() => createStyles(theme.colors), [theme.colors]);
 
   return (
     <View style={styles.toolbar}>
       <Text style={styles.sectionTitle}>{title}</Text>
-      <View style={styles.toolbarActions}>
-        {action}
-      </View>
+      <View style={styles.toolbarActions}>{action}</View>
     </View>
   );
 }
@@ -1332,7 +1416,10 @@ function HistoryRow({
   const styles = useMemo(() => createStyles(theme.colors), [theme.colors]);
 
   return (
-    <Pressable onPress={onPress} style={[styles.compactRow, active && styles.compactRowActive]}>
+    <Pressable
+      onPress={onPress}
+      style={[styles.compactRow, active && styles.compactRowActive]}
+    >
       <Text style={styles.itemName}>
         Tydzień od {formatDate(week.weekStartDate)}
       </Text>
@@ -1395,7 +1482,9 @@ function groupMealEntries(entries: MealPlanEntry[]): MealPlanEntry[] {
 }
 
 function buildMealSlotIndexes(value: number | null | undefined): number[] {
-  const count = Number.isFinite(value) ? Math.max(1, Math.min(8, Number(value))) : 4;
+  const count = Number.isFinite(value)
+    ? Math.max(1, Math.min(8, Number(value)))
+    : 4;
 
   return Array.from({ length: count }, (_, index) => index);
 }
@@ -1475,7 +1564,14 @@ function isOptionalTimeInputValid(value: string): boolean {
   const hours = Number(hoursPart);
   const minutes = Number(minutesPart);
 
-  return Number.isInteger(hours) && Number.isInteger(minutes) && hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59;
+  return (
+    Number.isInteger(hours) &&
+    Number.isInteger(minutes) &&
+    hours >= 0 &&
+    hours <= 23 &&
+    minutes >= 0 &&
+    minutes <= 59
+  );
 }
 
 function normalizeEventTime(value: string): string | null {
@@ -1577,14 +1673,8 @@ function createStyles(colors: AppPalette) {
       fontWeight: "800",
       letterSpacing: 0,
     },
-    chipTextActive: {
-      color: colors.inverseText,
-    },
-    chips: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: spacing.sm,
-    },
+    chipTextActive: { color: colors.inverseText },
+    chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
     compactRow: {
       backgroundColor: colors.cardMuted,
       borderColor: colors.border,
@@ -1597,14 +1687,8 @@ function createStyles(colors: AppPalette) {
       backgroundColor: colors.primarySoft,
       borderColor: colors.primary,
     },
-    flex: {
-      flex: 1,
-    },
-    formRow: {
-      alignItems: "center",
-      flexDirection: "row",
-      gap: spacing.sm,
-    },
+    flex: { flex: 1 },
+    formRow: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
     deleteWarning: {
       alignItems: "flex-start",
       backgroundColor: colors.dangerSoft,
@@ -1639,14 +1723,8 @@ function createStyles(colors: AppPalette) {
       flexDirection: "row",
       gap: spacing.xs,
     },
-    itemContent: {
-      flex: 1,
-      gap: spacing.xs,
-      paddingRight: spacing.sm,
-    },
-    itemList: {
-      gap: spacing.sm,
-    },
+    itemContent: { flex: 1, gap: spacing.xs, paddingRight: spacing.sm },
+    itemList: { gap: spacing.sm },
     itemName: {
       color: colors.text,
       fontSize: 15,
@@ -1657,11 +1735,7 @@ function createStyles(colors: AppPalette) {
       color: colors.textMuted,
       textDecorationLine: "line-through",
     },
-    itemQuantity: {
-      color: colors.textMuted,
-      fontSize: 12,
-      letterSpacing: 0,
-    },
+    itemQuantity: { color: colors.textMuted, fontSize: 12, letterSpacing: 0 },
     itemRow: {
       alignItems: "center",
       backgroundColor: colors.cardMuted,
@@ -1674,9 +1748,7 @@ function createStyles(colors: AppPalette) {
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.sm,
     },
-    itemRowChecked: {
-      opacity: 0.58,
-    },
+    itemRowChecked: { opacity: 0.58 },
     largeTextArea: {
       minHeight: 128,
       paddingTop: spacing.md,
@@ -1688,11 +1760,7 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
       marginTop: spacing.xs,
     },
-    muted: {
-      color: colors.textMuted,
-      fontSize: 13,
-      letterSpacing: 0,
-    },
+    muted: { color: colors.textMuted, fontSize: 13, letterSpacing: 0 },
     moduleIcon: {
       alignItems: "center",
       borderRadius: radii.control,
@@ -1706,20 +1774,10 @@ function createStyles(colors: AppPalette) {
       fontWeight: "900",
       letterSpacing: 0,
     },
-    moduleLabelActive: {
-      color: colors.text,
-    },
-    modalFooter: {
-      flexDirection: "row",
-      gap: spacing.sm,
-    },
-    modalFooterButton: {
-      flex: 1,
-    },
-    moduleStrip: {
-      flexDirection: "row",
-      gap: spacing.sm,
-    },
+    moduleLabelActive: { color: colors.text },
+    modalFooter: { flexDirection: "row", gap: spacing.sm },
+    modalFooterButton: { flex: 1 },
+    moduleStrip: { flexDirection: "row", gap: spacing.sm },
     moduleTile: {
       alignItems: "center",
       backgroundColor: colors.card,
@@ -1734,9 +1792,7 @@ function createStyles(colors: AppPalette) {
       paddingHorizontal: spacing.xs,
       paddingVertical: spacing.sm,
     },
-    moduleTileActive: {
-      backgroundColor: colors.overlay,
-    },
+    moduleTileActive: { backgroundColor: colors.overlay },
     sectionTitle: {
       color: colors.text,
       fontSize: 18,
@@ -1748,18 +1804,9 @@ function createStyles(colors: AppPalette) {
       paddingTop: spacing.md,
       textAlignVertical: "top",
     },
-    timeInput: {
-      width: 96,
-    },
-    weekInput: {
-      flex: 1,
-      minWidth: 134,
-    },
-    weekPicker: {
-      alignItems: "center",
-      flexDirection: "row",
-      gap: spacing.sm,
-    },
+    timeInput: { width: 96 },
+    weekInput: { flex: 1, minWidth: 134 },
+    weekPicker: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
     toolbar: {
       alignItems: "center",
       flexDirection: "row",

@@ -9,7 +9,13 @@ import {
 } from "@homeapp/shared-types";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { setStringAsync } from "expo-clipboard";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   Image,
   Linking,
@@ -57,6 +63,9 @@ import {
   useModulePermission,
   usePermissions,
 } from "../../src/permissions/use-permissions";
+import { useEncryption } from "../../src/encryption/encryption-context";
+import { EncryptionUnlockCard } from "../../src/encryption/encryption-unlock-card";
+import { confirmSensitiveAiTransfer } from "../../src/encryption/ai-data-disclosure";
 import {
   loadStoredJson,
   saveStoredJson,
@@ -168,6 +177,7 @@ export default function ListaScreen() {
   const permissionsQuery = usePermissions();
   const shoppingPermission = useModulePermission("shopping");
   const mealPermission = useModulePermission("meal_planner");
+  const encryption = useEncryption();
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
   const [activeSegment, setActiveSegment] = useState<MainSegment>("shopping");
@@ -179,6 +189,11 @@ export default function ListaScreen() {
   const [mealViewResetRequest, setMealViewResetRequest] = useState(0);
   const [mealLayout, setMealLayout] = useState<MealLayout>("list");
   const [mealLayoutLoaded, setMealLayoutLoaded] = useState(false);
+  const activeEncryptionModule =
+    activeSegment === "meals" ? "meal_planner" : "shopping";
+  const activeSegmentLocked =
+    encryption.isModuleEnabled(activeEncryptionModule) &&
+    encryption.lockState === "locked";
   const clearRouteAction = useCallback(() => {
     router.setParams({ action: undefined });
   }, [router]);
@@ -226,7 +241,11 @@ export default function ListaScreen() {
         label: string;
         value: MainSegment;
       }>,
-    [mealPermission.canRead, shoppingPermission.canRead, theme.colors.textMuted],
+    [
+      mealPermission.canRead,
+      shoppingPermission.canRead,
+      theme.colors.textMuted,
+    ],
   );
   const screenBackground =
     theme.colors.background === "#0C1220" ? theme.colors.background : "#FBFAF6";
@@ -325,7 +344,8 @@ export default function ListaScreen() {
   return (
     <AppScreen
       actions={
-        activeSegment === "shopping" && shoppingPermission.canCreate ? (
+        activeSegmentLocked ? undefined : activeSegment === "shopping" &&
+          shoppingPermission.canCreate ? (
           <View style={styles.headerActions}>
             <IconButton
               accessibilityLabel="AI do listy zakupów"
@@ -399,27 +419,33 @@ export default function ListaScreen() {
         value={activeSegment}
       />
 
-      {activeSegment === "shopping" ? (
-        <ShoppingBoard
-          action={params.action}
-          addOpenRequest={shoppingAddOpenRequest}
-          aiOpenRequest={shoppingAiOpenRequest}
-          onRouteActionHandled={clearRouteAction}
-        />
-      ) : null}
-      {activeSegment === "meals" ? (
-        <MealsBoard
-          action={params.action}
-          addOpenRequest={mealAddOpenRequest}
-          aiOpenRequest={mealAiOpenRequest}
-          layout={mealLayout}
-          onRouteActionHandled={clearRouteAction}
-          resetRequest={mealViewResetRequest}
-        />
-      ) : null}
-      {activeSegment === "pantry" ? (
-        <PantryDashboardBoard addOpenRequest={pantryAddOpenRequest} />
-      ) : null}
+      {activeSegmentLocked ? (
+        <EncryptionUnlockCard modules={[activeEncryptionModule]} />
+      ) : (
+        <>
+          {activeSegment === "shopping" ? (
+            <ShoppingBoard
+              action={params.action}
+              addOpenRequest={shoppingAddOpenRequest}
+              aiOpenRequest={shoppingAiOpenRequest}
+              onRouteActionHandled={clearRouteAction}
+            />
+          ) : null}
+          {activeSegment === "meals" ? (
+            <MealsBoard
+              action={params.action}
+              addOpenRequest={mealAddOpenRequest}
+              aiOpenRequest={mealAiOpenRequest}
+              layout={mealLayout}
+              onRouteActionHandled={clearRouteAction}
+              resetRequest={mealViewResetRequest}
+            />
+          ) : null}
+          {activeSegment === "pantry" ? (
+            <PantryDashboardBoard addOpenRequest={pantryAddOpenRequest} />
+          ) : null}
+        </>
+      )}
     </AppScreen>
   );
 }
@@ -437,6 +463,7 @@ function ShoppingBoard({
 }) {
   const { session } = useSession();
   const queryClient = useQueryClient();
+  const encryption = useEncryption();
   const permission = useModulePermission("shopping");
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
@@ -621,6 +648,15 @@ function ShoppingBoard({
     permission.canCreate &&
     aiMessage.trim().length >= 3 &&
     !aiImportMutation.isPending;
+
+  async function handleAiImport() {
+    if (
+      canImportWithAi &&
+      (await confirmSensitiveAiTransfer(encryption.isModuleEnabled("shopping")))
+    ) {
+      aiImportMutation.mutate();
+    }
+  }
 
   return (
     <>
@@ -952,7 +988,7 @@ function ShoppingBoard({
             <ActionButton
               disabled={!canImportWithAi}
               loading={aiImportMutation.isPending}
-              onPress={() => aiImportMutation.mutate()}
+              onPress={() => void handleAiImport()}
               style={styles.modalFooterButton}
               title="Dodaj z AI"
             />
@@ -1007,6 +1043,7 @@ function MealsBoard({
 }) {
   const { session } = useSession();
   const queryClient = useQueryClient();
+  const encryption = useEncryption();
   const permission = useModulePermission("meal_planner");
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
@@ -1032,6 +1069,7 @@ function MealsBoard({
     selectedWeekStartDate,
   );
   const [aiNotice, setAiNotice] = useState("");
+  const [aiDisclosureAccepted, setAiDisclosureAccepted] = useState(false);
   const [handledAddOpenRequest, setHandledAddOpenRequest] =
     useState(addOpenRequest);
   const [handledAiOpenRequest, setHandledAiOpenRequest] =
@@ -1268,7 +1306,9 @@ function MealsBoard({
         }
       }
 
-      const hasUserMessage = aiMessages.some((message) => message.role === "user");
+      const hasUserMessage = aiMessages.some(
+        (message) => message.role === "user",
+      );
       const finalizeResponse = hasUserMessage
         ? await finalizeMealPlanWithAi(
             {
@@ -1284,9 +1324,7 @@ function MealsBoard({
           };
 
       if (finalizeResponse.entries.length === 0) {
-        throw new Error(
-          "AI nie przygotowalo planu do zapisu.",
-        );
+        throw new Error("AI nie przygotowalo planu do zapisu.");
       }
 
       const targetPlan = await getOrCreateMealPlanForDate({
@@ -1345,12 +1383,12 @@ function MealsBoard({
   const editingMealEntry = useMemo(
     () =>
       modalVisible
-        ? activePlan?.entries.find(
+        ? (activePlan?.entries.find(
             (entry) =>
               entry.weekday === weekday &&
               entry.slotIndex === slotIndex &&
               activePlan.week.weekStartDate === selectedWeekStartDate,
-          ) ?? null
+          ) ?? null)
         : null,
     [
       activePlan?.entries,
@@ -1390,6 +1428,40 @@ function MealsBoard({
     !aiPromptMutation.isPending &&
     !aiSaveMutation.isPending;
   const aiDraftGroups = groupMealDraftEntries(aiDraft);
+
+  async function ensureAiDisclosureAccepted() {
+    if (aiDisclosureAccepted || !encryption.isModuleEnabled("meal_planner")) {
+      return true;
+    }
+
+    const accepted = await confirmSensitiveAiTransfer(true);
+
+    if (accepted) {
+      setAiDisclosureAccepted(true);
+    }
+
+    return accepted;
+  }
+
+  async function handleAiChat() {
+    if (canSendAi && (await ensureAiDisclosureAccepted())) {
+      aiChatMutation.mutate();
+    }
+  }
+
+  async function handleAiSave() {
+    const sendsDataToAi = aiMessages.some((message) => message.role === "user");
+
+    if (canSaveAi && (!sendsDataToAi || (await ensureAiDisclosureAccepted()))) {
+      aiSaveMutation.mutate();
+    }
+  }
+
+  useEffect(() => {
+    if (!aiModalVisible) {
+      setAiDisclosureAccepted(false);
+    }
+  }, [aiModalVisible]);
 
   useEffect(() => {
     if (!modalVisible) {
@@ -1812,7 +1884,7 @@ function MealsBoard({
               <ActionButton
                 disabled={!canSendAi}
                 loading={aiChatMutation.isPending}
-                onPress={() => aiChatMutation.mutate()}
+                onPress={() => void handleAiChat()}
                 style={styles.modalFooterButton}
                 title="Wyślij"
               />
@@ -1821,7 +1893,7 @@ function MealsBoard({
               <ActionButton
                 disabled={!canSaveAi}
                 loading={aiSaveMutation.isPending}
-                onPress={() => aiSaveMutation.mutate()}
+                onPress={() => void handleAiSave()}
                 title="Zapisz plan"
               />
             ) : null}
@@ -1996,7 +2068,10 @@ function ShoppingGroupCard({
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
-  const illustration = getShoppingGroupIllustration(group.category, group.title);
+  const illustration = getShoppingGroupIllustration(
+    group.category,
+    group.title,
+  );
 
   return (
     <View style={styles.shoppingGroup}>
@@ -2009,7 +2084,10 @@ function ShoppingGroupCard({
       <View style={styles.groupBody}>
         <View style={styles.groupItems}>
           {group.items.map((item) => (
-            <View key={item.id} style={[styles.itemRow, styles.shoppingItemRow]}>
+            <View
+              key={item.id}
+              style={[styles.itemRow, styles.shoppingItemRow]}
+            >
               <Pressable
                 disabled={!canUpdate || isUpdating(item.id)}
                 onPress={() => onCheck(item)}
@@ -2026,12 +2104,19 @@ function ShoppingGroupCard({
                 style={styles.itemText}
               >
                 <Text
-                  style={[styles.itemName, styles.shoppingItemName, item.isChecked && styles.shoppingItemDone]}
+                  style={[
+                    styles.itemName,
+                    styles.shoppingItemName,
+                    item.isChecked && styles.shoppingItemDone,
+                  ]}
                 >
                   {item.name}
                 </Text>
                 {item.quantity ? (
-                  <Text numberOfLines={1} style={[styles.itemMeta, styles.shoppingItemMeta]}>
+                  <Text
+                    numberOfLines={1}
+                    style={[styles.itemMeta, styles.shoppingItemMeta]}
+                  >
                     {item.quantity}
                   </Text>
                 ) : null}
@@ -2151,17 +2236,17 @@ const legacyShoppingCategoryMap: Record<string, ShoppingCategory> = {
   "Grill i ogrod": "Dom i ogród",
   "Mięso i ryby": "Mięso i wędliny",
   "Mieso i wedliny": "Mięso i wędliny",
-  "Nabial": "Nabiał i jaja",
+  Nabial: "Nabiał i jaja",
   "Nabiał i jajka": "Nabiał i jaja",
-  "Napoje": "Woda i napoje",
-  "Owoce": "Owoce, warzywa i zioła",
+  Napoje: "Woda i napoje",
+  Owoce: "Owoce, warzywa i zioła",
   "Owoce i warzywa": "Owoce, warzywa i zioła",
-  "Pozostałe": "Inne",
+  Pozostałe: "Inne",
   "Produkty suche i spizarnia": "Sypkie",
   "Przekaski i slodycze": "Słodycze i przekąski",
   "Sosy i dodatki": "Przyprawy, sosy i oleje",
-  "Spiżarnia": "Sypkie",
-  "Warzywa": "Owoce, warzywa i zioła",
+  Spiżarnia: "Sypkie",
+  Warzywa: "Owoce, warzywa i zioła",
 };
 
 function groupShoppingItems(items: ShoppingItem[]): ShoppingGroup[] {
@@ -2252,7 +2337,9 @@ function resolveShoppingCategory(item: ShoppingItem): ShoppingCategory {
     return item.category;
   }
 
-  return item.category ? (legacyShoppingCategoryMap[item.category] ?? "Inne") : "Inne";
+  return item.category
+    ? (legacyShoppingCategoryMap[item.category] ?? "Inne")
+    : "Inne";
 }
 
 function mealDraftKey(
@@ -2360,7 +2447,9 @@ function buildMarkedMealWeekDates(
         count: Number(count),
         weekday: Number(weekday),
       }))
-      .filter(({ count, weekday }) => count > 0 && weekday >= 1 && weekday <= 7);
+      .filter(
+        ({ count, weekday }) => count > 0 && weekday >= 1 && weekday <= 7,
+      );
 
     if (plannedWeekdays.length === 0 && week.entriesCount) {
       marked[week.weekStartDate] = {
@@ -2647,7 +2736,9 @@ function _PantryBoard() {
   const isZeroQuantity = useCallback((qty: string | null | undefined) => {
     if (!qty) return false;
     const str = qty.trim().toLowerCase();
-    return str === "0" || str.startsWith("0 ") || str === "brak" || str === "0szt";
+    return (
+      str === "0" || str.startsWith("0 ") || str === "brak" || str === "0szt"
+    );
   }, []);
 
   const groupedItems = useMemo(() => {
@@ -2701,7 +2792,9 @@ function _PantryBoard() {
     <View style={{ flex: 1 }}>
       <QueryState
         error={pantryQuery.error}
-        isEmpty={!pantryQuery.isLoading && (pantryQuery.data ?? []).length === 0}
+        isEmpty={
+          !pantryQuery.isLoading && (pantryQuery.data ?? []).length === 0
+        }
         isLoading={pantryQuery.isLoading}
       />
 
@@ -2725,7 +2818,15 @@ function _PantryBoard() {
           <IconButton
             accessibilityLabel="Dodaj produkt do spiżarni"
             onPress={() => setModalVisible(true)}
-            style={{ backgroundColor: theme.colors.primary, borderRadius: 32, elevation: 6, height: 64, width: 64, alignItems: "center", justifyContent: "center" }}
+            style={{
+              backgroundColor: theme.colors.primary,
+              borderRadius: 32,
+              elevation: 6,
+              height: 64,
+              width: 64,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
           >
             <Package color="#FFFFFF" size={32} />
           </IconButton>
@@ -2758,7 +2859,16 @@ function _PantryBoard() {
         title="Dodaj do spiżarni"
         visible={modalVisible}
       >
-        <Text style={{ color: theme.colors.text, fontSize: 14, fontWeight: "800", marginBottom: 8 }}>Co masz w spiżarni?</Text>
+        <Text
+          style={{
+            color: theme.colors.text,
+            fontSize: 14,
+            fontWeight: "800",
+            marginBottom: 8,
+          }}
+        >
+          Co masz w spiżarni?
+        </Text>
         <TextInput
           autoFocus
           onChangeText={setName}
@@ -2769,31 +2879,78 @@ function _PantryBoard() {
           }}
           placeholder="np. Mąka pszenna"
           placeholderTextColor={theme.colors.textMuted}
-          style={{ backgroundColor: theme.colors.card, borderColor: theme.colors.border, borderRadius: 8, borderWidth: 1, color: theme.colors.text, fontSize: 16, minHeight: 48, paddingHorizontal: 16 }}
+          style={{
+            backgroundColor: theme.colors.card,
+            borderColor: theme.colors.border,
+            borderRadius: 8,
+            borderWidth: 1,
+            color: theme.colors.text,
+            fontSize: 16,
+            minHeight: 48,
+            paddingHorizontal: 16,
+          }}
           value={name}
         />
         {suggestedCategory ? (
-          <Text style={{ color: theme.colors.textMuted, fontSize: 12, marginTop: 4 }}>
+          <Text
+            style={{
+              color: theme.colors.textMuted,
+              fontSize: 12,
+              marginTop: 4,
+            }}
+          >
             Kategoria:{" "}
             {getShoppingCategoryMeta(suggestedCategory).title.toLowerCase()}
           </Text>
         ) : null}
 
         {productSuggestions.length > 0 ? (
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              flexWrap: "wrap",
+              gap: 8,
+              marginTop: 12,
+            }}
+          >
             {productSuggestions.map((suggestion) => (
               <Pressable
                 key={suggestion.name}
                 onPress={() => setName(suggestion.name)}
-                style={{ backgroundColor: theme.colors.cardMuted, borderColor: theme.colors.border, borderRadius: 16, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 6 }}
+                style={{
+                  backgroundColor: theme.colors.cardMuted,
+                  borderColor: theme.colors.border,
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                }}
               >
-                <Text style={{ color: theme.colors.text, fontSize: 13, fontWeight: "700" }}>{suggestion.name}</Text>
+                <Text
+                  style={{
+                    color: theme.colors.text,
+                    fontSize: 13,
+                    fontWeight: "700",
+                  }}
+                >
+                  {suggestion.name}
+                </Text>
               </Pressable>
             ))}
           </View>
         ) : null}
 
-        <Text style={{ color: theme.colors.text, fontSize: 14, fontWeight: "800", marginBottom: 8, marginTop: 24 }}>Ile tego masz? (opcjonalnie)</Text>
+        <Text
+          style={{
+            color: theme.colors.text,
+            fontSize: 14,
+            fontWeight: "800",
+            marginBottom: 8,
+            marginTop: 24,
+          }}
+        >
+          Ile tego masz? (opcjonalnie)
+        </Text>
         <TextInput
           onChangeText={setQuantity}
           onSubmitEditing={() => {
@@ -2803,7 +2960,16 @@ function _PantryBoard() {
           }}
           placeholder="np. 2 kg, 3 szt."
           placeholderTextColor={theme.colors.textMuted}
-          style={{ backgroundColor: theme.colors.card, borderColor: theme.colors.border, borderRadius: 8, borderWidth: 1, color: theme.colors.text, fontSize: 16, minHeight: 48, paddingHorizontal: 16 }}
+          style={{
+            backgroundColor: theme.colors.card,
+            borderColor: theme.colors.border,
+            borderRadius: 8,
+            borderWidth: 1,
+            color: theme.colors.text,
+            fontSize: 16,
+            minHeight: 48,
+            paddingHorizontal: 16,
+          }}
           value={quantity}
         />
       </FormModal>
@@ -2822,7 +2988,10 @@ function _PantryBoard() {
               disabled={updateMutation.isPending}
               onPress={() => {
                 if (editItem) {
-                  updateMutation.mutate({ id: editItem.id, quantity: editQuantity });
+                  updateMutation.mutate({
+                    id: editItem.id,
+                    quantity: editQuantity,
+                  });
                 }
               }}
               style={{ flex: 1 }}
@@ -2834,22 +3003,47 @@ function _PantryBoard() {
         title="Edytuj produkt"
         visible={!!editItem}
       >
-        <Text style={{ color: theme.colors.text, fontSize: 14, fontWeight: "800", marginBottom: 8 }}>Ilość w spiżarni</Text>
+        <Text
+          style={{
+            color: theme.colors.text,
+            fontSize: 14,
+            fontWeight: "800",
+            marginBottom: 8,
+          }}
+        >
+          Ilość w spiżarni
+        </Text>
         <TextInput
           autoFocus
           onChangeText={setEditQuantity}
           onSubmitEditing={() => {
             if (editItem) {
-              updateMutation.mutate({ id: editItem.id, quantity: editQuantity });
+              updateMutation.mutate({
+                id: editItem.id,
+                quantity: editQuantity,
+              });
             }
           }}
           placeholder="np. 0, 2 kg, brak"
           placeholderTextColor={theme.colors.textMuted}
-          style={{ backgroundColor: theme.colors.card, borderColor: theme.colors.border, borderRadius: 8, borderWidth: 1, color: theme.colors.text, fontSize: 16, minHeight: 48, paddingHorizontal: 16 }}
+          style={{
+            backgroundColor: theme.colors.card,
+            borderColor: theme.colors.border,
+            borderRadius: 8,
+            borderWidth: 1,
+            color: theme.colors.text,
+            fontSize: 16,
+            minHeight: 48,
+            paddingHorizontal: 16,
+          }}
           value={editQuantity}
         />
         <View style={{ marginTop: 24 }}>
-          <ActionButton onPress={() => setEditQuantity("0")} title="Ustaw ilość na 0" variant="secondary" />
+          <ActionButton
+            onPress={() => setEditQuantity("0")}
+            title="Ustaw ilość na 0"
+            variant="secondary"
+          />
         </View>
       </FormModal>
     </View>
@@ -2873,17 +3067,19 @@ function _PantryGroupCard({
   const isZeroQuantity = (qty: string | null | undefined) => {
     if (!qty) return false;
     const str = qty.trim().toLowerCase();
-    return str === "0" || str.startsWith("0 ") || str === "brak" || str === "0szt";
+    return (
+      str === "0" || str.startsWith("0 ") || str === "brak" || str === "0szt"
+    );
   };
 
   return (
     <View style={styles.shoppingGroup}>
       <View style={{ alignItems: "center", flexDirection: "row", gap: 12 }}>
-        <View style={{ alignItems: "center", backgroundColor: theme.colors.cardMuted, borderRadius: 12, height: 48, justifyContent: "center", width: 48 }}>
+        <View style={styles.pantryGroupIllustrationFrame}>
           <Image
             resizeMode="contain"
             source={getShoppingGroupIllustration(category, meta.title)}
-            style={{ bottom: -8, height: 58, position: "absolute", right: -8, width: 58 }}
+            style={styles.pantryGroupIllustration}
           />
         </View>
         <Text style={styles.shoppingGroupTitle}>{meta.title}</Text>
@@ -2895,9 +3091,16 @@ function _PantryGroupCard({
             onPress={() => onItemPress(item)}
             style={[
               styles.shoppingItemRow,
-              { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
-              index < items.length - 1 && { borderBottomColor: theme.colors.border, borderBottomWidth: 1 },
-              isZeroQuantity(item.quantity) && { opacity: 0.5 }
+              {
+                alignItems: "center",
+                flexDirection: "row",
+                justifyContent: "space-between",
+              },
+              index < items.length - 1 && {
+                borderBottomColor: theme.colors.border,
+                borderBottomWidth: 1,
+              },
+              isZeroQuantity(item.quantity) && { opacity: 0.5 },
             ]}
           >
             <View style={{ flex: 1, gap: 2, paddingVertical: 12 }}>
@@ -2972,11 +3175,7 @@ const pantryDashboardGroups: PantryDashboardGroup[] = [
   },
 ];
 
-function PantryDashboardBoard({
-  addOpenRequest,
-}: {
-  addOpenRequest: number;
-}) {
+function PantryDashboardBoard({ addOpenRequest }: { addOpenRequest: number }) {
   const { session } = useSession();
   const queryClient = useQueryClient();
   const permission = useModulePermission("shopping");
@@ -3044,7 +3243,8 @@ function PantryDashboardBoard({
       createShoppingItem(
         "pantry",
         {
-          category: category === "Inne" ? categorizeShoppingProduct(name) : category,
+          category:
+            category === "Inne" ? categorizeShoppingProduct(name) : category,
           expirationDate: expirationDate.trim() || null,
           name: name.trim(),
           quantity: quantity.trim(),
@@ -3097,7 +3297,8 @@ function PantryDashboardBoard({
   }, [items, search]);
   const visibleItems = showAllItems ? filteredItems : filteredItems.slice(0, 4);
   const isSaving = createMutation.isPending || updateMutation.isPending;
-  const canSave = Boolean(name.trim()) && isValidOptionalIsoDate(expirationDate);
+  const canSave =
+    Boolean(name.trim()) && isValidOptionalIsoDate(expirationDate);
 
   if (!permission.canRead) {
     return <InlineAlert text="Nie masz dostępu do spiżarni." />;
@@ -3141,7 +3342,8 @@ function PantryDashboardBoard({
               onPress={() => openEditEditor(item)}
               style={({ pressed }) => [
                 styles.pantryProductRow,
-                index < visibleItems.length - 1 && styles.pantryProductRowBorder,
+                index < visibleItems.length - 1 &&
+                  styles.pantryProductRowBorder,
                 pressed && styles.pressed,
               ]}
             >
@@ -3166,7 +3368,8 @@ function PantryDashboardBoard({
                   numberOfLines={1}
                   style={[
                     styles.pantryProductDate,
-                    isExpiredPantryItem(item) && styles.pantryProductDateExpired,
+                    isExpiredPantryItem(item) &&
+                      styles.pantryProductDateExpired,
                   ]}
                 >
                   {item.expirationDate
@@ -3365,6 +3568,7 @@ function createStyles(colors: AppPalette) {
   const panelShadowOpacity = isDark ? 0.18 : 0.08;
   const softGreenPanel = isDark ? colors.cardMuted : "#F6FAF0";
   const softGreenBorder = isDark ? colors.border : "#E2EAD9";
+  const illustrationSurface = isDark ? "#F6F1E8" : "transparent";
 
   return StyleSheet.create({
     pantryCategoryCard: {
@@ -3634,6 +3838,19 @@ function createStyles(colors: AppPalette) {
       height: 48,
       paddingLeft: spacing.md,
       paddingRight: spacing.xs,
+    },
+    pantryGroupIllustration: {
+      height: 54,
+      width: 54,
+    },
+    pantryGroupIllustrationFrame: {
+      alignItems: "center",
+      backgroundColor: illustrationSurface,
+      borderRadius: 12,
+      height: 48,
+      justifyContent: "center",
+      overflow: "hidden",
+      width: 48,
     },
     pantrySearchDivider: {
       backgroundColor: colors.line,
@@ -3984,7 +4201,10 @@ function createStyles(colors: AppPalette) {
     groupIllustrationFrame: {
       alignItems: "center",
       alignSelf: "stretch",
+      backgroundColor: illustrationSurface,
+      borderRadius: radii.control,
       justifyContent: "center",
+      overflow: "hidden",
       width: 92,
     },
     groupIllustration: {

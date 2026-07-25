@@ -1,7 +1,11 @@
 import { Transform, Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
+  IsISO8601,
   IsOptional,
   IsString,
   IsUUID,
@@ -9,7 +13,8 @@ import {
   Matches,
   Max,
   MaxLength,
-  Min
+  Min,
+  ValidateNested
 } from 'class-validator';
 
 export const CALENDAR_SCOPE_TYPES = ['household', 'member'] as const;
@@ -85,6 +90,17 @@ export class CreateCalendarEventDto {
   @IsOptional()
   @IsUUID()
   ownerMemberId?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50000)
+  encryptedPayload?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  encryptionVersion?: number;
 }
 
 export class UpdateCalendarEventDto {
@@ -134,4 +150,52 @@ export class UpdateCalendarEventDto {
   @IsOptional()
   @IsUUID()
   ownerMemberId?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50000)
+  encryptedPayload?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  encryptionVersion?: number;
+}
+
+export class GoogleCalendarEncryptedSyncItemDto {
+  @IsString()
+  @Length(1, 1024)
+  googleEventId!: string;
+
+  @IsOptional()
+  @IsISO8601()
+  googleUpdatedAt?: string | null;
+
+  @Matches(DATE_PATTERN)
+  eventDate!: string;
+
+  @IsOptional()
+  @Matches(TIME_PATTERN)
+  eventTime?: string | null;
+
+  @IsString()
+  @Length(1, 50000)
+  encryptedPayload!: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  encryptionVersion!: number;
+}
+
+export class CommitGoogleCalendarEncryptedSyncDto {
+  @IsArray()
+  @ArrayMaxSize(200)
+  @ValidateNested({ each: true })
+  @Type(() => GoogleCalendarEncryptedSyncItemDto)
+  events!: GoogleCalendarEncryptedSyncItemDto[];
+
+  @IsBoolean()
+  finalize!: boolean;
 }

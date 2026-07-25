@@ -16,6 +16,10 @@ import { loadEnv } from "../../shared/env";
 import { HouseholdContext, UserContext } from "../../shared/request-context";
 import { DatabaseService } from "../database/database.service";
 import { RealtimeService } from "../realtime/realtime.service";
+import {
+  CommitGoogleCalendarEncryptedSyncDto,
+  GoogleCalendarEncryptedSyncItemDto,
+} from "./dto/calendar.dto";
 
 const calendarScope =
   "https://www.googleapis.com/auth/calendar.events.readonly";
@@ -146,7 +150,11 @@ export class CalendarGoogleService {
     return { googleAccountEmail };
   }
 
-  async sync(household: HouseholdContext, user: UserContext) {
+  async sync(
+    household: HouseholdContext,
+    user: UserContext,
+    options: { clientEncryption?: boolean } = {},
+  ) {
     const config = this.loadConfig();
     const connection = await this.findConnection(household, user);
 
@@ -169,6 +177,16 @@ export class CalendarGoogleService {
     let updatedCount = 0;
     let skippedCount = googleEvents.length - importableEvents.length;
     const affectedEventDates = new Set<string>();
+
+    if (options.clientEncryption) {
+      return {
+        clientEncryptionRequired: true as const,
+        events: importableEvents,
+        from: range.from,
+        skippedCount,
+        to: range.to,
+      };
+    }
 
     await this.database.transaction(async (client) => {
       for (const event of importableEvents) {
@@ -206,6 +224,7 @@ export class CalendarGoogleService {
     );
 
     return {
+      clientEncryptionRequired: false as const,
       from: range.from,
       eventDates: Array.from(affectedEventDates).sort(),
       importedCount,
@@ -213,6 +232,215 @@ export class CalendarGoogleService {
       to: range.to,
       updatedCount,
     };
+  }
+
+  async commitEncryptedSync(
+    household: HouseholdContext,
+    user: UserContext,
+    dto: CommitGoogleCalendarEncryptedSyncDto,
+    expectedKeyVersion: number,
+  ) {
+    const connection = await this.findConnection(household, user);
+
+    if (!connection) {
+      throw new BadRequestException("Google Calendar is not connected");
+    }
+
+    let importedCount = 0;
+    let updatedCount = 0;
+    let skippedCount = 0;
+    const affectedEventDates = new Set<string>();
+
+    await this.database.transaction(async (client) => {
+      for (const event of dto.events) {
+        if (event.encryptionVersion !== expectedKeyVersion) {
+          throw new BadRequestException("Outdated household encryption key");
+        }
+
+        const result = await this.upsertEncryptedImportedEvent(
+          client,
+          connection,
+          event,
+        );
+
+        if (result === "inserted") {
+          importedCount += 1;
+          affectedEventDates.add(event.eventDate);
+        } else if (result === "updated") {
+          updatedCount += 1;
+          affectedEventDates.add(event.eventDate);
+        } else {
+          skippedCount += 1;
+        }
+      }
+
+      if (dto.finalize) {
+        await client.query(
+          `
+            update calendar_google_connections
+            set last_synced_at = now()
+            where id = $1
+          `,
+          [connection.id],
+        );
+      }
+    });
+
+    if (affectedEventDates.size > 0) {
+      this.realtime.publish(
+        household.householdId,
+        "calendar.changed",
+        "google-sync",
+      );
+    }
+
+    return {
+      eventDates: Array.from(affectedEventDates).sort(),
+      importedCount,
+      skippedCount,
+      updatedCount,
+    };
+  }
+
+  private async upsertEncryptedImportedEvent(
+    client: PoolClient,
+    connection: GoogleCalendarConnectionRow,
+    event: GoogleCalendarEncryptedSyncItemDto,
+  ): Promise<"inserted" | "skipped" | "updated"> {
+    const existing = await client.query<{ calendar_event_id: string }>(
+      `
+        select calendar_event_id
+        from calendar_google_event_mappings
+        where connection_id = $1
+          and google_event_id = $2
+      `,
+      [connection.id, event.googleEventId],
+    );
+    const existingId = existing.rows[0]?.calendar_event_id;
+
+    if (existingId) {
+      const updated = await client.query(
+        `
+          update calendar_events
+          set
+            title = '[Zaszyfrowane wydarzenie]',
+            event_date = $3,
+            event_time = $4,
+            note = null,
+            location_name = null,
+            location_url = null,
+            recurrence_rule = null,
+            reminder_offset_minutes = null,
+            reminder_sent_at = null,
+            encrypted_payload = $5,
+            encryption_version = $6
+          where id = $1
+            and household_id = $2
+        `,
+        [
+          existingId,
+          connection.household_id,
+          event.eventDate,
+          event.eventTime ?? null,
+          event.encryptedPayload,
+          event.encryptionVersion,
+        ],
+      );
+
+      if (!updated.rowCount) {
+        return "skipped";
+      }
+
+      await client.query(
+        `
+          update calendar_google_event_mappings
+          set google_updated_at = $3
+          where connection_id = $1
+            and google_event_id = $2
+        `,
+        [connection.id, event.googleEventId, event.googleUpdatedAt ?? null],
+      );
+
+      return "updated";
+    }
+
+    const inserted = await client.query<{ id: string }>(
+      `
+        insert into calendar_events (
+          household_id,
+          scope_type,
+          owner_member_id,
+          title,
+          event_date,
+          event_time,
+          note,
+          location_name,
+          location_url,
+          recurrence_rule,
+          reminder_offset_minutes,
+          encrypted_payload,
+          encryption_version
+        )
+        values (
+          $1,
+          'member',
+          $2,
+          '[Zaszyfrowane wydarzenie]',
+          $3,
+          $4,
+          null,
+          null,
+          null,
+          null,
+          null,
+          $5,
+          $6
+        )
+        returning id
+      `,
+      [
+        connection.household_id,
+        connection.household_member_id,
+        event.eventDate,
+        event.eventTime ?? null,
+        event.encryptedPayload,
+        event.encryptionVersion,
+      ],
+    );
+    const eventId = inserted.rows[0]?.id;
+
+    if (!eventId) {
+      return "skipped";
+    }
+
+    const mapping = await client.query(
+      `
+        insert into calendar_google_event_mappings (
+          connection_id,
+          google_event_id,
+          calendar_event_id,
+          google_updated_at
+        )
+        values ($1, $2, $3, $4)
+        on conflict (connection_id, google_event_id) do nothing
+      `,
+      [
+        connection.id,
+        event.googleEventId,
+        eventId,
+        event.googleUpdatedAt ?? null,
+      ],
+    );
+
+    if (!mapping.rowCount) {
+      await client.query(
+        `delete from calendar_events where id = $1 and household_id = $2`,
+        [eventId, connection.household_id],
+      );
+      return "skipped";
+    }
+
+    return "inserted";
   }
 
   private async upsertImportedEvent(
@@ -539,7 +767,9 @@ export class CalendarGoogleService {
       googleEventId: event.id,
       googleUpdatedAt: event.updated ?? null,
       locationName,
-      locationUrl: locationName ? this.buildGoogleMapsSearchUrl(locationName) : null,
+      locationUrl: locationName
+        ? this.buildGoogleMapsSearchUrl(locationName)
+        : null,
       note: noteParts.join("\n\n").slice(0, 4000) || null,
       title: (event.summary?.trim() || "Wydarzenie z Google Calendar").slice(
         0,
@@ -703,7 +933,7 @@ interface GoogleCalendarEvent {
   updated?: string;
 }
 
-interface ImportedGoogleEvent {
+export interface ImportedGoogleEvent {
   eventDate: string;
   eventTime: string | null;
   googleEventId: string;

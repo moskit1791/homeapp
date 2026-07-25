@@ -15,9 +15,11 @@ import {
 } from "react-native";
 import {
   CalendarEvent,
+  CreateCalendarEventRequest,
   EffectivePermission,
   Note,
   TodoItem,
+  commitGoogleCalendarEncryptedSync,
   completeTodoItem,
   connectGoogleCalendar,
   createCalendarEvent,
@@ -40,6 +42,12 @@ import {
   hasModuleRead,
   usePermissions,
 } from "../../src/permissions/use-permissions";
+import {
+  decryptCalendarEvents,
+  protectCalendarRequest,
+} from "../../src/encryption/calendar-crypto";
+import { useEncryption } from "../../src/encryption/encryption-context";
+import { EncryptionUnlockCard } from "../../src/encryption/encryption-unlock-card";
 import { useSession } from "../../src/session/session-context";
 import { radii, spacing } from "../../src/theme/tokens";
 import { useAppTheme, type AppPalette } from "../../src/theme/use-app-theme";
@@ -113,6 +121,7 @@ const mockupGreen = "#4F8D2C";
 
 export default function KalendarzScreen() {
   const { session } = useSession();
+  const encryption = useEncryption();
   const routeParams = useLocalSearchParams<{
     action?: string | string[];
     date?: string | string[];
@@ -122,6 +131,10 @@ export default function KalendarzScreen() {
   const { screenBackground, styles, theme } = useCalendarStyles();
   const readableGreen = theme.isDark ? theme.colors.primaryDarker : mockupGreen;
   const accessToken = session?.accessToken;
+  const calendarEncryptionEnabled = encryption.isModuleEnabled("calendar");
+  const calendarContentReady =
+    encryption.lockState !== "loading" &&
+    (!calendarEncryptionEnabled || encryption.lockState === "unlocked");
   const [visibleMonth, setVisibleMonth] = useState(() =>
     monthAnchor(new Date()),
   );
@@ -156,8 +169,15 @@ export default function KalendarzScreen() {
   );
 
   const monthEventsQuery = useQuery({
-    enabled: calendarPermission.canRead && Boolean(accessToken),
-    queryFn: () => listCalendarEvents(range.from, range.to, { accessToken }),
+    enabled:
+      calendarPermission.canRead &&
+      Boolean(accessToken) &&
+      calendarContentReady,
+    queryFn: async () =>
+      decryptCalendarEvents(
+        await listCalendarEvents(range.from, range.to, { accessToken }),
+        encryption.decryptPayload,
+      ),
     queryKey: [
       ...queryKeys.calendar,
       "range",
@@ -176,39 +196,33 @@ export default function KalendarzScreen() {
     queryKey: [...queryKeys.calendar, "google", "status"],
   });
   const saveEventMutation = useMutation({
-    mutationFn: () =>
-      editingEvent
-        ? updateCalendarEvent(
-            getEditableCalendarEventId(editingEvent),
-            {
-              eventDate,
-              eventTime: normalizeEventTime(eventTime),
-              locationName: normalizeOptionalText(eventLocationName),
-              locationUrl: normalizeLocationUrlInput(
-                eventLocationUrl || eventLocationName,
-              ),
-              note: eventNote.trim() || null,
-              reminderOffsetMinutes: reminderValueToMinutes(eventReminder),
-              scopeType: editingEvent.scopeType,
-              title: eventTitle.trim(),
-            },
-            { accessToken },
-          )
-        : createCalendarEvent(
-            {
-              eventDate,
-              eventTime: normalizeEventTime(eventTime),
-              locationName: normalizeOptionalText(eventLocationName),
-              locationUrl: normalizeLocationUrlInput(
-                eventLocationUrl || eventLocationName,
-              ),
-              note: eventNote.trim() || null,
-              reminderOffsetMinutes: reminderValueToMinutes(eventReminder),
-              scopeType: "household",
-              title: eventTitle.trim(),
-            },
-            { accessToken },
+    mutationFn: async () => {
+      const input = await protectCalendarRequest(
+        {
+          eventDate,
+          eventTime: normalizeEventTime(eventTime),
+          locationName: normalizeOptionalText(eventLocationName),
+          locationUrl: normalizeLocationUrlInput(
+            eventLocationUrl || eventLocationName,
           ),
+          note: eventNote.trim() || null,
+          reminderOffsetMinutes: reminderValueToMinutes(eventReminder),
+          scopeType: editingEvent?.scopeType ?? "household",
+          title: eventTitle.trim(),
+        },
+        {
+          enabled: calendarEncryptionEnabled,
+          encryptPayload: encryption.encryptPayload,
+          keyVersion: encryption.settings?.keyVersion,
+        },
+      );
+
+      return editingEvent
+        ? updateCalendarEvent(getEditableCalendarEventId(editingEvent), input, {
+            accessToken,
+          })
+        : createCalendarEvent(input, { accessToken });
+    },
     onSuccess: async () => {
       closeEventModal();
       await queryClient.invalidateQueries({ queryKey: queryKeys.calendar });
@@ -235,7 +249,98 @@ export default function KalendarzScreen() {
     },
   });
   const syncGoogleMutation = useMutation({
-    mutationFn: () => syncGoogleCalendar({ accessToken }),
+    mutationFn: async () => {
+      const syncResult = await syncGoogleCalendar({ accessToken });
+
+      if (!syncResult.clientEncryptionRequired) {
+        return syncResult;
+      }
+
+      if (encryption.lockState !== "unlocked") {
+        throw new Error(
+          "Odblokuj szyfrowanie, aby zsynchronizować Google Calendar.",
+        );
+      }
+
+      const eventDates = new Set<string>();
+      let importedCount = 0;
+      let skippedCount = syncResult.skippedCount;
+      let updatedCount = 0;
+      const batchSize = 200;
+      const batchCount = Math.max(
+        1,
+        Math.ceil(syncResult.events.length / batchSize),
+      );
+
+      for (let batchIndex = 0; batchIndex < batchCount; batchIndex += 1) {
+        const sourceEvents = syncResult.events.slice(
+          batchIndex * batchSize,
+          (batchIndex + 1) * batchSize,
+        );
+        const events = await Promise.all(
+          sourceEvents.map(async (event) => {
+            const protectedEvent =
+              await protectCalendarRequest<CreateCalendarEventRequest>(
+                {
+                  eventDate: event.eventDate,
+                  eventTime: event.eventTime,
+                  locationName: event.locationName,
+                  locationUrl: event.locationUrl,
+                  note: event.note,
+                  reminderOffsetMinutes: null,
+                  scopeType: "member",
+                  title: event.title,
+                },
+                {
+                  enabled: true,
+                  encryptPayload: encryption.encryptPayload,
+                  keyVersion: encryption.settings?.keyVersion,
+                },
+              );
+
+            if (
+              !protectedEvent.encryptedPayload ||
+              !protectedEvent.encryptionVersion
+            ) {
+              throw new Error(
+                "Nie udało się zaszyfrować wydarzenia Google Calendar.",
+              );
+            }
+
+            return {
+              encryptedPayload: protectedEvent.encryptedPayload,
+              encryptionVersion: protectedEvent.encryptionVersion,
+              eventDate: event.eventDate,
+              eventTime: event.eventTime,
+              googleEventId: event.googleEventId,
+              googleUpdatedAt: event.googleUpdatedAt,
+            };
+          }),
+        );
+        const batchResult = await commitGoogleCalendarEncryptedSync(
+          {
+            events,
+            finalize: batchIndex === batchCount - 1,
+          },
+          { accessToken },
+        );
+
+        importedCount += batchResult.importedCount;
+        skippedCount += batchResult.skippedCount;
+        updatedCount += batchResult.updatedCount;
+        batchResult.eventDates.forEach((date) => eventDates.add(date));
+      }
+
+      return {
+        clientEncryptionRequired: false as const,
+        eventDates: Array.from(eventDates).sort(),
+        from: syncResult.from,
+        importedCount,
+        skippedCount,
+        to: syncResult.to,
+        updatedCount,
+      };
+    },
     onSuccess: async (result) => {
       const focusDate = pickGoogleSyncFocusDate(result.eventDates);
 
@@ -253,8 +358,13 @@ export default function KalendarzScreen() {
         setCalendarView("month");
         selectDate(focusDate);
         await queryClient.prefetchQuery({
-          queryFn: () =>
-            listCalendarEvents(focusRange.from, focusRange.to, { accessToken }),
+          queryFn: async () =>
+            decryptCalendarEvents(
+              await listCalendarEvents(focusRange.from, focusRange.to, {
+                accessToken,
+              }),
+              encryption.decryptPayload,
+            ),
           queryKey: [
             ...queryKeys.calendar,
             "range",
@@ -272,7 +382,8 @@ export default function KalendarzScreen() {
       : calendarPermission.canCreate) &&
     Boolean(eventTitle.trim()) &&
     /^\d{4}-\d{2}-\d{2}$/.test(eventDate) &&
-    isOptionalTimeInputValid(eventTime);
+    isOptionalTimeInputValid(eventTime) &&
+    calendarContentReady;
 
   useEffect(() => {
     const targetDate = routeDate && isIsoDate(routeDate) ? routeDate : null;
@@ -432,6 +543,14 @@ export default function KalendarzScreen() {
     );
   }
 
+  if (calendarEncryptionEnabled && encryption.lockState === "locked") {
+    return (
+      <AppScreen backgroundColor={screenBackground} title="Kalendarz">
+        <EncryptionUnlockCard modules={["calendar"]} />
+      </AppScreen>
+    );
+  }
+
   return (
     <AppScreen
       actions={
@@ -468,6 +587,7 @@ export default function KalendarzScreen() {
             {calendarPermission.canCreate ? (
               <IconButton
                 accessibilityLabel="Dodaj wydarzenie"
+                disabled={!calendarContentReady}
                 onPress={() => openCreateEvent()}
                 style={[styles.headerIconButton, styles.addHeaderButton]}
               >
@@ -522,7 +642,6 @@ export default function KalendarzScreen() {
           tone="error"
         />
       ) : null}
-
       {calendarPermission.canRead ? (
         calendarView === "month" ? (
           <CalendarMonth
@@ -1595,10 +1714,7 @@ function getWeekRange(value: string) {
   const weekStart = getWeekStart(parseIsoDate(value));
   const weekEnd = addDays(weekStart, 6);
 
-  return {
-    from: dateToIso(weekStart),
-    to: dateToIso(weekEnd),
-  };
+  return { from: dateToIso(weekStart), to: dateToIso(weekEnd) };
 }
 
 function getWeekDays(value: string) {
@@ -2009,9 +2125,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       minHeight: isCompact ? 42 : 54,
       paddingHorizontal: spacing.md,
     },
-    addEventDashedPressed: {
-      opacity: 0.76,
-    },
+    addEventDashedPressed: { opacity: 0.76 },
     addEventDashedText: {
       color: readableGreen,
       fontSize: isCompact ? 14 : 16,
@@ -2026,17 +2140,13 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       backgroundColor: panelBackground,
       borderColor: isDark ? colors.border : "#DDE7D7",
     },
-    calendarCancelButtonLabel: {
-      color: readableGreen,
-    },
+    calendarCancelButtonLabel: { color: readableGreen },
     calendarSaveButton: {
       backgroundColor: filledGreen,
       borderColor: filledGreen,
       shadowColor: filledGreen,
     },
-    calendarSaveButtonLabel: {
-      color: filledGreenText,
-    },
+    calendarSaveButtonLabel: { color: filledGreenText },
     calendarCard: {
       backgroundColor: panelBackground,
       borderColor: panelBorder,
@@ -2080,9 +2190,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       backgroundColor: isDark ? colors.cardMuted : "#F6FAF0",
       borderColor: isDark ? colors.border : "#E2EAD9",
     },
-    calendarModeOptionPressed: {
-      opacity: 0.78,
-    },
+    calendarModeOptionPressed: { opacity: 0.78 },
     calendarModeText: {
       color: colors.text,
       fontSize: isCompact ? 14 : 17,
@@ -2090,9 +2198,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       letterSpacing: 0,
       lineHeight: isCompact ? 21 : 25,
     },
-    calendarModeTextActive: {
-      color: readableGreen,
-    },
+    calendarModeTextActive: { color: readableGreen },
     calendarLoading: {
       color: colors.textMuted,
       fontSize: 12,
@@ -2131,10 +2237,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       paddingHorizontal: spacing.md,
       paddingTop: isCompact ? 0 : spacing.sm,
     },
-    agendaAccent: {
-      alignSelf: "stretch",
-      width: 5,
-    },
+    agendaAccent: { alignSelf: "stretch", width: 5 },
     agendaCard: {
       borderRadius: radii.card,
       borderWidth: 1,
@@ -2143,9 +2246,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       minHeight: 86,
       overflow: "hidden",
     },
-    agendaCardPressed: {
-      opacity: 0.82,
-    },
+    agendaCardPressed: { opacity: 0.82 },
     agendaContent: {
       flex: 1,
       gap: spacing.sm,
@@ -2191,9 +2292,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       gap: spacing.xs,
       minHeight: 28,
     },
-    agendaFooterSpacer: {
-      flex: 1,
-    },
+    agendaFooterSpacer: { flex: 1 },
     agendaHeader: {
       alignItems: "flex-start",
       flexDirection: "row",
@@ -2226,11 +2325,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       letterSpacing: 0,
       lineHeight: 19,
     },
-    agendaTitleBlock: {
-      flex: 1,
-      gap: 3,
-      minWidth: 0,
-    },
+    agendaTitleBlock: { flex: 1, gap: 3, minWidth: 0 },
     calendarTopPanel: {
       backgroundColor: colors.card,
       borderColor: colors.border,
@@ -2246,9 +2341,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       justifyContent: "center",
       width: isCompact ? 28 : 42,
     },
-    dayBubbleMuted: {
-      opacity: 0.42,
-    },
+    dayBubbleMuted: { opacity: 0.42 },
     dayBubbleSelected: {
       backgroundColor: selectedDayBackground,
       borderColor: selectedDayBorder,
@@ -2268,10 +2361,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       borderTopWidth: 1,
       paddingTop: isCompact ? 2 : 4,
     },
-    dayGrid: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-    },
+    dayGrid: { flexDirection: "row", flexWrap: "wrap" },
     dayText: {
       color: colors.text,
       fontSize: isCompact ? 14 : 19,
@@ -2279,22 +2369,11 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       letterSpacing: 0,
       lineHeight: isCompact ? 20 : 30,
     },
-    dayTextMuted: {
-      color: colors.textSubtle,
-    },
-    dayTextSelected: {
-      color: selectedDayText,
-    },
-    dayTextToday: {
-      color: colors.text,
-    },
-    dayTextWeekend: {
-      color: colors.textMuted,
-    },
-    doneText: {
-      color: colors.textMuted,
-      textDecorationLine: "line-through",
-    },
+    dayTextMuted: { color: colors.textSubtle },
+    dayTextSelected: { color: selectedDayText },
+    dayTextToday: { color: colors.text },
+    dayTextWeekend: { color: colors.textMuted },
+    doneText: { color: colors.textMuted, textDecorationLine: "line-through" },
     dotSlot: {
       alignItems: "center",
       height: isCompact ? 11 : 16,
@@ -2354,20 +2433,14 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       paddingHorizontal: isCompact ? 10 : spacing.md,
       paddingVertical: isCompact ? 5 : spacing.sm,
     },
-    eventPillPressed: {
-      opacity: 0.78,
-    },
+    eventPillPressed: { opacity: 0.78 },
     eventPillActions: {
       alignItems: "center",
       flexDirection: "row",
       flexShrink: 0,
       gap: spacing.xs,
     },
-    eventPillText: {
-      flex: 1,
-      gap: 2,
-      minWidth: 0,
-    },
+    eventPillText: { flex: 1, gap: 2, minWidth: 0 },
     eventStrip: {
       flexDirection: "column",
       gap: isCompact ? spacing.sm : spacing.md,
@@ -2377,11 +2450,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       borderRadius: 999,
       width: isCompact ? 5 : 7,
     },
-    eventSourceDot: {
-      borderRadius: 999,
-      height: 8,
-      width: 8,
-    },
+    eventSourceDot: { borderRadius: 999, height: 8, width: 8 },
     eventTitle: {
       color: colors.text,
       fontSize: isCompact ? 13 : 15,
@@ -2397,21 +2466,14 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       justifyContent: "center",
       width: 56,
     },
-    fabPressed: {
-      opacity: 0.82,
-      transform: [{ scale: 0.98 }],
-    },
+    fabPressed: { opacity: 0.82, transform: [{ scale: 0.98 }] },
     fabRow: {
       alignItems: "flex-end",
       paddingHorizontal: spacing.xs,
       paddingTop: spacing.xs,
     },
-    flexInput: {
-      flex: 1,
-    },
-    formGroup: {
-      gap: spacing.xs,
-    },
+    flexInput: { flex: 1 },
+    formGroup: { gap: spacing.xs },
     formLabel: {
       color: colors.textMuted,
       fontSize: 11,
@@ -2419,10 +2481,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       letterSpacing: 0,
       textTransform: "uppercase",
     },
-    formRow: {
-      flexDirection: "row",
-      gap: spacing.sm,
-    },
+    formRow: { flexDirection: "row", gap: spacing.sm },
     googleHeaderButton: {
       backgroundColor: isDark ? colors.card : "#FFFFFF",
       borderColor: isDark ? colors.border : "#E6DFD4",
@@ -2431,9 +2490,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       height: isCompact ? 26 : 30,
       width: isCompact ? 26 : 30,
     },
-    googleHeaderImageDisabled: {
-      opacity: 0.48,
-    },
+    googleHeaderImageDisabled: { opacity: 0.48 },
     googleHeaderButtonConnected: {
       borderColor: isDark ? colors.border : "#EDE7DC",
     },
@@ -2451,11 +2508,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       shadowRadius: 10,
       width: isCompact ? 40 : 48,
     },
-    headerActions: {
-      alignItems: "center",
-      flexDirection: "row",
-      gap: 5,
-    },
+    headerActions: { alignItems: "center", flexDirection: "row", gap: 5 },
     input: {
       backgroundColor: panelBackground,
       borderColor: isDark ? colors.border : "#E1E7DD",
@@ -2491,13 +2544,8 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       fontWeight: "800",
       letterSpacing: 0,
     },
-    modalFooter: {
-      flexDirection: "row",
-      gap: spacing.sm,
-    },
-    modalFooterButton: {
-      flex: 1,
-    },
+    modalFooter: { flexDirection: "row", gap: spacing.sm },
+    modalFooterButton: { flex: 1 },
     modalDeleteButton: {
       backgroundColor: colors.dangerSoft,
       borderColor: colors.danger,
@@ -2544,12 +2592,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       lineHeight: 17,
       textAlign: "center",
     },
-    periodText: {
-      alignItems: "center",
-      flex: 1,
-      gap: 2,
-      minWidth: 0,
-    },
+    periodText: { alignItems: "center", flex: 1, gap: 2, minWidth: 0 },
     periodTitle: {
       color: colors.text,
       fontSize: isCompact ? 18 : 25,
@@ -2562,11 +2605,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       flexDirection: "row",
       justifyContent: "space-between",
     },
-    monthNav: {
-      alignItems: "center",
-      flexDirection: "row",
-      gap: spacing.xs,
-    },
+    monthNav: { alignItems: "center", flexDirection: "row", gap: spacing.xs },
     monthTitle: {
       color: colors.primaryDark,
       fontSize: 15,
@@ -2581,19 +2620,9 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       gap: spacing.sm,
       padding: spacing.md,
     },
-    noteContent: {
-      flex: 1,
-      gap: spacing.xs,
-      minWidth: 0,
-    },
-    noteList: {
-      gap: spacing.sm,
-    },
-    noteMeta: {
-      color: colors.textMuted,
-      fontSize: 11,
-      letterSpacing: 0,
-    },
+    noteContent: { flex: 1, gap: spacing.xs, minWidth: 0 },
+    noteList: { gap: spacing.sm },
+    noteMeta: { color: colors.textMuted, fontSize: 11, letterSpacing: 0 },
     noteText: {
       color: colors.textMuted,
       fontSize: 12,
@@ -2607,10 +2636,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       letterSpacing: 0,
       lineHeight: 19,
     },
-    rowActions: {
-      alignItems: "center",
-      gap: spacing.xs,
-    },
+    rowActions: { alignItems: "center", gap: spacing.xs },
     sectionHeader: {
       alignItems: "center",
       flexDirection: "row",
@@ -2659,11 +2685,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.sm,
     },
-    selectedDayText: {
-      flex: 1,
-      gap: 1,
-      minWidth: 0,
-    },
+    selectedDayText: { flex: 1, gap: 1, minWidth: 0 },
     selectedDayTitle: {
       color: colors.text,
       fontSize: 14,
@@ -2712,10 +2734,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       paddingTop: spacing.md,
       textAlignVertical: "top",
     },
-    timeline: {
-      gap: spacing.md,
-      paddingTop: spacing.xs,
-    },
+    timeline: { gap: spacing.md, paddingTop: spacing.xs },
     timelineHour: {
       color: colors.text,
       fontSize: 16,
@@ -2724,18 +2743,9 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       lineHeight: 20,
       textAlign: "right",
     },
-    timelineRow: {
-      flexDirection: "row",
-      gap: spacing.sm,
-    },
-    timelineTime: {
-      alignItems: "flex-end",
-      paddingTop: spacing.sm,
-      width: 64,
-    },
-    timeInput: {
-      width: 92,
-    },
+    timelineRow: { flexDirection: "row", gap: spacing.sm },
+    timelineTime: { alignItems: "flex-end", paddingTop: spacing.sm, width: 64 },
+    timeInput: { width: 92 },
     todoCard: {
       alignItems: "center",
       backgroundColor: colors.card,
@@ -2748,10 +2758,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.sm,
     },
-    todoCardDone: {
-      backgroundColor: colors.surfaceMuted,
-      opacity: 0.74,
-    },
+    todoCardDone: { backgroundColor: colors.surfaceMuted, opacity: 0.74 },
     todoCheck: {
       alignItems: "center",
       backgroundColor: colors.card,
@@ -2775,9 +2782,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       letterSpacing: 0,
       textAlign: "center",
     },
-    weekLabelWeekend: {
-      color: colors.textMuted,
-    },
+    weekLabelWeekend: { color: colors.textMuted },
     weekDay: {
       alignItems: "center",
       backgroundColor: colors.cardMuted,
@@ -2800,24 +2805,16 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       fontWeight: "800",
       letterSpacing: 0,
     },
-    weekDayNameActive: {
-      color: colors.primaryDark,
-    },
+    weekDayNameActive: { color: colors.primaryDark },
     weekDayNumber: {
       color: colors.text,
       fontSize: 14,
       fontWeight: "900",
       letterSpacing: 0,
     },
-    weekDayNumberActive: {
-      color: colors.primaryDarker,
-    },
-    weekDayNumberToday: {
-      color: colors.primaryDark,
-    },
-    weekDayPressed: {
-      opacity: 0.78,
-    },
+    weekDayNumberActive: { color: colors.primaryDarker },
+    weekDayNumberToday: { color: colors.primaryDark },
+    weekDayPressed: { opacity: 0.78 },
     weekRow: {
       flexDirection: "row",
       paddingBottom: isCompact ? 6 : spacing.md,
@@ -2830,10 +2827,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       gap: spacing.md,
       padding: spacing.md,
     },
-    weekStrip: {
-      flexDirection: "row",
-      gap: spacing.xs,
-    },
+    weekStrip: { flexDirection: "row", gap: spacing.xs },
     todayBadge: {
       alignItems: "center",
       backgroundColor: isDark ? colors.cardMuted : "#F7FAF0",

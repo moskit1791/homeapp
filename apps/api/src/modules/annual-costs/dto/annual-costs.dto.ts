@@ -15,7 +15,20 @@ export class AnnualCostHistoryQueryDto {
   year!: number;
 }
 
-export class CreateAnnualCostDto {
+class EncryptedAnnualCostDto {
+  @IsOptional()
+  @IsString()
+  @Length(1, 50000)
+  encryptedPayload?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  encryptionVersion?: number;
+}
+
+export class CreateAnnualCostDto extends EncryptedAnnualCostDto {
   @IsString()
   @Length(1, 200)
   name!: string;
@@ -30,7 +43,7 @@ export class CreateAnnualCostDto {
   defaultAmount?: number | null;
 }
 
-export class UpdateAnnualCostDto {
+export class UpdateAnnualCostDto extends EncryptedAnnualCostDto {
   @IsOptional()
   @IsString()
   @Length(1, 200)
@@ -47,7 +60,7 @@ export class UpdateAnnualCostDto {
   defaultAmount?: number | null;
 }
 
-export class CompleteAnnualCostDto {
+export class CompleteAnnualCostDto extends EncryptedAnnualCostDto {
   @Matches(DATE_PATTERN)
   executedAt!: string;
 

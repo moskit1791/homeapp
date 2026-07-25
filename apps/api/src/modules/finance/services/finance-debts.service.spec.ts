@@ -3,10 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { FinanceDebtsService } from './finance-debts.service';
 
 function queryResult(rows: unknown[] = []) {
-  return {
-    rowCount: rows.length,
-    rows
-  };
+  return { rowCount: rows.length, rows };
 }
 
 function debtRow(overrides: Record<string, unknown> = {}) {
@@ -39,15 +36,15 @@ function paymentRow(overrides: Record<string, unknown> = {}) {
 }
 
 function createRealtime() {
-  return {
-    publish: vi.fn()
-  };
+  return { publish: vi.fn() };
 }
 
 function createTransactionDatabase(client: { query: ReturnType<typeof vi.fn> }) {
   return {
     query: vi.fn(),
-    transaction: vi.fn((callback: (transactionClient: typeof client) => Promise<unknown>) => callback(client))
+    transaction: vi.fn((callback: (transactionClient: typeof client) => Promise<unknown>) =>
+      callback(client)
+    )
   };
 }
 
@@ -62,24 +59,19 @@ describe('FinanceDebtsService', () => {
         .mockResolvedValueOnce(queryResult([debtRow()]))
     };
     const database = createTransactionDatabase(client);
-    database.query.mockResolvedValueOnce(queryResult([debtRow()])).mockResolvedValueOnce(
-      queryResult([
-        paymentRow({ amount: '40.00', id: 'payment-new' }),
-        paymentRow({
-          amount: '25.00',
-          id: 'payment-old',
-          paid_at: '2026-06-01'
-        })
-      ])
-    );
+    database.query
+      .mockResolvedValueOnce(queryResult([debtRow()]))
+      .mockResolvedValueOnce(
+        queryResult([
+          paymentRow({ amount: '40.00', id: 'payment-new' }),
+          paymentRow({ amount: '25.00', id: 'payment-old', paid_at: '2026-06-01' })
+        ])
+      );
     const realtime = createRealtime();
     const service = new FinanceDebtsService(database as never, realtime as never);
 
     await expect(
-      service.createPayment('household-id', 'debt-id', {
-        amount: 40,
-        paidAt: '2026-06-15'
-      })
+      service.createPayment('household-id', 'debt-id', { amount: 40, paidAt: '2026-06-15' })
     ).resolves.toMatchObject({
       paidAmount: '65.00',
       remainingAmount: '35.00',
@@ -87,7 +79,14 @@ describe('FinanceDebtsService', () => {
     });
 
     expect(client.query.mock.calls[2]?.[0]).toContain('insert into finance_debt_payments');
-    expect(client.query.mock.calls[2]?.[1]).toEqual(['debt-id', 40, '2026-06-15', null]);
+    expect(client.query.mock.calls[2]?.[1]).toEqual([
+      'debt-id',
+      40,
+      '2026-06-15',
+      null,
+      null,
+      null
+    ]);
     expect(realtime.publish).toHaveBeenCalledWith('household-id', 'finance.changed', 'debt-id');
   });
 
@@ -99,18 +98,20 @@ describe('FinanceDebtsService', () => {
         .mockResolvedValueOnce(queryResult([{ paid_amount: '60.00' }]))
         .mockResolvedValueOnce(queryResult())
         .mockResolvedValueOnce(
-          queryResult([
-            debtRow({
-              is_settled: true,
-              settled_at: '2026-06-15T09:00:00.000Z'
-            })
-          ])
+          queryResult([debtRow({ is_settled: true, settled_at: '2026-06-15T09:00:00.000Z' })])
         )
     };
     const database = createTransactionDatabase(client);
     database.query
-      .mockResolvedValueOnce(queryResult([debtRow({ is_settled: true, settled_at: '2026-06-15T09:00:00.000Z' })]))
-      .mockResolvedValueOnce(queryResult([paymentRow({ amount: '40.00', id: 'payment-new' }), paymentRow({ amount: '60.00', id: 'payment-old' })]));
+      .mockResolvedValueOnce(
+        queryResult([debtRow({ is_settled: true, settled_at: '2026-06-15T09:00:00.000Z' })])
+      )
+      .mockResolvedValueOnce(
+        queryResult([
+          paymentRow({ amount: '40.00', id: 'payment-new' }),
+          paymentRow({ amount: '60.00', id: 'payment-old' })
+        ])
+      );
     const service = new FinanceDebtsService(database as never, createRealtime() as never);
 
     const debt = await service.createPayment('household-id', 'debt-id', {
@@ -119,11 +120,7 @@ describe('FinanceDebtsService', () => {
     });
 
     expect(client.query.mock.calls[3]?.[1]).toEqual(['household-id', 'debt-id', true]);
-    expect(debt).toMatchObject({
-      isSettled: true,
-      paidAmount: '100.00',
-      remainingAmount: '0.00'
-    });
+    expect(debt).toMatchObject({ isSettled: true, paidAmount: '100.00', remainingAmount: '0.00' });
   });
 
   it('rejects overpayments', async () => {
@@ -138,10 +135,7 @@ describe('FinanceDebtsService', () => {
     const service = new FinanceDebtsService(database as never, realtime as never);
 
     await expect(
-      service.createPayment('household-id', 'debt-id', {
-        amount: 11,
-        paidAt: '2026-06-15'
-      })
+      service.createPayment('household-id', 'debt-id', { amount: 11, paidAt: '2026-06-15' })
     ).rejects.toThrow(BadRequestException);
 
     expect(realtime.publish).not.toHaveBeenCalled();
@@ -157,11 +151,9 @@ describe('FinanceDebtsService', () => {
     const realtime = createRealtime();
     const service = new FinanceDebtsService(database as never, realtime as never);
 
-    await expect(
-      service.updateDebt('household-id', 'debt-id', {
-        amount: 70
-      })
-    ).rejects.toThrow(BadRequestException);
+    await expect(service.updateDebt('household-id', 'debt-id', { amount: 70 })).rejects.toThrow(
+      BadRequestException
+    );
 
     expect(database.query).toHaveBeenCalledTimes(2);
     expect(realtime.publish).not.toHaveBeenCalled();

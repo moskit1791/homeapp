@@ -18,7 +18,8 @@ export class AnnualCostsService {
   async listCosts(householdId: string): Promise<AnnualCostRecord[]> {
     const result = await this.database.query<AnnualCostRow>(
       `
-        select id, household_id, name, default_amount, next_due_date, created_at, updated_at
+        select id, household_id, name, default_amount, encrypted_payload, encryption_version,
+          next_due_date, created_at, updated_at
         from annual_costs
         where household_id = $1
         order by next_due_date asc, name asc
@@ -39,12 +40,22 @@ export class AnnualCostsService {
           household_id,
           name,
           default_amount,
+          encrypted_payload,
+          encryption_version,
           next_due_date
         )
-        values ($1, $2, $3, $4)
-        returning id, household_id, name, default_amount, next_due_date, created_at, updated_at
+        values ($1, $2, $3, $4, $5, $6)
+        returning id, household_id, name, default_amount, encrypted_payload, encryption_version,
+          next_due_date, created_at, updated_at
       `,
-      [householdId, this.normalizeName(dto.name), dto.defaultAmount ?? null, dto.nextDueDate]
+      [
+        householdId,
+        this.normalizeName(dto.name),
+        dto.defaultAmount ?? null,
+        dto.encryptedPayload ?? null,
+        dto.encryptionVersion ?? null,
+        dto.nextDueDate
+      ]
     );
 
     const cost = this.mapCostOrThrow(result.rows[0]);
@@ -61,7 +72,9 @@ export class AnnualCostsService {
     if (
       dto.name === undefined &&
       dto.nextDueDate === undefined &&
-      dto.defaultAmount === undefined
+      dto.defaultAmount === undefined &&
+      dto.encryptedPayload === undefined &&
+      dto.encryptionVersion === undefined
     ) {
       throw new BadRequestException('No annual cost fields to update');
     }
@@ -78,16 +91,21 @@ export class AnnualCostsService {
         set
           name = $3,
           default_amount = $4,
-          next_due_date = $5
+          encrypted_payload = $5,
+          encryption_version = $6,
+          next_due_date = $7
         where household_id = $1
           and id = $2
-        returning id, household_id, name, default_amount, next_due_date, created_at, updated_at
+        returning id, household_id, name, default_amount, encrypted_payload, encryption_version,
+          next_due_date, created_at, updated_at
       `,
       [
         householdId,
         costId,
         dto.name === undefined ? current.name : this.normalizeName(dto.name),
         dto.defaultAmount === undefined ? current.defaultAmount : dto.defaultAmount,
+        dto.encryptedPayload ?? current.encryptedPayload,
+        dto.encryptionVersion ?? current.encryptionVersion,
         dto.nextDueDate === undefined ? current.nextDueDate : dto.nextDueDate
       ]
     );
@@ -156,20 +174,34 @@ export class AnnualCostsService {
           insert into annual_cost_history (
             annual_cost_id,
             executed_at,
-            amount
+            amount,
+            encrypted_payload,
+            encryption_version
           )
-          select ac.id, $3, $4
+          select ac.id, $3, $4, $5, $6
           from annual_costs ac
           where ac.household_id = $1
             and ac.id = $2
-          returning id, annual_cost_id, executed_at, amount, created_at
+          returning id, annual_cost_id, executed_at, amount, encrypted_payload,
+            encryption_version, created_at
         `,
-        [householdId, costId, dto.executedAt, dto.amount ?? null]
+        [
+          householdId,
+          costId,
+          dto.executedAt,
+          dto.amount ?? null,
+          dto.encryptedPayload ?? null,
+          dto.encryptionVersion ?? null
+        ]
       );
 
       return {
         cost,
-        history: this.mapHistoryOrThrow(historyResult.rows[0], cost.name)
+        history: this.mapHistoryOrThrow(
+          historyResult.rows[0],
+          cost.name,
+          cost.encryptedPayload
+        )
       };
     });
 
@@ -190,8 +222,11 @@ export class AnnualCostsService {
           ach.id,
           ach.annual_cost_id,
           ac.name as annual_cost_name,
+          ac.encrypted_payload as annual_cost_encrypted_payload,
           ach.executed_at,
           ach.amount,
+          ach.encrypted_payload,
+          ach.encryption_version,
           ach.created_at
         from annual_cost_history ach
         join annual_costs ac on ac.id = ach.annual_cost_id
@@ -203,7 +238,9 @@ export class AnnualCostsService {
       [householdId, year]
     );
 
-    return result.rows.map((row) => this.mapHistory(row, row.annual_cost_name));
+    return result.rows.map((row) =>
+      this.mapHistory(row, row.annual_cost_name, row.annual_cost_encrypted_payload)
+    );
   }
 
   private async findCost(
@@ -212,7 +249,8 @@ export class AnnualCostsService {
   ): Promise<AnnualCostRecord | null> {
     const result = await this.database.query<AnnualCostRow>(
       `
-        select id, household_id, name, default_amount, next_due_date, created_at, updated_at
+        select id, household_id, name, default_amount, encrypted_payload, encryption_version,
+          next_due_date, created_at, updated_at
         from annual_costs
         where household_id = $1
           and id = $2
@@ -236,7 +274,8 @@ export class AnnualCostsService {
         set next_due_date = ($3::date + interval '1 year')::date
         where household_id = $1
           and id = $2
-        returning id, household_id, name, default_amount, next_due_date, created_at, updated_at
+        returning id, household_id, name, default_amount, encrypted_payload, encryption_version,
+          next_due_date, created_at, updated_at
       `,
       [householdId, costId, executedAt]
     );
@@ -266,6 +305,9 @@ export class AnnualCostsService {
     return {
       createdAt: row.created_at,
       defaultAmount: row.default_amount,
+      encryptedPayload: row.encrypted_payload,
+      encryptionEntity: 'annual-cost',
+      encryptionVersion: row.encryption_version,
       householdId: row.household_id,
       id: row.id,
       name: row.name,
@@ -276,24 +318,30 @@ export class AnnualCostsService {
 
   private mapHistoryOrThrow(
     row: AnnualCostHistoryRow | undefined,
-    annualCostName: string
+    annualCostName: string,
+    annualCostEncryptedPayload: string | null
   ): AnnualCostHistoryRecord {
     if (!row) {
       throw new Error('Expected annual cost history record');
     }
 
-    return this.mapHistory(row, annualCostName);
+    return this.mapHistory(row, annualCostName, annualCostEncryptedPayload);
   }
 
   private mapHistory(
     row: AnnualCostHistoryRow,
-    annualCostName: string
+    annualCostName: string,
+    annualCostEncryptedPayload: string | null
   ): AnnualCostHistoryRecord {
     return {
       amount: row.amount,
+      annualCostEncryptedPayload,
       annualCostId: row.annual_cost_id,
       annualCostName,
       createdAt: row.created_at,
+      encryptedPayload: row.encrypted_payload,
+      encryptionEntity: 'annual-cost-history',
+      encryptionVersion: row.encryption_version,
       executedAt: this.formatDateOnly(row.executed_at),
       id: row.id
     };
@@ -315,6 +363,8 @@ export class AnnualCostsService {
 interface AnnualCostRow {
   created_at: string;
   default_amount: string | null;
+  encrypted_payload: string | null;
+  encryption_version: number | null;
   household_id: string;
   id: string;
   name: string;
@@ -326,17 +376,23 @@ interface AnnualCostHistoryRow {
   amount: string | null;
   annual_cost_id: string;
   created_at: string;
+  encrypted_payload: string | null;
+  encryption_version: number | null;
   executed_at: Date | string;
   id: string;
 }
 
 interface AnnualCostHistoryWithNameRow extends AnnualCostHistoryRow {
+  annual_cost_encrypted_payload: string | null;
   annual_cost_name: string;
 }
 
 export interface AnnualCostRecord {
   createdAt: string;
   defaultAmount: string | null;
+  encryptedPayload: string | null;
+  encryptionEntity: 'annual-cost';
+  encryptionVersion: number | null;
   householdId: string;
   id: string;
   name: string;
@@ -346,9 +402,13 @@ export interface AnnualCostRecord {
 
 export interface AnnualCostHistoryRecord {
   amount: string | null;
+  annualCostEncryptedPayload: string | null;
   annualCostId: string;
   annualCostName: string;
   createdAt: string;
+  encryptedPayload: string | null;
+  encryptionEntity: 'annual-cost-history';
+  encryptionVersion: number | null;
   executedAt: string;
   id: string;
 }

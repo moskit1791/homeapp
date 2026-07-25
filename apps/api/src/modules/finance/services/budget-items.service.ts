@@ -10,10 +10,7 @@ export class BudgetItemsService {
     private readonly realtime: RealtimeService
   ) {}
 
-  async createBudgetItem(
-    householdId: string,
-    dto: CreateBudgetItemDto
-  ): Promise<BudgetItemRecord> {
+  async createBudgetItem(householdId: string, dto: CreateBudgetItemDto): Promise<BudgetItemRecord> {
     await this.ensureBudgetMonth(householdId, dto.budgetMonthId);
     await this.ensureActiveMember(householdId, dto.ownerMemberId);
     await this.ensureActiveCategory(householdId, dto.categoryId);
@@ -29,9 +26,11 @@ export class BudgetItemsService {
           category_id,
           name,
           budget_amount,
-          display_order
+          display_order,
+          encrypted_payload,
+          encryption_version
         )
-        values ($1, $2, $3, $4, $5, $6)
+        values ($1, $2, $3, $4, $5, $6, $7, $8)
         returning
           id,
           budget_month_id,
@@ -41,6 +40,8 @@ export class BudgetItemsService {
           budget_amount,
           display_order,
           is_deleted,
+          encrypted_payload,
+          encryption_version,
           created_at,
           updated_at
       `,
@@ -48,9 +49,11 @@ export class BudgetItemsService {
         dto.budgetMonthId,
         dto.ownerMemberId,
         dto.categoryId,
-        this.normalizeName(dto.name),
-        dto.budgetAmount ?? null,
-        displayOrder
+        dto.encryptedPayload ? '[Zaszyfrowana pozycja]' : this.normalizeName(dto.name),
+        dto.encryptedPayload ? null : (dto.budgetAmount ?? null),
+        displayOrder,
+        dto.encryptedPayload ?? null,
+        dto.encryptionVersion ?? null
       ]
     );
 
@@ -70,7 +73,9 @@ export class BudgetItemsService {
       dto.categoryId === undefined &&
       dto.name === undefined &&
       dto.budgetAmount === undefined &&
-      dto.displayOrder === undefined
+      dto.displayOrder === undefined &&
+      dto.encryptedPayload === undefined &&
+      dto.encryptionVersion === undefined
     ) {
       throw new BadRequestException('No budget item fields to update');
     }
@@ -95,9 +100,11 @@ export class BudgetItemsService {
         set
           owner_member_id = coalesce($3, owner_member_id),
           category_id = coalesce($4, category_id),
-          name = coalesce($5, name),
-          budget_amount = $6,
-          display_order = coalesce($7, display_order)
+          name = case when $8::text is not null then '[Zaszyfrowana pozycja]' else coalesce($5, name) end,
+          budget_amount = case when $8::text is not null then null else $6 end,
+          display_order = coalesce($7, display_order),
+          encrypted_payload = coalesce($8, encrypted_payload),
+          encryption_version = coalesce($9, encryption_version)
         where id = $2
           and exists (
             select 1
@@ -114,6 +121,8 @@ export class BudgetItemsService {
           budget_amount,
           display_order,
           is_deleted,
+          encrypted_payload,
+          encryption_version,
           created_at,
           updated_at
       `,
@@ -124,7 +133,9 @@ export class BudgetItemsService {
         dto.categoryId ?? null,
         dto.name === undefined ? null : this.normalizeName(dto.name),
         dto.budgetAmount === undefined ? current.budgetAmount : dto.budgetAmount,
-        dto.displayOrder ?? null
+        dto.displayOrder ?? null,
+        dto.encryptedPayload ?? null,
+        dto.encryptionVersion ?? null
       ]
     );
 
@@ -184,6 +195,8 @@ export class BudgetItemsService {
           bi.budget_amount,
           bi.display_order,
           bi.is_deleted,
+          bi.encrypted_payload,
+          bi.encryption_version,
           bi.created_at,
           bi.updated_at
         from budget_items bi
@@ -199,10 +212,7 @@ export class BudgetItemsService {
     return result.rows[0] ? this.mapItem(result.rows[0]) : null;
   }
 
-  private async ensureBudgetMonth(
-    householdId: string,
-    budgetMonthId: string
-  ): Promise<void> {
+  private async ensureBudgetMonth(householdId: string, budgetMonthId: string): Promise<void> {
     const result = await this.database.query<{ id: string }>(
       `
         select id
@@ -300,6 +310,8 @@ export class BudgetItemsService {
       categoryId: row.category_id,
       createdAt: row.created_at,
       displayOrder: row.display_order,
+      encryptedPayload: row.encrypted_payload,
+      encryptionVersion: row.encryption_version,
       id: row.id,
       isDeleted: row.is_deleted,
       name: row.name,
@@ -315,6 +327,8 @@ interface BudgetItemRow {
   category_id: string;
   created_at: string;
   display_order: number;
+  encrypted_payload: string | null;
+  encryption_version: number | null;
   id: string;
   is_deleted: boolean;
   name: string;
@@ -328,6 +342,8 @@ export interface BudgetItemRecord {
   categoryId: string;
   createdAt: string;
   displayOrder: number;
+  encryptedPayload: string | null;
+  encryptionVersion: number | null;
   id: string;
   isDeleted: boolean;
   name: string;

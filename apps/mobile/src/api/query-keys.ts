@@ -4,6 +4,7 @@ export const queryKeys = {
   calendar: ['calendar'] as const,
   cleaning: ['cleaning'] as const,
   dataEntries: ['dataEntries'] as const,
+  encryption: ['encryption'] as const,
   finances: ['finances'] as const,
   household: ['household'] as const,
   meal: ['meal'] as const,
@@ -16,4 +17,3 @@ export const queryKeys = {
 };
 
 export type AppQueryKey = (typeof queryKeys)[keyof typeof queryKeys];
-

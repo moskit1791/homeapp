@@ -271,7 +271,10 @@ export class BudgetMonthsService {
     return deleted;
   }
 
-  async generateNextMonth(householdId: string, dto: GenerateNextBudgetMonthDto = {}): Promise<BudgetMonthRecord> {
+  async generateNextMonth(
+    householdId: string,
+    dto: GenerateNextBudgetMonthDto = {}
+  ): Promise<BudgetMonthRecord> {
     const generated = await this.database.transaction(async (client) => {
       await client.query(
         `
@@ -348,7 +351,10 @@ export class BudgetMonthsService {
         `,
         [householdId, next.year, next.month, current.id]
       );
-      const nextMonth = this.mapMonthOrThrow(nextMonthResult.rows[0], 'Expected generated budget month');
+      const nextMonth = this.mapMonthOrThrow(
+        nextMonthResult.rows[0],
+        'Expected generated budget month'
+      );
 
       await this.copyBudgetItems(client, current.id, nextMonth.id, dto.items);
       await this.saveCategoryOrder(client, householdId, current.id, nextMonth.id, dto.categories);
@@ -403,7 +409,12 @@ export class BudgetMonthsService {
     selectedItems?: BudgetMonthCopySelection[]
   ): Promise<void> {
     if (selectedItems !== undefined) {
-      await this.copySelectedBudgetItems(client, sourceBudgetMonthId, targetBudgetMonthId, selectedItems);
+      await this.copySelectedBudgetItems(
+        client,
+        sourceBudgetMonthId,
+        targetBudgetMonthId,
+        selectedItems
+      );
       return;
     }
 
@@ -415,7 +426,9 @@ export class BudgetMonthsService {
           category_id,
           name,
           budget_amount,
-          display_order
+          display_order,
+          encrypted_payload,
+          encryption_version
         )
         select
           $2,
@@ -423,7 +436,9 @@ export class BudgetMonthsService {
           bi.category_id,
           bi.name,
           null,
-          bi.display_order
+          bi.display_order,
+          bi.encrypted_payload,
+          bi.encryption_version
         from budget_items bi
         join budget_categories bc on bc.id = bi.category_id
         where bi.budget_month_id = $1
@@ -545,7 +560,9 @@ export class BudgetMonthsService {
           bi.category_id,
           bi.name,
           bi.budget_amount,
-          bi.display_order
+          bi.display_order,
+          bi.encrypted_payload,
+          bi.encryption_version
         from budget_items bi
         where bi.budget_month_id = $1
           and bi.is_deleted = false
@@ -569,23 +586,35 @@ export class BudgetMonthsService {
             category_id,
             name,
             budget_amount,
-            display_order
+            display_order,
+            encrypted_payload,
+            encryption_version
           )
-          values ($1, $2, $3, $4, $5, $6)
+          values ($1, $2, $3, $4, $5, $6, $7, $8)
         `,
         [
           targetBudgetMonthId,
           row.owner_member_id,
           row.category_id,
-          row.name,
-          selected?.budgetAmount === undefined ? row.budget_amount : selected.budgetAmount,
-          row.display_order
+          selected?.encryptedPayload ? '[Zaszyfrowana pozycja]' : row.name,
+          selected?.encryptedPayload
+            ? null
+            : selected?.budgetAmount === undefined
+              ? row.budget_amount
+              : selected.budgetAmount,
+          row.display_order,
+          selected?.encryptedPayload ?? row.encrypted_payload,
+          selected?.encryptionVersion ?? row.encryption_version
         ]
       );
     }
   }
 
-  private async getMonthForUpdate(client: PoolClient, householdId: string, monthId: string): Promise<void> {
+  private async getMonthForUpdate(
+    client: PoolClient,
+    householdId: string,
+    monthId: string
+  ): Promise<void> {
     const result = await client.query<{ id: string }>(
       `
         select id
@@ -686,12 +715,16 @@ export interface BudgetMonthRecord {
 interface BudgetMonthCopySelection {
   budgetAmount?: number | null;
   budgetItemId: string;
+  encryptedPayload?: string;
+  encryptionVersion?: number;
 }
 
 interface BudgetItemCopyRow {
   budget_amount: string | null;
   category_id: string;
   display_order: number;
+  encrypted_payload: string | null;
+  encryption_version: number | null;
   id: string;
   name: string;
   owner_member_id: string;

@@ -19,6 +19,8 @@ export class NotesService {
           owner_member_id,
           title,
           description,
+          encrypted_payload,
+          encryption_version,
           created_at,
           updated_at
         from note_items
@@ -43,19 +45,30 @@ export class NotesService {
           household_id,
           owner_member_id,
           title,
-          description
+          description,
+          encrypted_payload,
+          encryption_version
         )
-        values ($1, $2, $3, $4)
+        values ($1, $2, $3, $4, $5, $6)
         returning
           id,
           household_id,
           owner_member_id,
           title,
           description,
+          encrypted_payload,
+          encryption_version,
           created_at,
           updated_at
       `,
-      [householdId, ownerMemberId, dto.title.trim(), dto.description?.trim() ?? ""],
+      [
+        householdId,
+        ownerMemberId,
+        dto.title.trim(),
+        dto.description?.trim() ?? "",
+        dto.encryptedPayload ?? null,
+        dto.encryptionVersion ?? null,
+      ],
     );
 
     const note = result.rows[0];
@@ -87,7 +100,9 @@ export class NotesService {
         update note_items
         set
           title = $4,
-          description = $5
+          description = $5,
+          encrypted_payload = $6,
+          encryption_version = $7
         where household_id = $1
           and id = $2
           and owner_member_id = $3
@@ -97,6 +112,8 @@ export class NotesService {
           owner_member_id,
           title,
           description,
+          encrypted_payload,
+          encryption_version,
           created_at,
           updated_at
       `,
@@ -106,6 +123,8 @@ export class NotesService {
         ownerMemberId,
         dto.title?.trim() ?? current.title,
         dto.description?.trim() ?? current.description,
+        dto.encryptedPayload ?? current.encryptedPayload,
+        dto.encryptionVersion ?? current.encryptionVersion,
       ],
     );
 
@@ -151,6 +170,8 @@ export class NotesService {
           owner_member_id,
           title,
           description,
+          encrypted_payload,
+          encryption_version,
           created_at,
           updated_at
         from note_items
@@ -169,6 +190,9 @@ export class NotesService {
     return {
       createdAt: row.created_at,
       description: row.description,
+      encryptedPayload: row.encrypted_payload,
+      encryptionEntity: "note-item",
+      encryptionVersion: row.encryption_version,
       householdId: row.household_id,
       id: row.id,
       ownerMemberId: row.owner_member_id,
@@ -181,6 +205,8 @@ export class NotesService {
 interface NoteRow {
   created_at: string;
   description: string;
+  encrypted_payload: string | null;
+  encryption_version: number | null;
   household_id: string;
   id: string;
   owner_member_id: string;
@@ -191,6 +217,9 @@ interface NoteRow {
 export interface NoteRecord {
   createdAt: string;
   description: string;
+  encryptedPayload: string | null;
+  encryptionEntity: "note-item";
+  encryptionVersion: number | null;
   householdId: string;
   id: string;
   ownerMemberId: string;

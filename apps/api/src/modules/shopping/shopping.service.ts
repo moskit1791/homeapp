@@ -64,6 +64,8 @@ export class ShoppingService {
           sli.quantity,
           sli.category,
           sli.expiration_date,
+          sli.encrypted_payload,
+          sli.encryption_version,
           sli.is_checked,
           sli.checked_at,
           sli.display_order,
@@ -147,6 +149,20 @@ export class ShoppingService {
   ): Promise<ShoppingAiImportResult> {
     const plan = await this.shoppingAi.planImport(dto.message);
 
+    if (dto.planOnly) {
+      return {
+        ignoredSourceFragments: plan.ignoredSourceFragments,
+        importedCount: 0,
+        items: [],
+        plannedItems: plan.items.map(({ category, name, quantity }) => ({
+          category,
+          name,
+          quantity
+        })),
+        sourceFragments: plan.sourceFragments
+      };
+    }
+
     await this.ensureShoppingState(householdId);
 
     const items = await this.database.transaction(async (client) => {
@@ -177,6 +193,7 @@ export class ShoppingService {
       ignoredSourceFragments: plan.ignoredSourceFragments,
       importedCount: items.length,
       items,
+      plannedItems: [],
       sourceFragments: plan.sourceFragments
     };
   }
@@ -200,7 +217,9 @@ export class ShoppingService {
           quantity = $4,
           display_order = $5,
           category = $6,
-          expiration_date = $7
+          expiration_date = $7,
+          encrypted_payload = $8,
+          encryption_version = $9
         from shopping_lists sl
         where sl.id = sli.shopping_list_id
           and sl.household_id = $1
@@ -214,6 +233,8 @@ export class ShoppingService {
           sli.quantity,
           sli.category,
           sli.expiration_date,
+          sli.encrypted_payload,
+          sli.encryption_version,
           sli.is_checked,
           sli.checked_at,
           sli.display_order,
@@ -227,7 +248,9 @@ export class ShoppingService {
         dto.quantity?.trim() ?? current.quantity,
         dto.displayOrder ?? current.displayOrder,
         normalizeShoppingCategory(dto.category) ?? current.category,
-        dto.expirationDate === undefined ? current.expirationDate : dto.expirationDate
+        dto.expirationDate === undefined ? current.expirationDate : dto.expirationDate,
+        dto.encryptedPayload ?? current.encryptedPayload,
+        dto.encryptionVersion ?? current.encryptionVersion
       ]
     );
 
@@ -280,6 +303,8 @@ export class ShoppingService {
           sli.quantity,
           sli.category,
           sli.expiration_date,
+          sli.encrypted_payload,
+          sli.encryption_version,
           sli.is_checked,
           sli.checked_at,
           sli.display_order,
@@ -317,6 +342,8 @@ export class ShoppingService {
           sli.quantity,
           sli.category,
           sli.expiration_date,
+          sli.encrypted_payload,
+          sli.encryption_version,
           sli.is_checked,
           sli.checked_at,
           sli.display_order,
@@ -387,6 +414,8 @@ export class ShoppingService {
             sli.quantity,
             sli.category,
             sli.expiration_date,
+            sli.encrypted_payload,
+            sli.encryption_version,
             sli.is_checked,
             sli.checked_at,
             sli.display_order,
@@ -452,11 +481,13 @@ export class ShoppingService {
     listId: string,
     dto: CreateShoppingItemDto
   ): Promise<ShoppingItemRecord> {
-    const existing = await this.findDuplicateUncheckedItem(
-      client,
-      listId,
-      normalizeProductName(dto.name)
-    );
+    const existing = dto.encryptedPayload
+      ? null
+      : await this.findDuplicateUncheckedItem(
+          client,
+          listId,
+          normalizeProductName(dto.name)
+        );
 
     if (existing) {
       const result = await client.query<ShoppingItemRow>(
@@ -477,6 +508,8 @@ export class ShoppingService {
             quantity,
             category,
             expiration_date,
+            encrypted_payload,
+            encryption_version,
             is_checked,
             checked_at,
             display_order,
@@ -506,18 +539,22 @@ export class ShoppingService {
           quantity,
           category,
           expiration_date,
+          encrypted_payload,
+          encryption_version,
           display_order
         )
-        values ($1, $2, $3, $4, $5, $6)
+        values ($1, $2, $3, $4, $5, $6, $7, $8)
         returning
           id,
           shopping_list_id,
-          $7::uuid as household_id,
-          $8::shopping_list_type as type,
+          $9::uuid as household_id,
+          $10::shopping_list_type as type,
           name,
           quantity,
           category,
           expiration_date,
+          encrypted_payload,
+          encryption_version,
           is_checked,
           checked_at,
           display_order,
@@ -530,6 +567,8 @@ export class ShoppingService {
         dto.quantity?.trim() ?? '',
         normalizeShoppingCategory(dto.category),
         dto.expirationDate ?? null,
+        dto.encryptedPayload ?? null,
+        dto.encryptionVersion ?? null,
         displayOrder,
         householdId,
         type
@@ -551,6 +590,8 @@ export class ShoppingService {
           sli.quantity,
           sli.category,
           sli.expiration_date,
+          sli.encrypted_payload,
+          sli.encryption_version,
           sli.is_checked,
           sli.checked_at,
           sli.display_order,
@@ -684,6 +725,8 @@ export class ShoppingService {
           sli.quantity,
           sli.category,
           sli.expiration_date,
+          sli.encrypted_payload,
+          sli.encryption_version,
           sli.is_checked,
           sli.checked_at,
           sli.display_order,
@@ -742,6 +785,9 @@ export class ShoppingService {
       createdAt: row.created_at,
       category: row.category,
       displayOrder: row.display_order,
+      encryptedPayload: row.encrypted_payload,
+      encryptionEntity: 'shopping-item',
+      encryptionVersion: row.encryption_version,
       expirationDate: row.expiration_date,
       householdId: row.household_id,
       id: row.id,
@@ -841,6 +887,8 @@ interface ShoppingItemRow {
   category: ShoppingAiCategory | null;
   created_at: string;
   display_order: number;
+  encrypted_payload: string | null;
+  encryption_version: number | null;
   expiration_date: string | null;
   household_id: string;
   id: string;
@@ -866,6 +914,9 @@ export interface ShoppingItemRecord {
   category: ShoppingAiCategory | null;
   createdAt: string;
   displayOrder: number;
+  encryptedPayload: string | null;
+  encryptionEntity: 'shopping-item';
+  encryptionVersion: number | null;
   expirationDate: string | null;
   householdId: string;
   id: string;
@@ -894,5 +945,10 @@ export interface ShoppingAiImportResult {
   }>;
   importedCount: number;
   items: ShoppingItemRecord[];
+  plannedItems: Array<{
+    category: ShoppingAiCategory;
+    name: string;
+    quantity: string;
+  }>;
   sourceFragments: ShoppingAiSourceFragment[];
 }

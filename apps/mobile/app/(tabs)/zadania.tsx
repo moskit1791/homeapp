@@ -22,6 +22,8 @@ import {
   useModulePermission,
   usePermissions,
 } from "../../src/permissions/use-permissions";
+import { useEncryption } from "../../src/encryption/encryption-context";
+import { EncryptionUnlockCard } from "../../src/encryption/encryption-unlock-card";
 import { useSession } from "../../src/session/session-context";
 import { radii, spacing } from "../../src/theme/tokens";
 import { useAppTheme, type AppPalette } from "../../src/theme/use-app-theme";
@@ -71,11 +73,16 @@ export default function ZadaniaScreen() {
   const permissionsQuery = usePermissions();
   const notesPermission = useModulePermission("notes");
   const todoPermission = useModulePermission("todo");
+  const encryption = useEncryption();
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
   const [activeSegment, setActiveSegment] = useState<TaskSegment>("notes");
   const [noteAddOpenRequest, setNoteAddOpenRequest] = useState(0);
   const [todoAddOpenRequest, setTodoAddOpenRequest] = useState(0);
+  const activeEncryptionModule = activeSegment === "notes" ? "notes" : "todo";
+  const activeSegmentLocked =
+    encryption.isModuleEnabled(activeEncryptionModule) &&
+    encryption.lockState === "locked";
   const availableSegments = useMemo(
     () =>
       taskSegments
@@ -140,7 +147,8 @@ export default function ZadaniaScreen() {
   return (
     <AppScreen
       actions={
-        activeSegment === "notes" && notesPermission.canCreate ? (
+        activeSegmentLocked ? undefined : activeSegment === "notes" &&
+          notesPermission.canCreate ? (
           <IconButton
             accessibilityLabel="Dodaj notatkę"
             onPress={() => setNoteAddOpenRequest((value) => value + 1)}
@@ -172,22 +180,28 @@ export default function ZadaniaScreen() {
         value={activeSegment}
       />
 
-      {activeSegment === "notes" ? (
-        <NotesBoard
-          accessToken={session?.accessToken}
-          addOpenRequest={noteAddOpenRequest}
-          action={params.segment === "notes" ? params.action : undefined}
-          onRouteActionHandled={() => router.setParams({ action: undefined })}
-        />
-      ) : null}
-      {activeSegment === "todo" ? (
-        <TodoBoard
-          accessToken={session?.accessToken}
-          addOpenRequest={todoAddOpenRequest}
-          action={params.segment === "todo" ? params.action : undefined}
-          onRouteActionHandled={() => router.setParams({ action: undefined })}
-        />
-      ) : null}
+      {activeSegmentLocked ? (
+        <EncryptionUnlockCard modules={[activeEncryptionModule]} />
+      ) : (
+        <>
+          {activeSegment === "notes" ? (
+            <NotesBoard
+              accessToken={session?.accessToken}
+              addOpenRequest={noteAddOpenRequest}
+              action={params.segment === "notes" ? params.action : undefined}
+              onRouteActionHandled={() => router.setParams({ action: undefined })}
+            />
+          ) : null}
+          {activeSegment === "todo" ? (
+            <TodoBoard
+              accessToken={session?.accessToken}
+              addOpenRequest={todoAddOpenRequest}
+              action={params.segment === "todo" ? params.action : undefined}
+              onRouteActionHandled={() => router.setParams({ action: undefined })}
+            />
+          ) : null}
+        </>
+      )}
     </AppScreen>
   );
 }
