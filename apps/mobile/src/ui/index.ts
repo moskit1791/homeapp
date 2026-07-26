@@ -10,6 +10,7 @@ export { AppToast } from "./toast";
 export { ListRow } from "./list-row";
 export { MetricCard } from "./metric-card";
 export { QueryState } from "./query-state";
+export { SelectField, type SelectOption } from "./select-field";
 export { SectionCard } from "./section-card";
 export { SegmentedControl } from "./segmented-control";
 export { TextField } from "./text-field";

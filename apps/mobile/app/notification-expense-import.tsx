@@ -30,6 +30,12 @@ import {
   notificationExpenseImport,
 } from "../src/notification-expense-import/native";
 import {
+  changeBudgetCategory,
+  findBudgetCategoryId,
+  getBudgetItemsForCategory,
+  type BudgetCategoryOption,
+} from "../src/notification-expense-import/budget-selection";
+import {
   formatSourceAmountCurrency,
   parsePositiveMoney,
   parseSourceAmountCurrency,
@@ -45,10 +51,12 @@ import {
   EmptyState,
   InlineAlert,
   QueryState,
+  SelectField,
   SectionCard,
 } from "../src/ui";
 
 type Draft = PendingNotificationTransaction & {
+  budgetCategoryId: string | null;
   expanded: boolean;
   selected: boolean;
   sourceAmountCurrency: string;
@@ -97,6 +105,7 @@ export default function NotificationExpenseImportReviewScreen() {
             item.id,
             {
               ...item,
+              budgetCategoryId: null,
               budgetAmount:
                 item.budgetAmount ?? (item.currency ? item.amount : null),
               expanded: false,
@@ -143,13 +152,30 @@ export default function NotificationExpenseImportReviewScreen() {
   });
   const candidates = Object.values(drafts);
   const selected = candidates.filter((candidate) => candidate.selected);
-  const budgetItems =
-    financeQuery.data?.categories.flatMap((category) =>
-      category.items.map((item) => ({
-        id: item.id,
-        label: `${category.name} / ${item.name}`,
-      })),
-    ) ?? [];
+  const budgetCategories = useMemo<BudgetCategoryOption[]>(
+    () =>
+      financeQuery.data?.categories
+        .filter((category) => category.items.length > 0)
+        .map((category) => ({
+          id: category.id,
+          items: category.items.map((item) => ({
+            id: item.id,
+            label: item.name,
+          })),
+          label: category.name,
+        })) ?? [],
+    [financeQuery.data?.categories],
+  );
+  const budgetItems = useMemo(
+    () =>
+      budgetCategories.flatMap((category) =>
+        category.items.map((item) => ({
+          id: item.id,
+          label: `${category.label} / ${item.label}`,
+        })),
+      ),
+    [budgetCategories],
+  );
   const householdCurrency = householdQuery.data?.currencyCode ?? "PLN";
   const invalidSelected = selected.some((item) => {
     const source = parseSourceAmountCurrency(item.sourceAmountCurrency);
@@ -339,6 +365,13 @@ export default function NotificationExpenseImportReviewScreen() {
         const selectedBudgetLabel = budgetItems.find(
           (item) => item.id === candidate.budgetItemId,
         )?.label;
+        const selectedBudgetCategoryId =
+          candidate.budgetCategoryId ??
+          findBudgetCategoryId(budgetCategories, candidate.budgetItemId);
+        const categoryBudgetItems = getBudgetItemsForCategory(
+          budgetCategories,
+          selectedBudgetCategoryId,
+        );
 
         return (
           <SectionCard
@@ -454,31 +487,45 @@ export default function NotificationExpenseImportReviewScreen() {
                     value={candidate.sourceAmountCurrency}
                   />
                 </View>
-                <Text style={styles.fieldLabel}>Pozycja budżetowa</Text>
-                <View style={styles.choices}>
-                  {budgetItems.map((item) => (
-                    <Pressable
-                      key={item.id}
-                      onPress={() =>
-                        patchDraft(candidate.id, { budgetItemId: item.id })
-                      }
-                      style={[
-                        styles.choice,
-                        candidate.budgetItemId === item.id &&
-                          styles.choiceActive,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.choiceText,
-                          candidate.budgetItemId === item.id &&
-                            styles.choiceTextActive,
-                        ]}
-                      >
-                        {item.label}
-                      </Text>
-                    </Pressable>
-                  ))}
+                <View style={styles.twoColumns}>
+                  <SelectField
+                    emptyText="Brak kategorii budżetu."
+                    label="Kategoria"
+                    onSelect={(categoryId) =>
+                      patchDraft(
+                        candidate.id,
+                        changeBudgetCategory(
+                          selectedBudgetCategoryId,
+                          candidate.budgetItemId,
+                          categoryId,
+                        ),
+                      )
+                    }
+                    options={budgetCategories.map((category) => ({
+                      id: category.id,
+                      label: category.label,
+                      meta: `Pozycji: ${category.items.length}`,
+                    }))}
+                    placeholder="Wybierz kategorię"
+                    searchPlaceholder="Szukaj kategorii"
+                    value={selectedBudgetCategoryId}
+                  />
+                  <SelectField
+                    disabled={!selectedBudgetCategoryId}
+                    emptyText="Ta kategoria nie ma pozycji budżetu."
+                    label="Pozycja budżetowa"
+                    onSelect={(budgetItemId) =>
+                      patchDraft(candidate.id, { budgetItemId })
+                    }
+                    options={categoryBudgetItems}
+                    placeholder={
+                      selectedBudgetCategoryId
+                        ? "Wybierz pozycję"
+                        : "Najpierw kategoria"
+                    }
+                    searchPlaceholder="Szukaj pozycji"
+                    value={candidate.budgetItemId}
+                  />
                 </View>
                 <ActionButton
                   onPress={async () => {
@@ -609,21 +656,6 @@ function createStyles(colors: AppPalette) {
       gap: spacing.sm,
       padding: spacing.md,
     },
-    choice: {
-      backgroundColor: colors.cardMuted,
-      borderColor: colors.border,
-      borderRadius: radii.control,
-      borderWidth: 1,
-      paddingHorizontal: spacing.sm,
-      paddingVertical: spacing.sm,
-    },
-    choiceActive: {
-      backgroundColor: colors.surfaceMuted,
-      borderColor: colors.finance,
-    },
-    choiceText: { color: colors.text, fontSize: 12 },
-    choiceTextActive: { color: colors.finance, fontWeight: "700" },
-    choices: { gap: spacing.xs },
     compactActions: {
       alignItems: "center",
       flexDirection: "row",
