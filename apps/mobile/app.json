@@ -19,6 +19,12 @@
     "android": {
       "package": "com.homeapp.mobile",
       "versionCode": 102,
+      "blockedPermissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.RECORD_AUDIO"
+      ],
       "permissions": [
         "POST_NOTIFICATIONS",
         "READ_EXTERNAL_STORAGE",
@@ -44,6 +50,8 @@
       [
         "expo-image-picker",
         {
+          "cameraPermission": false,
+          "microphonePermission": false,
           "photosPermission": "HomeApp potrzebuje dostępu do galerii, żeby dodać zdjęcie jako załącznik."
         }
       ],
