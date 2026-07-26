@@ -1997,3 +1997,35 @@
 - SHA-256: `E45898BF222EB88AA2B3CE39DE3C1CB3AFD8E96153BB94F9B88A4D637C9A54DF`.
 - Podpis APK Signature Scheme v2 - poprawny.
 - SHA-256 certyfikatu: `DABDB31074901BB7097FF460326130E0DABB796C94A2A8A8F3BD1F267BA72874`.
+
+## 2026-07-26 - Hotfix HomeApp 1.2.1
+
+### Zakres
+
+- Ustawiono wersję aplikacji mobilnej `1.2.1` oraz Android `versionCode=103`.
+- Karta oczekującej płatności jest domyślnie zwinięta i pokazuje nazwę, źródło, czas, kwotę, status, pewność oraz przypisaną pozycję budżetową.
+- Pełny formularz nazwy, kwoty, waluty i budżetu jest dostępny po wybraniu `Edytuj`.
+- Zredukowano wysokość pojedynczej karty z około 1250 px do 381 px na emulatorze Pixel API 36, czyli do około 30% starego widoku.
+- Usunięto zielony kontener wokół logo logowania, powiększono transparentne logo i usunięto dekoracyjny kafelek przed nagłówkiem `Witaj ponownie`.
+
+### Walidacja
+
+- Pełne `typecheck`, `lint`, testy API i mobile oraz build API/Android/iOS - OK.
+- API: 24 zestawy i 93 testy - OK.
+- Mobile: 3 zestawy i 13 testów - OK.
+- APK zainstalowano jako aktualizację `1.2.0 -> 1.2.1` na emulatorze.
+- Cold-start, logowanie produkcyjnym kontem QA, wykrycie źródła `Shell`, zapis testowej płatności i zwarty widok kolejki - OK.
+- Przycisk `Edytuj` rozwija pełny formularz - OK.
+- Logcat po teście nie zawiera krytycznych błędów aplikacji.
+
+### Finalny APK
+
+- Plik: `builds/homeapp-release.apk`.
+- EAS build: `9cda50e4-c8e3-4f9c-809e-cebdd61c99c0`.
+- Pakiet: `com.homeapp.mobile`.
+- Wersja: `1.2.1` (`versionCode=103`).
+- Rozmiar: `76251585` bajtów.
+- SHA-256: `5DDD2D1274833DD611844EDB8BF3F4C35DD6D1551203DB8A761BD5A12EF8AEB7`.
+- Podpis APK Signature Scheme v2 - poprawny.
+- SHA-256 certyfikatu: `DABDB31074901BB7097FF460326130E0DABB796C94A2A8A8F3BD1F267BA72874`.
+- Produkcyjny manifest ma `usesCleartextTraffic=false` i nie zawiera zbędnych uprawnień kamery, mikrofonu, mediów ani nakładek systemowych.
