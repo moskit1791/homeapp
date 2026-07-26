@@ -30,7 +30,9 @@ import {
   notificationExpenseImport,
 } from "../src/notification-expense-import/native";
 import {
+  formatSourceAmountCurrency,
   parsePositiveMoney,
+  parseSourceAmountCurrency,
   requirePositiveMoney,
 } from "../src/notification-expense-import/money";
 import { useModulePermission } from "../src/permissions/use-permissions";
@@ -49,6 +51,7 @@ import {
 type Draft = PendingNotificationTransaction & {
   expanded: boolean;
   selected: boolean;
+  sourceAmountCurrency: string;
   sourceIconDataUrl: string | null;
 };
 
@@ -99,6 +102,10 @@ export default function NotificationExpenseImportReviewScreen() {
               expanded: false,
               merchant: item.merchant ?? "Wydatek z powiadomienia",
               selected: item.transactionType !== "refund",
+              sourceAmountCurrency: formatSourceAmountCurrency(
+                item.amount,
+                item.currency,
+              ),
               sourceIconDataUrl: sourceIcons.get(item.sourcePackage) ?? null,
             },
           ]),
@@ -145,17 +152,13 @@ export default function NotificationExpenseImportReviewScreen() {
     ) ?? [];
   const householdCurrency = householdQuery.data?.currencyCode ?? "PLN";
   const invalidSelected = selected.some((item) => {
-    const finalAmountText =
-      item.currency === householdCurrency
-        ? item.budgetAmount || item.amount
-        : item.budgetAmount;
-    const sourceAmount = parsePositiveMoney(item.amount);
+    const source = parseSourceAmountCurrency(item.sourceAmountCurrency);
+    const finalAmountText = item.budgetAmount || source?.amountText;
     const finalAmount = parsePositiveMoney(finalAmountText);
     return (
       !item.budgetItemId ||
       !item.merchant?.trim() ||
-      !/^[A-Z]{3}$/.test(item.currency ?? "") ||
-      sourceAmount === null ||
+      source === null ||
       finalAmount === null
     );
   });
@@ -175,18 +178,20 @@ export default function NotificationExpenseImportReviewScreen() {
 
       const items: ImportExpenseItemRequest[] = await Promise.all(
         selected.map(async (item) => {
+          const source = parseSourceAmountCurrency(item.sourceAmountCurrency);
+          if (!source) {
+            throw new Error("Uzupełnij kwotę źródłową i walutę.");
+          }
           const finalAmount = requirePositiveMoney(
-            item.currency === householdCurrency
-              ? item.budgetAmount || item.amount
-              : item.budgetAmount,
+            item.budgetAmount || source.amountText,
           );
-          const originalAmount = requirePositiveMoney(item.amount);
+          const originalAmount = source.amount;
           const name = item.merchant?.trim() || "Wydatek z powiadomienia";
           await notificationExpenseImport.updatePending(item.id, {
             amount: originalAmount.toFixed(2),
             budgetAmount: finalAmount.toFixed(2),
             budgetItemId: item.budgetItemId,
-            currency: item.currency,
+            currency: source.currency,
             merchant: name,
           });
           const envelope = financeEncrypted
@@ -197,7 +202,7 @@ export default function NotificationExpenseImportReviewScreen() {
                   name,
                   occurredAt: item.occurredAt,
                   originalAmount,
-                  originalCurrency: item.currency,
+                  originalCurrency: source.currency,
                   source: "bank_notification",
                 },
                 {
@@ -218,7 +223,7 @@ export default function NotificationExpenseImportReviewScreen() {
                   name,
                   occurredAt: item.occurredAt,
                   originalAmount,
-                  originalCurrency: item.currency ?? undefined,
+                  originalCurrency: source.currency,
                 }),
             ...envelope,
           };
@@ -419,44 +424,36 @@ export default function NotificationExpenseImportReviewScreen() {
 
             {candidate.expanded ? (
               <View style={styles.details}>
-                <Field
-                  label="Nazwa wydatku"
-                  onChangeText={(merchant) =>
-                    patchDraft(candidate.id, { merchant })
-                  }
-                  value={candidate.merchant ?? ""}
-                />
                 <View style={styles.twoColumns}>
                   <Field
-                    keyboardType="decimal-pad"
-                    label="Kwota źródłowa"
-                    onChangeText={(amount) =>
-                      patchDraft(candidate.id, { amount })
+                    label="Nazwa wydatku"
+                    onChangeText={(merchant) =>
+                      patchDraft(candidate.id, { merchant })
                     }
-                    value={candidate.amount ?? ""}
+                    value={candidate.merchant ?? ""}
                   />
                   <Field
                     autoCapitalize="characters"
-                    label="Waluta"
-                    maxLength={3}
-                    onChangeText={(currency) =>
+                    autoCorrect={false}
+                    label="Kwota i waluta"
+                    onChangeText={(sourceAmountCurrency) => {
+                      const source =
+                        parseSourceAmountCurrency(sourceAmountCurrency);
                       patchDraft(candidate.id, {
-                        currency: currency.toUpperCase(),
-                      })
-                    }
-                    value={candidate.currency ?? ""}
+                        sourceAmountCurrency,
+                        ...(source
+                          ? {
+                              amount: source.amountText,
+                              budgetAmount: source.amountText,
+                              currency: source.currency,
+                            }
+                          : {}),
+                      });
+                    }}
+                    placeholder="18,50 EUR"
+                    value={candidate.sourceAmountCurrency}
                   />
                 </View>
-                {candidate.currency !== householdCurrency ? (
-                  <Field
-                    keyboardType="decimal-pad"
-                    label={`Kwota w walucie budżetu (${householdCurrency})`}
-                    onChangeText={(budgetAmount) =>
-                      patchDraft(candidate.id, { budgetAmount })
-                    }
-                    value={candidate.budgetAmount ?? ""}
-                  />
-                ) : null}
                 <Text style={styles.fieldLabel}>Pozycja budżetowa</Text>
                 <View style={styles.choices}>
                   {budgetItems.map((item) => (
@@ -485,9 +482,7 @@ export default function NotificationExpenseImportReviewScreen() {
                 </View>
                 <ActionButton
                   onPress={async () => {
-                    await notificationExpenseImport.ignorePending(
-                      candidate.id,
-                    );
+                    await notificationExpenseImport.ignorePending(candidate.id);
                     await loadQueue();
                   }}
                   title="To nie jest wydatek"
@@ -507,7 +502,7 @@ export default function NotificationExpenseImportReviewScreen() {
           <Text style={styles.budgetSummary}>
             Suma budżetowa:{" "}
             {formatMoneyWithCode(
-              budgetCurrencyTotal(selected, householdCurrency),
+              budgetCurrencyTotal(selected),
               householdCurrency,
             )}
           </Text>
@@ -518,7 +513,7 @@ export default function NotificationExpenseImportReviewScreen() {
           {invalidSelected ? (
             <InlineAlert
               tone="info"
-              text="Uzupełnij nazwę, walutę, finalną kwotę i pozycję budżetową dla każdej wybranej płatności."
+              text="Uzupełnij nazwę, kwotę z walutą i pozycję budżetową dla każdej wybranej płatności."
             />
           ) : null}
           {importMutation.error ? (
@@ -569,23 +564,22 @@ function Field({
 function sourceCurrencySummary(items: Draft[]): string {
   const totals = new Map<string, number>();
   for (const item of items) {
-    const amount = parsePositiveMoney(item.amount);
-    if (amount === null) continue;
-    const currency = item.currency || "bez waluty";
-    totals.set(currency, (totals.get(currency) ?? 0) + amount);
+    const source = parseSourceAmountCurrency(item.sourceAmountCurrency);
+    if (!source) continue;
+    totals.set(
+      source.currency,
+      (totals.get(source.currency) ?? 0) + source.amount,
+    );
   }
   return [...totals.entries()]
     .map(([currency, amount]) => formatMoneyWithCode(amount, currency))
     .join(" • ");
 }
 
-function budgetCurrencyTotal(items: Draft[], householdCurrency: string): number {
+function budgetCurrencyTotal(items: Draft[]): number {
   return items.reduce((total, item) => {
-    const amount = parsePositiveMoney(
-      item.currency === householdCurrency
-        ? item.budgetAmount || item.amount
-        : item.budgetAmount,
-    );
+    const source = parseSourceAmountCurrency(item.sourceAmountCurrency);
+    const amount = parsePositiveMoney(item.budgetAmount || source?.amountText);
     return total + (amount ?? 0);
   }, 0);
 }
