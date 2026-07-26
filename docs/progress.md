@@ -2029,3 +2029,45 @@
 - Podpis APK Signature Scheme v2 - poprawny.
 - SHA-256 certyfikatu: `DABDB31074901BB7097FF460326130E0DABB796C94A2A8A8F3BD1F267BA72874`.
 - Produkcyjny manifest ma `usesCleartextTraffic=false` i nie zawiera zbędnych uprawnień kamery, mikrofonu, mediów ani nakładek systemowych.
+
+## 2026-07-26 - HomeApp 1.2.2 i aktualizacje OTA
+
+### Zakres
+
+- Ustawiono wersję aplikacji mobilnej `1.2.2` oraz Android `versionCode=104`.
+- Usunięto z edycji oczekującej płatności pole `Kwota w walucie budżetu`.
+- Pola `Nazwa wydatku` oraz połączone `Kwota i waluta` są ułożone obok siebie w równych kolumnach.
+- Dodano bezpieczne formatowanie, parsowanie i walidację połączonej kwoty źródłowej z kodem waluty.
+- Skonfigurowano EAS Update dla kanału `production`, projektu `84c1efe4-53a2-451f-bf57-84228ab140f6` i runtime `1.2.2`.
+- Produkcyjne APK sprawdza aktualizacje przy uruchomieniu i zachowuje wbudowany pakiet jako bezpieczny fallback.
+
+### Walidacja
+
+- Pełne `typecheck`, `lint`, testy API i mobile oraz build API/Android/iOS - OK.
+- API: 24 zestawy i 93 testy - OK.
+- Mobile: 3 zestawy i 15 testów - OK.
+- Produkcyjny APK zainstalowano na emulatorze Pixel API 36 i potwierdzono wersję `1.2.2 (104)`.
+- Logowanie kontem QA, dostęp do powiadomień, wykrycie źródła `Shell`, zapis testowej płatności i zwarty widok kolejki - OK.
+- Formularz edycji pokazuje obok siebie `Nazwa wydatku` i `Kwota i waluta`; usunięte pole kwoty budżetowej nie występuje.
+- Pierwsze uruchomienie pobrało aktualizację OTA z kanału produkcyjnego, a kolejne potwierdziło brak nowszej aktualizacji.
+- Logcat po teście nie zawiera krytycznych błędów aplikacji.
+
+### OTA
+
+- Update ID: `019fa034-a3f2-7bc3-813b-5a07b2fa5650`.
+- Update group: `86a08ad2-52f4-4ae1-b88d-c869daa01c9d`.
+- Kanał i branch: `production`.
+- Runtime: `1.2.2`.
+- Commit źródłowy: `cf19f3ab94d27a7042b5a2017474466be57265a5`.
+
+### Finalny APK
+
+- Plik: `builds/homeapp-release.apk`.
+- EAS build: `b8159d7d-9465-4142-90b6-6f9b902e2891`.
+- Pakiet: `com.homeapp.mobile`.
+- Wersja: `1.2.2` (`versionCode=104`).
+- Rozmiar: `79631730` bajtów.
+- SHA-256: `A421E98AD06B9010597F724B9E80C2096F591F718A446EF1BC72DA6FE56DD2EC`.
+- Podpis APK Signature Scheme v2 - poprawny.
+- SHA-256 certyfikatu: `DABDB31074901BB7097FF460326130E0DABB796C94A2A8A8F3BD1F267BA72874`.
+- Manifest ma `usesCleartextTraffic=false`, aktywny EAS Update, runtime `1.2.2` i nagłówek kanału `production`.
