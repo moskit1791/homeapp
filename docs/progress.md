@@ -1960,3 +1960,40 @@
 - Nie ma skonfigurowanego właściwego klucza wydania (`HOMEAPP_ANDROID_KEYSTORE_PATH`, alias i hasła), więc nie wolno publikować obecnego APK jako produkcyjnego.
 - Modale w `login.tsx` i `auth/invitation.tsx` nadal oznaczają politykę prywatności jako roboczy podgląd. Finalna treść, administrator danych i kontakt muszą zostać zatwierdzone przed wdrożeniem.
 - Nie scalono, nie wypchnięto ani nie wdrożono zmian na produkcję, ponieważ dwa powyższe warunki release gate nie są spełnione.
+
+## 2026-07-26 - Release candidate HomeApp 1.2.0
+
+### Zamknięte blokery wydania
+
+- Ustawiono wersję aplikacji mobilnej `1.2.0` oraz Android `versionCode=102`.
+- Zastąpiono robocze treści prawne kompletną Polityką prywatności, Regulaminem i instrukcją usunięcia konta.
+- Udostępniono publiczne strony `/api/legal/privacy`, `/api/legal/terms` i `/api/legal/account-deletion`.
+- Produkcyjny build Androida wymaga właściwego klucza wydania i nie może już po cichu użyć certyfikatu debug.
+- Usunięto z wydania nieużywane uprawnienia `CAMERA`, `RECORD_AUDIO`, `READ_MEDIA_AUDIO`, `READ_MEDIA_VIDEO` i `SYSTEM_ALERT_WINDOW`.
+- Wyłączono cleartext HTTP w produkcyjnym manifeście Androida.
+- Usunięto podatności zależności o poziomie high/critical wykrywane przez `pnpm audit --prod --audit-level high`.
+- Poprawiono deterministyczność testu kalendarza przez tworzenie zdarzenia w przyszłości.
+
+### Walidacja
+
+- Pełne `typecheck`, `lint`, testy API i mobile oraz build API/Android/iOS - OK.
+- API: 24 zestawy i 93 testy - OK.
+- Mobile: 3 zestawy i 13 testów - OK.
+- Android JVM: 6 testów parsera - OK.
+- AndroidX na emulatorze Pixel API 36: 3 testy - OK.
+- Funkcjonalny smoke lokalnego API: 29/29 kroków - OK.
+- Migracje PostgreSQL od pustej bazy: 27 migracji - OK.
+- Finalny scalony manifest release nie zawiera zbędnych uprawnień i ma `usesCleartextTraffic=false`.
+- Podpisany APK zainstalowano jako aktualizację na emulatorze i uruchomiono cold-start bez błędów krytycznych.
+- Pełna Polityka prywatności została otwarta i zweryfikowana na emulatorze.
+
+### Finalny APK
+
+- Plik: `builds/homeapp-release.apk`.
+- EAS build: `ee89bc9d-a149-4077-a704-1aa36bfba5f5`.
+- Pakiet: `com.homeapp.mobile`.
+- Wersja: `1.2.0` (`versionCode=102`).
+- Rozmiar: `76251293` bajtów.
+- SHA-256: `E45898BF222EB88AA2B3CE39DE3C1CB3AFD8E96153BB94F9B88A4D637C9A54DF`.
+- Podpis APK Signature Scheme v2 - poprawny.
+- SHA-256 certyfikatu: `DABDB31074901BB7097FF460326130E0DABB796C94A2A8A8F3BD1F267BA72874`.
