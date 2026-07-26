@@ -47,6 +47,7 @@ import {
 } from "../src/ui";
 
 type Draft = PendingNotificationTransaction & {
+  expanded: boolean;
   selected: boolean;
   sourceIconDataUrl: string | null;
 };
@@ -95,6 +96,7 @@ export default function NotificationExpenseImportReviewScreen() {
               ...item,
               budgetAmount:
                 item.budgetAmount ?? (item.currency ? item.amount : null),
+              expanded: false,
               merchant: item.merchant ?? "Wydatek z powiadomienia",
               selected: item.transactionType !== "refund",
               sourceIconDataUrl: sourceIcons.get(item.sourcePackage) ?? null,
@@ -327,128 +329,175 @@ export default function NotificationExpenseImportReviewScreen() {
         />
       ) : null}
 
-      {candidates.map((candidate) => (
-        <SectionCard
-          key={candidate.id}
-          action={
-            <Pressable
-              onPress={() =>
-                patchDraft(candidate.id, {
-                  selected: !candidate.selected,
-                })
-              }
-              style={[
-                styles.selectionBadge,
-                candidate.selected && styles.selectionBadgeActive,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.selectionText,
-                  candidate.selected && styles.selectionTextActive,
-                ]}
-              >
-                {candidate.selected ? "Wybrano" : "Pomiń w tej paczce"}
-              </Text>
-            </Pressable>
-          }
-          subtitle={new Date(candidate.occurredAt).toLocaleString("pl-PL")}
-          title={candidate.sourceAppName}
-        >
-          <View style={styles.sourceRow}>
-            {candidate.sourceIconDataUrl ? (
-              <Image
-                accessibilityIgnoresInvertColors
-                source={{ uri: candidate.sourceIconDataUrl }}
-                style={styles.sourceIcon}
-              />
-            ) : (
-              <View style={styles.sourceIconFallback}>
-                <Text style={styles.sourceIconFallbackText}>↗</Text>
-              </View>
-            )}
-            <Text style={styles.sourceName}>{candidate.sourceAppName}</Text>
-          </View>
-          <View style={styles.statusRow}>
-            <Text style={styles.statusText}>
-              {candidate.requiresReview ? "Sprawdź dane" : "Rozpoznano"}
-            </Text>
-            <Text style={styles.meta}>
-              Pewność {Math.round(candidate.confidence * 100)}%
-            </Text>
-          </View>
-          <Field
-            label="Nazwa wydatku"
-            onChangeText={(merchant) => patchDraft(candidate.id, { merchant })}
-            value={candidate.merchant ?? ""}
-          />
-          <View style={styles.twoColumns}>
-            <Field
-              keyboardType="decimal-pad"
-              label="Kwota źródłowa"
-              onChangeText={(amount) => patchDraft(candidate.id, { amount })}
-              value={candidate.amount ?? ""}
-            />
-            <Field
-              autoCapitalize="characters"
-              label="Waluta"
-              maxLength={3}
-              onChangeText={(currency) =>
-                patchDraft(candidate.id, {
-                  currency: currency.toUpperCase(),
-                })
-              }
-              value={candidate.currency ?? ""}
-            />
-          </View>
-          {candidate.currency !== householdCurrency ? (
-            <Field
-              keyboardType="decimal-pad"
-              label={`Kwota w walucie budżetu (${householdCurrency})`}
-              onChangeText={(budgetAmount) =>
-                patchDraft(candidate.id, { budgetAmount })
-              }
-              value={candidate.budgetAmount ?? ""}
-            />
-          ) : null}
-          <Text style={styles.fieldLabel}>Pozycja budżetowa</Text>
-          <View style={styles.choices}>
-            {budgetItems.map((item) => (
+      {candidates.map((candidate) => {
+        const parsedAmount = parsePositiveMoney(candidate.amount);
+        const selectedBudgetLabel = budgetItems.find(
+          (item) => item.id === candidate.budgetItemId,
+        )?.label;
+
+        return (
+          <SectionCard
+            key={candidate.id}
+            action={
               <Pressable
-                key={item.id}
+                accessibilityRole="button"
                 onPress={() =>
-                  patchDraft(candidate.id, { budgetItemId: item.id })
+                  patchDraft(candidate.id, {
+                    selected: !candidate.selected,
+                  })
                 }
                 style={[
-                  styles.choice,
-                  candidate.budgetItemId === item.id && styles.choiceActive,
+                  styles.selectionBadge,
+                  candidate.selected && styles.selectionBadgeActive,
                 ]}
               >
                 <Text
                   style={[
-                    styles.choiceText,
-                    candidate.budgetItemId === item.id &&
-                      styles.choiceTextActive,
+                    styles.selectionText,
+                    candidate.selected && styles.selectionTextActive,
                   ]}
                 >
-                  {item.label}
+                  {candidate.selected ? "Wybrano" : "Pominięto"}
                 </Text>
               </Pressable>
-            ))}
-          </View>
-          <Text style={styles.meta}>
-            Typ: {transactionTypeLabel(candidate.transactionType)}
-          </Text>
-          <ActionButton
-            onPress={async () => {
-              await notificationExpenseImport.ignorePending(candidate.id);
-              await loadQueue();
-            }}
-            title="To nie jest wydatek"
-            variant="secondary"
-          />
-        </SectionCard>
-      ))}
+            }
+            style={styles.candidateCard}
+            subtitle={`${candidate.sourceAppName} • ${new Date(
+              candidate.occurredAt,
+            ).toLocaleString("pl-PL")}`}
+            title={candidate.merchant?.trim() || "Wydatek z powiadomienia"}
+          >
+            <View style={styles.compactRow}>
+              {candidate.sourceIconDataUrl ? (
+                <Image
+                  accessibilityIgnoresInvertColors
+                  source={{ uri: candidate.sourceIconDataUrl }}
+                  style={styles.sourceIcon}
+                />
+              ) : (
+                <View style={styles.sourceIconFallback}>
+                  <Text style={styles.sourceIconFallbackText}>↗</Text>
+                </View>
+              )}
+              <View style={styles.compactInfo}>
+                <Text style={styles.statusText}>
+                  {candidate.requiresReview ? "Sprawdź dane" : "Rozpoznano"}
+                </Text>
+                <Text numberOfLines={1} style={styles.meta}>
+                  {selectedBudgetLabel ?? "Wybierz pozycję budżetową"}
+                </Text>
+              </View>
+              <Text style={styles.compactAmount}>
+                {parsedAmount === null
+                  ? `${candidate.amount ?? "—"} ${candidate.currency ?? ""}`
+                  : formatMoneyWithCode(
+                      parsedAmount,
+                      candidate.currency ?? householdCurrency,
+                    )}
+              </Text>
+            </View>
+
+            <View style={styles.compactActions}>
+              <Text style={styles.meta}>
+                {transactionTypeLabel(candidate.transactionType)} • pewność{" "}
+                {Math.round(candidate.confidence * 100)}%
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() =>
+                  patchDraft(candidate.id, {
+                    expanded: !candidate.expanded,
+                  })
+                }
+                style={styles.expandButton}
+              >
+                <Text style={styles.expandButtonText}>
+                  {candidate.expanded ? "Zwiń" : "Edytuj"}
+                </Text>
+              </Pressable>
+            </View>
+
+            {candidate.expanded ? (
+              <View style={styles.details}>
+                <Field
+                  label="Nazwa wydatku"
+                  onChangeText={(merchant) =>
+                    patchDraft(candidate.id, { merchant })
+                  }
+                  value={candidate.merchant ?? ""}
+                />
+                <View style={styles.twoColumns}>
+                  <Field
+                    keyboardType="decimal-pad"
+                    label="Kwota źródłowa"
+                    onChangeText={(amount) =>
+                      patchDraft(candidate.id, { amount })
+                    }
+                    value={candidate.amount ?? ""}
+                  />
+                  <Field
+                    autoCapitalize="characters"
+                    label="Waluta"
+                    maxLength={3}
+                    onChangeText={(currency) =>
+                      patchDraft(candidate.id, {
+                        currency: currency.toUpperCase(),
+                      })
+                    }
+                    value={candidate.currency ?? ""}
+                  />
+                </View>
+                {candidate.currency !== householdCurrency ? (
+                  <Field
+                    keyboardType="decimal-pad"
+                    label={`Kwota w walucie budżetu (${householdCurrency})`}
+                    onChangeText={(budgetAmount) =>
+                      patchDraft(candidate.id, { budgetAmount })
+                    }
+                    value={candidate.budgetAmount ?? ""}
+                  />
+                ) : null}
+                <Text style={styles.fieldLabel}>Pozycja budżetowa</Text>
+                <View style={styles.choices}>
+                  {budgetItems.map((item) => (
+                    <Pressable
+                      key={item.id}
+                      onPress={() =>
+                        patchDraft(candidate.id, { budgetItemId: item.id })
+                      }
+                      style={[
+                        styles.choice,
+                        candidate.budgetItemId === item.id &&
+                          styles.choiceActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.choiceText,
+                          candidate.budgetItemId === item.id &&
+                            styles.choiceTextActive,
+                        ]}
+                      >
+                        {item.label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <ActionButton
+                  onPress={async () => {
+                    await notificationExpenseImport.ignorePending(
+                      candidate.id,
+                    );
+                    await loadQueue();
+                  }}
+                  title="To nie jest wydatek"
+                  variant="secondary"
+                />
+              </View>
+            ) : null}
+          </SectionCard>
+        );
+      })}
 
       {selected.length > 0 ? (
         <SectionCard
@@ -562,6 +611,10 @@ function transactionTypeLabel(value: Draft["transactionType"]): string {
 
 function createStyles(colors: AppPalette) {
   return StyleSheet.create({
+    candidateCard: {
+      gap: spacing.sm,
+      padding: spacing.md,
+    },
     choice: {
       backgroundColor: colors.cardMuted,
       borderColor: colors.border,
@@ -577,6 +630,43 @@ function createStyles(colors: AppPalette) {
     choiceText: { color: colors.text, fontSize: 12 },
     choiceTextActive: { color: colors.finance, fontWeight: "700" },
     choices: { gap: spacing.xs },
+    compactActions: {
+      alignItems: "center",
+      flexDirection: "row",
+      justifyContent: "space-between",
+    },
+    compactAmount: {
+      color: colors.text,
+      fontSize: 16,
+      lineHeight: 22,
+    },
+    compactInfo: {
+      flex: 1,
+      gap: 2,
+      minWidth: 0,
+    },
+    compactRow: {
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.sm,
+    },
+    details: {
+      borderTopColor: colors.border,
+      borderTopWidth: 1,
+      gap: spacing.md,
+      paddingTop: spacing.md,
+    },
+    expandButton: {
+      borderColor: colors.border,
+      borderRadius: radii.control,
+      borderWidth: 1,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.xs,
+    },
+    expandButtonText: {
+      color: colors.finance,
+      fontSize: 12,
+    },
     field: { flex: 1, gap: spacing.xs },
     fieldLabel: { color: colors.text, fontSize: 13, fontWeight: "700" },
     budgetSummary: {
@@ -600,7 +690,7 @@ function createStyles(colors: AppPalette) {
       borderRadius: 999,
       borderWidth: 1,
       paddingHorizontal: spacing.sm,
-      paddingVertical: 6,
+      paddingVertical: spacing.xs,
     },
     selectionBadgeActive: {
       backgroundColor: colors.surfaceMuted,
@@ -608,28 +698,17 @@ function createStyles(colors: AppPalette) {
     },
     selectionText: { color: colors.textMuted, fontSize: 11 },
     selectionTextActive: { color: colors.finance, fontWeight: "700" },
-    statusRow: {
-      alignItems: "center",
-      flexDirection: "row",
-      justifyContent: "space-between",
-    },
-    statusText: { color: colors.finance, fontSize: 14, fontWeight: "700" },
-    sourceIcon: { borderRadius: 10, height: 40, width: 40 },
+    statusText: { color: colors.finance, fontSize: 13 },
+    sourceIcon: { borderRadius: 8, height: 32, width: 32 },
     sourceIconFallback: {
       alignItems: "center",
       backgroundColor: colors.surfaceMuted,
-      borderRadius: 10,
-      height: 40,
+      borderRadius: 8,
+      height: 32,
       justifyContent: "center",
-      width: 40,
+      width: 32,
     },
-    sourceIconFallbackText: { color: colors.finance, fontSize: 20 },
-    sourceName: { color: colors.text, flex: 1, fontSize: 15 },
-    sourceRow: {
-      alignItems: "center",
-      flexDirection: "row",
-      gap: spacing.sm,
-    },
+    sourceIconFallbackText: { color: colors.finance, fontSize: 16 },
     summary: { color: colors.text, fontSize: 13, lineHeight: 19 },
     twoColumns: { flexDirection: "row", gap: spacing.sm },
   });

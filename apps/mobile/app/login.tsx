@@ -41,7 +41,6 @@ import {
   Eye,
   EyeOff,
   Google,
-  LogIn,
   UserPlus,
 } from "../src/ui/icon";
 import { SegmentedControl } from "../src/ui/segmented-control";
@@ -569,7 +568,6 @@ export default function Index() {
                   {mode === "login" ? (
                     <>
                       <FormTitle
-                        icon={<LogIn color={theme.colors.primary} size={18} />}
                         subtitle="Wprowadź swoje dane, aby wejść do domu."
                         title="Witaj ponownie"
                       />
@@ -809,9 +807,11 @@ export default function Index() {
   function BrandHeader() {
     return (
       <View style={styles.brandBar}>
-        <View style={styles.brandIcon}>
-          <Image source={brandIconSource} style={styles.brandIconImage} />
-        </View>
+        <Image
+          resizeMode="contain"
+          source={brandIconSource}
+          style={styles.brandIconImage}
+        />
         <Text style={styles.brand}>HomeApp</Text>
         <Text style={styles.subtitle}>Domowy panel operacyjny</Text>
       </View>
@@ -823,14 +823,14 @@ export default function Index() {
     subtitle,
     title,
   }: {
-    icon: ReactNode;
+    icon?: ReactNode;
     subtitle?: string;
     title: string;
   }) {
     return (
       <View style={styles.formTitleWrap}>
         <View style={styles.formTitle}>
-          <View style={styles.titleIcon}>{icon}</View>
+          {icon ? <View style={styles.titleIcon}>{icon}</View> : null}
           <Text style={styles.heading}>{title}</Text>
         </View>
         {subtitle ? <Text style={styles.copy}>{subtitle}</Text> : null}
@@ -1262,18 +1262,9 @@ function createStyles(colors: AppPalette) {
       gap: spacing.sm,
       paddingHorizontal: spacing.xs,
     },
-    brandIcon: {
-      alignItems: "center",
-      backgroundColor: colors.primary,
-      borderRadius: 18,
-      height: 64,
-      justifyContent: "center",
-      width: 64,
-    },
     brandIconImage: {
-      borderRadius: 14,
-      height: 52,
-      width: 52,
+      height: 88,
+      width: 88,
     },
     checkbox: {
       alignItems: "center",
