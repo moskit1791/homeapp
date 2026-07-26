@@ -522,6 +522,7 @@ export interface CreateExpenseRequest {
   budgetItemId: string;
   encryptedPayload?: string;
   encryptionVersion?: number;
+  name?: string;
 }
 
 export interface Expense {
@@ -531,7 +532,36 @@ export interface Expense {
   encryptedPayload: string | null;
   encryptionVersion: number | null;
   id: string;
+  name: string | null;
+  occurredAt: string | null;
+  originalAmount: string | null;
+  originalCurrency: string | null;
+  source: "manual" | "bank_notification";
+  sourceExternalId: string | null;
   updatedAt: string;
+}
+
+export interface ImportExpenseItemRequest extends CreateExpenseRequest {
+  clientId: string;
+  occurredAt?: string;
+  originalAmount?: number;
+  originalCurrency?: string;
+  sourceExternalId: string;
+}
+
+export interface ImportExpensesRequest {
+  items: ImportExpenseItemRequest[];
+}
+
+export interface ImportExpenseItemResult {
+  clientId: string;
+  expense?: Expense;
+  message?: string;
+  status: "created" | "duplicate" | "failed";
+}
+
+export interface ImportExpensesResult {
+  items: ImportExpenseItemResult[];
 }
 
 export interface UpsertIncomeRequest {

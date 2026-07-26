@@ -43,4 +43,26 @@ describe('client-side encryption', () => {
     expect(first).toEqual(second);
     expect(parseRecoveryCode(formatRecoveryCode(recoveryKey))).toEqual(recoveryKey);
   });
+
+  it('keeps old expense envelopes readable and extended envelopes compatible with old decoders', async () => {
+    const key = Uint8Array.from({ length: 32 }, (_, index) => 255 - index);
+    const aad = 'homeapp:finances:expense';
+    const oldEnvelope =
+      'homeapp:v1:0b1c2d3e4f60718293a4b5c6:4546f7b5df056806ff2a94539050fbf55de596d1a6bdc48ad0ba92ad050bc9a9';
+    const extendedEnvelope = await sealJson(
+      {
+        amount: 42.5,
+        name: 'Zakupy',
+        occurredAt: '2026-07-26T08:00:00.000Z',
+        originalAmount: 10,
+        originalCurrency: 'EUR',
+        source: 'bank_notification'
+      },
+      key,
+      aad
+    );
+
+    expect(openJson(oldEnvelope, key, aad)).toEqual({ amount: 19.99 });
+    expect((openJson(extendedEnvelope, key, aad) as { amount: number }).amount).toBe(42.5);
+  });
 });

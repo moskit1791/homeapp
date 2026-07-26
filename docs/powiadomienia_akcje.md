@@ -30,3 +30,16 @@ Powiadomienia push są wysyłane do domowników, którzy mają włączony dany t
 - Dzwonek w `Dzisiaj` świeci tylko wtedy, gdy telefon ma lokalnie zapisane nieodczytane powiadomienia.
 - Wejście w centrum powiadomień oznacza widoczne wpisy jako odczytane.
 - Wyczyszczenie centrum zapisuje lokalnie usunięte identyfikatory, żeby te same wpisy nie wracały po ponownym wejściu.
+
+## Import wydatków z powiadomień Androida
+
+To osobny, lokalny przepływ:
+
+- `NotificationListenerService` odbiera nowe powiadomienie,
+- parser działa tylko dla źródła włączonego przez użytkownika,
+- rozpoznana pozycja trafia do szyfrowanej kolejki Room,
+- prywatne przypomnienie WorkManager pokazuje jedynie liczbę oczekujących pozycji,
+- zatwierdzenie paczki zapisuje wydatki i emituje `finance.changed`,
+- surowa treść powiadomienia i lokalny fingerprint nie trafiają do API.
+
+Dokumentacja: [android-notification-expense-import.md](android-notification-expense-import.md).

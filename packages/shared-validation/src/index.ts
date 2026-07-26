@@ -26,7 +26,23 @@ export const positiveMoneyAmountSchema = z
 
 export const createExpenseSchema = z.object({
   budgetItemId: uuidSchema,
-  amount: positiveMoneyAmountSchema
+  amount: positiveMoneyAmountSchema,
+  name: z.string().trim().min(1).max(160).optional()
+});
+
+export const importExpenseItemSchema = createExpenseSchema.extend({
+  clientId: uuidSchema,
+  occurredAt: z.string().datetime({ offset: true }).optional(),
+  originalAmount: positiveMoneyAmountSchema.optional(),
+  originalCurrency: z
+    .string()
+    .regex(/^[A-Z]{3}$/)
+    .optional(),
+  sourceExternalId: uuidSchema
+});
+
+export const importExpensesSchema = z.object({
+  items: z.array(importExpenseItemSchema).min(1).max(100)
 });
 
 export const upsertIncomeSchema = z.object({

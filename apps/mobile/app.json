@@ -3,7 +3,7 @@
     "name": "HomeApp",
     "slug": "homeapp",
     "scheme": "homeapp",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "icon": "./assets/icon.png",
@@ -18,7 +18,7 @@
     },
     "android": {
       "package": "com.homeapp.mobile",
-      "versionCode": 101,
+      "versionCode": 102,
       "permissions": [
         "POST_NOTIFICATIONS",
         "READ_EXTERNAL_STORAGE",
@@ -36,10 +36,11 @@
       [
         "expo-secure-store",
         {
-          "configureAndroidBackup": true,
+          "configureAndroidBackup": false,
           "faceIDPermission": "Pozwól HomeApp używać Face ID do odblokowania zaszyfrowanych danych."
         }
       ],
+      "./plugins/with-notification-expense-import",
       [
         "expo-image-picker",
         {

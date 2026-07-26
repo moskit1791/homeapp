@@ -1,5 +1,6 @@
 import {
   ArrayMaxSize,
+  ArrayMinSize,
   IsBoolean,
   IsDateString,
   IsInt,
@@ -11,6 +12,7 @@ import {
   IsUUID,
   Length,
   MaxLength,
+  Matches,
   Min,
   ValidateNested
 } from 'class-validator';
@@ -216,6 +218,56 @@ export class CreateExpenseDto extends FinanceEncryptedPayloadDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.01)
   amount!: number;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 160)
+  name?: string;
+}
+
+export class ImportExpenseItemDto extends FinanceEncryptedPayloadDto {
+  @IsUUID()
+  clientId!: string;
+
+  @IsUUID()
+  budgetItemId!: string;
+
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.01)
+  amount!: number;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 160)
+  name?: string;
+
+  @IsOptional()
+  @IsDateString()
+  occurredAt?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.01)
+  originalAmount?: number;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^[A-Z]{3}$/)
+  originalCurrency?: string;
+
+  @IsUUID()
+  sourceExternalId!: string;
+}
+
+export class ImportExpensesDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => ImportExpenseItemDto)
+  items!: ImportExpenseItemDto[];
 }
 
 export class UpsertIncomeDto extends FinanceEncryptedPayloadDto {

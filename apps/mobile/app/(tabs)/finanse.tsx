@@ -20,6 +20,7 @@ import {
 } from "react-native";
 import {
   Archive,
+  Bell,
   Car,
   ChartBar,
   Check,
@@ -107,6 +108,7 @@ import {
 import { useEncryption } from "../../src/encryption/encryption-context";
 import { EncryptionUnlockCard } from "../../src/encryption/encryption-unlock-card";
 import { useModulePermission } from "../../src/permissions/use-permissions";
+import { notificationExpenseImport } from "../../src/notification-expense-import/native";
 import {
   loadStoredJson,
   saveStoredJson,
@@ -141,6 +143,7 @@ type FinanceFormValues = {
   debtPaymentNote: string;
   debtPurpose: string;
   expenseAmount: string;
+  expenseName: string;
   incomeAmount: string;
   itemAmount: string;
   itemName: string;
@@ -270,6 +273,7 @@ export default function FinanseScreen() {
       debtPaymentNote: "",
       debtPurpose: "",
       expenseAmount: "",
+      expenseName: "",
       incomeAmount: "",
       itemAmount: "",
       itemName: "",
@@ -288,6 +292,7 @@ export default function FinanseScreen() {
   const itemName = watch("itemName");
   const itemAmount = watch("itemAmount");
   const expenseAmount = watch("expenseAmount");
+  const expenseName = watch("expenseName");
   const debtAmount = watch("debtAmount");
   const debtDueDate = watch("debtDueDate");
   const debtLenderName = watch("debtLenderName");
@@ -353,6 +358,18 @@ export default function FinanseScreen() {
     useState(false);
   const [handledRouteAction, setHandledRouteAction] = useState<string | null>(
     null,
+  );
+  const [notificationImportPendingCount, setNotificationImportPendingCount] =
+    useState(0);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!notificationExpenseImport.available) return;
+      notificationExpenseImport
+        .getPendingCount()
+        .then(setNotificationImportPendingCount)
+        .catch(() => setNotificationImportPendingCount(0));
+    }, []),
   );
 
   const currentQuery = useQuery({
@@ -930,6 +947,7 @@ export default function FinanseScreen() {
     setSelectedExpenseItemId("");
     setExpenseQuickItemId(null);
     setValue("expenseAmount", "");
+    setValue("expenseName", "");
     setFinanceModal("expense");
     setHandledRouteAction(routeActionKey);
     router.setParams({ action: undefined, intent: undefined });
@@ -1462,7 +1480,7 @@ export default function FinanseScreen() {
       const envelope = financeEncryptionEnabled
         ? await sealFinanceEnvelope(
             "expense",
-            { amount },
+            { amount, name: expenseName.trim() },
             {
               encryptPayload: encryption.encryptPayload,
               keyVersion: encryption.settings?.keyVersion,
@@ -1474,6 +1492,7 @@ export default function FinanseScreen() {
         {
           amount: financeEncryptionEnabled ? 0.01 : amount,
           budgetItemId,
+          name: financeEncryptionEnabled ? undefined : expenseName.trim(),
           ...envelope,
         },
         { accessToken },
@@ -1481,6 +1500,7 @@ export default function FinanseScreen() {
     },
     onSuccess: async () => {
       setValue("expenseAmount", "");
+      setValue("expenseName", "");
       setExpenseQuickItemId(null);
       setExpenseQuickCategoryId(null);
       if (financeModal !== "expenseHistory") {
@@ -1593,6 +1613,7 @@ export default function FinanseScreen() {
     setExpenseQuickItemId(null);
     setExpenseQuickCategoryId(null);
     setValue("expenseAmount", "");
+    setValue("expenseName", "");
     setFinanceModal("expense");
   }
 
@@ -1621,6 +1642,7 @@ export default function FinanseScreen() {
     setExpenseQuickItemId(null);
     setExpenseQuickCategoryId(null);
     setValue("expenseAmount", "");
+    setValue("expenseName", "");
     setFinanceModal("expenseHistory");
   }
 
@@ -1736,6 +1758,7 @@ export default function FinanseScreen() {
     (!itemAmount.trim() || isValidMoney(itemAmount));
   const canSaveExpense =
     canCreate &&
+    Boolean(expenseName.trim()) &&
     isPositiveMoney(expenseAmount) &&
     (Boolean(financeModal === "expenseHistory" && historyBudgetItemId) ||
       Boolean(selectedExpenseItem) ||
@@ -1823,7 +1846,27 @@ export default function FinanseScreen() {
 
   if (financeEncryptionEnabled && encryption.lockState === "locked") {
     return (
-      <AppScreen title="Finanse">
+      <AppScreen
+        actions={
+          notificationExpenseImport.available ? (
+            <IconButton
+              accessibilityLabel="Oczekujące płatności z powiadomień"
+              onPress={() =>
+                router.push("/notification-expense-import" as never)
+              }
+              style={styles.financeHeaderActionButton}
+            >
+              <Bell color={mockupGreen} size={23} />
+              {notificationImportPendingCount > 0 ? (
+                <Text style={styles.notificationImportBadge}>
+                  {Math.min(99, notificationImportPendingCount)}
+                </Text>
+              ) : null}
+            </IconButton>
+          ) : undefined
+        }
+        title="Finanse"
+      >
         <EncryptionUnlockCard modules={["finances"]} />
       </AppScreen>
     );
@@ -1833,6 +1876,22 @@ export default function FinanseScreen() {
     <AppScreen
       actions={
         <View style={styles.financeHeaderActions}>
+          {notificationExpenseImport.available ? (
+            <IconButton
+              accessibilityLabel="Oczekujące płatności z powiadomień"
+              onPress={() =>
+                router.push("/notification-expense-import" as never)
+              }
+              style={styles.financeHeaderActionButton}
+            >
+              <Bell color={mockupGreen} size={23} />
+              {notificationImportPendingCount > 0 ? (
+                <Text style={styles.notificationImportBadge}>
+                  {Math.min(99, notificationImportPendingCount)}
+                </Text>
+              ) : null}
+            </IconButton>
+          ) : null}
           {activeFinanceView === "budget" ? (
             <IconButton
               accessibilityLabel="Szukaj w budżecie"
@@ -2816,13 +2875,21 @@ export default function FinanseScreen() {
               </>
             )}
             {selectedExpenseItem || isQuickCategoryExpense ? (
-              <TextField
-                control={control}
-                keyboardType="decimal-pad"
-                label="Kwota wydatku"
-                name="expenseAmount"
-                placeholder="0,00"
-              />
+              <>
+                <TextField
+                  control={control}
+                  label="Nazwa wydatku"
+                  name="expenseName"
+                  placeholder="np. Zakupy spożywcze"
+                />
+                <TextField
+                  control={control}
+                  keyboardType="decimal-pad"
+                  label="Kwota wydatku"
+                  name="expenseAmount"
+                  placeholder="0,00"
+                />
+              </>
             ) : null}
             {expenseMutation.error ? (
               <InlineAlert tone="error" text="Nie udało się dodać wydatku." />
@@ -2865,6 +2932,12 @@ export default function FinanseScreen() {
                       {formatOwner(historyBudgetItem.owner)}
                     </Text>
                   </View>
+                  <TextField
+                    control={control}
+                    label="Nazwa wydatku"
+                    name="expenseName"
+                    placeholder="np. Zakupy spożywcze"
+                  />
                   <TextField
                     control={control}
                     keyboardType="decimal-pad"
@@ -2926,9 +2999,13 @@ export default function FinanseScreen() {
                     {historyExpenses.map((expense) => (
                       <View key={expense.id} style={styles.expenseHistoryRow}>
                         <View style={styles.expenseHistoryText}>
-                          <Text style={styles.expenseHistoryTitle}>Wpis</Text>
+                          <Text style={styles.expenseHistoryTitle}>
+                            {expense.name?.trim() || "Wydatek"}
+                          </Text>
                           <Text style={styles.expenseHistoryMeta}>
-                            {formatDateTimeFull(expense.createdAt)}
+                            {formatDateTimeFull(
+                              expense.occurredAt ?? expense.createdAt,
+                            )}
                           </Text>
                         </View>
                         <Text style={styles.expenseHistoryAmount}>
@@ -5688,9 +5765,9 @@ function createStyles(colors: AppPalette) {
     actionPicker: { gap: spacing.sm },
     financeMenu: { gap: spacing.lg },
     financeMenuHeading: {
-      color: colors.textMuted,
-      fontSize: 11,
-      fontWeight: "900",
+      color: colors.finance,
+      fontSize: 13,
+      fontWeight: "700",
       letterSpacing: 0,
       textTransform: "uppercase",
     },
@@ -6693,23 +6770,23 @@ function createStyles(colors: AppPalette) {
       padding: spacing.md,
     },
     expenseContextLabel: {
-      color: colors.textMuted,
-      fontSize: 11,
-      fontWeight: "900",
+      color: colors.finance,
+      fontSize: 12,
+      fontWeight: "700",
       letterSpacing: 0,
       textTransform: "uppercase",
     },
     expenseContextMeta: {
-      color: colors.textMuted,
-      fontSize: 12,
-      fontWeight: "800",
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: "600",
       letterSpacing: 0,
       lineHeight: 17,
     },
     expenseContextTitle: {
-      color: colors.text,
-      fontSize: 16,
-      fontWeight: "900",
+      color: colors.finance,
+      fontSize: 17,
+      fontWeight: "700",
       letterSpacing: 0,
       lineHeight: 21,
     },
@@ -6729,16 +6806,16 @@ function createStyles(colors: AppPalette) {
     },
     expenseHistoryActions: { gap: spacing.sm, paddingTop: spacing.sm },
     expenseHistoryAmount: {
-      color: colors.primaryDark,
-      fontSize: 14,
-      fontWeight: "900",
+      color: colors.finance,
+      fontSize: 16,
+      fontWeight: "700",
       letterSpacing: 0,
       textAlign: "right",
     },
     expenseHistoryList: { gap: spacing.xs },
     expenseHistoryMeta: {
-      color: colors.textMuted,
-      fontSize: 12,
+      color: colors.text,
+      fontSize: 13,
       letterSpacing: 0,
     },
     expenseHistoryRow: {
@@ -6750,7 +6827,7 @@ function createStyles(colors: AppPalette) {
       flexDirection: "row",
       gap: spacing.sm,
       justifyContent: "space-between",
-      padding: spacing.sm,
+      padding: spacing.md,
     },
     expenseHistorySummary: {
       alignItems: "center",
@@ -6772,9 +6849,9 @@ function createStyles(colors: AppPalette) {
     },
     expenseHistoryText: { flex: 1, gap: 2, minWidth: 0 },
     expenseHistoryTitle: {
-      color: colors.text,
-      fontSize: 13,
-      fontWeight: "900",
+      color: colors.finance,
+      fontSize: 15,
+      fontWeight: "700",
       letterSpacing: 0,
     },
     financeHeaderActionButton: {
@@ -6789,6 +6866,20 @@ function createStyles(colors: AppPalette) {
       shadowOpacity: panelShadowOpacity,
       shadowRadius: 10,
       width: 48,
+    },
+    notificationImportBadge: {
+      backgroundColor: colors.danger,
+      borderRadius: 999,
+      color: colors.inverseText,
+      fontSize: 10,
+      fontWeight: "700",
+      minWidth: 18,
+      paddingHorizontal: 4,
+      paddingVertical: 2,
+      position: "absolute",
+      right: -3,
+      textAlign: "center",
+      top: -3,
     },
     financeHeaderActions: {
       alignItems: "center",

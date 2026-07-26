@@ -81,6 +81,18 @@ react {
  * Set this to true to Run Proguard on Release builds to minify the Java bytecode.
  */
 def enableProguardInReleaseBuilds = (findProperty('android.enableProguardInReleaseBuilds') ?: false).toBoolean()
+def releaseKeystorePath = System.getenv('HOMEAPP_ANDROID_KEYSTORE_PATH')
+def isEasBuild = (System.getenv('EAS_BUILD') ?: 'false').toBoolean()
+def releaseTaskRequested = gradle.startParameter.taskNames.any { taskName ->
+    taskName.toLowerCase().contains('release')
+}
+
+if (releaseTaskRequested && !releaseKeystorePath && !isEasBuild) {
+    throw new GradleException(
+        'Release signing is not configured. Use EAS Build or provide HOMEAPP_ANDROID_KEYSTORE_PATH, ' +
+        'HOMEAPP_ANDROID_KEYSTORE_PASSWORD, HOMEAPP_ANDROID_KEY_ALIAS and HOMEAPP_ANDROID_KEY_PASSWORD.'
+    )
+}
 
 /**
  * The preferred build flavor of JavaScriptCore (JSC)
@@ -106,8 +118,13 @@ android {
         applicationId 'com.homeapp.mobile'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 101
-        versionName "1.1.0"
+        versionCode 102
+        versionName "1.2.0"
+    }
+    compileOptions {
+        coreLibraryDesugaringEnabled true
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
     }
     signingConfigs {
         debug {
@@ -116,27 +133,20 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
-        release {
-            def keystorePath = System.getenv('HOMEAPP_ANDROID_KEYSTORE_PATH')
-
-            if (keystorePath) {
+        if (releaseKeystorePath) {
+            release {
                 def keystorePassword = System.getenv('HOMEAPP_ANDROID_KEYSTORE_PASSWORD')
-                def keyAlias = System.getenv('HOMEAPP_ANDROID_KEY_ALIAS')
-                def keyPassword = System.getenv('HOMEAPP_ANDROID_KEY_PASSWORD')
+                def keyAliasValue = System.getenv('HOMEAPP_ANDROID_KEY_ALIAS')
+                def keyPasswordValue = System.getenv('HOMEAPP_ANDROID_KEY_PASSWORD')
 
-                if (!keystorePassword || !keyAlias || !keyPassword) {
+                if (!keystorePassword || !keyAliasValue || !keyPasswordValue) {
                     throw new GradleException('HOMEAPP_ANDROID_KEYSTORE_PASSWORD, HOMEAPP_ANDROID_KEY_ALIAS and HOMEAPP_ANDROID_KEY_PASSWORD are required when HOMEAPP_ANDROID_KEYSTORE_PATH is set.')
                 }
 
-                storeFile file(keystorePath)
+                storeFile file(releaseKeystorePath)
                 storePassword keystorePassword
-                keyAlias keyAlias
-                keyPassword keyPassword
-            } else {
-                storeFile file('debug.keystore')
-                storePassword 'android'
-                keyAlias 'androiddebugkey'
-                keyPassword 'android'
+                keyAlias keyAliasValue
+                keyPassword keyPasswordValue
             }
         }
     }
@@ -145,7 +155,9 @@ android {
             signingConfig signingConfigs.debug
         }
         release {
-            signingConfig signingConfigs.release
+            if (releaseKeystorePath) {
+                signingConfig signingConfigs.release
+            }
             shrinkResources (findProperty('android.enableShrinkResourcesInReleaseBuilds')?.toBoolean() ?: false)
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
@@ -183,6 +195,7 @@ android {
 }
 
 dependencies {
+    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.0.4"
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
 

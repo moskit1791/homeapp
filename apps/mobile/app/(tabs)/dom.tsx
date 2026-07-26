@@ -2637,6 +2637,24 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
                   variant="secondary"
                 />
               </View>
+              <View style={styles.settingsPanelRow}>
+                <Text style={styles.settingsPanelTitle}>
+                  Import wydatków z powiadomień
+                </Text>
+                <Text style={styles.settingsPanelMeta}>
+                  Android: wybierz aplikacje, ustaw prywatne przypomnienie i
+                  przejrzyj lokalną kolejkę płatności.
+                </Text>
+                <ActionButton
+                  onPress={() =>
+                    router.push(
+                      "/notification-expense-import-settings" as never,
+                    )
+                  }
+                  title="Ustaw import wydatków"
+                  variant="secondary"
+                />
+              </View>
               <View style={[styles.settingsPanelRow, styles.dangerPanel]}>
                 <Text style={styles.settingsPanelTitle}>Usuwanie konta</Text>
                 <Text style={styles.settingsPanelMeta}>

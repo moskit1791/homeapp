@@ -16,6 +16,8 @@ tmp-*
 builds/homeapp-release-*.apk
 builds/*.apk
 /app.json
+artifacts/
+android-notification-access.png
 
 .env
 .env.*

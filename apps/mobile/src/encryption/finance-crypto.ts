@@ -73,15 +73,36 @@ export function decryptBudgetMonthDetail(
         : { budgetAmount: nullableNumber(item.budgetAmount), name: item.name };
       const expenses = item.expenses.map((expense) => {
         const expensePayload = expense.encryptedPayload
-          ? decryptOrFallback<{ amount: number }>(
-              decryptPayload,
-              'expense',
-              expense.encryptedPayload,
-              { amount: 0 }
-            )
-          : { amount: Number(expense.amount) };
+          ? decryptOrFallback<{
+              amount: number;
+              name?: string;
+              occurredAt?: string;
+              originalAmount?: number | string;
+              originalCurrency?: string;
+            }>(decryptPayload, 'expense', expense.encryptedPayload, {
+              amount: 0
+            })
+          : {
+              amount: Number(expense.amount),
+              name: expense.name ?? undefined,
+              occurredAt: expense.occurredAt ?? undefined,
+              originalAmount: expense.originalAmount ?? undefined,
+              originalCurrency: expense.originalCurrency ?? undefined
+            };
 
-        return { ...expense, amount: money(expensePayload.amount) };
+        return {
+          ...expense,
+          amount: money(expensePayload.amount),
+          name: expensePayload.name?.trim() || expense.name?.trim() || 'Wydatek',
+          occurredAt: expensePayload.occurredAt ?? expense.occurredAt ?? expense.createdAt,
+          originalAmount:
+            expensePayload.originalAmount === undefined
+              ? (expense.originalAmount ?? null)
+              : money(Number(expensePayload.originalAmount)),
+          originalCurrency: expensePayload.originalCurrency ?? expense.originalCurrency ?? null,
+          source: expense.source ?? 'manual',
+          sourceExternalId: expense.sourceExternalId ?? null
+        };
       });
       const spent = expenses.reduce((sum, expense) => sum + Number(expense.amount), 0);
       const remaining = itemPayload.budgetAmount === null ? null : itemPayload.budgetAmount - spent;

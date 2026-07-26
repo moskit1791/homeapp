@@ -1,0 +1,4 @@
+<resources>
+  <string name="notification_expense_listener_label">HomeApp – import wydatków</string>
+  <string name="notification_expense_channel_name">Przegląd wydatków</string>
+</resources>

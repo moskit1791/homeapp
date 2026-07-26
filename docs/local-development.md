@@ -213,24 +213,7 @@ builds/homeapp-release.apk
 builds/homeapp-release-YYYYMMDD-HHMM.apk
 ```
 
-### Aktualny release do testu na telefonie
-
-Najnowszy build po utwardzeniu auth/sesji/realtime/e-mail:
-
-```text
-builds/homeapp-release.apk
-builds/homeapp-release-20260430-1838.apk
-```
-
-Parametry:
-- Android `versionCode`: `55`
-- Android `versionName`: `0.1.55`
-- API wbudowane w bundle: `http://192.168.100.109:3000/api`
-- Metro nie jest potrzebne.
-
-Przed testem odinstaluj poprzednia wersje HomeApp z telefonu i zainstaluj najnowszy APK. Ten build zawiera natywny modul `expo-secure-store`, Google AuthSession/WebBrowser oraz obsluge deep linkow `homeapp://auth` dla resetu i weryfikacji e-mail.
-
-Do finalnego podpisu sklepowego ustaw przed buildem:
+Lokalny release wymaga właściwego keystore. Ustaw przed buildem:
 
 ```powershell
 $env:HOMEAPP_ANDROID_KEYSTORE_PATH='C:\sekrety\homeapp-release.keystore'
@@ -239,4 +222,15 @@ $env:HOMEAPP_ANDROID_KEY_ALIAS='<alias>'
 $env:HOMEAPP_ANDROID_KEY_PASSWORD='<password>'
 ```
 
-Bez tych zmiennych skrypt buduje APK podpisany debugowym kluczem, dobry tylko do testow lokalnych.
+Brak tych zmiennych przerywa lokalny build release. Nie ma fallbacku do klucza debug.
+
+Artefakt produkcyjny buduj profilem EAS, który używa przypisanego do projektu
+klucza wydania i środowiska `production`:
+
+```powershell
+Set-Location apps\mobile
+npx eas-cli build --platform android --profile production-apk --non-interactive --wait
+```
+
+Po pobraniu APK sprawdź co najmniej `versionName`, `versionCode`, adres API,
+obecność Android OAuth Client ID, schemat podpisu i odcisk certyfikatu.

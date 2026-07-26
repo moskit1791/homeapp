@@ -222,6 +222,12 @@ export class FinanceSummaryService {
           e.id,
           e.budget_item_id,
           e.amount,
+          e.name,
+          e.source,
+          e.source_external_id,
+          e.occurred_at,
+          e.original_amount,
+          e.original_currency,
           e.encrypted_payload,
           e.encryption_version,
           e.created_at,
@@ -244,6 +250,12 @@ export class FinanceSummaryService {
       encryptedPayload: row.encrypted_payload,
       encryptionVersion: row.encryption_version,
       id: row.id,
+      name: row.name,
+      occurredAt: row.occurred_at,
+      originalAmount: row.original_amount,
+      originalCurrency: row.original_currency,
+      source: row.source ?? 'manual',
+      sourceExternalId: row.source_external_id,
       updatedAt: row.updated_at
     }));
   }
@@ -404,6 +416,12 @@ interface ExpenseSummaryRow {
   encrypted_payload: string | null;
   encryption_version: number | null;
   id: string;
+  name: string | null;
+  occurred_at: string | null;
+  original_amount: string | null;
+  original_currency: string | null;
+  source: 'manual' | 'bank_notification' | null;
+  source_external_id: string | null;
   updated_at: string;
 }
 
@@ -471,6 +489,12 @@ export interface ExpenseSummaryRecord {
   encryptedPayload: string | null;
   encryptionVersion: number | null;
   id: string;
+  name: string | null;
+  occurredAt: string | null;
+  originalAmount: string | null;
+  originalCurrency: string | null;
+  source: 'manual' | 'bank_notification';
+  sourceExternalId: string | null;
   updatedAt: string;
 }
 

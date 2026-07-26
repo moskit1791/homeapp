@@ -1888,3 +1888,75 @@
 ### Nastepny krok
 
 - Kontynuowac przebudowe UX modulow w kierunku: widok danych jako domyslny ekran, akcje `+ Dodaj` w naglowku, formularze w modalach/sheetach.
+
+## 2026-07-26 - Android: import wydatków z powiadomień i czytelniejsze finanse
+
+### Zakres
+
+- Dodano lokalny moduł Expo/Android z `NotificationListenerService`, Room, WorkManager i mostem do React Native.
+- Źródła są wykrywane na podstawie faktycznie odebranych powiadomień; nie dodano `QUERY_ALL_PACKAGES`.
+- Parser deterministyczny rozpoznaje typowe płatności PL/EN/DE/ES/FR i odrzuca OTP, saldo, oferty, przelewy przychodzące oraz operacje nieudane.
+- Kolejka i ustawienia są szyfrowane AES-256-GCM kluczem Android Keystore, a indeksy osobnym HMAC-SHA-256.
+- Dodano obsługę utraty klucza, jawny reset lokalnej kolejki, retencję i wyłączenie danych z backupu Androida.
+- Dodano ekran zgody, ustawienia źródeł, godzinę prywatnego przypomnienia oraz ekran zbiorczego zatwierdzania.
+- Przechwytywanie jest powiązane z profilem, domem, `finances/create` i ważnością lokalnej autoryzacji.
+- Dodano `POST /finance/expenses/import` z wynikiem per element, atomową transakcją i trwałą idempotencją także po usunięciu wydatku.
+- Rozszerzono wydatek o nazwę, źródło, czas operacji i opcjonalną kwotę/walutę źródłową.
+- Zachowano AAD oraz kompatybilność starej koperty E2EE wydatku.
+- W ręcznym dodawaniu nazwa wydatku jest wymagana w UI i widoczna w historii.
+- Poprawiono hierarchię finansów rozmiarem, kolorem, kontrastem i odstępami bez zwiększania pogrubienia.
+- Przebudowano README i dodano dokumentację funkcji, finansów oraz szyfrowania.
+
+### Pliki
+
+- `apps/mobile/modules/homeapp-notification-expense-import/**`
+- `apps/mobile/app/notification-expense-import-settings.tsx`
+- `apps/mobile/app/notification-expense-import.tsx`
+- `apps/mobile/src/notification-expense-import/native.ts`
+- `apps/mobile/app/(tabs)/finanse.tsx`
+- `apps/api/src/modules/finance/**`
+- `apps/api/src/modules/encryption/encryption.service.ts`
+- `db/migrations/202607260001_notification_expense_import.sql`
+- `docs/android-notification-expense-import.md`
+- `docs/encryption.md`
+- `docs/finances.md`
+- `README.md`
+
+### Testy
+
+- `pnpm.cmd --filter @homeapp/api typecheck` - OK.
+- `pnpm.cmd --filter @homeapp/api lint` - OK; pozostało jedno wcześniejsze ostrzeżenie `no-explicit-any` w teście meal planner.
+- `pnpm.cmd --filter @homeapp/api test` - OK, 23 pliki i 91 testów.
+- `pnpm.cmd --filter @homeapp/mobile typecheck` - OK.
+- `pnpm.cmd --filter @homeapp/mobile lint` - OK.
+- `pnpm.cmd --filter @homeapp/mobile test -- --runInBand` - OK, 3 zestawy i 13 testów.
+- `pnpm.cmd typecheck` - OK, 6 zadań workspace.
+- `pnpm.cmd lint` - OK, 6 zadań workspace; jedno wcześniejsze ostrzeżenie API.
+- `pnpm.cmd --filter @homeapp/api build` - OK.
+- `pnpm.cmd --filter @homeapp/mobile build` - OK, bundle Android i iOS.
+- `:homeapp-notification-expense-import:testDebugUnitTest` - OK, 6 testów parsera.
+- `:homeapp-notification-expense-import:connectedDebugAndroidTest` - OK, 3 testy AndroidX na emulatorze Pixel API 36.
+- Scalony manifest debug zawiera listener, receiver, reguły backupu i nie zawiera `QUERY_ALL_PACKAGES`.
+- `:app:assembleDebug` - OK w świeżym krótkim katalogu roboczym.
+- Migracja Room `1 -> 2 -> 3 -> 4` - OK, w tym zachowanie ustawień, zakres profil/dom oraz leniwe przejęcie starych źródeł.
+- Migracja PostgreSQL - OK od pustej bazy na izolowanym lokalnym PostgreSQL 18, baza `homeapp_release_gate_20260726_1847`.
+- E2E prawdziwego lokalnego API - OK: ręczny wydatek, import `BIEDRONKA 79,99 PLN`, ponowienie jako `duplicate` i odświeżony budżet.
+- E2E emulatora - OK: przechwycenie płatności ze źródła `Shell`, ikona źródła, nazwa `BIEDRONKA`, kwota `79,99 PLN`, wybór budżetu i podsumowanie końcowe.
+- Standalone APK z produkcyjnym adresem API i konfiguracją OAuth - OK; `versionName=1.1.0`, `versionCode=101`, `minSdk=24`, `targetSdk=35`, podpis APK v2 poprawny.
+
+### Emulator
+
+- `emulator-5554` jest dostępny jako Pixel API 36.
+- Zainstalowana wcześniej aplikacja ma `versionName=1.1.0`, `versionCode=101`.
+- Listener HomeApp został włączony i przetestowany dla wybranego źródła `Shell`.
+- Debug APK zainstalowano, a konto testowe utworzono wyłącznie w izolowanym lokalnym środowisku.
+- Potwierdzono przechwytywanie bez procesu JavaScript, prywatne przypomnienie, cold-start deep link oraz zachowanie po restarcie emulatora.
+- Samodzielnego APK z produkcyjnym adresem API nie instalowano na emulatorze; testy urządzeniowe wykonano debug APK zgodnie z zakresem zgody.
+
+### Ograniczenia
+
+- Nie testowano treści z rzeczywistej aplikacji bankowej; systemowy pipeline Androida sprawdzono powiadomieniami publikowanymi przez `Shell`.
+- `builds/homeapp-release.apk` jest testowym buildem standalone podpisanym certyfikatem `CN=Android Debug`, nie artefaktem produkcyjnym. SHA-256: `837420DD7CFBC3DB4345E9DD71AD672E8AA929C5FC78495D7F6594B8DDE932BE`.
+- Nie ma skonfigurowanego właściwego klucza wydania (`HOMEAPP_ANDROID_KEYSTORE_PATH`, alias i hasła), więc nie wolno publikować obecnego APK jako produkcyjnego.
+- Modale w `login.tsx` i `auth/invitation.tsx` nadal oznaczają politykę prywatności jako roboczy podgląd. Finalna treść, administrator danych i kontakt muszą zostać zatwierdzone przed wdrożeniem.
+- Nie scalono, nie wypchnięto ani nie wdrożono zmian na produkcję, ponieważ dwa powyższe warunki release gate nie są spełnione.

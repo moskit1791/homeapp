@@ -1,3 +1,7 @@
+import {
+  HOMEAPP_LEGAL_DOCUMENTS,
+  type LegalDocumentKey,
+} from "@homeapp/shared-types";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import brandIconSource from "../../assets/icon.png";
 import { useEffect, useState, type ReactNode } from "react";
@@ -15,7 +19,11 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { z } from "zod";
-import { ApiNetworkError, previewInvitation, type InvitationPreview } from "../../src/api";
+import {
+  ApiNetworkError,
+  previewInvitation,
+  type InvitationPreview,
+} from "../../src/api";
 import { useSession } from "../../src/session/session-context";
 import { radii, spacing } from "../../src/theme/tokens";
 import { useAppTheme, type AppPalette } from "../../src/theme/use-app-theme";
@@ -24,17 +32,22 @@ import { AuthTextField } from "../../src/ui/auth-text-field";
 import { Check, ChevronLeft, Eye, EyeOff, UserPlus } from "../../src/ui/icon";
 
 const invitationSchema = z.object({
-  acceptedPrivacy: z.boolean().refine(Boolean, "Zaakceptuj politykę prywatności"),
+  acceptedPrivacy: z
+    .boolean()
+    .refine(Boolean, "Zaakceptuj politykę prywatności"),
   acceptedTerms: z.boolean().refine(Boolean, "Zaakceptuj regulamin"),
   displayName: z.string().trim().min(1, "Podaj imię"),
   password: z.string().min(8, "Hasło musi mieć min. 8 znaków"),
-  token: z.string().trim().min(1, "Link zaproszenia jest nieprawidłowy lub wygasł"),
+  token: z
+    .string()
+    .trim()
+    .min(1, "Link zaproszenia jest nieprawidłowy lub wygasł"),
 });
 
 type InvitationValues = z.input<typeof invitationSchema>;
 type InvitationField = keyof InvitationValues;
 type FieldErrors<TField extends string> = Partial<Record<TField, string>>;
-type LegalDocument = "privacy" | "terms";
+type LegalDocument = LegalDocumentKey;
 
 export default function InvitationScreen() {
   const params = useLocalSearchParams<{ token?: string | string[] }>();
@@ -50,7 +63,9 @@ export default function InvitationScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [acceptedPrivacy, setAcceptedPrivacy] = useState(false);
-  const [legalDocument, setLegalDocument] = useState<LegalDocument | null>(null);
+  const [legalDocument, setLegalDocument] = useState<LegalDocument | null>(
+    null,
+  );
   const [errors, setErrors] = useState<FieldErrors<InvitationField>>({});
   const [notice, setNotice] = useState<string | null>(
     token ? null : "Link zaproszenia jest nieprawidłowy lub wygasł.",
@@ -75,7 +90,9 @@ export default function InvitationScreen() {
         }
 
         setPreview(invitation);
-        setDisplayName((current) => current || inferDisplayName(invitation.email));
+        setDisplayName(
+          (current) => current || inferDisplayName(invitation.email),
+        );
       })
       .catch((error) => {
         if (active) {
@@ -130,7 +147,10 @@ export default function InvitationScreen() {
 
     if (!parsed.success) {
       setErrors(toFieldErrors<InvitationField>(parsed.error));
-      setNotice(parsed.error.issues.find((issue) => issue.path[0] === "token")?.message ?? null);
+      setNotice(
+        parsed.error.issues.find((issue) => issue.path[0] === "token")
+          ?.message ?? null,
+      );
       return;
     }
 
@@ -147,17 +167,24 @@ export default function InvitationScreen() {
     }
   }
 
-  const noticeTone = notice?.startsWith("Nie") || notice?.startsWith("Link") ? "error" : "info";
+  const noticeTone =
+    notice?.startsWith("Nie") || notice?.startsWith("Link") ? "error" : "info";
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.keyboardView}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={styles.keyboardView}
+      >
         <View style={styles.header}>
           <Pressable
             accessibilityLabel="Wróć do logowania"
             accessibilityRole="button"
             onPress={() =>
-              router.replace({ pathname: "/login", params: { skipInitialAuthLink: "1" } } as never)
+              router.replace({
+                pathname: "/login",
+                params: { skipInitialAuthLink: "1" },
+              } as never)
             }
             style={styles.backButton}
           >
@@ -195,9 +222,12 @@ export default function InvitationScreen() {
                   {preview ? (
                     <View style={styles.invitationBox}>
                       <Text style={styles.invitationLabel}>Zaproszenie</Text>
-                      <Text style={styles.invitationTitle}>{preview.householdName}</Text>
+                      <Text style={styles.invitationTitle}>
+                        {preview.householdName}
+                      </Text>
                       <Text style={styles.copy}>
-                        {preview.invitedByDisplayName} zaprasza adres {preview.email}.
+                        {preview.invitedByDisplayName} zaprasza adres{" "}
+                        {preview.email}.
                       </Text>
                     </View>
                   ) : null}
@@ -221,7 +251,9 @@ export default function InvitationScreen() {
                     placeholder="Minimum 8 znaków"
                     returnKeyType="done"
                     rightElement={
-                      <IconTap onPress={() => setShowPassword((current) => !current)}>
+                      <IconTap
+                        onPress={() => setShowPassword((current) => !current)}
+                      >
                         {showPassword ? (
                           <EyeOff color={theme.colors.textMuted} size={18} />
                         ) : (
@@ -254,7 +286,9 @@ export default function InvitationScreen() {
                       <Text style={styles.link}>Podgląd polityki</Text>
                     </Pressable>
                   </View>
-                  {notice ? <Banner message={notice} tone={noticeTone} /> : null}
+                  {notice ? (
+                    <Banner message={notice} tone={noticeTone} />
+                  ) : null}
                   <ActionButton
                     disabled={!token || !preview || loading}
                     loading={loading}
@@ -266,7 +300,10 @@ export default function InvitationScreen() {
                     onPress={() =>
                       router.replace({
                         pathname: "/login",
-                        params: { invitationToken: token, skipInitialAuthLink: "1" },
+                        params: {
+                          invitationToken: token,
+                          skipInitialAuthLink: "1",
+                        },
                       } as never)
                     }
                     title="Mam już konto"
@@ -279,7 +316,10 @@ export default function InvitationScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <LegalModal document={legalDocument} onClose={() => setLegalDocument(null)} />
+      <LegalModal
+        document={legalDocument}
+        onClose={() => setLegalDocument(null)}
+      />
     </SafeAreaView>
   );
 
@@ -298,7 +338,9 @@ export default function InvitationScreen() {
       <View style={styles.checkboxBlock}>
         <Pressable onPress={onPress} style={styles.checkboxRow}>
           <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
-            {checked ? <Check color={theme.colors.inverseText} size={13} /> : null}
+            {checked ? (
+              <Check color={theme.colors.inverseText} size={13} />
+            ) : null}
           </View>
           <Text style={styles.checkboxLabel}>{label}</Text>
         </Pressable>
@@ -307,40 +349,91 @@ export default function InvitationScreen() {
     );
   }
 
-  function IconTap({ children, onPress }: { children: ReactNode; onPress: () => void }) {
+  function IconTap({
+    children,
+    onPress,
+  }: {
+    children: ReactNode;
+    onPress: () => void;
+  }) {
     return (
-      <Pressable accessibilityRole="button" onPress={onPress} style={styles.iconTap}>
+      <Pressable
+        accessibilityRole="button"
+        onPress={onPress}
+        style={styles.iconTap}
+      >
         {children}
       </Pressable>
     );
   }
 
-  function Banner({ message, tone }: { message: string; tone: "error" | "info" }) {
+  function Banner({
+    message,
+    tone,
+  }: {
+    message: string;
+    tone: "error" | "info";
+  }) {
     return (
-      <View style={[styles.banner, tone === "error" ? styles.errorBox : styles.infoBox]}>
-        <Text style={[styles.bannerText, tone === "error" ? styles.error : styles.infoText]}>{message}</Text>
+      <View
+        style={[
+          styles.banner,
+          tone === "error" ? styles.errorBox : styles.infoBox,
+        ]}
+      >
+        <Text
+          style={[
+            styles.bannerText,
+            tone === "error" ? styles.error : styles.infoText,
+          ]}
+        >
+          {message}
+        </Text>
       </View>
     );
   }
 
-  function LegalModal({ document, onClose }: { document: LegalDocument | null; onClose: () => void }) {
-    const title = document === "privacy" ? "Polityka prywatności" : "Regulamin";
+  function LegalModal({
+    document,
+    onClose,
+  }: {
+    document: LegalDocument | null;
+    onClose: () => void;
+  }) {
+    const content = HOMEAPP_LEGAL_DOCUMENTS[document ?? "privacy"];
 
     return (
-      <Modal animationType="fade" onRequestClose={onClose} transparent visible={Boolean(document)}>
+      <Modal
+        animationType="fade"
+        onRequestClose={onClose}
+        transparent
+        visible={Boolean(document)}
+      >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>{title}</Text>
-            <ScrollView style={styles.modalBody}>
-              <Text style={styles.modalText}>
-                To roboczy podgląd dokumentu dla MVP. Finalna treść prawna zostanie podmieniona przed wydaniem
-                produkcyjnym. Aplikacja przechowuje dane domowe, finansowe i organizacyjne wyłącznie w ramach Twojego
-                gospodarstwa domowego oraz zgodnie z rolami użytkowników.
+            <Text style={styles.modalTitle}>{content.title}</Text>
+            <ScrollView
+              contentContainerStyle={styles.modalBodyContent}
+              style={styles.modalBody}
+            >
+              <Text style={styles.modalMeta}>
+                Obowiązuje od: {content.effectiveDate}
               </Text>
-              <Text style={styles.modalText}>
-                Użytkownik odpowiada za poprawność danych wprowadzonych do aplikacji. Dostęp do domu, zaproszeń i
-                uprawnień kontroluje właściciel gospodarstwa domowego.
-              </Text>
+              {content.introduction.map((paragraph) => (
+                <Text key={paragraph} style={styles.modalText}>
+                  {paragraph}
+                </Text>
+              ))}
+              {content.sections.map((section) => (
+                <View key={section.title} style={styles.modalSection}>
+                  <Text style={styles.modalSectionTitle}>{section.title}</Text>
+                  {section.paragraphs.map((paragraph) => (
+                    <Text key={paragraph} style={styles.modalText}>
+                      {paragraph}
+                    </Text>
+                  ))}
+                </View>
+              ))}
             </ScrollView>
             <ActionButton onPress={onClose} title="Rozumiem" />
           </View>
@@ -360,7 +453,10 @@ function PasswordStrength({ value }: { value: string }) {
         {[0, 1, 2, 3].map((item) => (
           <View
             key={item}
-            style={[styles.strengthBar, item < result.score && { backgroundColor: result.color }]}
+            style={[
+              styles.strengthBar,
+              item < result.score && { backgroundColor: result.color },
+            ]}
           />
         ))}
       </View>
@@ -379,10 +475,14 @@ function inferDisplayName(email: string): string {
   const localPart = email.split("@")[0] ?? "";
   const firstSegment = localPart.split(/[._-]/)[0] ?? localPart;
 
-  return firstSegment ? firstSegment.charAt(0).toUpperCase() + firstSegment.slice(1) : "";
+  return firstSegment
+    ? firstSegment.charAt(0).toUpperCase() + firstSegment.slice(1)
+    : "";
 }
 
-function toFieldErrors<TField extends string>(error: z.ZodError): FieldErrors<TField> {
+function toFieldErrors<TField extends string>(
+  error: z.ZodError,
+): FieldErrors<TField> {
   return error.issues.reduce<FieldErrors<TField>>((errors, issue) => {
     const field = issue.path[0];
 
@@ -395,7 +495,10 @@ function toFieldErrors<TField extends string>(error: z.ZodError): FieldErrors<TF
 }
 
 function getMessage(error: unknown): string {
-  if (error instanceof ApiNetworkError || (error instanceof TypeError && error.message === "Network request failed")) {
+  if (
+    error instanceof ApiNetworkError ||
+    (error instanceof TypeError && error.message === "Network request failed")
+  ) {
     return "Nie mogę połączyć się z serwerem. Sprawdź połączenie z internetem i spróbuj ponownie.";
   }
 
@@ -416,11 +519,19 @@ function getPasswordStrength(value: string) {
   const score = checks.filter(Boolean).length;
 
   if (!value) {
-    return { color: "#DFE3E8", label: "Wpisz hasło, aby zobaczyć siłę.", score: 0 };
+    return {
+      color: "#DFE3E8",
+      label: "Wpisz hasło, aby zobaczyć siłę.",
+      score: 0,
+    };
   }
 
   if (score <= 1) {
-    return { color: "#FF5630", label: "Słabe hasło", score: Math.max(score, 1) };
+    return {
+      color: "#FF5630",
+      label: "Słabe hasło",
+      score: Math.max(score, 1),
+    };
   }
 
   if (score === 2) {
@@ -624,6 +735,10 @@ function createStyles(colors: AppPalette) {
     modalBody: {
       maxHeight: 220,
     },
+    modalBodyContent: {
+      gap: spacing.sm,
+      paddingBottom: spacing.xs,
+    },
     modalCard: {
       backgroundColor: colors.modalSurface,
       borderColor: colors.border,
@@ -639,6 +754,22 @@ function createStyles(colors: AppPalette) {
       fontSize: 13,
       letterSpacing: 0,
       lineHeight: 20,
+    },
+    modalMeta: {
+      color: colors.textSubtle,
+      fontSize: 12,
+      letterSpacing: 0,
+      lineHeight: 18,
+    },
+    modalSection: {
+      gap: spacing.xs,
+    },
+    modalSectionTitle: {
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: "600",
+      letterSpacing: 0,
+      lineHeight: 21,
     },
     modalTitle: {
       color: colors.text,

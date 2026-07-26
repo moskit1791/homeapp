@@ -407,7 +407,13 @@ export class EncryptionService {
           e.id,
           e.encrypted_payload,
           e.encryption_version,
-          case when e.encrypted_payload is null then jsonb_build_object('amount', e.amount::double precision) else null end,
+          case when e.encrypted_payload is null then jsonb_strip_nulls(jsonb_build_object(
+            'amount', e.amount::double precision,
+            'name', e.name,
+            'occurredAt', e.occurred_at,
+            'originalAmount', e.original_amount::double precision,
+            'originalCurrency', e.original_currency
+          )) else null end,
           e.encryption_migration_revision
         from expenses e
         join budget_items bi on bi.id = e.budget_item_id
@@ -778,12 +784,26 @@ export class EncryptionService {
       case "expense":
         result = await client.query(
           encrypted
-            ? `update expenses e set amount = 0.01, encrypted_payload = $3, encryption_version = $4
+            ? `update expenses e set
+                amount = 0.01,
+                name = '[Zaszyfrowany wydatek]',
+                occurred_at = null,
+                original_amount = null,
+                original_currency = null,
+                encrypted_payload = $3,
+                encryption_version = $4
               where e.id = $2 and exists (
                 select 1 from budget_items bi join budget_months bm on bm.id = bi.budget_month_id
                 where bi.id = e.budget_item_id and bm.household_id = $1
               )`
-            : `update expenses e set amount = $3, encrypted_payload = null, encryption_version = null
+            : `update expenses e set
+                amount = $3,
+                name = $4,
+                occurred_at = $5,
+                original_amount = $6,
+                original_currency = $7,
+                encrypted_payload = null,
+                encryption_version = null
               where e.id = $2 and exists (
                 select 1 from budget_items bi join budget_months bm on bm.id = bi.budget_month_id
                 where bi.id = e.budget_item_id and bm.household_id = $1
@@ -799,6 +819,20 @@ export class EncryptionService {
                 householdId,
                 item.id,
                 this.money(payload.amount, "expense amount", 0.01),
+                this.nullableText(payload.name, "expense name", 160),
+                this.nullableDateTime(
+                  payload.occurredAt,
+                  "expense occurrence time",
+                ),
+                this.nullableMoney(
+                  payload.originalAmount,
+                  "original expense amount",
+                  0.01,
+                ),
+                this.nullableCurrency(
+                  payload.originalCurrency,
+                  "original expense currency",
+                ),
               ],
         );
         break;
@@ -1351,6 +1385,30 @@ export class EncryptionService {
     }
 
     return value.trim() || null;
+  }
+
+  private nullableCurrency(value: unknown, label: string): string | null {
+    if (value === null || value === undefined || value === "") {
+      return null;
+    }
+
+    if (typeof value !== "string" || !/^[A-Z]{3}$/.test(value)) {
+      throw new BadRequestException(`Invalid ${label}`);
+    }
+
+    return value;
+  }
+
+  private nullableDateTime(value: unknown, label: string): string | null {
+    if (value === null || value === undefined || value === "") {
+      return null;
+    }
+
+    if (typeof value !== "string" || Number.isNaN(Date.parse(value))) {
+      throw new BadRequestException(`Invalid ${label}`);
+    }
+
+    return new Date(value).toISOString();
   }
 
   private money(value: unknown, label: string, minimum: number): number {

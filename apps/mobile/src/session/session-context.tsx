@@ -25,6 +25,7 @@ import {
   saveRememberedEmail,
   saveStoredSession
 } from './secure-session-store';
+import { notificationExpenseImport } from '../notification-expense-import/native';
 
 interface Session {
   accessToken: string;
@@ -197,6 +198,9 @@ export function SessionProvider({ children }: PropsWithChildren) {
       isAuthenticated: Boolean(session),
       logout: async () => {
         try {
+          if (notificationExpenseImport.available) {
+            await notificationExpenseImport.clearCaptureContext().catch(() => undefined);
+          }
           if (session?.accessToken) {
             await logoutSession({ accessToken: session.accessToken }).catch(() => undefined);
           }

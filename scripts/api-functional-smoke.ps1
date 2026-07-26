@@ -14,6 +14,7 @@ $ownerEmail = "qa.owner.$stamp@homeapp.local"
 $memberEmail = "qa.member.$stamp@homeapp.local"
 $password = "QaSmoke111@"
 $today = Get-Date -Format "yyyy-MM-dd"
+$tomorrow = (Get-Date).AddDays(1).ToString("yyyy-MM-dd")
 $year = (Get-Date).Year
 $nextWeek = (Get-Date).AddDays(7).ToString("yyyy-MM-dd")
 $nextMonth = (Get-Date).AddMonths(1).ToString("yyyy-MM-dd")
@@ -279,7 +280,7 @@ if (-not $idea.id -or -not $planUpdated.week.id -or -not $currentPlan.week.id -o
 Add-Check "meal planner ideas plan update current randomize copy"
 
 $event = Request-Json "POST" "/calendar/events" @{
-  eventDate = $today
+  eventDate = $tomorrow
   eventTime = "12:30"
   note = "Smoke"
   scopeType = "household"

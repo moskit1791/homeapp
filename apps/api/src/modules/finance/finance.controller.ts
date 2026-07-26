@@ -36,6 +36,7 @@ import {
   FinanceMonthIdParamDto,
   FinanceSavingsAccountIdParamDto,
   GenerateNextBudgetMonthDto,
+  ImportExpensesDto,
   UpdateBudgetCategoryDto,
   UpdateBudgetItemDto,
   UpdateFinanceDebtDto,
@@ -265,6 +266,43 @@ export class FinanceController {
     return this.expensesService.createExpense(context.householdId, dto);
   }
 
+  @Post('expenses/import')
+  @RequirePermission('finances', 'create')
+  async importExpenses(
+    @CurrentHousehold() household: HouseholdContext | undefined,
+    @Body() dto: ImportExpensesDto
+  ) {
+    const context = this.requireHousehold(household);
+    const settings = await this.encryptionService.getSettings(context.householdId);
+    const encrypted = settings.enabledModules.includes('finances');
+
+    dto.items.forEach((item) =>
+      this.assertFinancePayloadAgainstSettings(
+        item,
+        true,
+        encrypted,
+        settings.keyVersion
+      )
+    );
+
+    if (
+      encrypted &&
+      dto.items.some(
+        (item) =>
+          item.name !== undefined ||
+          item.occurredAt !== undefined ||
+          item.originalAmount !== undefined ||
+          item.originalCurrency !== undefined
+      )
+    ) {
+      throw new BadRequestException(
+        'Imported finance metadata must be included in the encrypted expense payload'
+      );
+    }
+
+    return this.expensesService.importExpenses(context.householdId, dto.items);
+  }
+
   @Delete('expenses/:id')
   @RequirePermission('finances', 'delete')
   async deleteExpense(
@@ -458,6 +496,21 @@ export class FinanceController {
   ): Promise<void> {
     const settings = await this.encryptionService.getSettings(householdId);
     const enabled = settings.enabledModules.includes('finances');
+
+    this.assertFinancePayloadAgainstSettings(
+      dto,
+      requiredWhenEncrypted,
+      enabled,
+      settings.keyVersion
+    );
+  }
+
+  private assertFinancePayloadAgainstSettings(
+    dto: { encryptedPayload?: string; encryptionVersion?: number },
+    requiredWhenEncrypted: boolean,
+    enabled: boolean,
+    keyVersion: number | null
+  ): void {
     const hasEnvelope = dto.encryptedPayload !== undefined || dto.encryptionVersion !== undefined;
 
     if (!enabled) {
@@ -472,7 +525,7 @@ export class FinanceController {
       throw new BadRequestException('Finance content must be encrypted on the client');
     }
 
-    if (hasEnvelope && (!dto.encryptedPayload || dto.encryptionVersion !== settings.keyVersion)) {
+    if (hasEnvelope && (!dto.encryptedPayload || dto.encryptionVersion !== keyVersion)) {
       throw new BadRequestException('Outdated or incomplete household encryption envelope');
     }
   }

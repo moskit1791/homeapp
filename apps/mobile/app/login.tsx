@@ -1,9 +1,13 @@
-import * as GoogleAuth from 'expo-auth-session/providers/google';
-import Constants from 'expo-constants';
-import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
-import brandIconSource from '../assets/icon.png';
-import { ReactNode, useEffect, useState } from 'react';
+import * as GoogleAuth from "expo-auth-session/providers/google";
+import {
+  HOMEAPP_LEGAL_DOCUMENTS,
+  type LegalDocumentKey,
+} from "@homeapp/shared-types";
+import Constants from "expo-constants";
+import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
+import brandIconSource from "../assets/icon.png";
+import { ReactNode, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -16,36 +20,49 @@ import {
   StyleSheet,
   Text,
   View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { z } from 'zod';
-import { ApiNetworkError, forgotPassword, resendVerification, verifyEmail } from '../src/api';
-import { useSession } from '../src/session/session-context';
-import { loadRememberedEmail } from '../src/session/secure-session-store';
-import { useAppTheme, type AppPalette } from '../src/theme/use-app-theme';
-import { radii, spacing } from '../src/theme/tokens';
-import { ActionButton } from '../src/ui/action-button';
-import { AuthTextField } from '../src/ui/auth-text-field';
-import { Apple, Check, Eye, EyeOff, Google, LogIn, UserPlus } from '../src/ui/icon';
-import { SegmentedControl } from '../src/ui/segmented-control';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { z } from "zod";
+import {
+  ApiNetworkError,
+  forgotPassword,
+  resendVerification,
+  verifyEmail,
+} from "../src/api";
+import { useSession } from "../src/session/session-context";
+import { loadRememberedEmail } from "../src/session/secure-session-store";
+import { useAppTheme, type AppPalette } from "../src/theme/use-app-theme";
+import { radii, spacing } from "../src/theme/tokens";
+import { ActionButton } from "../src/ui/action-button";
+import { AuthTextField } from "../src/ui/auth-text-field";
+import {
+  Apple,
+  Check,
+  Eye,
+  EyeOff,
+  Google,
+  LogIn,
+  UserPlus,
+} from "../src/ui/icon";
+import { SegmentedControl } from "../src/ui/segmented-control";
 
 WebBrowser.maybeCompleteAuthSession();
 
 const loginSchema = z.object({
-  email: z.string().trim().toLowerCase().email('Podaj poprawny e-mail'),
-  password: z.string().min(8, 'Hasło musi mieć min. 8 znaków')
+  email: z.string().trim().toLowerCase().email("Podaj poprawny e-mail"),
+  password: z.string().min(8, "Hasło musi mieć min. 8 znaków"),
 });
 
 const registerSchema = loginSchema.extend({
-  displayName: z.string().trim().min(1, 'Podaj imię')
+  displayName: z.string().trim().min(1, "Podaj imię"),
 });
 
 const householdSchema = z.object({
-  name: z.string().trim().min(1, 'Podaj nazwę domu')
+  name: z.string().trim().min(1, "Podaj nazwę domu"),
 });
 
 const resetRequestSchema = z.object({
-  email: z.string().trim().toLowerCase().email('Podaj poprawny e-mail')
+  email: z.string().trim().toLowerCase().email("Podaj poprawny e-mail"),
 });
 
 type LoginFormValues = z.input<typeof loginSchema>;
@@ -57,7 +74,7 @@ type RegisterField = keyof RegisterFormValues;
 type HouseholdField = keyof HouseholdFormValues;
 type ResetRequestField = keyof ResetRequestValues;
 type FieldErrors<TField extends string> = Partial<Record<TField, string>>;
-type LegalDocument = 'privacy' | 'terms';
+type LegalDocument = LegalDocumentKey;
 
 export default function Index() {
   const theme = useAppTheme();
@@ -71,23 +88,32 @@ export default function Index() {
   const routeInvitationToken = normalizeParam(params.invitationToken);
   const routeNotice = normalizeParam(params.notice);
   const skipInitialAuthLink =
-    normalizeParam(params.skipInitialAuthLink) === '1' || Boolean(routeInvitationToken);
-  const { createFirstHousehold, registerAndSignIn, signIn, signInWithGoogle, status } = useSession();
+    normalizeParam(params.skipInitialAuthLink) === "1" ||
+    Boolean(routeInvitationToken);
+  const {
+    createFirstHousehold,
+    registerAndSignIn,
+    signIn,
+    signInWithGoogle,
+    status,
+  } = useSession();
   const googleOAuthConfig = readGoogleOAuthConfig();
   const googleFallbackClientId =
     googleOAuthConfig.androidClientId ??
     googleOAuthConfig.iosClientId ??
     googleOAuthConfig.webClientId ??
     googleOAuthConfig.oauthClientId ??
-    'google-oauth-not-configured';
-  const [googleRequest, googleResponse, promptGoogleAsync] = GoogleAuth.useIdTokenAuthRequest({
-    androidClientId: googleOAuthConfig.androidClientId,
-    clientId: googleFallbackClientId,
-    iosClientId: googleOAuthConfig.iosClientId,
-    selectAccount: true,
-    webClientId: googleOAuthConfig.webClientId ?? googleOAuthConfig.oauthClientId
-  });
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+    "google-oauth-not-configured";
+  const [googleRequest, googleResponse, promptGoogleAsync] =
+    GoogleAuth.useIdTokenAuthRequest({
+      androidClientId: googleOAuthConfig.androidClientId,
+      clientId: googleFallbackClientId,
+      iosClientId: googleOAuthConfig.iosClientId,
+      selectAccount: true,
+      webClientId:
+        googleOAuthConfig.webClientId ?? googleOAuthConfig.oauthClientId,
+    });
+  const [mode, setMode] = useState<"login" | "register">("login");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -96,22 +122,39 @@ export default function Index() {
   const [showRegisterPassword, setShowRegisterPassword] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [acceptedPrivacy, setAcceptedPrivacy] = useState(false);
-  const [legalDocument, setLegalDocument] = useState<LegalDocument | null>(null);
-  const [pendingInvitationToken, setPendingInvitationToken] = useState<string | null>(null);
+  const [legalDocument, setLegalDocument] = useState<LegalDocument | null>(
+    null,
+  );
+  const [pendingInvitationToken, setPendingInvitationToken] = useState<
+    string | null
+  >(null);
   const [resetVisible, setResetVisible] = useState(false);
   const [resetNotice, setResetNotice] = useState<string | null>(null);
-  const [resetValues, setResetValues] = useState<ResetRequestValues>({ email: '' });
-  const [loginValues, setLoginValues] = useState<LoginFormValues>({ email: '', password: '' });
-  const [registerValues, setRegisterValues] = useState<RegisterFormValues>({
-    displayName: '',
-    email: '',
-    password: ''
+  const [resetValues, setResetValues] = useState<ResetRequestValues>({
+    email: "",
   });
-  const [householdValues, setHouseholdValues] = useState<HouseholdFormValues>({ name: 'Mój dom' });
+  const [loginValues, setLoginValues] = useState<LoginFormValues>({
+    email: "",
+    password: "",
+  });
+  const [registerValues, setRegisterValues] = useState<RegisterFormValues>({
+    displayName: "",
+    email: "",
+    password: "",
+  });
+  const [householdValues, setHouseholdValues] = useState<HouseholdFormValues>({
+    name: "Mój dom",
+  });
   const [loginErrors, setLoginErrors] = useState<FieldErrors<LoginField>>({});
-  const [registerErrors, setRegisterErrors] = useState<FieldErrors<RegisterField>>({});
-  const [householdErrors, setHouseholdErrors] = useState<FieldErrors<HouseholdField>>({});
-  const [resetErrors, setResetErrors] = useState<FieldErrors<ResetRequestField>>({});
+  const [registerErrors, setRegisterErrors] = useState<
+    FieldErrors<RegisterField>
+  >({});
+  const [householdErrors, setHouseholdErrors] = useState<
+    FieldErrors<HouseholdField>
+  >({});
+  const [resetErrors, setResetErrors] = useState<
+    FieldErrors<ResetRequestField>
+  >({});
 
   useEffect(() => {
     let active = true;
@@ -138,26 +181,30 @@ export default function Index() {
     }
 
     setPendingInvitationToken(routeInvitationToken);
-    setMode('login');
-    setNotice('Zaproszenie zapisane. Zaloguj się kontem z zaproszonego adresu e-mail.');
+    setMode("login");
+    setNotice(
+      "Zaproszenie zapisane. Zaloguj się kontem z zaproszonego adresu e-mail.",
+    );
   }, [routeInvitationToken]);
 
   useEffect(() => {
-    if (routeNotice === 'password-reset') {
-      setMode('login');
-      setNotice('Hasło zostało zmienione. Możesz się zalogować.');
+    if (routeNotice === "password-reset") {
+      setMode("login");
+      setNotice("Hasło zostało zmienione. Możesz się zalogować.");
     }
   }, [routeNotice]);
 
   useEffect(() => {
-    if (googleResponse?.type !== 'success') {
+    if (googleResponse?.type !== "success") {
       return;
     }
 
     const idToken = googleResponse.params.id_token;
 
     if (!idToken) {
-      setNotice('Google nie zwrócił tokena ID. Sprawdź konfigurację klienta OAuth.');
+      setNotice(
+        "Google nie zwrócił tokena ID. Sprawdź konfigurację klienta OAuth.",
+      );
       return;
     }
 
@@ -166,7 +213,7 @@ export default function Index() {
 
     void signInWithGoogle(idToken, {
       invitationToken: pendingInvitationToken,
-      remember: rememberMe
+      remember: rememberMe,
     })
       .then(() => setPendingInvitationToken(null))
       .catch((submitError) => setError(getMessage(submitError)))
@@ -185,13 +232,19 @@ export default function Index() {
 
       setError(null);
 
-      if (action.type === 'reset-password') {
-        router.push({ pathname: '/auth/reset-password', params: { token: action.token } } as never);
+      if (action.type === "reset-password") {
+        router.push({
+          pathname: "/auth/reset-password",
+          params: { token: action.token },
+        } as never);
         return;
       }
 
-      if (action.type === 'invitation') {
-        router.push({ pathname: '/auth/invitation', params: { token: action.token } } as never);
+      if (action.type === "invitation") {
+        router.push({
+          pathname: "/auth/invitation",
+          params: { token: action.token },
+        } as never);
         return;
       }
 
@@ -202,9 +255,9 @@ export default function Index() {
             return;
           }
 
-          setMode('login');
+          setMode("login");
           setLoginValues((current) => ({ ...current, email: action.email }));
-          setNotice('Adres e-mail został potwierdzony. Możesz się zalogować.');
+          setNotice("Adres e-mail został potwierdzony. Możesz się zalogować.");
         })
         .catch((submitError) => {
           if (active) {
@@ -226,7 +279,9 @@ export default function Index() {
       });
     }
 
-    const subscription = Linking.addEventListener('url', ({ url }) => handleAuthUrl(url));
+    const subscription = Linking.addEventListener("url", ({ url }) =>
+      handleAuthUrl(url),
+    );
 
     return () => {
       active = false;
@@ -234,11 +289,11 @@ export default function Index() {
     };
   }, [router, skipInitialAuthLink]);
 
-  if (status === 'ready') {
-    return <Redirect href={'/(tabs)' as never} />;
+  if (status === "ready") {
+    return <Redirect href={"/(tabs)" as never} />;
   }
 
-  if (status === 'checking') {
+  if (status === "checking") {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.loadingShell}>
@@ -252,7 +307,7 @@ export default function Index() {
     );
   }
 
-  function changeMode(nextMode: 'login' | 'register') {
+  function changeMode(nextMode: "login" | "register") {
     setError(null);
     setNotice(null);
     setMode(nextMode);
@@ -296,7 +351,7 @@ export default function Index() {
     try {
       await signIn(parsed.data, {
         invitationToken: pendingInvitationToken,
-        remember: rememberMe
+        remember: rememberMe,
       });
       setPendingInvitationToken(null);
     } catch (submitError) {
@@ -315,7 +370,9 @@ export default function Index() {
     }
 
     if (!acceptedTerms || !acceptedPrivacy) {
-      setError('Zaakceptuj regulamin oraz politykę prywatności, aby założyć konto.');
+      setError(
+        "Zaakceptuj regulamin oraz politykę prywatności, aby założyć konto.",
+      );
       return;
     }
 
@@ -325,13 +382,13 @@ export default function Index() {
     try {
       await registerAndSignIn(parsed.data, {
         invitationToken: pendingInvitationToken,
-        remember: rememberMe
+        remember: rememberMe,
       });
       setPendingInvitationToken(null);
     } catch (submitError) {
       const message = getMessage(submitError);
 
-      if (message.startsWith('Konto utworzone.')) {
+      if (message.startsWith("Konto utworzone.")) {
         setNotice(message);
       } else {
         setError(message);
@@ -342,10 +399,15 @@ export default function Index() {
   }
 
   async function submitResendVerification() {
-    const parsed = resetRequestSchema.safeParse({ email: registerValues.email });
+    const parsed = resetRequestSchema.safeParse({
+      email: registerValues.email,
+    });
 
     if (!parsed.success) {
-      setRegisterErrors((current) => ({ ...current, email: 'Podaj poprawny e-mail' }));
+      setRegisterErrors((current) => ({
+        ...current,
+        email: "Podaj poprawny e-mail",
+      }));
       return;
     }
 
@@ -358,13 +420,15 @@ export default function Index() {
       if (response.devVerificationToken) {
         await verifyEmail({
           email: parsed.data.email,
-          token: response.devVerificationToken
+          token: response.devVerificationToken,
         });
-        setMode('login');
+        setMode("login");
         setLoginValues((current) => ({ ...current, email: parsed.data.email }));
-        setNotice('Konto zostało potwierdzone. Możesz się zalogować.');
+        setNotice("Konto zostało potwierdzone. Możesz się zalogować.");
       } else {
-        setNotice('Wysłaliśmy nowy link weryfikacyjny, jeśli konto czeka na potwierdzenie.');
+        setNotice(
+          "Wysłaliśmy nowy link weryfikacyjny, jeśli konto czeka na potwierdzenie.",
+        );
       }
     } catch (submitError) {
       setError(getMessage(submitError));
@@ -385,7 +449,11 @@ export default function Index() {
     setLoading(true);
 
     try {
-      await createFirstHousehold({ currencyCode: 'PLN', mealSlotsPerDay: 3, name: parsed.data.name });
+      await createFirstHousehold({
+        currencyCode: "PLN",
+        mealSlotsPerDay: 3,
+        name: parsed.data.name,
+      });
     } catch (submitError) {
       setError(getMessage(submitError));
     } finally {
@@ -406,7 +474,9 @@ export default function Index() {
 
     try {
       await forgotPassword(parsed.data);
-      setResetNotice('Jeśli konto istnieje, wysłaliśmy instrukcję resetu hasła.');
+      setResetNotice(
+        "Jeśli konto istnieje, wysłaliśmy instrukcję resetu hasła.",
+      );
     } catch (submitError) {
       setResetNotice(getMessage(submitError));
     } finally {
@@ -414,9 +484,11 @@ export default function Index() {
     }
   }
 
-  function submitSocial(provider: 'Apple' | 'Google') {
-    if (provider === 'Apple') {
-      setNotice('Przycisk Apple jest przygotowany w UI. Pełne logowanie wymaga konfiguracji Apple OAuth.');
+  function submitSocial(provider: "Apple" | "Google") {
+    if (provider === "Apple") {
+      setNotice(
+        "Przycisk Apple jest przygotowany w UI. Pełne logowanie wymaga konfiguracji Apple OAuth.",
+      );
       return;
     }
 
@@ -426,12 +498,14 @@ export default function Index() {
       !googleOAuthConfig.webClientId &&
       !googleOAuthConfig.oauthClientId
     ) {
-      setNotice('Google OAuth wymaga skonfigurowanego client ID w env/EAS.');
+      setNotice("Google OAuth wymaga skonfigurowanego client ID w env/EAS.");
       return;
     }
 
     if (!googleRequest) {
-      setNotice('Google OAuth jeszcze się inicjalizuje. Spróbuj ponownie za chwilę.');
+      setNotice(
+        "Google OAuth jeszcze się inicjalizuje. Spróbuj ponownie za chwilę.",
+      );
       return;
     }
 
@@ -441,7 +515,7 @@ export default function Index() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.keyboardView}
       >
         <ScrollView
@@ -453,19 +527,23 @@ export default function Index() {
             <BrandHeader />
 
             <View style={styles.panel}>
-              {status === 'needs-household' ? (
+              {status === "needs-household" ? (
                 <View style={styles.form}>
                   <View style={styles.formHeader}>
                     <Text style={styles.eyebrow}>Pierwszy krok</Text>
                     <Text style={styles.heading}>Utwórz dom</Text>
-                    <Text style={styles.copy}>Nazwę zawsze można później zmienić w ustawieniach.</Text>
+                    <Text style={styles.copy}>
+                      Nazwę zawsze można później zmienić w ustawieniach.
+                    </Text>
                   </View>
                   <AuthTextField
                     autoCapitalize="words"
                     autoComplete="name"
                     error={householdErrors.name}
                     label="Nazwa domu"
-                    onChangeText={(value) => updateHouseholdField('name', value)}
+                    onChangeText={(value) =>
+                      updateHouseholdField("name", value)
+                    }
                     returnKeyType="done"
                     value={householdValues.name}
                   />
@@ -482,13 +560,13 @@ export default function Index() {
                   <SegmentedControl
                     onChange={changeMode}
                     options={[
-                      { label: 'Logowanie', value: 'login' },
-                      { label: 'Rejestracja', value: 'register' }
+                      { label: "Logowanie", value: "login" },
+                      { label: "Rejestracja", value: "register" },
                     ]}
                     value={mode}
                   />
 
-                  {mode === 'login' ? (
+                  {mode === "login" ? (
                     <>
                       <FormTitle
                         icon={<LogIn color={theme.colors.primary} size={18} />}
@@ -500,7 +578,9 @@ export default function Index() {
                         error={loginErrors.email}
                         keyboardType="email-address"
                         label="Adres e-mail"
-                        onChangeText={(value) => updateLoginField('email', value)}
+                        onChangeText={(value) =>
+                          updateLoginField("email", value)
+                        }
                         placeholder="jan.kowalski@example.com"
                         returnKeyType="next"
                         textContentType="emailAddress"
@@ -510,13 +590,22 @@ export default function Index() {
                         autoComplete="password"
                         error={loginErrors.password}
                         label="Hasło"
-                        onChangeText={(value) => updateLoginField('password', value)}
+                        onChangeText={(value) =>
+                          updateLoginField("password", value)
+                        }
                         placeholder="Minimum 8 znaków"
                         returnKeyType="done"
                         rightElement={
-                          <IconTap onPress={() => setShowLoginPassword((current) => !current)}>
+                          <IconTap
+                            onPress={() =>
+                              setShowLoginPassword((current) => !current)
+                            }
+                          >
                             {showLoginPassword ? (
-                              <EyeOff color={theme.colors.textMuted} size={18} />
+                              <EyeOff
+                                color={theme.colors.textMuted}
+                                size={18}
+                              />
                             ) : (
                               <Eye color={theme.colors.textMuted} size={18} />
                             )}
@@ -534,7 +623,10 @@ export default function Index() {
                         />
                         <Pressable
                           onPress={() => {
-                            setResetValues((current) => ({ ...current, email: loginValues.email || current.email }));
+                            setResetValues((current) => ({
+                              ...current,
+                              email: loginValues.email || current.email,
+                            }));
                             setResetVisible(true);
                           }}
                         >
@@ -553,7 +645,9 @@ export default function Index() {
                   ) : (
                     <>
                       <FormTitle
-                        icon={<UserPlus color={theme.colors.primary} size={18} />}
+                        icon={
+                          <UserPlus color={theme.colors.primary} size={18} />
+                        }
                         subtitle="Po rejestracji wyślemy link do potwierdzenia adresu e-mail."
                         title="Załóż konto"
                       />
@@ -562,7 +656,9 @@ export default function Index() {
                         autoComplete="name"
                         error={registerErrors.displayName}
                         label="Imię"
-                        onChangeText={(value) => updateRegisterField('displayName', value)}
+                        onChangeText={(value) =>
+                          updateRegisterField("displayName", value)
+                        }
                         placeholder="Jak mamy się zwracać?"
                         returnKeyType="next"
                         textContentType="name"
@@ -573,7 +669,9 @@ export default function Index() {
                         error={registerErrors.email}
                         keyboardType="email-address"
                         label="Adres e-mail"
-                        onChangeText={(value) => updateRegisterField('email', value)}
+                        onChangeText={(value) =>
+                          updateRegisterField("email", value)
+                        }
                         placeholder="adres@email.pl"
                         returnKeyType="next"
                         textContentType="emailAddress"
@@ -583,13 +681,22 @@ export default function Index() {
                         autoComplete="new-password"
                         error={registerErrors.password}
                         label="Hasło"
-                        onChangeText={(value) => updateRegisterField('password', value)}
+                        onChangeText={(value) =>
+                          updateRegisterField("password", value)
+                        }
                         placeholder="Minimum 8 znaków"
                         returnKeyType="done"
                         rightElement={
-                          <IconTap onPress={() => setShowRegisterPassword((current) => !current)}>
+                          <IconTap
+                            onPress={() =>
+                              setShowRegisterPassword((current) => !current)
+                            }
+                          >
                             {showRegisterPassword ? (
-                              <EyeOff color={theme.colors.textMuted} size={18} />
+                              <EyeOff
+                                color={theme.colors.textMuted}
+                                size={18}
+                              />
                             ) : (
                               <Eye color={theme.colors.textMuted} size={18} />
                             )}
@@ -604,17 +711,21 @@ export default function Index() {
                         <Checkbox
                           checked={acceptedTerms}
                           label="Akceptuję regulamin"
-                          onPress={() => setAcceptedTerms((current) => !current)}
+                          onPress={() =>
+                            setAcceptedTerms((current) => !current)
+                          }
                         />
-                        <Pressable onPress={() => setLegalDocument('terms')}>
+                        <Pressable onPress={() => setLegalDocument("terms")}>
                           <Text style={styles.link}>Podgląd regulaminu</Text>
                         </Pressable>
                         <Checkbox
                           checked={acceptedPrivacy}
                           label="Akceptuję politykę prywatności"
-                          onPress={() => setAcceptedPrivacy((current) => !current)}
+                          onPress={() =>
+                            setAcceptedPrivacy((current) => !current)
+                          }
                         />
-                        <Pressable onPress={() => setLegalDocument('privacy')}>
+                        <Pressable onPress={() => setLegalDocument("privacy")}>
                           <Text style={styles.link}>Podgląd polityki</Text>
                         </Pressable>
                       </View>
@@ -642,21 +753,31 @@ export default function Index() {
 
                   <SocialDivider />
                   <View style={styles.socialRow}>
-                    <SocialButton icon={<Google color="#DB4437" size={18} />} label="Google" onPress={() => submitSocial('Google')} />
+                    <SocialButton
+                      icon={<Google color="#DB4437" size={18} />}
+                      label="Google"
+                      onPress={() => submitSocial("Google")}
+                    />
                     <SocialButton
                       disabled
                       icon={<Apple color={theme.colors.textSubtle} size={18} />}
                       label="Apple"
-                      onPress={() => submitSocial('Apple')}
+                      onPress={() => submitSocial("Apple")}
                     />
                   </View>
                   <Text style={styles.legalSmall}>
-                    Logując się, akceptujesz{' '}
-                    <Text onPress={() => setLegalDocument('terms')} style={styles.legalSmallLink}>
+                    Logując się, akceptujesz{" "}
+                    <Text
+                      onPress={() => setLegalDocument("terms")}
+                      style={styles.legalSmallLink}
+                    >
                       Regulamin
-                    </Text>{' '}
-                    oraz{' '}
-                    <Text onPress={() => setLegalDocument('privacy')} style={styles.legalSmallLink}>
+                    </Text>{" "}
+                    oraz{" "}
+                    <Text
+                      onPress={() => setLegalDocument("privacy")}
+                      style={styles.legalSmallLink}
+                    >
                       Politykę prywatności
                     </Text>
                     .
@@ -668,7 +789,10 @@ export default function Index() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <LegalModal document={legalDocument} onClose={() => setLegalDocument(null)} />
+      <LegalModal
+        document={legalDocument}
+        onClose={() => setLegalDocument(null)}
+      />
       <ResetPasswordModal
         errors={resetErrors}
         loading={loading}
@@ -697,7 +821,7 @@ export default function Index() {
   function FormTitle({
     icon,
     subtitle,
-    title
+    title,
   }: {
     icon: ReactNode;
     subtitle?: string;
@@ -714,19 +838,47 @@ export default function Index() {
     );
   }
 
-  function Banner({ message, tone }: { message: string; tone: 'error' | 'info' }) {
+  function Banner({
+    message,
+    tone,
+  }: {
+    message: string;
+    tone: "error" | "info";
+  }) {
     return (
-      <View style={[styles.banner, tone === 'error' ? styles.errorBox : styles.infoBox]}>
-        <Text style={[styles.bannerText, tone === 'error' ? styles.error : styles.infoText]}>{message}</Text>
+      <View
+        style={[
+          styles.banner,
+          tone === "error" ? styles.errorBox : styles.infoBox,
+        ]}
+      >
+        <Text
+          style={[
+            styles.bannerText,
+            tone === "error" ? styles.error : styles.infoText,
+          ]}
+        >
+          {message}
+        </Text>
       </View>
     );
   }
 
-  function Checkbox({ checked, label, onPress }: { checked: boolean; label: string; onPress: () => void }) {
+  function Checkbox({
+    checked,
+    label,
+    onPress,
+  }: {
+    checked: boolean;
+    label: string;
+    onPress: () => void;
+  }) {
     return (
       <Pressable onPress={onPress} style={styles.checkboxRow}>
         <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
-          {checked ? <Check color={theme.colors.inverseText} size={13} /> : null}
+          {checked ? (
+            <Check color={theme.colors.inverseText} size={13} />
+          ) : null}
         </View>
         <Text style={styles.checkboxLabel}>{label}</Text>
       </Pressable>
@@ -744,7 +896,7 @@ export default function Index() {
               key={item}
               style={[
                 styles.strengthBar,
-                item < result.score && { backgroundColor: result.color }
+                item < result.score && { backgroundColor: result.color },
               ]}
             />
           ))}
@@ -768,7 +920,7 @@ export default function Index() {
     disabled,
     icon,
     label,
-    onPress
+    onPress,
   }: {
     disabled?: boolean;
     icon: ReactNode;
@@ -784,37 +936,74 @@ export default function Index() {
         style={[styles.socialButton, disabled && styles.socialButtonDisabled]}
       >
         {icon}
-        <Text style={[styles.socialLabel, disabled && styles.socialLabelDisabled]}>{label}</Text>
+        <Text
+          style={[styles.socialLabel, disabled && styles.socialLabelDisabled]}
+        >
+          {label}
+        </Text>
       </Pressable>
     );
   }
 
-  function IconTap({ children, onPress }: { children: ReactNode; onPress: () => void }) {
+  function IconTap({
+    children,
+    onPress,
+  }: {
+    children: ReactNode;
+    onPress: () => void;
+  }) {
     return (
-      <Pressable accessibilityRole="button" onPress={onPress} style={styles.iconTap}>
+      <Pressable
+        accessibilityRole="button"
+        onPress={onPress}
+        style={styles.iconTap}
+      >
         {children}
       </Pressable>
     );
   }
 
-  function LegalModal({ document, onClose }: { document: LegalDocument | null; onClose: () => void }) {
-    const title = document === 'privacy' ? 'Polityka prywatności' : 'Regulamin';
+  function LegalModal({
+    document,
+    onClose,
+  }: {
+    document: LegalDocument | null;
+    onClose: () => void;
+  }) {
+    const content = HOMEAPP_LEGAL_DOCUMENTS[document ?? "privacy"];
 
     return (
-      <Modal animationType="fade" onRequestClose={onClose} transparent visible={Boolean(document)}>
+      <Modal
+        animationType="fade"
+        onRequestClose={onClose}
+        transparent
+        visible={Boolean(document)}
+      >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>{title}</Text>
-            <ScrollView style={styles.modalBody}>
-              <Text style={styles.modalText}>
-                To roboczy podgląd dokumentu dla MVP. Finalna treść prawna zostanie podmieniona przed wydaniem
-                produkcyjnym. Aplikacja przechowuje dane domowe, finansowe i organizacyjne wyłącznie w ramach Twojego
-                gospodarstwa domowego oraz zgodnie z rolami użytkowników.
+            <Text style={styles.modalTitle}>{content.title}</Text>
+            <ScrollView
+              contentContainerStyle={styles.modalBodyContent}
+              style={styles.modalBody}
+            >
+              <Text style={styles.modalMeta}>
+                Obowiązuje od: {content.effectiveDate}
               </Text>
-              <Text style={styles.modalText}>
-                Użytkownik odpowiada za poprawność danych wprowadzonych do aplikacji. Dostęp do domu, zaproszeń i
-                uprawnień kontroluje właściciel gospodarstwa domowego.
-              </Text>
+              {content.introduction.map((paragraph) => (
+                <Text key={paragraph} style={styles.modalText}>
+                  {paragraph}
+                </Text>
+              ))}
+              {content.sections.map((section) => (
+                <View key={section.title} style={styles.modalSection}>
+                  <Text style={styles.modalSectionTitle}>{section.title}</Text>
+                  {section.paragraphs.map((paragraph) => (
+                    <Text key={paragraph} style={styles.modalText}>
+                      {paragraph}
+                    </Text>
+                  ))}
+                </View>
+              ))}
             </ScrollView>
             <ActionButton onPress={onClose} title="Rozumiem" />
           </View>
@@ -822,7 +1011,6 @@ export default function Index() {
       </Modal>
     );
   }
-
 }
 
 function ResetPasswordModal({
@@ -833,7 +1021,7 @@ function ResetPasswordModal({
   onRequestReset,
   onUpdateRequest,
   requestValues,
-  visible
+  visible,
 }: {
   errors: FieldErrors<ResetRequestField>;
   loading: boolean;
@@ -846,35 +1034,60 @@ function ResetPasswordModal({
 }) {
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
-  const noticeTone = notice?.startsWith('Nie') ? 'error' : 'info';
+  const noticeTone = notice?.startsWith("Nie") ? "error" : "info";
 
   return (
-    <Modal animationType="fade" onRequestClose={onClose} transparent visible={visible}>
+    <Modal
+      animationType="fade"
+      onRequestClose={onClose}
+      transparent
+      visible={visible}
+    >
       <View style={styles.modalBackdrop}>
         <View style={styles.modalCard}>
           <Text style={styles.modalTitle}>Reset hasła</Text>
           <Text style={styles.modalText}>
-            Wpisz e-mail konta. Jeśli konto istnieje, wyślemy link do osobnego widoku zmiany hasła.
+            Wpisz e-mail konta. Jeśli konto istnieje, wyślemy link do osobnego
+            widoku zmiany hasła.
           </Text>
           <AuthTextField
             autoComplete="email"
             error={errors.email}
             keyboardType="email-address"
             label="Adres e-mail"
-            onChangeText={(value) => onUpdateRequest('email', value)}
+            onChangeText={(value) => onUpdateRequest("email", value)}
             placeholder="adres@email.pl"
             value={requestValues.email}
           />
           {notice ? (
-            <View style={[styles.banner, noticeTone === 'error' ? styles.errorBox : styles.infoBox]}>
-              <Text style={[styles.bannerText, noticeTone === 'error' ? styles.error : styles.infoText]}>
+            <View
+              style={[
+                styles.banner,
+                noticeTone === "error" ? styles.errorBox : styles.infoBox,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.bannerText,
+                  noticeTone === "error" ? styles.error : styles.infoText,
+                ]}
+              >
                 {notice}
               </Text>
             </View>
           ) : null}
           <View style={styles.modalActions}>
-            <ActionButton disabled={loading} onPress={onClose} title="Anuluj" variant="secondary" />
-            <ActionButton loading={loading} onPress={onRequestReset} title="Wyślij instrukcję" />
+            <ActionButton
+              disabled={loading}
+              onPress={onClose}
+              title="Anuluj"
+              variant="secondary"
+            />
+            <ActionButton
+              loading={loading}
+              onPress={onRequestReset}
+              title="Wyślij instrukcję"
+            />
           </View>
         </View>
       </View>
@@ -885,14 +1098,16 @@ function ResetPasswordModal({
 function normalizeParam(value: string | string[] | undefined): string {
   const normalized = Array.isArray(value) ? value[0] : value;
 
-  return normalized?.trim() ?? '';
+  return normalized?.trim() ?? "";
 }
 
-function toFieldErrors<TField extends string>(error: z.ZodError): FieldErrors<TField> {
+function toFieldErrors<TField extends string>(
+  error: z.ZodError,
+): FieldErrors<TField> {
   return error.issues.reduce<FieldErrors<TField>>((errors, issue) => {
     const field = issue.path[0];
 
-    if (typeof field === 'string') {
+    if (typeof field === "string") {
       errors[field as TField] = issue.message;
     }
 
@@ -901,41 +1116,44 @@ function toFieldErrors<TField extends string>(error: z.ZodError): FieldErrors<TF
 }
 
 function getMessage(error: unknown): string {
-  if (error instanceof ApiNetworkError || (error instanceof TypeError && error.message === 'Network request failed')) {
-    return 'Nie mogę połączyć się z serwerem. Sprawdź połączenie z internetem i spróbuj ponownie.';
+  if (
+    error instanceof ApiNetworkError ||
+    (error instanceof TypeError && error.message === "Network request failed")
+  ) {
+    return "Nie mogę połączyć się z serwerem. Sprawdź połączenie z internetem i spróbuj ponownie.";
   }
 
   if (error instanceof Error) {
     return error.message;
   }
 
-  return 'Nie udało się wykonać akcji';
+  return "Nie udało się wykonać akcji";
 }
 
 function parseAuthDeepLink(rawUrl: string): AuthDeepLinkAction | null {
   try {
     const parsed = new URL(rawUrl);
-    const route = [parsed.host, parsed.pathname.replace(/^\/+/, '')]
+    const route = [parsed.host, parsed.pathname.replace(/^\/+/, "")]
       .filter(Boolean)
-      .join('/');
+      .join("/");
 
-    if (route.endsWith('reset-password')) {
-      const token = parsed.searchParams.get('token')?.trim();
+    if (route.endsWith("reset-password")) {
+      const token = parsed.searchParams.get("token")?.trim();
 
-      return token ? { token, type: 'reset-password' } : null;
+      return token ? { token, type: "reset-password" } : null;
     }
 
-    if (route.endsWith('invitation') || route.endsWith('accept-invitation')) {
-      const token = parsed.searchParams.get('token')?.trim();
+    if (route.endsWith("invitation") || route.endsWith("accept-invitation")) {
+      const token = parsed.searchParams.get("token")?.trim();
 
-      return token ? { token, type: 'invitation' } : null;
+      return token ? { token, type: "invitation" } : null;
     }
 
-    if (route.endsWith('verify-email')) {
-      const email = parsed.searchParams.get('email')?.trim();
-      const token = parsed.searchParams.get('token')?.trim();
+    if (route.endsWith("verify-email")) {
+      const email = parsed.searchParams.get("email")?.trim();
+      const token = parsed.searchParams.get("token")?.trim();
 
-      return email && token ? { email, token, type: 'verify-email' } : null;
+      return email && token ? { email, token, type: "verify-email" } : null;
     }
   } catch {
     return null;
@@ -947,16 +1165,16 @@ function parseAuthDeepLink(rawUrl: string): AuthDeepLinkAction | null {
 type AuthDeepLinkAction =
   | {
       token: string;
-      type: 'reset-password';
+      type: "reset-password";
     }
   | {
       token: string;
-      type: 'invitation';
+      type: "invitation";
     }
   | {
       email: string;
       token: string;
-      type: 'verify-email';
+      type: "verify-email";
     };
 
 function readGoogleOAuthConfig() {
@@ -973,7 +1191,7 @@ function readGoogleOAuthConfig() {
     androidClientId: normalizeOptionalValue(extra?.googleAndroidClientId),
     iosClientId: normalizeOptionalValue(extra?.googleIosClientId),
     oauthClientId: normalizeOptionalValue(extra?.googleOAuthClientId),
-    webClientId: normalizeOptionalValue(extra?.googleWebClientId)
+    webClientId: normalizeOptionalValue(extra?.googleWebClientId),
   };
 }
 
@@ -988,27 +1206,35 @@ function getPasswordStrength(value: string) {
     value.length >= 8,
     /[A-ZĄĆĘŁŃÓŚŹŻ]/.test(value) && /[a-ząćęłńóśźż]/.test(value),
     /\d/.test(value),
-    /[^A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż0-9]/.test(value)
+    /[^A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż0-9]/.test(value),
   ];
   const score = checks.filter(Boolean).length;
 
   if (!value) {
-    return { color: '#DFE3E8', label: 'Wpisz hasło, aby zobaczyć siłę.', score: 0 };
+    return {
+      color: "#DFE3E8",
+      label: "Wpisz hasło, aby zobaczyć siłę.",
+      score: 0,
+    };
   }
 
   if (score <= 1) {
-    return { color: '#FF5630', label: 'Słabe hasło', score: Math.max(score, 1) };
+    return {
+      color: "#FF5630",
+      label: "Słabe hasło",
+      score: Math.max(score, 1),
+    };
   }
 
   if (score === 2) {
-    return { color: '#FFAB00', label: 'Średnie hasło', score };
+    return { color: "#FFAB00", label: "Średnie hasło", score };
   }
 
   if (score === 3) {
-    return { color: '#36B37E', label: 'Dobre hasło', score };
+    return { color: "#36B37E", label: "Dobre hasło", score };
   }
 
-  return { color: '#00AB55', label: 'Bardzo mocne hasło', score };
+  return { color: "#00AB55", label: "Bardzo mocne hasło", score };
 }
 
 function createStyles(colors: AppPalette) {
@@ -1017,105 +1243,105 @@ function createStyles(colors: AppPalette) {
       borderRadius: radii.control,
       borderWidth: 1,
       paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm
+      paddingVertical: spacing.sm,
     },
     bannerText: {
       fontSize: 13,
-      fontWeight: '700',
+      fontWeight: "700",
       letterSpacing: 0,
-      lineHeight: 19
+      lineHeight: 19,
     },
     brand: {
       color: colors.text,
       fontSize: 28,
-      fontWeight: '900',
-      letterSpacing: 0
+      fontWeight: "900",
+      letterSpacing: 0,
     },
     brandBar: {
-      alignItems: 'center',
+      alignItems: "center",
       gap: spacing.sm,
-      paddingHorizontal: spacing.xs
+      paddingHorizontal: spacing.xs,
     },
     brandIcon: {
-      alignItems: 'center',
+      alignItems: "center",
       backgroundColor: colors.primary,
       borderRadius: 18,
       height: 64,
-      justifyContent: 'center',
-      width: 64
+      justifyContent: "center",
+      width: 64,
     },
     brandIconImage: {
       borderRadius: 14,
       height: 52,
-      width: 52
+      width: 52,
     },
     checkbox: {
-      alignItems: 'center',
+      alignItems: "center",
       borderColor: colors.border,
       borderRadius: 4,
       borderWidth: 1,
       height: 18,
-      justifyContent: 'center',
-      width: 18
+      justifyContent: "center",
+      width: 18,
     },
     checkboxChecked: {
       backgroundColor: colors.primary,
-      borderColor: colors.primary
+      borderColor: colors.primary,
     },
     checkboxLabel: {
       color: colors.textMuted,
       flex: 1,
       fontSize: 12,
       letterSpacing: 0,
-      lineHeight: 17
+      lineHeight: 17,
     },
     checkboxRow: {
-      alignItems: 'center',
-      flexDirection: 'row',
+      alignItems: "center",
+      flexDirection: "row",
       flexShrink: 1,
-      gap: spacing.sm
+      gap: spacing.sm,
     },
     copy: {
       color: colors.textMuted,
       fontSize: 14,
       letterSpacing: 0,
-      lineHeight: 20
+      lineHeight: 20,
     },
     divider: {
       backgroundColor: colors.line,
       flex: 1,
-      height: 1
+      height: 1,
     },
     dividerRow: {
-      alignItems: 'center',
-      flexDirection: 'row',
+      alignItems: "center",
+      flexDirection: "row",
       gap: spacing.sm,
-      marginTop: spacing.sm
+      marginTop: spacing.sm,
     },
     dividerText: {
       color: colors.textSubtle,
       fontSize: 10,
-      fontWeight: '800',
-      letterSpacing: 0
+      fontWeight: "800",
+      letterSpacing: 0,
     },
     error: {
-      color: colors.danger
+      color: colors.danger,
     },
     errorBox: {
-      backgroundColor: '#FFF1F0',
-      borderColor: '#FFDAD6'
+      backgroundColor: "#FFF1F0",
+      borderColor: "#FFDAD6",
     },
     eyebrow: {
       color: colors.primaryDark,
       fontSize: 12,
-      fontWeight: '800',
+      fontWeight: "800",
       letterSpacing: 0,
-      textTransform: 'uppercase'
+      textTransform: "uppercase",
     },
     fieldError: {
       color: colors.danger,
       fontSize: 12,
-      letterSpacing: 0
+      letterSpacing: 0,
     },
     fieldInput: {
       color: colors.text,
@@ -1123,96 +1349,96 @@ function createStyles(colors: AppPalette) {
       fontSize: 15,
       letterSpacing: 0,
       minHeight: 48,
-      paddingHorizontal: spacing.md
+      paddingHorizontal: spacing.md,
     },
     fieldInputError: {
-      borderColor: colors.danger
+      borderColor: colors.danger,
     },
     fieldInputFocused: {
-      borderColor: colors.primary
+      borderColor: colors.primary,
     },
     fieldInputWrap: {
-      alignItems: 'center',
+      alignItems: "center",
       backgroundColor: colors.field,
       borderColor: colors.border,
       borderRadius: radii.control,
       borderWidth: 1,
-      flexDirection: 'row',
-      minHeight: 50
+      flexDirection: "row",
+      minHeight: 50,
     },
     fieldLabel: {
       color: colors.text,
       fontSize: 12,
-      fontWeight: '800',
-      letterSpacing: 0
+      fontWeight: "800",
+      letterSpacing: 0,
     },
     fieldRight: {
-      paddingRight: spacing.sm
+      paddingRight: spacing.sm,
     },
     fieldRoot: {
-      gap: spacing.xs
+      gap: spacing.xs,
     },
     form: {
-      gap: spacing.md
+      gap: spacing.md,
     },
     formHeader: {
-      gap: spacing.xs
+      gap: spacing.xs,
     },
     formTitle: {
-      alignItems: 'center',
-      flexDirection: 'row',
-      gap: spacing.md
+      alignItems: "center",
+      flexDirection: "row",
+      gap: spacing.md,
     },
     formTitleWrap: {
       gap: spacing.xs,
-      marginBottom: spacing.xs
+      marginBottom: spacing.xs,
     },
     heading: {
       color: colors.text,
       fontSize: 25,
-      fontWeight: '900',
-      letterSpacing: 0
+      fontWeight: "900",
+      letterSpacing: 0,
     },
     iconTap: {
-      alignItems: 'center',
+      alignItems: "center",
       height: 36,
-      justifyContent: 'center',
-      width: 36
+      justifyContent: "center",
+      width: 36,
     },
     infoBox: {
       backgroundColor: colors.softBlue,
-      borderColor: colors.border
+      borderColor: colors.border,
     },
     infoText: {
-      color: colors.text
+      color: colors.text,
     },
     inlineBetween: {
-      alignItems: 'center',
-      flexDirection: 'row',
+      alignItems: "center",
+      flexDirection: "row",
       gap: spacing.md,
-      justifyContent: 'space-between'
+      justifyContent: "space-between",
     },
     keyboardView: {
-      flex: 1
+      flex: 1,
     },
     loadingCard: {
-      alignItems: 'center',
+      alignItems: "center",
       backgroundColor: colors.card,
       borderColor: colors.border,
       borderRadius: radii.card,
       borderWidth: 1,
       gap: spacing.md,
       padding: spacing.lg,
-      width: '100%'
+      width: "100%",
     },
     loadingShell: {
-      alignSelf: 'center',
+      alignSelf: "center",
       flex: 1,
       gap: spacing.xl,
-      justifyContent: 'center',
+      justifyContent: "center",
       maxWidth: 430,
       padding: spacing.lg,
-      width: '100%'
+      width: "100%",
     },
     legalBox: {
       backgroundColor: colors.cardMuted,
@@ -1220,38 +1446,42 @@ function createStyles(colors: AppPalette) {
       borderRadius: radii.control,
       borderWidth: 1,
       gap: spacing.sm,
-      padding: spacing.md
+      padding: spacing.md,
     },
     legalSmall: {
       color: colors.textMuted,
       fontSize: 11,
       letterSpacing: 0,
       lineHeight: 16,
-      textAlign: 'center'
+      textAlign: "center",
     },
     legalSmallLink: {
       color: colors.text,
-      fontWeight: '800'
+      fontWeight: "800",
     },
     link: {
       color: colors.primaryDark,
       fontSize: 12,
-      fontWeight: '800',
-      letterSpacing: 0
+      fontWeight: "800",
+      letterSpacing: 0,
     },
     modalActions: {
-      flexDirection: 'row',
-      gap: spacing.sm
+      flexDirection: "row",
+      gap: spacing.sm,
     },
     modalBackdrop: {
-      alignItems: 'center',
+      alignItems: "center",
       backgroundColor: colors.backdrop,
       flex: 1,
-      justifyContent: 'center',
-      padding: spacing.lg
+      justifyContent: "center",
+      padding: spacing.lg,
     },
     modalBody: {
-      maxHeight: 220
+      maxHeight: 220,
+    },
+    modalBodyContent: {
+      gap: spacing.sm,
+      paddingBottom: spacing.xs,
     },
     modalCard: {
       backgroundColor: colors.modalSurface,
@@ -1261,109 +1491,125 @@ function createStyles(colors: AppPalette) {
       gap: spacing.md,
       maxWidth: 430,
       padding: spacing.lg,
-      width: '100%'
+      width: "100%",
     },
     modalText: {
       color: colors.textMuted,
       fontSize: 13,
       letterSpacing: 0,
-      lineHeight: 20
+      lineHeight: 20,
+    },
+    modalMeta: {
+      color: colors.textSubtle,
+      fontSize: 12,
+      letterSpacing: 0,
+      lineHeight: 18,
+    },
+    modalSection: {
+      gap: spacing.xs,
+    },
+    modalSectionTitle: {
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: "600",
+      letterSpacing: 0,
+      lineHeight: 21,
     },
     modalTitle: {
       color: colors.text,
       fontSize: 20,
-      fontWeight: '900',
-      letterSpacing: 0
+      fontWeight: "900",
+      letterSpacing: 0,
     },
     panel: {
       backgroundColor: colors.card,
       borderColor: colors.border,
       borderRadius: radii.card,
       borderWidth: 1,
-      padding: spacing.lg
+      padding: spacing.lg,
     },
     safeArea: {
       backgroundColor: colors.background,
-      flex: 1
+      flex: 1,
     },
     scrollContent: {
       flexGrow: 1,
-      justifyContent: 'flex-start',
+      justifyContent: "flex-start",
       padding: spacing.lg,
-      paddingBottom: spacing.xxl
+      paddingBottom: spacing.xxl,
     },
     shell: {
-      alignSelf: 'center',
+      alignSelf: "center",
       gap: spacing.xl,
       maxWidth: 430,
-      width: '100%'
+      width: "100%",
     },
     socialButton: {
-      alignItems: 'center',
+      alignItems: "center",
       backgroundColor: colors.card,
       borderColor: colors.border,
       borderRadius: radii.control,
       borderWidth: 1,
       flex: 1,
-      flexDirection: 'row',
+      flexDirection: "row",
       gap: spacing.sm,
-      justifyContent: 'center',
+      justifyContent: "center",
       minHeight: 44,
-      paddingHorizontal: spacing.md
+      paddingHorizontal: spacing.md,
     },
     socialButtonDisabled: {
       backgroundColor: colors.cardMuted,
-      opacity: 0.56
+      opacity: 0.56,
     },
     socialLabel: {
       color: colors.text,
       fontSize: 13,
-      fontWeight: '800',
-      letterSpacing: 0
+      fontWeight: "800",
+      letterSpacing: 0,
     },
     socialLabelDisabled: {
-      color: colors.textSubtle
+      color: colors.textSubtle,
     },
     socialRow: {
-      flexDirection: 'row',
-      gap: spacing.sm
+      flexDirection: "row",
+      gap: spacing.sm,
     },
     strengthBar: {
       backgroundColor: colors.border,
       borderRadius: 999,
       flex: 1,
-      height: 5
+      height: 5,
     },
     strengthBars: {
-      flexDirection: 'row',
-      gap: spacing.xs
+      flexDirection: "row",
+      gap: spacing.xs,
     },
     strengthRoot: {
-      gap: spacing.xs
+      gap: spacing.xs,
     },
     strengthText: {
       color: colors.textMuted,
       fontSize: 12,
-      letterSpacing: 0
+      letterSpacing: 0,
     },
     submitButton: {
       marginTop: spacing.xs,
-      minHeight: 50
+      minHeight: 50,
     },
     subtitle: {
       color: colors.textMuted,
       fontSize: 14,
       letterSpacing: 0,
       lineHeight: 20,
-      textAlign: 'center'
+      textAlign: "center",
     },
     titleIcon: {
-      alignItems: 'center',
+      alignItems: "center",
       backgroundColor: colors.primarySoft,
       borderRadius: radii.control,
       height: 42,
-      justifyContent: 'center',
-      width: 42
-    }
+      justifyContent: "center",
+      width: 42,
+    },
   });
 }

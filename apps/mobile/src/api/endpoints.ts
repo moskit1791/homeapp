@@ -58,6 +58,8 @@ import type {
   HouseholdInvitation,
   InvitationPreview,
   HouseholdMember,
+  ImportExpensesRequest,
+  ImportExpensesResult,
   ForgotPasswordRequest,
   ForgotPasswordResponse,
   FinanceDebt,
@@ -796,6 +798,23 @@ export function createExpense(
     method: "POST",
     signal: requestOptions.signal,
   });
+}
+
+export function importExpenses(
+  input: ImportExpensesRequest,
+  options?: ApiCallOptionsInput,
+): Promise<ImportExpensesResult> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<ImportExpensesResult, ImportExpensesRequest>(
+    "/finance/expenses/import",
+    {
+      accessToken: requestOptions.accessToken,
+      body: input,
+      method: "POST",
+      signal: requestOptions.signal,
+    },
+  );
 }
 
 export async function listIncomes(

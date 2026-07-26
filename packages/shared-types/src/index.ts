@@ -1,3 +1,5 @@
+export * from "./legal-documents";
+
 export const MODULE_KEYS = [
   "start",
   "finances",
@@ -112,6 +114,12 @@ export interface ExpenseSummary {
   budgetItemId: string;
   createdAt: string;
   id: string;
+  name?: string | null;
+  occurredAt?: string | null;
+  originalAmount?: string | null;
+  originalCurrency?: string | null;
+  source?: "manual" | "bank_notification";
+  sourceExternalId?: string | null;
   updatedAt: string;
 }
 
