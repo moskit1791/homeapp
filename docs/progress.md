@@ -2071,3 +2071,40 @@
 - Podpis APK Signature Scheme v2 - poprawny.
 - SHA-256 certyfikatu: `DABDB31074901BB7097FF460326130E0DABB796C94A2A8A8F3BD1F267BA72874`.
 - Manifest ma `usesCleartextTraffic=false`, aktywny EAS Update, runtime `1.2.2` i nagłówek kanału `production`.
+
+## 2026-08-06 - Hotfix HomeApp 1.2.3
+
+### Zakres
+
+- Ustawiono wersję aplikacji mobilnej `1.2.3`, Android `versionCode=105` i runtime OTA `1.2.3`.
+- Ustabilizowano lokalny import wydatków z powiadomień: migracja klucza Android Keystore do wersji 2, ponowne skanowanie aktywnych powiadomień, odświeżanie źródeł oraz bezpieczna naprawa lokalnej kolejki.
+- Rozszerzono obsługę wariantów powiadomień mBanku i danych przekazywanych przez Androida.
+- Przywrócono formularz ręcznego wydatku bez dodatkowego pola `Nazwa wydatku`.
+
+### Walidacja
+
+- Pełne `typecheck`, `lint`, testy API i mobile oraz eksport Android/iOS - OK.
+- API: 24 pliki i 93 testy - OK. Mobile: 4 zestawy i 19 testów - OK.
+- Testy jednostkowe Gradle i testy AndroidX na emulatorze - OK.
+- Na emulatorze potwierdzono migrację klucza, wyłączenie i ponowne włączenie importu, wykrycie źródła oraz zapis powiadomień pasujących do mBanku, także przy wygaszonym ekranie.
+- Oficjalny APK EAS zainstalowano na emulatorze jako `1.2.3 (105)`; cold-start i ekran logowania działają bez krytycznych błędów w logcat.
+- Produkcyjny manifest ma `usesCleartextTraffic=false`, listener powiadomień, runtime `1.2.3` i nagłówek kanału OTA `production`.
+
+### Produkcja i OTA
+
+- Commit wdrożonego kodu: `59d9408c0b87959a56793cfec8195279c6a9f00c`.
+- Produkcyjne API: `https://app.porabkihome.pl/api/health` - OK.
+- EAS Update ID: `019fd7a1-5e48-706e-acb2-9309324caef9`.
+- EAS Update group: `24136f4f-6981-4866-b18d-9ba9b846b4db`.
+- Kanał i branch OTA: `production`; runtime: `1.2.3`.
+
+### Finalny APK
+
+- Plik: `builds/homeapp-release.apk`.
+- EAS build: `17979301-c5c6-4a82-bbc0-19c6dfa723b4`.
+- Pakiet: `com.homeapp.mobile`.
+- Wersja: `1.2.3` (`versionCode=105`).
+- Rozmiar: `79635498` bajtów.
+- SHA-256: `1106C60FA2AC6E2C1F15F1633E2EF3616419FC3553D1F7C01C02369F102B4682`.
+- Podpis APK Signature Scheme v2 - poprawny.
+- SHA-256 certyfikatu: `DABDB31074901BB7097FF460326130E0DABB796C94A2A8A8F3BD1F267BA72874`.
