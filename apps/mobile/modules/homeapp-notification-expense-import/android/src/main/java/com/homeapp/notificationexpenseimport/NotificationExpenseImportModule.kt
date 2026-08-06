@@ -39,8 +39,13 @@ class NotificationExpenseImportModule : Module() {
       io { repository.listSources() }
     }
 
+    AsyncFunction("refreshActiveNotifications") {
+      NotificationExpenseListenerService.refreshActiveNotifications(context)
+    }
+
     AsyncFunction("setSourceEnabled") { packageName: String, enabled: Boolean ->
       io { repository.setSourceEnabled(packageName, enabled) }
+      if (enabled) NotificationExpenseListenerService.refreshActiveNotifications(context)
       true
     }
 
@@ -62,6 +67,7 @@ class NotificationExpenseImportModule : Module() {
         val current = repository.getSettings()
         repository.saveSettings(current.copy(featureEnabled = enabled))
       }
+      if (enabled) NotificationExpenseListenerService.refreshActiveNotifications(context)
       true
     }
 

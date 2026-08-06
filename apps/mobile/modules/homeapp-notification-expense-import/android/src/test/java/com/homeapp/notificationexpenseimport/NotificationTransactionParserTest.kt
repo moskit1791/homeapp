@@ -32,6 +32,23 @@ class NotificationTransactionParserTest {
   }
 
   @Test
+  fun parsesMbankPaymentNotificationVariants() {
+    val cases = listOf(
+      NotificationInput("Płatność kartą", "Kwota: 18,50 PLN. Miejsce: REWE"),
+      NotificationInput(null, "Zapłaciłeś kartą 45,67 PLN w LIDL"),
+      NotificationInput("Transakcja kartą", "Kwota 29,99 PLN. Punkt: ŻABKA"),
+      NotificationInput(null, "Pobrano z konta 14,20 PLN, odbiorca ALLEGRO")
+    )
+
+    val parsed = cases.map(parser::parse)
+
+    assertEquals(listOf("18.5", "45.67", "29.99", "14.2"), parsed.map { it?.amount })
+    assertTrue(parsed.all { it?.currency == "PLN" })
+    assertTrue(parsed.all { it?.transactionType == "payment" })
+    assertEquals(listOf("REWE", "LIDL", "ŻABKA", "ALLEGRO"), parsed.map { it?.merchant })
+  }
+
+  @Test
   fun rejectsDeclinesSecurityCodesBalancesIncomingTransfersAndOffers() {
     val rejected = listOf(
       "Płatność 99,00 PLN została odrzucona",

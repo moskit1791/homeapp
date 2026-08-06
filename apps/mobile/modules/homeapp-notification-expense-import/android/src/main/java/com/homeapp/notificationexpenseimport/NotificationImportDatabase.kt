@@ -77,6 +77,9 @@ data class NotificationImportStateEntity(
 
 @Dao
 interface NotificationImportDao {
+  @Query("select * from notification_sources")
+  fun listAllSources(): List<NotificationSourceEntity>
+
   @Query(
     """
       select * from notification_sources
@@ -121,6 +124,9 @@ interface NotificationImportDao {
 
   @Update
   fun updateSource(entity: NotificationSourceEntity)
+
+  @Query("select * from pending_notification_transactions")
+  fun listAllTransactions(): List<PendingTransactionEntity>
 
   @Query(
     """
@@ -184,6 +190,9 @@ interface NotificationImportDao {
 
   @Query("delete from notification_sources")
   fun clearSources(): Int
+
+  @Query("delete from notification_import_state")
+  fun clearState(): Int
 
   @Query(
     """

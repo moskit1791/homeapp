@@ -11,12 +11,16 @@ import java.util.UUID
 
 class NotificationImportRepository(context: Context) {
   companion object {
+    private const val CRYPTO_PREFS = "homeapp.notification-import.crypto"
+    private const val CRYPTO_VERSION_KEY = "queueCryptoVersion"
+    private const val CURRENT_CRYPTO_VERSION = 2
     private const val INDEX_KEY_CHECK_INPUT = "state:index-key-check:v1"
     private const val SCHEMA_VERSION = 1
     private const val TAG = "HomeAppNotificationImport"
     private const val RAW_TEXT_RETENTION_MS = 7L * 24 * 60 * 60 * 1000
     private const val PENDING_RETENTION_MS = 30L * 24 * 60 * 60 * 1000
     private const val TOMBSTONE_RETENTION_MS = 180L * 24 * 60 * 60 * 1000
+    private val CRYPTO_MIGRATION_LOCK = Any()
   }
 
   private val appContext = context.applicationContext
@@ -24,6 +28,10 @@ class NotificationImportRepository(context: Context) {
   private val dao get() = database.dao()
   private val crypto = QueueCrypto()
   private val parser = UniversalNotificationTransactionParser()
+
+  init {
+    migrateQueueEncryptionIfNeeded()
+  }
 
   fun getSettings(): ImportSettings {
     val row = dao.getState() ?: return ImportSettings()
@@ -375,8 +383,97 @@ class NotificationImportRepository(context: Context) {
     NotificationImportDatabase.closeForReset()
     appContext.deleteDatabase(NotificationImportDatabase.DATABASE_NAME)
     crypto.deleteKeys()
+    markCurrentCryptoVersion()
     NotificationExpenseReminderScheduler.cancel(appContext)
     NotificationExpenseMaintenanceScheduler.cancel(appContext)
+  }
+
+  private fun migrateQueueEncryptionIfNeeded() {
+    synchronized(CRYPTO_MIGRATION_LOCK) {
+      val preferences = appContext.getSharedPreferences(CRYPTO_PREFS, Context.MODE_PRIVATE)
+      if (preferences.getInt(CRYPTO_VERSION_KEY, 1) >= CURRENT_CRYPTO_VERSION) {
+        return@synchronized
+      }
+
+      if (dao.encryptedRecordCount() == 0) {
+        crypto.deleteLegacyAesKey()
+        markCurrentCryptoVersion()
+        return@synchronized
+      }
+
+      if (!crypto.legacyAesKeyPresent()) {
+        Log.w(TAG, "legacy queue key is missing; clearing unreadable local queue")
+        clearEncryptedStorage()
+        markCurrentCryptoVersion()
+        return@synchronized
+      }
+
+      try {
+        database.runInTransaction {
+          dao.getState()?.let { row ->
+            val encrypted = reencryptLegacy(
+              row.id.toString(),
+              row.schemaVersion,
+              row.nonce,
+              row.ciphertext
+            )
+            dao.saveState(row.copy(nonce = encrypted.nonce, ciphertext = encrypted.ciphertext))
+          }
+          dao.listAllSources().forEach { row ->
+            val encrypted = reencryptLegacy(
+              row.id,
+              row.schemaVersion,
+              row.nonce,
+              row.ciphertext
+            )
+            dao.updateSource(row.copy(nonce = encrypted.nonce, ciphertext = encrypted.ciphertext))
+          }
+          dao.listAllTransactions().forEach { row ->
+            val encrypted = reencryptLegacy(
+              row.id,
+              row.schemaVersion,
+              row.nonce,
+              row.ciphertext
+            )
+            dao.updatePending(row.copy(nonce = encrypted.nonce, ciphertext = encrypted.ciphertext))
+          }
+        }
+        crypto.deleteLegacyAesKey()
+        markCurrentCryptoVersion()
+        Log.i(TAG, "local queue encryption migrated")
+      } catch (error: Throwable) {
+        Log.w(TAG, "local queue encryption migration deferred", error)
+      }
+    }
+  }
+
+  private fun reencryptLegacy(
+    id: String,
+    schemaVersion: Int,
+    nonce: ByteArray,
+    ciphertext: ByteArray
+  ): EncryptedValue = crypto.encrypt(
+    id,
+    schemaVersion,
+    crypto.decryptLegacy(id, schemaVersion, nonce, ciphertext)
+  )
+
+  private fun clearEncryptedStorage() {
+    database.runInTransaction {
+      dao.clearPending()
+      dao.clearSources()
+      dao.clearState()
+    }
+    crypto.deleteKeys()
+    NotificationExpenseReminderScheduler.cancel(appContext)
+    NotificationExpenseMaintenanceScheduler.cancel(appContext)
+  }
+
+  private fun markCurrentCryptoVersion() {
+    appContext.getSharedPreferences(CRYPTO_PREFS, Context.MODE_PRIVATE)
+      .edit()
+      .putInt(CRYPTO_VERSION_KEY, CURRENT_CRYPTO_VERSION)
+      .apply()
   }
 
   private fun upsertSource(

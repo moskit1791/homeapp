@@ -143,7 +143,6 @@ type FinanceFormValues = {
   debtPaymentNote: string;
   debtPurpose: string;
   expenseAmount: string;
-  expenseName: string;
   incomeAmount: string;
   itemAmount: string;
   itemName: string;
@@ -273,7 +272,6 @@ export default function FinanseScreen() {
       debtPaymentNote: "",
       debtPurpose: "",
       expenseAmount: "",
-      expenseName: "",
       incomeAmount: "",
       itemAmount: "",
       itemName: "",
@@ -292,7 +290,6 @@ export default function FinanseScreen() {
   const itemName = watch("itemName");
   const itemAmount = watch("itemAmount");
   const expenseAmount = watch("expenseAmount");
-  const expenseName = watch("expenseName");
   const debtAmount = watch("debtAmount");
   const debtDueDate = watch("debtDueDate");
   const debtLenderName = watch("debtLenderName");
@@ -947,7 +944,6 @@ export default function FinanseScreen() {
     setSelectedExpenseItemId("");
     setExpenseQuickItemId(null);
     setValue("expenseAmount", "");
-    setValue("expenseName", "");
     setFinanceModal("expense");
     setHandledRouteAction(routeActionKey);
     router.setParams({ action: undefined, intent: undefined });
@@ -1480,7 +1476,7 @@ export default function FinanseScreen() {
       const envelope = financeEncryptionEnabled
         ? await sealFinanceEnvelope(
             "expense",
-            { amount, name: expenseName.trim() },
+            { amount },
             {
               encryptPayload: encryption.encryptPayload,
               keyVersion: encryption.settings?.keyVersion,
@@ -1492,7 +1488,6 @@ export default function FinanseScreen() {
         {
           amount: financeEncryptionEnabled ? 0.01 : amount,
           budgetItemId,
-          name: financeEncryptionEnabled ? undefined : expenseName.trim(),
           ...envelope,
         },
         { accessToken },
@@ -1500,7 +1495,6 @@ export default function FinanseScreen() {
     },
     onSuccess: async () => {
       setValue("expenseAmount", "");
-      setValue("expenseName", "");
       setExpenseQuickItemId(null);
       setExpenseQuickCategoryId(null);
       if (financeModal !== "expenseHistory") {
@@ -1613,7 +1607,6 @@ export default function FinanseScreen() {
     setExpenseQuickItemId(null);
     setExpenseQuickCategoryId(null);
     setValue("expenseAmount", "");
-    setValue("expenseName", "");
     setFinanceModal("expense");
   }
 
@@ -1642,7 +1635,6 @@ export default function FinanseScreen() {
     setExpenseQuickItemId(null);
     setExpenseQuickCategoryId(null);
     setValue("expenseAmount", "");
-    setValue("expenseName", "");
     setFinanceModal("expenseHistory");
   }
 
@@ -1758,7 +1750,6 @@ export default function FinanseScreen() {
     (!itemAmount.trim() || isValidMoney(itemAmount));
   const canSaveExpense =
     canCreate &&
-    Boolean(expenseName.trim()) &&
     isPositiveMoney(expenseAmount) &&
     (Boolean(financeModal === "expenseHistory" && historyBudgetItemId) ||
       Boolean(selectedExpenseItem) ||
@@ -2875,21 +2866,13 @@ export default function FinanseScreen() {
               </>
             )}
             {selectedExpenseItem || isQuickCategoryExpense ? (
-              <>
-                <TextField
-                  control={control}
-                  label="Nazwa wydatku"
-                  name="expenseName"
-                  placeholder="np. Zakupy spożywcze"
-                />
-                <TextField
-                  control={control}
-                  keyboardType="decimal-pad"
-                  label="Kwota wydatku"
-                  name="expenseAmount"
-                  placeholder="0,00"
-                />
-              </>
+              <TextField
+                control={control}
+                keyboardType="decimal-pad"
+                label="Kwota wydatku"
+                name="expenseAmount"
+                placeholder="0,00"
+              />
             ) : null}
             {expenseMutation.error ? (
               <InlineAlert tone="error" text="Nie udało się dodać wydatku." />
@@ -2932,12 +2915,6 @@ export default function FinanseScreen() {
                       {formatOwner(historyBudgetItem.owner)}
                     </Text>
                   </View>
-                  <TextField
-                    control={control}
-                    label="Nazwa wydatku"
-                    name="expenseName"
-                    placeholder="np. Zakupy spożywcze"
-                  />
                   <TextField
                     control={control}
                     keyboardType="decimal-pad"

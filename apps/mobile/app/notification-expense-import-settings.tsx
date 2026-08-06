@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Notifications from "expo-notifications";
 import { useCallback, useMemo, useState } from "react";
@@ -10,12 +11,14 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { getMyHousehold, queryKeys } from "../src/api";
 import {
   type DetectedNotificationSource,
   type NotificationImportSettings,
   notificationExpenseImport,
 } from "../src/notification-expense-import/native";
 import { useModulePermission } from "../src/permissions/use-permissions";
+import { useSession } from "../src/session/session-context";
 import { radii, spacing } from "../src/theme/tokens";
 import { useAppTheme, type AppPalette } from "../src/theme/use-app-theme";
 import {
@@ -30,11 +33,15 @@ import { Bell, Lock, Search, Smartphone } from "../src/ui/icon";
 
 export default function NotificationExpenseImportSettingsScreen() {
   const router = useRouter();
+  const { session } = useSession();
   const theme = useAppTheme();
   const styles = useMemo(() => createStyles(theme.colors), [theme.colors]);
   const { canCreate, canRead, permissionsQuery } =
     useModulePermission("finances");
   const [loading, setLoading] = useState(true);
+  const [busyAction, setBusyAction] = useState<
+    "feature" | "repair" | "sources" | null
+  >(null);
   const [error, setError] = useState<string | null>(null);
   const [accessGranted, setAccessGranted] = useState(false);
   const [reminderPermissionGranted, setReminderPermissionGranted] =
@@ -47,6 +54,12 @@ export default function NotificationExpenseImportSettingsScreen() {
   const [search, setSearch] = useState("");
   const [showDisclosure, setShowDisclosure] = useState(false);
   const [timeInput, setTimeInput] = useState("21:00");
+  const accessToken = session?.accessToken;
+  const householdQuery = useQuery({
+    enabled: notificationExpenseImport.available && Boolean(accessToken),
+    queryFn: () => getMyHousehold({ accessToken }),
+    queryKey: queryKeys.household,
+  });
 
   const reload = useCallback(async () => {
     if (!notificationExpenseImport.available) {
@@ -73,14 +86,16 @@ export default function NotificationExpenseImportSettingsScreen() {
         Notifications.getPermissionsAsync(),
       ]);
       setAccessGranted(access.granted);
-      setReminderPermissionGranted(
-        notificationPermission.status === "granted",
-      );
+      setReminderPermissionGranted(notificationPermission.status === "granted");
       setStorageUnavailable(storage.state === "unavailable");
       if (storage.state === "unavailable") {
         setSettings(null);
         setSources([]);
         return;
+      }
+      if (access.granted) {
+        await notificationExpenseImport.refreshActiveNotifications();
+        await waitForNotificationScan();
       }
       const [nextSettings, nextSources] = await Promise.all([
         notificationExpenseImport.getSettings(),
@@ -145,20 +160,92 @@ export default function NotificationExpenseImportSettingsScreen() {
   );
 
   async function updateFeature(enabled: boolean) {
-    if (!canCreate) return;
-    await notificationExpenseImport.setFeatureEnabled(enabled);
-    setSettings((current) =>
-      current ? { ...current, featureEnabled: enabled } : current,
-    );
+    if (!canCreate || busyAction) return;
+    setBusyAction("feature");
+    setError(null);
+    try {
+      await notificationExpenseImport.setFeatureEnabled(enabled);
+      setSettings((current) =>
+        current ? { ...current, featureEnabled: enabled } : current,
+      );
+      if (enabled) {
+        await notificationExpenseImport.refreshActiveNotifications();
+        await waitForNotificationScan();
+        setSources(await notificationExpenseImport.listDetectedSources());
+      }
+    } catch {
+      setError(
+        "Nie udało się zmienić działania importu. Odśwież lokalną kolejkę i spróbuj ponownie.",
+      );
+    } finally {
+      setBusyAction(null);
+    }
   }
 
   async function updateSource(packageName: string, enabled: boolean) {
-    await notificationExpenseImport.setSourceEnabled(packageName, enabled);
-    setSources((current) =>
-      current.map((source) =>
-        source.packageName === packageName ? { ...source, enabled } : source,
-      ),
-    );
+    if (busyAction) return;
+    setBusyAction("sources");
+    setError(null);
+    try {
+      await notificationExpenseImport.setSourceEnabled(packageName, enabled);
+      setSources((current) =>
+        current.map((source) =>
+          source.packageName === packageName ? { ...source, enabled } : source,
+        ),
+      );
+      if (enabled) {
+        await notificationExpenseImport.refreshActiveNotifications();
+      }
+    } catch {
+      setError("Nie udało się zmienić wybranej aplikacji.");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function refreshSources() {
+    if (busyAction) return;
+    setBusyAction("sources");
+    setError(null);
+    try {
+      await notificationExpenseImport.refreshActiveNotifications();
+      await waitForNotificationScan();
+      setSources(await notificationExpenseImport.listDetectedSources());
+    } catch {
+      setError("Nie udało się odświeżyć listy aplikacji.");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function repairStorage() {
+    if (busyAction) return;
+    const profileId = session ? decodeJwtSubject(session.accessToken) : null;
+    const householdId = householdQuery.data?.id;
+    if (!session || !profileId || !householdId) {
+      setError(
+        "Nie udało się odtworzyć kontekstu konta. Zamknij i uruchom HomeApp ponownie.",
+      );
+      return;
+    }
+
+    setBusyAction("repair");
+    setError(null);
+    try {
+      await notificationExpenseImport.resetUnavailableStorage();
+      await notificationExpenseImport.setCaptureContext(
+        profileId,
+        householdId,
+        canCreate,
+        session.refreshTokenExpiresAt ?? null,
+      );
+      setStorageUnavailable(false);
+      await reload();
+    } catch {
+      setError("Nie udało się odtworzyć lokalnej kolejki.");
+    } finally {
+      setBusyAction(null);
+    }
   }
 
   async function saveReminder() {
@@ -229,10 +316,9 @@ export default function NotificationExpenseImportSettingsScreen() {
             text="Klucz Android Keystore został utracony albo unieważniony. Zatwierdzone wcześniej wydatki nie zostały utracone. Możesz wyczyścić wyłącznie niedostępną lokalną kolejkę."
           />
           <ActionButton
-            onPress={async () => {
-              await notificationExpenseImport.resetUnavailableStorage();
-              await reload();
-            }}
+            disabled={busyAction !== null || householdQuery.isLoading}
+            loading={busyAction === "repair"}
+            onPress={() => void repairStorage()}
             title="Wyczyść kolejkę i utwórz nowy klucz"
             variant="secondary"
           />
@@ -280,7 +366,7 @@ export default function NotificationExpenseImportSettingsScreen() {
           title="Działanie i przypomnienie"
         >
           <SettingSwitch
-            disabled={!canCreate || !accessGranted}
+            disabled={!canCreate || !accessGranted || busyAction !== null}
             label="Import z powiadomień"
             onValueChange={(value) => void updateFeature(value)}
             value={settings.featureEnabled}
@@ -349,6 +435,7 @@ export default function NotificationExpenseImportSettingsScreen() {
                 </Text>
               </View>
               <Switch
+                disabled={busyAction !== null}
                 onValueChange={(value) =>
                   void updateSource(source.packageName, value)
                 }
@@ -357,6 +444,20 @@ export default function NotificationExpenseImportSettingsScreen() {
             </View>
           ))
         )}
+        {settings?.featureEnabled &&
+        !sources.some((source) => source.enabled) ? (
+          <InlineAlert
+            tone="info"
+            text="Import jest włączony. Wybierz niżej aplikację bankową, np. mBank. Po jej włączeniu HomeApp ponownie sprawdzi także aktualne powiadomienia."
+          />
+        ) : null}
+        <ActionButton
+          disabled={!accessGranted || busyAction !== null}
+          loading={busyAction === "sources"}
+          onPress={() => void refreshSources()}
+          title="Odśwież wykryte aplikacje"
+          variant="secondary"
+        />
       </SectionCard>
 
       <SectionCard title="Dane lokalne">
@@ -418,6 +519,24 @@ export default function NotificationExpenseImportSettingsScreen() {
       </FormModal>
     </AppScreen>
   );
+}
+
+function waitForNotificationScan(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 500));
+}
+
+function decodeJwtSubject(token: string): string | null {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    const parsed = JSON.parse(globalThis.atob(padded)) as { sub?: unknown };
+
+    return typeof parsed.sub === "string" ? parsed.sub : null;
+  } catch {
+    return null;
+  }
 }
 
 function SettingSwitch({

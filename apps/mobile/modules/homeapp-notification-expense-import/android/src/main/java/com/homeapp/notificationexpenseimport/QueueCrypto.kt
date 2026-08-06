@@ -1,6 +1,5 @@
 package com.homeapp.notificationexpenseimport
 
-import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.security.keystore.KeyProperties
@@ -22,7 +21,8 @@ class QueueKeyUnavailableException(cause: Throwable) :
 
 class QueueCrypto {
   companion object {
-    private const val AES_ALIAS = "homeapp.notification-import.queue-aes.v1"
+    private const val AES_ALIAS = "homeapp.notification-import.queue-aes.v2"
+    private const val LEGACY_AES_ALIAS = "homeapp.notification-import.queue-aes.v1"
     private const val HMAC_ALIAS = "homeapp.notification-import.index-hmac.v1"
     private const val KEYSTORE = "AndroidKeyStore"
     private val KEY_LOCK = Any()
@@ -46,6 +46,20 @@ class QueueCrypto {
     return guarded {
       val cipher = Cipher.getInstance("AES/GCM/NoPadding")
       cipher.init(Cipher.DECRYPT_MODE, getOrCreateAesKey(), GCMParameterSpec(128, nonce))
+      cipher.updateAAD(aad(id, schemaVersion))
+      cipher.doFinal(ciphertext)
+    }
+  }
+
+  fun decryptLegacy(
+    id: String,
+    schemaVersion: Int,
+    nonce: ByteArray,
+    ciphertext: ByteArray
+  ): ByteArray {
+    return guarded {
+      val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+      cipher.init(Cipher.DECRYPT_MODE, requireKey(LEGACY_AES_ALIAS), GCMParameterSpec(128, nonce))
       cipher.updateAAD(aad(id, schemaVersion))
       cipher.doFinal(ciphertext)
     }
@@ -78,10 +92,18 @@ class QueueCrypto {
     }
   }
 
+  fun legacyAesKeyPresent(): Boolean = keyPresent(LEGACY_AES_ALIAS)
+
   fun deleteKeys() {
     val keyStore = KeyStore.getInstance(KEYSTORE).apply { load(null) }
     if (keyStore.containsAlias(AES_ALIAS)) keyStore.deleteEntry(AES_ALIAS)
+    if (keyStore.containsAlias(LEGACY_AES_ALIAS)) keyStore.deleteEntry(LEGACY_AES_ALIAS)
     if (keyStore.containsAlias(HMAC_ALIAS)) keyStore.deleteEntry(HMAC_ALIAS)
+  }
+
+  fun deleteLegacyAesKey() {
+    val keyStore = KeyStore.getInstance(KEYSTORE).apply { load(null) }
+    if (keyStore.containsAlias(LEGACY_AES_ALIAS)) keyStore.deleteEntry(LEGACY_AES_ALIAS)
   }
 
   internal fun aad(id: String, schemaVersion: Int): ByteArray =
@@ -99,10 +121,6 @@ class QueueCrypto {
       .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
       .setKeySize(256)
       .setRandomizedEncryptionRequired(true)
-
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-      builder.setUnlockedDeviceRequired(true)
-    }
 
     KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KEYSTORE).run {
       init(builder.build())
@@ -126,6 +144,19 @@ class QueueCrypto {
       )
       generateKey()
     }
+  }
+
+  private fun keyPresent(alias: String): Boolean = try {
+    val keyStore = KeyStore.getInstance(KEYSTORE).apply { load(null) }
+    keyStore.containsAlias(alias)
+  } catch (_: Throwable) {
+    false
+  }
+
+  private fun requireKey(alias: String): SecretKey {
+    val keyStore = KeyStore.getInstance(KEYSTORE).apply { load(null) }
+    return keyStore.getKey(alias, null) as? SecretKey
+      ?: throw QueueKeyUnavailableException(IllegalStateException("Missing Android Keystore key"))
   }
 
   private inline fun <T> guarded(block: () -> T): T {

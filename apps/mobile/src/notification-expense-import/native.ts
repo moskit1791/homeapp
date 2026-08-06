@@ -49,6 +49,7 @@ interface NotificationExpenseImportNativeModule {
     state: "available" | "unavailable";
     pendingCount: number;
   }>;
+  refreshActiveNotifications(): Promise<boolean>;
   listDetectedSources(): Promise<DetectedNotificationSource[]>;
   setSourceEnabled(packageName: string, enabled: boolean): Promise<boolean>;
   getSettings(): Promise<NotificationImportSettings>;
@@ -102,6 +103,8 @@ export const notificationExpenseImport = {
   listPending: () => requireModule().listPending(),
   markImported: (id: string) => requireModule().markImported(id),
   openAccessSettings: () => requireModule().openAccessSettings(),
+  refreshActiveNotifications: () =>
+    requireModule().refreshActiveNotifications(),
   resetUnavailableStorage: () => requireModule().resetUnavailableStorage(),
   setCaptureContext: (
     profileId: string,
