@@ -108,14 +108,10 @@ export default function TabsLayout() {
           padding: 0,
         },
         tabBarStyle: {
-          backgroundColor: theme.isDark ? "#151C2D" : theme.colors.overlay,
-          borderColor: theme.isDark
-            ? "rgba(238, 244, 255, 0.24)"
-            : theme.colors.border,
+          backgroundColor: theme.colors.overlay,
+          borderColor: theme.colors.border,
           borderRadius: 16,
-          borderTopColor: theme.isDark
-            ? "rgba(238, 244, 255, 0.24)"
-            : theme.colors.border,
+          borderTopColor: theme.colors.border,
           borderTopWidth: 1,
           borderWidth: 1,
           elevation: 0,
@@ -127,9 +123,9 @@ export default function TabsLayout() {
           paddingHorizontal: 8,
           paddingTop: 6,
           position: "absolute",
-          shadowColor: theme.colors.text,
+          shadowColor: theme.isDark ? "#000000" : theme.colors.text,
           shadowOffset: { height: 8, width: 0 },
-          shadowOpacity: 0.06,
+          shadowOpacity: theme.isDark ? 0.28 : 0.06,
           shadowRadius: 16,
         },
       }}
@@ -297,12 +293,12 @@ function TabGlyph({
   const activeColor = theme.isDark
     ? theme.colors.primaryDarker
     : theme.colors.shopping;
-  const inactiveColor = theme.isDark ? "#D8E0F0" : theme.colors.textMuted;
-  const activeBackground = theme.isDark
-    ? "rgba(155, 212, 124, 0.2)"
-    : theme.colors.shoppingSoft;
+  const inactiveColor = theme.isDark
+    ? theme.colors.textSubtle
+    : theme.colors.textMuted;
+  const activeBackground = theme.colors.shoppingSoft;
   const activeBorder = theme.isDark
-    ? "rgba(199, 242, 174, 0.48)"
+    ? theme.colors.primary
     : "rgba(79, 141, 44, 0.18)";
   const color = focused ? activeColor : inactiveColor;
 

@@ -29,9 +29,15 @@ export function SegmentedControl<TValue extends string>({
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
   const isMockup = presentation === "mockup";
-  const mockupSelectedTextColor = accentColor ?? theme.colors.primary;
-  const selectedBackgroundColor = accentColor ?? theme.colors.primary;
-  const selectedTextColor = accentTextColor ?? theme.colors.inverseText;
+  const mockupSelectedTextColor = theme.isDark
+    ? theme.colors.primaryDarker
+    : accentColor ?? theme.colors.primary;
+  const selectedBackgroundColor = theme.isDark
+    ? theme.colors.primary
+    : accentColor ?? theme.colors.primary;
+  const selectedTextColor = theme.isDark
+    ? theme.colors.inverseText
+    : accentTextColor ?? theme.colors.inverseText;
 
   return (
     <View style={[styles.root, isMockup && styles.mockupRoot]}>
@@ -132,8 +138,8 @@ function createStyles(colors: AppPalette) {
     },
     mockupActive: {
       backgroundColor:
-        colors.background === "#0C1220" ? colors.cardMuted : "#F6FAF0",
-      borderColor: colors.background === "#0C1220" ? colors.border : "#E2EAD9",
+        colors.isDark ? colors.cardMuted : "#F6FAF0",
+      borderColor: colors.isDark ? colors.border : "#E2EAD9",
       elevation: 0,
       shadowOpacity: 0,
     },
@@ -146,13 +152,13 @@ function createStyles(colors: AppPalette) {
       minHeight: 42,
     },
     mockupRoot: {
-      backgroundColor: colors.background === "#0C1220" ? colors.card : "#FFFFFF",
-      borderColor: colors.background === "#0C1220" ? colors.border : "#E8DED2",
+      backgroundColor: colors.isDark ? colors.card : "#FFFFFF",
+      borderColor: colors.isDark ? colors.border : "#E8DED2",
       borderRadius: 12,
       elevation: 2,
       shadowColor: "#000000",
       shadowOffset: { height: 8, width: 0 },
-      shadowOpacity: colors.background === "#0C1220" ? 0.18 : 0.08,
+      shadowOpacity: colors.isDark ? 0.18 : 0.08,
       shadowRadius: 18,
     },
     pressed: {

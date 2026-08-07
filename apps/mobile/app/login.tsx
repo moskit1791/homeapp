@@ -1319,8 +1319,8 @@ function createStyles(colors: AppPalette) {
       color: colors.danger,
     },
     errorBox: {
-      backgroundColor: "#FFF1F0",
-      borderColor: "#FFDAD6",
+      backgroundColor: colors.dangerSoft,
+      borderColor: colors.isDark ? colors.danger : "#FFDAD6",
     },
     eyebrow: {
       color: colors.primaryDark,

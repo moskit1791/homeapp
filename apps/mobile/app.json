@@ -3,12 +3,12 @@
     "name": "HomeApp",
     "slug": "homeapp",
     "scheme": "homeapp",
-    "version": "1.2.3",
+    "version": "1.2.5",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "icon": "./assets/icon.png",
     "newArchEnabled": false,
-    "runtimeVersion": "1.2.3",
+    "runtimeVersion": "1.2.5",
     "updates": {
       "url": "https://u.expo.dev/84c1efe4-53a2-451f-bf57-84228ab140f6",
       "checkAutomatically": "ON_LOAD",
@@ -24,7 +24,7 @@
     },
     "android": {
       "package": "com.homeapp.mobile",
-      "versionCode": 105,
+      "versionCode": 107,
       "blockedPermissions": [
         "android.permission.CAMERA",
         "android.permission.READ_MEDIA_AUDIO",

@@ -14,12 +14,21 @@ class NotificationExpenseListenerService : NotificationListenerService() {
     @Volatile
     private var connectedInstance: NotificationExpenseListenerService? = null
 
-    fun refreshActiveNotifications(context: android.content.Context): Boolean {
-      val listener = connectedInstance
-      if (listener == null) {
-        requestRebind(ComponentName(context, NotificationExpenseListenerService::class.java))
-        return false
+    fun isConnected(): Boolean = connectedInstance != null
+
+    fun ensureConnected(context: android.content.Context, timeoutMs: Long = 1_500): Boolean {
+      if (isConnected()) return true
+      requestRebind(ComponentName(context, NotificationExpenseListenerService::class.java))
+      val deadline = System.currentTimeMillis() + timeoutMs
+      while (!isConnected() && System.currentTimeMillis() < deadline) {
+        Thread.sleep(50)
       }
+      return isConnected()
+    }
+
+    fun refreshActiveNotifications(context: android.content.Context): Boolean {
+      if (!ensureConnected(context)) return false
+      val listener = connectedInstance ?: return false
 
       return listener.scanActiveNotificationsAndWait()
     }
@@ -35,11 +44,13 @@ class NotificationExpenseListenerService : NotificationListenerService() {
   override fun onListenerConnected() {
     super.onListenerConnected()
     connectedInstance = this
+    Log.i(TAG, "notification listener connected")
     enqueueActiveNotifications()
   }
 
   override fun onListenerDisconnected() {
     if (connectedInstance === this) connectedInstance = null
+    Log.w(TAG, "notification listener disconnected")
     super.onListenerDisconnected()
     requestRebind(ComponentName(this, NotificationExpenseListenerService::class.java))
   }

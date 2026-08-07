@@ -191,7 +191,7 @@ function createStyles(colors: AppPalette) {
       overflow: "hidden",
       shadowColor: "#000000",
       shadowOffset: { height: 10, width: 0 },
-      shadowOpacity: 0.14,
+      shadowOpacity: colors.isDark ? 0.36 : 0.14,
       shadowRadius: 24,
     },
     scroll: {

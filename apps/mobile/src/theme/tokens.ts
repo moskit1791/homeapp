@@ -1,6 +1,6 @@
 export const colors = {
-  background: '#F9FAFB',
-  border: '#DFE3E8',
+  background: '#F6F7F8',
+  border: '#D8DEE5',
   calendar: '#3366FF',
   card: '#FFFFFF',
   danger: '#B42318',
@@ -17,11 +17,11 @@ export const colors = {
   shopping: '#4F8D2C',
   shoppingSoft: '#EEF7E8',
   surface: '#FFFFFF',
-  surfaceMuted: '#F4F6F8',
+  surfaceMuted: '#F1F3F5',
   successSoft: '#D8FBDE',
-  text: '#1C252E',
-  textMuted: '#637381',
-  textSubtle: '#919EAB',
+  text: '#17212B',
+  textMuted: '#5E6A77',
+  textSubtle: '#7D8996',
   warning: '#B76E00',
   warningSoft: '#FFF4DE'
 } as const;
@@ -43,16 +43,16 @@ export const radii = {
 export const shadows = {
   card: {
     elevation: 2,
-    shadowColor: '#919EAB',
+    shadowColor: '#0F172A',
     shadowOffset: { height: 12, width: 0 },
-    shadowOpacity: 0.12,
-    shadowRadius: 24
+    shadowOpacity: 0.1,
+    shadowRadius: 20
   },
   control: {
     elevation: 1,
-    shadowColor: '#919EAB',
+    shadowColor: '#0F172A',
     shadowOffset: { height: 4, width: 0 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 10
   }
 } as const;

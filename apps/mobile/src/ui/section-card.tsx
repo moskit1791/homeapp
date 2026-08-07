@@ -44,8 +44,8 @@ function createStyles(colors: AppPalette) {
     padding: spacing.lg,
     shadowColor: '#000000',
     shadowOffset: { height: 10, width: 0 },
-    shadowOpacity: 0.06,
-    shadowRadius: 22
+    shadowOpacity: colors.isDark ? 0.26 : 0.06,
+    shadowRadius: colors.isDark ? 18 : 22
   },
   header: {
     alignItems: 'center',

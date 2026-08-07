@@ -40,6 +40,7 @@ import {
 import {
   Check,
   CheckSquare,
+  ListPlus,
   NotePlus,
   NotebookText,
 } from "../../src/ui/icon";
@@ -96,20 +97,31 @@ export default function ZadaniaScreen() {
           icon: (active: boolean): ReactNode =>
             segment.value === "notes" ? (
               <NotebookText
-                color={active ? mockupGreen : theme.colors.textMuted}
+                color={
+                  active
+                    ? theme.isDark
+                      ? theme.colors.primaryDarker
+                      : mockupGreen
+                    : theme.colors.textMuted
+                }
                 size={16}
               />
             ) : (
               <CheckSquare
-                color={active ? mockupGreen : theme.colors.textMuted}
+                color={
+                  active
+                    ? theme.isDark
+                      ? theme.colors.primaryDarker
+                      : mockupGreen
+                    : theme.colors.textMuted
+                }
                 size={16}
               />
             ),
         })),
     [notesPermission.canRead, theme.colors.textMuted, todoPermission.canRead],
   );
-  const screenBackground =
-    theme.colors.background === "#0C1220" ? theme.colors.background : "#FBFAF6";
+  const screenBackground = theme.isDark ? theme.colors.background : "#FBFAF6";
 
   useEffect(() => {
     if (
@@ -154,7 +166,10 @@ export default function ZadaniaScreen() {
             onPress={() => setNoteAddOpenRequest((value) => value + 1)}
             style={styles.headerIconButton}
           >
-            <NotePlus color={mockupGreen} size={23} />
+            <NotePlus
+              color={theme.isDark ? theme.colors.primary : mockupGreen}
+              size={23}
+            />
           </IconButton>
         ) : activeSegment === "todo" && todoPermission.canCreate ? (
           <IconButton
@@ -162,7 +177,10 @@ export default function ZadaniaScreen() {
             onPress={() => setTodoAddOpenRequest((value) => value + 1)}
             style={styles.headerIconButton}
           >
-            <CheckSquare color={mockupGreen} size={23} />
+            <ListPlus
+              color={theme.isDark ? theme.colors.primary : mockupGreen}
+              size={24}
+            />
           </IconButton>
         ) : undefined
       }
@@ -810,7 +828,7 @@ function formatDateTime(value: string): string {
 }
 
 function createStyles(colors: AppPalette) {
-  const isDark = colors.background === "#0C1220";
+  const isDark = colors.isDark;
 
   return StyleSheet.create({
     cardDescription: {
@@ -963,8 +981,8 @@ function createStyles(colors: AppPalette) {
       width: 28,
     },
     todoCheckDone: {
-      backgroundColor: mockupGreen,
-      borderColor: mockupGreen,
+      backgroundColor: isDark ? colors.primary : mockupGreen,
+      borderColor: isDark ? colors.primary : mockupGreen,
     },
   });
 }

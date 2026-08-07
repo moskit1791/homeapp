@@ -33,8 +33,7 @@ export function ActionButton({
   const isDisabled = disabled || loading;
   const theme = useAppTheme();
   const styles = createStyles(theme.colors);
-  const actionAccent =
-    theme.colors.background === "#0C1220" ? theme.colors.primary : "#4F8D2C";
+  const actionAccent = theme.isDark ? theme.colors.primary : "#4F8D2C";
 
   return (
     <Pressable
@@ -69,7 +68,7 @@ export function ActionButton({
 }
 
 function createStyles(colors: AppPalette) {
-  const isDark = colors.background === "#0C1220";
+  const isDark = colors.isDark;
   const actionAccent = isDark ? colors.primary : "#4F8D2C";
   const actionAccentBorder = isDark ? colors.primaryLight : "#DDE7D7";
   const actionAccentDark = isDark ? colors.primaryDark : "#4F8D2C";
@@ -83,7 +82,7 @@ function createStyles(colors: AppPalette) {
       paddingHorizontal: 16,
     },
     disabled: {
-      opacity: 0.56,
+      opacity: isDark ? 0.48 : 0.56,
     },
     ghost: {
       backgroundColor: "transparent",
@@ -101,16 +100,16 @@ function createStyles(colors: AppPalette) {
       minHeight: 46,
     },
     pressed: {
-      opacity: 0.82,
+      opacity: isDark ? 0.9 : 0.84,
     },
     primary: {
       backgroundColor: actionAccent,
       borderColor: actionAccent,
-      elevation: 3,
+      elevation: isDark ? 1 : 3,
       shadowColor: actionAccent,
       shadowOffset: { height: 0, width: 0 },
-      shadowOpacity: 0.28,
-      shadowRadius: 12,
+      shadowOpacity: isDark ? 0.16 : 0.24,
+      shadowRadius: isDark ? 8 : 12,
     },
     primaryLabel: {
       color: colors.inverseText,

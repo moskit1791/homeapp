@@ -108,6 +108,7 @@ import {
 } from "../../src/ui";
 import {
   Broom,
+  CashPlus,
   CalendarDays,
   ChartBar,
   ChevronLeft,
@@ -115,12 +116,15 @@ import {
   Close,
   Cog,
   Database,
+  DatabasePlus,
   Download,
   FileText,
   Folder,
+  FolderPlus,
   MailPlus,
   MapPin,
   Pencil,
+  Plus,
   Trash2,
   Users,
 } from "../../src/ui/icon";
@@ -289,7 +293,11 @@ export default function DomScreen() {
         icon: (active: boolean): ReactNode =>
           getSegmentIcon(
             tile.value,
-            active ? mockupGreen : theme.colors.textMuted,
+            active
+              ? theme.isDark
+                ? theme.colors.primaryDarker
+                : mockupGreen
+              : theme.colors.textMuted,
             16,
           ),
         label: tile.label,
@@ -297,8 +305,7 @@ export default function DomScreen() {
       })),
     [availableTiles, theme.colors.textMuted],
   );
-  const screenBackground =
-    theme.colors.background === "#0C1220" ? theme.colors.background : "#FBFAF6";
+  const screenBackground = theme.isDark ? theme.colors.background : "#FBFAF6";
 
   useEffect(() => {
     if (
@@ -592,7 +599,7 @@ function CleaningPanel() {
             onPress={openCreateTask}
             style={styles.homeHeaderButton}
           >
-            <Broom color={accent.color} size={22} />
+            <Plus color={accent.color} size={24} />
           </IconButton>
         ) : undefined
       }
@@ -1018,7 +1025,7 @@ function AnnualCostsPanel() {
             onPress={() => setModalVisible(true)}
             style={styles.homeHeaderButton}
           >
-            <ChartBar color={accent.color} size={22} />
+            <CashPlus color={accent.color} size={23} />
           </IconButton>
         ) : undefined
       }
@@ -1225,7 +1232,7 @@ function DataEntriesPanel() {
             onPress={() => setModalVisible(true)}
             style={styles.homeHeaderButton}
           >
-            <Database color={accent.color} size={22} />
+            <DatabasePlus color={accent.color} size={23} />
           </IconButton>
         ) : undefined
       }
@@ -1628,7 +1635,7 @@ function AttachmentsPanel() {
             onPress={handlePickPhoto}
             style={styles.homeHeaderButton}
           >
-            <Folder color={accent.color} size={22} />
+            <FolderPlus color={accent.color} size={23} />
           </IconButton>
         ) : undefined
       }
@@ -2076,6 +2083,8 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
   const [settingsView, setSettingsView] = useState<SettingsView>("main");
   const [encryptionVisible, setEncryptionVisible] = useState(false);
   const [notificationsVisible, setNotificationsVisible] = useState(false);
+  const [notificationScrollLayoutVersion, setNotificationScrollLayoutVersion] =
+    useState(0);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [homeName, setHomeName] = useState("");
   const [currencyCode, setCurrencyCode] =
@@ -2720,6 +2729,9 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
       </Modal>
       <Modal
         animationType="slide"
+        onShow={() =>
+          setNotificationScrollLayoutVersion((current) => current + 1)
+        }
         onRequestClose={() => setNotificationsVisible(false)}
         visible={notificationsVisible}
       >
@@ -2744,8 +2756,9 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
               </View>
               <ScrollView
                 contentContainerStyle={styles.notificationScreenContent}
+                key={`notification-scroll-${notificationScrollLayoutVersion}`}
                 keyboardShouldPersistTaps="always"
-                nestedScrollEnabled={false}
+                nestedScrollEnabled
                 overScrollMode="always"
                 removeClippedSubviews={false}
                 scrollEventThrottle={16}
@@ -2757,7 +2770,7 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
                     <Text style={styles.settingsToastText}>{toast}</Text>
                   </View>
                 ) : null}
-                <View style={styles.settingsPanel}>
+                <View collapsable={false} style={styles.settingsPanel}>
                   <View style={styles.settingsPanelRow}>
                     <Text style={styles.settingsPanelTitle}>Telefon</Text>
                     <Text style={styles.settingsPanelMeta}>
@@ -2814,7 +2827,10 @@ function SettingsRow({ openOnMount }: { openOnMount: boolean }) {
                       error={notificationPreferencesQuery.error}
                       isLoading={notificationPreferencesQuery.isLoading}
                     />
-                    <View style={styles.notificationPreferenceList}>
+                    <View
+                      collapsable={false}
+                      style={styles.notificationPreferenceList}
+                    >
                       {notificationPreferences.map((preference) => {
                         const copy =
                           notificationPreferenceLabels[preference.eventType];
@@ -3170,7 +3186,7 @@ function CostRow({
       </View>
       {paidThisYear ? (
         <View style={styles.paidBadge}>
-          <Text style={styles.paidBadgeText}>Oplacone w tym roku</Text>
+          <Text style={styles.paidBadgeText}>Opłacone w tym roku</Text>
         </View>
       ) : null}
       <ActionButton
@@ -3967,7 +3983,7 @@ function createStyles(colors: AppPalette) {
     homeHeaderButton: {
       alignItems: "center",
       backgroundColor: colors.card,
-      borderColor: colors.background === "#0C1220" ? colors.border : "#E8DED2",
+      borderColor: colors.isDark ? colors.border : "#E8DED2",
       borderRadius: 999,
       borderWidth: 1,
       elevation: 2,
@@ -3976,7 +3992,7 @@ function createStyles(colors: AppPalette) {
       padding: 0,
       shadowColor: "#000000",
       shadowOffset: { height: 8, width: 0 },
-      shadowOpacity: colors.background === "#0C1220" ? 0.18 : 0.08,
+      shadowOpacity: colors.isDark ? 0.18 : 0.08,
       shadowRadius: 16,
       width: 44,
     },
@@ -4098,7 +4114,7 @@ function createStyles(colors: AppPalette) {
     itemRow: {
       alignItems: "center",
       backgroundColor: colors.card,
-      borderColor: colors.background === "#0C1220" ? colors.border : "#E8DED2",
+      borderColor: colors.isDark ? colors.border : "#E8DED2",
       borderRadius: 12,
       borderWidth: 1,
       elevation: 1,
@@ -4385,7 +4401,7 @@ function createStyles(colors: AppPalette) {
     },
     panel: {
       backgroundColor: colors.overlay,
-      borderColor: colors.background === "#0C1220" ? colors.border : "#E8DED2",
+      borderColor: colors.isDark ? colors.border : "#E8DED2",
       borderRadius: 12,
       borderWidth: 1,
       elevation: 2,
@@ -4393,7 +4409,7 @@ function createStyles(colors: AppPalette) {
       padding: spacing.md,
       shadowColor: "#000000",
       shadowOffset: { height: 8, width: 0 },
-      shadowOpacity: colors.background === "#0C1220" ? 0.16 : 0.08,
+      shadowOpacity: colors.isDark ? 0.16 : 0.08,
       shadowRadius: 18,
     },
     panelActions: {

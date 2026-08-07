@@ -355,7 +355,7 @@ export class MealPlannerAiService {
     return {
       ...fallback,
       assistantMessage:
-        'Limit AI jest teraz wyczerpany. Dostosowalem dostepne informacje lokalnym algorytmem, bez rozmowy z AI. Sprobuj ponownie pozniej, jesli chcesz dopracowac linki albo szczegoly.',
+        'Limit AI jest teraz wyczerpany. Dostosowałem dostępne informacje lokalnym algorytmem, bez rozmowy z AI. Spróbuj ponownie później, jeśli chcesz dopracować linki albo szczegóły.',
       limitExhausted: true,
       status: fallback.entries.length > 0 ? 'limit_exhausted' : 'needs_clarification'
     };
@@ -389,15 +389,15 @@ export class MealPlannerAiService {
     targetWeekStartDate: string;
   }): string {
     return [
-      'Jestes asystentem planu posilkow w polskiej aplikacji domowej.',
-      'Rozmawiasz bezposrednio z uzytkownikiem jak normalny chat. Backend nie bedzie dopowiadal nic w Twoim imieniu.',
-      'Pomagaj ulozyc tygodniowy plan jedzenia, poprawiaj go w rozmowie i szukaj linkow do przepisow, gdy uzytkownik o to prosi lub podaje zrodlo.',
-      'Masz wlaczone Google Search. Jesli rozmawiacie o linkach, szukaj realnych publicznych URL-i i pokazuj je uzytkownikowi w odpowiedzi.',
-      'Nie twierdz, ze plan jest zapisany. Zapis nastapi dopiero, gdy uzytkownik kliknie przycisk "Zapisz plan" w aplikacji.',
+      'Jesteś asystentem planu posiłków w polskiej aplikacji domowej.',
+      'Rozmawiasz bezpośrednio z użytkownikiem jak normalny chat. Backend nie będzie dopowiadał nic w Twoim imieniu.',
+      'Pomagaj ułożyć tygodniowy plan jedzenia, poprawiaj go w rozmowie i szukaj linków do przepisów, gdy użytkownik o to prosi lub podaje źródło.',
+      'Masz włączone Google Search. Jeśli rozmawiacie o linkach, szukaj realnych publicznych URL-i i pokazuj je użytkownikowi w odpowiedzi.',
+      'Nie twierdź, że plan jest zapisany. Zapis nastąpi dopiero, gdy użytkownik kliknie przycisk "Zapisz plan" w aplikacji.',
       '',
-      `Docelowy poniedzialek tygodnia: ${input.targetWeekStartDate}.`,
-      `W domu skonfigurowano ${input.mealSlotsPerDay} posilkow dziennie.`,
-      'Oznaczenia zrodla: C=Cookidoo, KS=Kwestia Smaku, I/IG=Instagram, AG=AniaGotuje, Knorr=Knorr, MW=Moje Wypieki.',
+      `Docelowy poniedziałek tygodnia: ${input.targetWeekStartDate}.`,
+      `W domu skonfigurowano ${input.mealSlotsPerDay} posiłków dziennie.`,
+      'Oznaczenia źródła: C=Cookidoo, KS=Kwestia Smaku, I/IG=Instagram, AG=AniaGotuje, Knorr=Knorr, MW=Moje Wypieki.',
       '',
       'Znane przepisy z domu:',
       input.knownRecipes.length > 0 ? JSON.stringify(input.knownRecipes) : '[]'
@@ -418,11 +418,11 @@ export class MealPlannerAiService {
       }),
       '',
       'Tryb finalizacji:',
-      '- Uzytkownik kliknal "Zapisz plan". Na podstawie calej rozmowy przygotuj ostateczny JSON do zapisu.',
-      '- Wpisz pelny aktualny plan, nie tylko ostatnia zmiane.',
-      '- Jesli w rozmowie sa linki, zachowaj je w linkUrl.',
-      '- Jesli trzeba znalezc linki do przepisow, uzyj Google Search i uzupelnij realne URL-e.',
-      '- Odpowiadasz wylacznie JSON-em zgodnym ze schematem.'
+      '- Użytkownik kliknął "Zapisz plan". Na podstawie całej rozmowy przygotuj ostateczny JSON do zapisu.',
+      '- Wpisz pełny aktualny plan, nie tylko ostatnią zmianę.',
+      '- Jeśli w rozmowie są linki, zachowaj je w linkUrl.',
+      '- Jeśli trzeba znaleźć linki do przepisów, użyj Google Search i uzupełnij realne URL-e.',
+      '- Odpowiadasz wyłącznie JSON-em zgodnym ze schematem.'
     ].join('\n');
   }
 
@@ -655,23 +655,23 @@ export class MealPlannerAiService {
     targetWeekStartDate: string;
   }): string {
     return [
-      'Jestes resolverem linkow do przepisow w polskiej aplikacji domowej.',
-      'Masz wlaczone Google Search. Twoim jedynym zadaniem jest znalezienie realnych URL-i do juz rozpisanych posilkow.',
+      'Jesteś resolverem linków do przepisów w polskiej aplikacji domowej.',
+      'Masz włączone Google Search. Twoim jedynym zadaniem jest znalezienie realnych URL-i do już rozpisanych posiłków.',
       '',
       'Zasady:',
-      '- Nie zmieniaj dni, slotow ani nazw posilkow. Dopasowujesz tylko linkUrl/sourceHint/note.',
-      '- Dla kazdej pozycji wykonaj konkretne wyszukiwanie. Link jest priorytetem tej funkcji.',
-      '- Jesli sourceHint istnieje, szukaj przede wszystkim w tym serwisie: Cookidoo, Kwestia Smaku, AniaGotuje, Instagram, Knorr, Przepisy.pl albo Moje Wypieki.',
-      '- Jesli sourceHint nie istnieje, wybierz najlepiej pasujacy publiczny przepis, gdy nazwa wyglada jak konkretne danie.',
-      '- linkUrl musi prowadzic bezposrednio do przepisu albo posta z przepisem, nie do strony glownej, kategorii ani wynikow wyszukiwania.',
-      '- Nie wymyslaj adresow. Pusty linkUrl zostaw tylko dla ogolnych rzeczy typu kanapki, jajecznica, parowki, gotowy produkt albo gdy Google Search nie pokazuje pewnego wyniku.',
-      '- Jesli znajdziesz pasujacy wynik z wyszukiwania, wpisz URL. Nie pomijaj linku z nadmiernej ostroznosci.',
-      '- Odpowiadasz wylacznie JSON-em: {"updates":[{"weekday":1,"slotIndex":0,"linkUrl":"https://...","sourceHint":"Kwestia Smaku","note":"..."}]}',
+      '- Nie zmieniaj dni, slotów ani nazw posiłków. Dopasowujesz tylko linkUrl/sourceHint/note.',
+      '- Dla każdej pozycji wykonaj konkretne wyszukiwanie. Link jest priorytetem tej funkcji.',
+      '- Jeśli sourceHint istnieje, szukaj przede wszystkim w tym serwisie: Cookidoo, Kwestia Smaku, AniaGotuje, Instagram, Knorr, Przepisy.pl albo Moje Wypieki.',
+      '- Jeśli sourceHint nie istnieje, wybierz najlepiej pasujący publiczny przepis, gdy nazwa wygląda jak konkretne danie.',
+      '- linkUrl musi prowadzić bezpośrednio do przepisu albo posta z przepisem, nie do strony głównej, kategorii ani wyników wyszukiwania.',
+      '- Nie wymyślaj adresów. Pusty linkUrl zostaw tylko dla ogólnych rzeczy typu kanapki, jajecznica, parówki, gotowy produkt albo gdy Google Search nie pokazuje pewnego wyniku.',
+      '- Jeśli znajdziesz pasujący wynik z wyszukiwania, wpisz URL. Nie pomijaj linku z nadmiernej ostrożności.',
+      '- Odpowiadasz wyłącznie JSON-em: {"updates":[{"weekday":1,"slotIndex":0,"linkUrl":"https://...","sourceHint":"Kwestia Smaku","note":"..."}]}',
       '',
-      `Docelowy poniedzialek tygodnia: ${input.targetWeekStartDate}`,
+      `Docelowy poniedziałek tygodnia: ${input.targetWeekStartDate}`,
       `Tryb nacisku na linki: ${input.shouldPrioritizeLinks ? 'wysoki' : 'standardowy'}`,
       '',
-      'Pozycje do uzupelnienia:',
+      'Pozycje do uzupełnienia:',
       JSON.stringify(input.candidates),
       '',
       'Kontekst rozmowy:',
@@ -748,7 +748,7 @@ export class MealPlannerAiService {
     if (entries.length === 0) {
       return {
         assistantMessage:
-          'Nie widze jeszcze planu posilkow. Wklej dni tygodnia i posilki, a przygotuje szkic.',
+          'Nie widzę jeszcze planu posiłków. Wklej dni tygodnia i posiłki, a przygotuję szkic.',
         entries: [],
         limitExhausted: false,
         questions: ['Wkleisz plan z dniami tygodnia?'],
@@ -758,10 +758,10 @@ export class MealPlannerAiService {
     }
 
     const assistantMessage = linkRequest
-      ? `Mam obecny szkic na tydzien ${targetWeekStartDate}, ale bez AI nie znalazlem pewnych nowych linkow. ` +
-        'Zostawiam niepewne adresy puste. Czy mam zapisac taki szkic?'
-      : `Rozpisalem szkic planu na tydzien ${targetWeekStartDate}. ` +
-        'Nie uzupelnilem linkow tam, gdzie nie mialem pewnego adresu. Czy zapisac taki plan?';
+      ? `Mam obecny szkic na tydzień ${targetWeekStartDate}, ale bez AI nie znalazłem pewnych nowych linków. ` +
+        'Zostawiam niepewne adresy puste. Czy mam zapisać taki szkic?'
+      : `Rozpisałem szkic planu na tydzień ${targetWeekStartDate}. ` +
+        'Nie uzupełniłem linków tam, gdzie nie miałem pewnego adresu. Czy zapisać taki plan?';
 
     return {
       assistantMessage,
@@ -937,9 +937,9 @@ export class MealPlannerAiService {
     return {
       assistantMessage: entries.length > 0
         ? input.limitExhausted
-          ? 'Limit AI jest teraz wyczerpany. Przygotowalem lokalne propozycje z historii domu, z pominieciem ostatnich 30 dni.'
-          : 'AI nie odpowiedzialo poprawnie. Przygotowalem lokalne propozycje z historii domu, z pominieciem ostatnich 30 dni.'
-        : 'Nie mam jeszcze dosc starszej historii posilkow, zeby bezpiecznie zaproponowac plan po odjeciu ostatnich 30 dni.',
+          ? 'Limit AI jest teraz wyczerpany. Przygotowałem lokalne propozycje z historii domu, z pominięciem ostatnich 30 dni.'
+          : 'AI nie odpowiedziało poprawnie. Przygotowałem lokalne propozycje z historii domu, z pominięciem ostatnich 30 dni.'
+        : 'Nie mam jeszcze dość starszej historii posiłków, żeby bezpiecznie zaproponować plan po odjęciu ostatnich 30 dni.',
       entries,
       excludedRecentDays: 30,
       insights: normalizeInsights([], input.history, entries.length),
@@ -963,36 +963,36 @@ export class MealPlannerAiService {
     const payload = buildHistoryPromptPayload(input.history);
 
     return [
-      'Jestes asystentem AI planu posilkow dla polskiego domu.',
-      'Masz przeanalizowac historie jedzenia domownikow, znalezc rytm i upodobania, a potem zaproponowac plan posilkow.',
-      'Masz wlaczone Google Search. Uzyj internetu do dobrania nowych alternatyw, ktore pasuja do wzorcow z historii.',
+      'Jesteś asystentem AI planu posiłków dla polskiego domu.',
+      'Masz przeanalizować historię jedzenia domowników, znaleźć rytm i upodobania, a potem zaproponować plan posiłków.',
+      'Masz włączone Google Search. Użyj internetu do dobrania nowych alternatyw, które pasują do wzorców z historii.',
       '',
       'Cel:',
-      `- Przygotuj propozycje na tydzien zaczynajacy sie ${input.targetWeekStartDate}.`,
-      `- W domu sa ${input.mealSlotsPerDay} sloty posilkow dziennie, slotIndex od 0 do ${input.mealSlotsPerDay - 1}.`,
-      '- Wypelnij mozliwie caly tydzien: weekday 1..7, slotIndex wedlug liczby slotow.',
-      '- Zachowaj styl domu: czeste sniadania, obiady, powtarzalne zestawy i ulubione zrodla przepisow.',
+      `- Przygotuj propozycje na tydzień zaczynający się ${input.targetWeekStartDate}.`,
+      `- W domu są ${input.mealSlotsPerDay} sloty posiłków dziennie, slotIndex od 0 do ${input.mealSlotsPerDay - 1}.`,
+      '- Wypełnij możliwie cały tydzień: weekday 1..7, slotIndex według liczby slotów.',
+      '- Zachowaj styl domu: częste śniadania, obiady, powtarzalne zestawy i ulubione źródła przepisów.',
       '',
       'Twarde zasady wykluczenia:',
-      '- Nie proponuj zadnego posilku, ktory byl jedzony w ostatnich 30 dniach.',
-      '- Nie proponuj tez bliskich wariantow tej samej nazwy, np. jesli niedawno bylo spaghetti, nie dawaj spaghetti bolognese.',
-      '- Lista ostatnich 30 dni ponizej jest zakazana nawet wtedy, gdy jest bardzo popularna w historii.',
+      '- Nie proponuj żadnego posiłku, który był jedzony w ostatnich 30 dniach.',
+      '- Nie proponuj też bliskich wariantów tej samej nazwy, np. jeśli niedawno było spaghetti, nie dawaj spaghetti bolognese.',
+      '- Lista ostatnich 30 dni poniżej jest zakazana nawet wtedy, gdy jest bardzo popularna w historii.',
       '',
       'Zasady internetu:',
-      '- Oprocz propozycji z historii dodaj alternatywy z internetu, ale tylko takie, ktore pasuja do upodoban domu.',
-      '- Szukaj realnych publicznych przepisow. Preferuj polskie zrodla, np. Kwestia Smaku, AniaGotuje, Przepisy.pl, Cookidoo, Knorr, Moje Wypieki albo sensowne publiczne przepisy.',
-      '- linkUrl wypelnij tylko realnym URL-em do konkretnego przepisu lub posta. Nie wymyslaj adresow.',
-      '- W sourceHint wpisz zrodlo lub "Historia domu".',
-      '- W note napisz jedno krotkie uzasadnienie: jaki wzorzec z historii lub jaka alternatywa z internetu.',
+      '- Oprócz propozycji z historii dodaj alternatywy z internetu, ale tylko takie, które pasują do upodobań domu.',
+      '- Szukaj realnych publicznych przepisów. Preferuj polskie źródła, np. Kwestia Smaku, AniaGotuje, Przepisy.pl, Cookidoo, Knorr, Moje Wypieki albo sensowne publiczne przepisy.',
+      '- linkUrl wypełnij tylko realnym URL-em do konkretnego przepisu lub posta. Nie wymyślaj adresów.',
+      '- W sourceHint wpisz źródło lub "Historia domu".',
+      '- W note napisz jedno krótkie uzasadnienie: jaki wzorzec z historii lub jaka alternatywa z internetu.',
       '',
-      'Odpowiedz wylacznie JSON-em:',
+      'Odpowiedz wyłącznie JSON-em:',
       '{"status":"ready","assistantMessage":"...","insights":["..."],"entries":[{"weekday":1,"slotIndex":0,"mealName":"...","linkUrl":"https://...","note":"...","sourceHint":"..."}]}',
-      'status ustaw na "needs_more_history" tylko gdy historia jest zbyt mala i nie da sie sensownie zaproponowac planu.',
+      'status ustaw na "needs_more_history" tylko gdy historia jest zbyt mała i nie da się sensownie zaproponować planu.',
       '',
       'Ostatnie 30 dni - zakazane:',
       JSON.stringify(payload.recentMeals),
       '',
-      'Najczestsze starsze posilki i wzorce:',
+      'Najczęstsze starsze posiłki i wzorce:',
       JSON.stringify(payload.frequentMeals),
       '',
       'Starsza historia do analizy:',
@@ -1013,57 +1013,57 @@ export class MealPlannerAiService {
   }): string {
     const searchRules = input.useGoogleSearch
       ? [
-          '- W tym wywolaniu masz wlaczone Google Search. Gdy uzytkownik prosi o linki albo podaje zrodlo przepisu, uzyj wyszukiwania i wpisz znaleziony publiczny URL w linkUrl.',
-          '- Nie odpowiadaj, ze nie masz dostepu do internetu. Jesli wyszukiwanie nie daje pewnego wyniku, zostaw linkUrl pusty i napisz krotko, ktore pozycje wymagaja recznego sprawdzenia.'
+          '- W tym wywołaniu masz włączone Google Search. Gdy użytkownik prosi o linki albo podaje źródło przepisu, użyj wyszukiwania i wpisz znaleziony publiczny URL w linkUrl.',
+          '- Nie odpowiadaj, że nie masz dostępu do internetu. Jeśli wyszukiwanie nie daje pewnego wyniku, zostaw linkUrl pusty i napisz krótko, które pozycje wymagają ręcznego sprawdzenia.'
         ]
       : [
-          '- W tym wywolaniu nie uzywasz wyszukiwania. Jesli nie masz pewnego adresu ze znanych przepisow albo wiedzy modelu, zostaw linkUrl pusty.'
+          '- W tym wywołaniu nie używasz wyszukiwania. Jeśli nie masz pewnego adresu ze znanych przepisów albo wiedzy modelu, zostaw linkUrl pusty.'
         ];
 
     return [
-      'Jestes backendowym asystentem planu posilkow w polskiej aplikacji domowej.',
-      'To jest rozmowa robocza: niczego nie zapisujesz w bazie. Zwracasz tylko aktualny szkic planu i odpowiedz dla uzytkownika.',
+      'Jesteś backendowym asystentem planu posiłków w polskiej aplikacji domowej.',
+      'To jest rozmowa robocza: niczego nie zapisujesz w bazie. Zwracasz tylko aktualny szkic planu i odpowiedź dla użytkownika.',
       '',
       'Zadanie:',
-      '- Uzytkownik wkleja tekst z planem jedzenia albo dopisuje poprawki do obecnego szkicu.',
-      '- Zachowuj sie jak chat: odpowiadaj na ostatnia prosbe w kontekscie rozmowy i obecnego szkicu.',
-      '- Zamien rozmowe na pelny aktualny szkic wpisow posilkow tylko wtedy, gdy uzytkownik faktycznie podaje plan albo prosi o korekte planu.',
-      '- Nigdy nie sugeruj, ze plan zostal zapisany. Mozesz tylko zapytac, czy zapisac szkic na wskazany tydzien.',
+      '- Użytkownik wkleja tekst z planem jedzenia albo dopisuje poprawki do obecnego szkicu.',
+      '- Zachowuj się jak chat: odpowiadaj na ostatnią prośbę w kontekście rozmowy i obecnego szkicu.',
+      '- Zamień rozmowę na pełny aktualny szkic wpisów posiłków tylko wtedy, gdy użytkownik faktycznie podaje plan albo prosi o korektę planu.',
+      '- Nigdy nie sugeruj, że plan został zapisany. Możesz tylko zapytać, czy zapisać szkic na wskazany tydzień.',
       '',
       'Zasady planu:',
-      '- Weekday: poniedzialek=1, wtorek=2, sroda=3, czwartek=4, piatek=5, sobota=6, niedziela=7.',
-      `- W domu skonfigurowano ${input.mealSlotsPerDay} posilkow dziennie. slotIndex zaczyna sie od 0 i musi byc mniejszy od tej liczby.`,
-      '- Jesli w jednym dniu jest kilka pozycji oddzielonych przecinkami lub srednikami, wpisz je kolejno w slotIndex 0, 1, 2...',
-      '- Nie zapisuj pozycji typu "obiad w pracy", "jedzenie na wycieczke" jako przepisu, jesli to tylko kontekst. Mozesz jednak zachowac to jako osobny posilek, gdy wyglada jak realny wpis w planie.',
-      '- Zachowaj wpisy bez przepisu, np. kanapki, angielskie, kielbasa, omlet, jesli uzytkownik je podal.',
+      '- Weekday: poniedziałek=1, wtorek=2, środa=3, czwartek=4, piątek=5, sobota=6, niedziela=7.',
+      `- W domu skonfigurowano ${input.mealSlotsPerDay} posiłków dziennie. slotIndex zaczyna się od 0 i musi być mniejszy od tej liczby.`,
+      '- Jeśli w jednym dniu jest kilka pozycji oddzielonych przecinkami lub średnikami, wpisz je kolejno w slotIndex 0, 1, 2...',
+      '- Nie zapisuj pozycji typu "obiad w pracy", "jedzenie na wycieczkę" jako przepisu, jeśli to tylko kontekst. Możesz jednak zachować to jako osobny posiłek, gdy wygląda jak realny wpis w planie.',
+      '- Zachowaj wpisy bez przepisu, np. kanapki, angielskie, kiełbasa, omlet, jeśli użytkownik je podał.',
       '',
-      'Zasady linkow:',
-      '- LinkUrl wypelnij tylko wtedy, gdy znasz realny, publiczny URL przepisu albo masz go w sekcji znanych przepisow z domu.',
-      '- Nie wymyslaj slugow ani adresow. Gdy nie masz pewnosci, linkUrl musi byc pustym stringiem.',
-      '- Najpierw uzywaj znanych przepisow z domu, jezeli nazwa pasuje.',
-      '- Oznaczenia zrodla sa podpowiedziami wyszukiwania: C=szukaj na Cookidoo, KS=szukaj na Kwestia Smaku, I/IG=szukaj na Instagramie, AG=szukaj na AniaGotuje, Knorr=szukaj na Knorr, MW=szukaj na Moje Wypieki.',
-      '- Gdy uzytkownik wkleja plan z prefiksami zrodla, np. "C kokosowa jaglanka", "KS kasza + schab", "AG nalesniki", od razu potraktuj prefiks jako prosbe o znalezienie adresu URL. Nie czekaj na osobna wiadomosc "daj linki".',
-      '- Dla pozycji z prefiksem zrodla wyszukaj konkretny przepis w odpowiednim serwisie i wpisz URL do pola linkUrl tego posilku. Przyklady: C -> Cookidoo, KS -> Kwestia Smaku, AG -> AniaGotuje, I/IG -> Instagram, Knorr -> Knorr, MW -> Moje Wypieki.',
-      '- Pozycje bez prefiksu zrodla, np. "kanapki", "pizza", "parowki", nie powinny dostawac przypadkowych linkow. Uzupelnij je tylko, jesli pasuja do znanych przepisow z domu albo masz bardzo pewny publiczny URL.',
-      '- Prefix zrodla usun z mealName i wpisz znormalizowana nazwe do sourceHint.',
-      '- Gdy uzytkownik pisze "to samo co w sobote" albo podobnie, skopiuj odpowiednie posilki z tego dnia razem z linkUrl/sourceHint, jesli te dane sa juz dostepne w szkicu.',
-      '- Gdy uzytkownik pisze "daj linki", "uzupelnij linki", "znajdz przepisy" albo podobnie, nie tworz nowej listy jedzenia. Zachowaj currentDraft, uzupelnij tylko pewne linkUrl/sourceHint/note i powiedz, ktorych linkow nie udalo sie pewnie znalezc.',
+      'Zasady linków:',
+      '- LinkUrl wypełnij tylko wtedy, gdy znasz realny, publiczny URL przepisu albo masz go w sekcji znanych przepisów z domu.',
+      '- Nie wymyślaj slugów ani adresów. Gdy nie masz pewności, linkUrl musi być pustym stringiem.',
+      '- Najpierw używaj znanych przepisów z domu, jeżeli nazwa pasuje.',
+      '- Oznaczenia źródła są podpowiedziami wyszukiwania: C=szukaj na Cookidoo, KS=szukaj na Kwestia Smaku, I/IG=szukaj na Instagramie, AG=szukaj na AniaGotuje, Knorr=szukaj na Knorr, MW=szukaj na Moje Wypieki.',
+      '- Gdy użytkownik wkleja plan z prefiksami źródła, np. "C kokosowa jaglanka", "KS kasza + schab", "AG naleśniki", od razu potraktuj prefiks jako prośbę o znalezienie adresu URL. Nie czekaj na osobną wiadomość "daj linki".',
+      '- Dla pozycji z prefiksem źródła wyszukaj konkretny przepis w odpowiednim serwisie i wpisz URL do pola linkUrl tego posiłku. Przykłady: C -> Cookidoo, KS -> Kwestia Smaku, AG -> AniaGotuje, I/IG -> Instagram, Knorr -> Knorr, MW -> Moje Wypieki.',
+      '- Pozycje bez prefiksu źródła, np. "kanapki", "pizza", "parówki", nie powinny dostawać przypadkowych linków. Uzupełnij je tylko, jeśli pasują do znanych przepisów z domu albo masz bardzo pewny publiczny URL.',
+      '- Prefiks źródła usuń z mealName i wpisz znormalizowaną nazwę do sourceHint.',
+      '- Gdy użytkownik pisze "to samo co w sobotę" albo podobnie, skopiuj odpowiednie posiłki z tego dnia razem z linkUrl/sourceHint, jeśli te dane są już dostępne w szkicu.',
+      '- Gdy użytkownik pisze "daj linki", "uzupełnij linki", "znajdź przepisy" albo podobnie, nie twórz nowej listy jedzenia. Zachowaj currentDraft, uzupełnij tylko pewne linkUrl/sourceHint/note i powiedz, których linków nie udało się pewnie znaleźć.',
       ...searchRules,
       '',
       'Zasady korekt:',
-      '- Jesli currentDraft nie jest pusty, traktuj go jako aktualny stan rozmowy.',
-      '- Jesli uzytkownik poprawia szkic ("popraw", "zamien", "usun", "dodaj", "zmien"), zastosuj poprawke do currentDraft i zwroc caly zaktualizowany szkic, nie tylko zmiany.',
-      '- Jesli uzytkownik zadaje pytanie albo prosi o wyjasnienie bez zmiany planu, zwroc currentDraft bez zmian i odpowiedz na pytanie.',
-      '- Jesli uzytkownik podaje krotka wiadomosc bez dni tygodnia, nie interpretuj jej jako nowego planu.',
-      '- Jesli nie da sie zrozumiec intencji, status needs_clarification i zadaj krotkie pytanie.',
-      '- Odpowiadasz wylacznie JSON-em zgodnym ze schematem.',
+      '- Jeśli currentDraft nie jest pusty, traktuj go jako aktualny stan rozmowy.',
+      '- Jeśli użytkownik poprawia szkic ("popraw", "zamień", "usuń", "dodaj", "zmień"), zastosuj poprawkę do currentDraft i zwróć cały zaktualizowany szkic, nie tylko zmiany.',
+      '- Jeśli użytkownik zadaje pytanie albo prosi o wyjaśnienie bez zmiany planu, zwróć currentDraft bez zmian i odpowiedz na pytanie.',
+      '- Jeśli użytkownik podaje krótką wiadomość bez dni tygodnia, nie interpretuj jej jako nowego planu.',
+      '- Jeśli nie da się zrozumieć intencji, status needs_clarification i zadaj krótkie pytanie.',
+      '- Odpowiadasz wyłącznie JSON-em zgodnym ze schematem.',
       '',
-      `Docelowy poniedzialek tygodnia: ${input.targetWeekStartDate}`,
+      `Docelowy poniedziałek tygodnia: ${input.targetWeekStartDate}`,
       '',
       'Obecny szkic:',
       JSON.stringify(input.currentDraft),
       '',
-      'Znane przepisy z domu (uzywaj linkow stad, gdy pasuja):',
+      'Znane przepisy z domu (używaj linków stąd, gdy pasują):',
       input.knownRecipes.length > 0
         ? JSON.stringify(input.knownRecipes)
         : '[]',
@@ -1209,7 +1209,7 @@ function improveLinkAssistantMessage(
     return assistantMessage;
   }
 
-  return `${assistantMessage} Uzupelnilem ${linkedCount} linkow do przepisow.`;
+  return `${assistantMessage} Uzupełniłem ${linkedCount} linków do przepisów.`;
 }
 
 function buildHistoryPromptPayload(history: MealHistoryEntry[]): {
@@ -1344,10 +1344,10 @@ function normalizeInsights(
     );
   }
 
-  fallback.push('Posilki z ostatnich 30 dni zostaly potraktowane jako zakazane.');
+  fallback.push('Posiłki z ostatnich 30 dni zostały potraktowane jako zakazane.');
 
   if (entriesCount === 0) {
-    fallback.push('Brakuje starszych kandydatow po odjeciu ostatnich 30 dni.');
+    fallback.push('Brakuje starszych kandydatów po odjęciu ostatnich 30 dni.');
   }
 
   return fallback.slice(0, 5);
@@ -1375,7 +1375,7 @@ function buildLocalHistorySuggestions(
       entries.push({
         linkUrl: normalizeUrl(candidate.linkUrl),
         mealName: candidate.mealName,
-        note: `Pasuje do historii domu. Ostatnio starsze niz 30 dni: ${candidate.lastServedOn}.`,
+        note: `Pasuje do historii domu. Ostatnio starsze niż 30 dni: ${candidate.lastServedOn}.`,
         slotIndex,
         sourceHint: 'Historia domu',
         weekday
@@ -1413,10 +1413,10 @@ function pickHistoryFrequency(
 
 function buildDefaultHistorySuggestionMessage(entries: MealPlanAiDraftEntry[]): string {
   if (entries.length === 0) {
-    return 'Nie mam jeszcze wystarczajacej historii po odjeciu ostatnich 30 dni.';
+    return 'Nie mam jeszcze wystarczającej historii po odjęciu ostatnich 30 dni.';
   }
 
-  return `Przygotowalem ${entries.length} propozycji na podstawie historii domu i blokady ostatnich 30 dni.`;
+  return `Przygotowałem ${entries.length} propozycji na podstawie historii domu i blokady ostatnich 30 dni.`;
 }
 
 function areRecipeTitlesMatching(left: string, right: string): boolean {
@@ -1437,7 +1437,7 @@ function areRecipeTitlesMatching(left: string, right: string): boolean {
 }
 
 function normalizeKnownRecipeSource(source: string): string | null {
-  return source === 'pomysly' ? 'Pomysly' : source === 'plan' ? 'Plan posilkow' : null;
+  return source === 'pomysly' ? 'Pomysły' : source === 'plan' ? 'Plan posiłków' : null;
 }
 
 function mergeEntryNotes(current: string | null, update: string | null): string | null {
@@ -1631,7 +1631,7 @@ function parseMealPlanText(input: string, mealSlotsPerDay: number): MealPlanAiDr
       entries.push({
         linkUrl: parsedMeal.linkUrl,
         mealName,
-        note: parsedMeal.sourceHint ? `Zrodlo: ${parsedMeal.sourceHint}` : null,
+        note: parsedMeal.sourceHint ? `Źródło: ${parsedMeal.sourceHint}` : null,
         slotIndex: index,
         sourceHint: parsedMeal.sourceHint,
         weekday: parsedDay.weekday
@@ -1759,10 +1759,10 @@ function buildDefaultAssistantMessage(
   targetWeekStartDate: string
 ): string {
   if (entries.length === 0) {
-    return 'Nie widze jeszcze planu posilkow. Doprecyzujesz dni i posilki?';
+    return 'Nie widzę jeszcze planu posiłków. Doprecyzujesz dni i posiłki?';
   }
 
-  return `Mam szkic ${entries.length} posilkow na tydzien ${targetWeekStartDate}. Czy zapisac taki plan?`;
+  return `Mam szkic ${entries.length} posiłków na tydzień ${targetWeekStartDate}. Czy zapisać taki plan?`;
 }
 
 function trimToLength(value: string, maxLength: number): string {

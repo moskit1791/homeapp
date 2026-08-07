@@ -24,7 +24,7 @@ function BootError({ error }) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.card}>
-        <Text style={styles.title}>Nie udalo sie uruchomic aplikacji</Text>
+        <Text style={styles.title}>Nie udało się uruchomić aplikacji</Text>
         <Text style={styles.message}>{message}</Text>
       </View>
     </SafeAreaView>

@@ -49,6 +49,24 @@ class NotificationTransactionParserTest {
   }
 
   @Test
+  fun parsesRealMbankTransferFromAccountNotification() {
+    val maskedRecipient = parser.parse(
+      NotificationInput("Przelew z konta", "1,00 PLN do ***MALWINKA:* .")
+    )
+    val namedRecipient = parser.parse(
+      NotificationInput("Przelew z konta", "25,40 PLN do JAN KOWALSKI")
+    )
+
+    assertEquals("1", maskedRecipient?.amount)
+    assertEquals("PLN", maskedRecipient?.currency)
+    assertEquals("MALWINKA", maskedRecipient?.merchant)
+    assertEquals("transfer_out", maskedRecipient?.transactionType)
+    assertEquals("25.4", namedRecipient?.amount)
+    assertEquals("JAN KOWALSKI", namedRecipient?.merchant)
+    assertEquals("transfer_out", namedRecipient?.transactionType)
+  }
+
+  @Test
   fun rejectsDeclinesSecurityCodesBalancesIncomingTransfersAndOffers() {
     val rejected = listOf(
       "Płatność 99,00 PLN została odrzucona",

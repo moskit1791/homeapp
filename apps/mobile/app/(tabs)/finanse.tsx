@@ -20,11 +20,11 @@ import {
 } from "react-native";
 import {
   Archive,
-  Bell,
   Car,
   ChartBar,
   Check,
   CheckCircle2,
+  CreditCardClock,
   CalendarDays,
   Close,
   ChevronDown,
@@ -54,6 +54,7 @@ import {
   Vacuum,
   ViewGrid,
   WalletCards,
+  WalletPlus,
   Wrench,
 } from "../../src/ui/icon";
 import savingsGoalCarImage from "../../assets/savings-goal-car.png";
@@ -876,31 +877,6 @@ export default function FinanseScreen() {
 
     saveStoredJson(financeFilterStorageKey, financeFilters);
   }, [financeFilters, financeFiltersLoaded]);
-
-  useEffect(() => {
-    if (!financeFiltersLoaded) {
-      return;
-    }
-
-    setFinanceFilters((current) => {
-      const ownerIsValid =
-        !current.ownerMemberId ||
-        financeOwnerOptions.some((owner) => owner.id === current.ownerMemberId);
-      const categoryIsValid =
-        !current.categoryId ||
-        categories.some((category) => category.id === current.categoryId);
-
-      if (ownerIsValid && categoryIsValid) {
-        return current;
-      }
-
-      return {
-        ...current,
-        categoryId: categoryIsValid ? current.categoryId : "",
-        ownerMemberId: ownerIsValid ? current.ownerMemberId : "",
-      };
-    });
-  }, [categories, financeFiltersLoaded, financeOwnerOptions]);
 
   useEffect(() => {
     let isMounted = true;
@@ -1847,7 +1823,10 @@ export default function FinanseScreen() {
               }
               style={styles.financeHeaderActionButton}
             >
-              <Bell color={mockupGreen} size={23} />
+              <CreditCardClock
+                color={theme.isDark ? theme.colors.primary : mockupGreen}
+                size={23}
+              />
               {notificationImportPendingCount > 0 ? (
                 <Text style={styles.notificationImportBadge}>
                   {Math.min(99, notificationImportPendingCount)}
@@ -1875,7 +1854,10 @@ export default function FinanseScreen() {
               }
               style={styles.financeHeaderActionButton}
             >
-              <Bell color={mockupGreen} size={23} />
+              <CreditCardClock
+                color={theme.isDark ? theme.colors.primary : mockupGreen}
+                size={23}
+              />
               {notificationImportPendingCount > 0 ? (
                 <Text style={styles.notificationImportBadge}>
                   {Math.min(99, notificationImportPendingCount)}
@@ -1889,7 +1871,10 @@ export default function FinanseScreen() {
               onPress={() => setFinanceSearchVisible((visible) => !visible)}
               style={styles.financeHeaderActionButton}
             >
-              <Search color={mockupGreen} size={23} />
+              <Search
+                color={theme.isDark ? theme.colors.primary : mockupGreen}
+                size={23}
+              />
             </IconButton>
           ) : null}
           {canOpenFinanceActions ? (
@@ -1910,22 +1895,17 @@ export default function FinanseScreen() {
               }}
               style={styles.financeHeaderActionButton}
             >
-              {activeFinanceView === "debts" ? (
-                <ReceiptText color={mockupGreen} size={23} />
-              ) : activeFinanceView === "savings" ? (
-                <PiggyBank color={mockupGreen} size={24} />
-              ) : (
-                <MoreHorizontal color={mockupGreen} size={25} />
-              )}
+              <WalletPlus
+                color={theme.isDark ? theme.colors.primary : mockupGreen}
+                size={24}
+              />
             </IconButton>
           ) : null}
         </View>
       }
       contentStyle={styles.financeScreenContent}
       backgroundColor={
-        theme.colors.background === "#0C1220"
-          ? theme.colors.background
-          : "#FBFAF6"
+        theme.isDark ? theme.colors.background : "#FBFAF6"
       }
       title="Finanse"
     >
@@ -1948,7 +1928,13 @@ export default function FinanseScreen() {
           {
             icon: (active) => (
               <ChartBar
-                color={active ? mockupGreen : theme.colors.textMuted}
+                color={
+                  active
+                    ? theme.isDark
+                      ? theme.colors.primaryDarker
+                      : mockupGreen
+                    : theme.colors.textMuted
+                }
                 size={16}
               />
             ),
@@ -1958,7 +1944,13 @@ export default function FinanseScreen() {
           {
             icon: (active) => (
               <ReceiptText
-                color={active ? mockupGreen : theme.colors.textMuted}
+                color={
+                  active
+                    ? theme.isDark
+                      ? theme.colors.primaryDarker
+                      : mockupGreen
+                    : theme.colors.textMuted
+                }
                 size={16}
               />
             ),
@@ -1968,7 +1960,13 @@ export default function FinanseScreen() {
           {
             icon: (active) => (
               <PiggyBank
-                color={active ? mockupGreen : theme.colors.textMuted}
+                color={
+                  active
+                    ? theme.isDark
+                      ? theme.colors.primaryDarker
+                      : mockupGreen
+                    : theme.colors.textMuted
+                }
                 size={16}
               />
             ),
@@ -2754,7 +2752,7 @@ export default function FinanseScreen() {
                     onSuccess: () => closeFinanceModal(),
                   });
                 }}
-                title="Usun pozycje"
+                title="Usuń pozycję"
                 variant="ghost"
               />
             ) : null}
@@ -4999,7 +4997,10 @@ function FinanceCategoryCards({
                       pressed && styles.pressedRow,
                     ]}
                   >
-                    <ReceiptText color={mockupGreen} size={22} />
+                    <ReceiptText
+                      color={theme.isDark ? theme.colors.primaryDark : mockupGreen}
+                      size={22}
+                    />
                     <Text style={styles.budgetAddItemText}>Dodaj pozycję</Text>
                   </Pressable>
                 ) : null}
@@ -5733,7 +5734,7 @@ function formatMonthLong(month: BudgetMonth): string {
 }
 
 function createStyles(colors: AppPalette) {
-  const isDark = colors.background === "#0C1220";
+  const isDark = colors.isDark;
   const panelBackground = isDark ? colors.card : "#FFFFFF";
   const panelBorder = isDark ? colors.border : "#E8DED2";
   const panelShadowOpacity = isDark ? 0.18 : 0.065;
@@ -5904,7 +5905,7 @@ function createStyles(colors: AppPalette) {
       paddingHorizontal: spacing.md,
     },
     budgetAddItemText: {
-      color: mockupGreen,
+      color: isDark ? colors.primaryDark : mockupGreen,
       fontSize: 12,
       fontWeight: "700",
       letterSpacing: 0,
@@ -6666,8 +6667,8 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
     },
     debtSaveButton: {
-      backgroundColor: mockupGreen,
-      borderColor: mockupGreen,
+      backgroundColor: isDark ? colors.primary : mockupGreen,
+      borderColor: isDark ? colors.primary : mockupGreen,
       flex: 1,
     },
     debtSettledText: {
@@ -7413,8 +7414,8 @@ function createStyles(colors: AppPalette) {
       paddingHorizontal: spacing.sm,
     },
     filterChipActive: {
-      backgroundColor: mockupGreen,
-      borderColor: mockupGreen,
+      backgroundColor: isDark ? colors.primary : mockupGreen,
+      borderColor: isDark ? colors.primary : mockupGreen,
     },
     filterChipCompact: {
       flexBasis: "31.8%",
@@ -7786,7 +7787,7 @@ function createStyles(colors: AppPalette) {
       lineHeight: 18,
     },
     personCell: { width: 64 },
-    positiveText: { color: mockupGreen },
+    positiveText: { color: isDark ? colors.primaryDark : mockupGreen },
     sheet: {
       backgroundColor: colors.card,
       borderColor: colors.border,

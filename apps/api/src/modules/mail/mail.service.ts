@@ -16,15 +16,15 @@ export class MailService {
 
     await this.send(env, {
       html: [
-        `<p>Czesc ${escapeHtml(input.displayName)},</p>`,
-        '<p>Potwierdz adres e-mail, aby aktywowac konto w HomeApp.</p>',
-        this.buttonLink(link, 'Potwierdz konto'),
-        `<p>Jesli przycisk nie dziala, skopiuj ten link: ${escapeHtml(link)}</p>`
+        `<p>Cześć ${escapeHtml(input.displayName)},</p>`,
+        '<p>Potwierdź adres e-mail, aby aktywować konto w HomeApp.</p>',
+        this.buttonLink(link, 'Potwierdź konto'),
+        `<p>Jeśli przycisk nie działa, skopiuj ten link: ${escapeHtml(link)}</p>`
       ].join(''),
-      subject: 'Potwierdz konto w HomeApp',
+      subject: 'Potwierdź konto w HomeApp',
       text: [
-        `Czesc ${input.displayName},`,
-        'Potwierdz adres e-mail, aby aktywowac konto w HomeApp.',
+        `Cześć ${input.displayName},`,
+        'Potwierdź adres e-mail, aby aktywować konto w HomeApp.',
         link
       ].join('\n\n'),
       to: input.email
@@ -39,16 +39,16 @@ export class MailService {
 
     await this.send(env, {
       html: [
-        `<p>Czesc ${escapeHtml(input.displayName)},</p>`,
-        '<p>Otrzymalismy prosbe o reset hasla do HomeApp.</p>',
-        this.buttonLink(link, 'Ustaw nowe haslo'),
+        `<p>Cześć ${escapeHtml(input.displayName)},</p>`,
+        '<p>Otrzymaliśmy prośbę o reset hasła do HomeApp.</p>',
+        this.buttonLink(link, 'Ustaw nowe hasło'),
         '<p>Link wygasa po 1 godzinie. Jeśli to nie Ty, zignoruj tę wiadomość.</p>',
-        `<p>Jesli przycisk nie dziala, skopiuj ten link: ${escapeHtml(link)}</p>`
+        `<p>Jeśli przycisk nie działa, skopiuj ten link: ${escapeHtml(link)}</p>`
       ].join(''),
-      subject: 'Reset hasla HomeApp',
+      subject: 'Reset hasła HomeApp',
       text: [
-        `Czesc ${input.displayName},`,
-        'Otrzymalismy prosbe o reset hasla do HomeApp.',
+        `Cześć ${input.displayName},`,
+        'Otrzymaliśmy prośbę o reset hasła do HomeApp.',
         'Link wygasa po 1 godzinie. Jeśli to nie Ty, zignoruj tę wiadomość.',
         link
       ].join('\n\n'),
@@ -64,17 +64,17 @@ export class MailService {
 
     await this.send(env, {
       html: [
-        `<p>Czesc,</p>`,
-        `<p>${escapeHtml(input.invitedByDisplayName)} zaprasza Cie do domu "${escapeHtml(input.householdName)}" w HomeApp.</p>`,
-        this.buttonLink(link, 'Dolacz do domu'),
-        '<p>Link wygasa po 7 dniach. Otworzy widok dolaczenia do domu, gdzie ustawisz haslo i zaakceptujesz dokumenty.</p>',
-        `<p>Jesli przycisk nie dziala, skopiuj ten link: ${escapeHtml(link)}</p>`
+        `<p>Cześć,</p>`,
+        `<p>${escapeHtml(input.invitedByDisplayName)} zaprasza Cię do domu "${escapeHtml(input.householdName)}" w HomeApp.</p>`,
+        this.buttonLink(link, 'Dołącz do domu'),
+        '<p>Link wygasa po 7 dniach. Otworzy widok dołączenia do domu, gdzie ustawisz hasło i zaakceptujesz dokumenty.</p>',
+        `<p>Jeśli przycisk nie działa, skopiuj ten link: ${escapeHtml(link)}</p>`
       ].join(''),
       subject: `Zaproszenie do domu ${input.householdName} w HomeApp`,
       text: [
-        'Czesc,',
-        `${input.invitedByDisplayName} zaprasza Cie do domu "${input.householdName}" w HomeApp.`,
-        'Link wygasa po 7 dniach. Otworzy widok dolaczenia do domu, gdzie ustawisz haslo i zaakceptujesz dokumenty.',
+        'Cześć,',
+        `${input.invitedByDisplayName} zaprasza Cię do domu "${input.householdName}" w HomeApp.`,
+        'Link wygasa po 7 dniach. Otworzy widok dołączenia do domu, gdzie ustawisz hasło i zaakceptujesz dokumenty.',
         link
       ].join('\n\n'),
       to: input.email

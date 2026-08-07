@@ -91,14 +91,15 @@ import {
   ChevronRight,
   DotsVertical,
   ExternalLink,
+  CardsView,
+  ListBulleted,
   Package,
+  Plus,
   Search,
   ShoppingCart,
   Sparkles,
-  TableLarge,
   Trash2,
   Utensils,
-  ViewGrid,
 } from "../../src/ui/icon";
 import shoppingCategoryDairyImage from "../../assets/shopping-category-dairy.png";
 import shoppingCategoryBakeryImage from "../../assets/shopping-category-bakery.png";
@@ -204,7 +205,13 @@ export default function ListaScreen() {
           ? {
               icon: (active: boolean) => (
                 <ShoppingCart
-                  color={active ? mockupGreen : theme.colors.textMuted}
+                  color={
+                    active
+                      ? theme.isDark
+                        ? theme.colors.primaryDarker
+                        : mockupGreen
+                      : theme.colors.textMuted
+                  }
                   size={16}
                 />
               ),
@@ -216,7 +223,13 @@ export default function ListaScreen() {
           ? {
               icon: (active: boolean) => (
                 <Utensils
-                  color={active ? mockupGreen : theme.colors.textMuted}
+                  color={
+                    active
+                      ? theme.isDark
+                        ? theme.colors.primaryDarker
+                        : mockupGreen
+                      : theme.colors.textMuted
+                  }
                   size={16}
                 />
               ),
@@ -228,7 +241,13 @@ export default function ListaScreen() {
           ? {
               icon: (active: boolean) => (
                 <Package
-                  color={active ? mockupGreen : theme.colors.textMuted}
+                  color={
+                    active
+                      ? theme.isDark
+                        ? theme.colors.primaryDarker
+                        : mockupGreen
+                      : theme.colors.textMuted
+                  }
                   size={16}
                 />
               ),
@@ -247,8 +266,7 @@ export default function ListaScreen() {
       theme.colors.textMuted,
     ],
   );
-  const screenBackground =
-    theme.colors.background === "#0C1220" ? theme.colors.background : "#FBFAF6";
+  const screenBackground = theme.isDark ? theme.colors.background : "#FBFAF6";
 
   useEffect(() => {
     if (
@@ -352,14 +370,17 @@ export default function ListaScreen() {
               onPress={() => setShoppingAiOpenRequest((value) => value + 1)}
               style={styles.foodHeaderButton}
             >
-              <Sparkles color={mockupGreen} size={21} />
+              <Text style={styles.foodAiHeaderLabel}>AI</Text>
             </IconButton>
             <IconButton
               accessibilityLabel="Dodaj produkt"
               onPress={() => setShoppingAddOpenRequest((value) => value + 1)}
               style={styles.foodHeaderButton}
             >
-              <CartPlus color={mockupGreen} size={23} />
+              <CartPlus
+                color={theme.isDark ? theme.colors.primary : mockupGreen}
+                size={23}
+              />
             </IconButton>
           </View>
         ) : activeSegment === "meals" ? (
@@ -367,34 +388,43 @@ export default function ListaScreen() {
             {mealPermission.canCreate && mealPermission.canUpdate ? (
               <>
                 <IconButton
-                  accessibilityLabel="AI do planu posilkow"
+                  accessibilityLabel="AI do planu posiłków"
                   onPress={() => setMealAiOpenRequest((value) => value + 1)}
                   style={styles.foodHeaderButton}
                 >
-                  <Sparkles color={mockupGreen} size={21} />
+                  <Text style={styles.foodAiHeaderLabel}>AI</Text>
                 </IconButton>
                 <IconButton
-                  accessibilityLabel="Dodaj posilek"
+                  accessibilityLabel="Dodaj posiłek"
                   onPress={() => setMealAddOpenRequest((value) => value + 1)}
                   style={styles.foodHeaderButton}
                 >
-                  <Utensils color={mockupGreen} size={23} />
+                  <Plus
+                    color={theme.isDark ? theme.colors.primary : mockupGreen}
+                    size={24}
+                  />
                 </IconButton>
               </>
             ) : null}
             <IconButton
               accessibilityLabel={
                 mealLayout === "list"
-                  ? "Zmien uklad posilkow na kafelki"
-                  : "Zmien uklad posilkow na liste"
+                  ? "Zmień układ posiłków na kafelki"
+                  : "Zmień układ posiłków na listę"
               }
               onPress={toggleMealLayout}
               style={styles.foodHeaderButton}
             >
               {mealLayout === "list" ? (
-                <ViewGrid color={mockupGreen} size={21} />
+                <CardsView
+                  color={theme.isDark ? theme.colors.primary : mockupGreen}
+                  size={22}
+                />
               ) : (
-                <TableLarge color={mockupGreen} size={21} />
+                <ListBulleted
+                  color={theme.isDark ? theme.colors.primary : mockupGreen}
+                  size={22}
+                />
               )}
             </IconButton>
           </View>
@@ -404,7 +434,10 @@ export default function ListaScreen() {
             onPress={() => setPantryAddOpenRequest((value) => value + 1)}
             style={styles.foodHeaderButton}
           >
-            <Package color={mockupGreen} size={23} />
+            <Plus
+              color={theme.isDark ? theme.colors.primary : mockupGreen}
+              size={24}
+            />
           </IconButton>
         ) : undefined
       }
@@ -1285,7 +1318,7 @@ function MealsBoard({
       setAiInput("");
       if (response.limitExhausted) {
         setAiNotice(
-          "Limit AI jest wyczerpany. Aplikacja uzyla lokalnego algorytmu.",
+        "Limit AI jest wyczerpany. Aplikacja użyła lokalnego algorytmu.",
         );
         setTimeout(() => setAiNotice(""), 3500);
       }
@@ -1324,7 +1357,7 @@ function MealsBoard({
           };
 
       if (finalizeResponse.entries.length === 0) {
-        throw new Error("AI nie przygotowalo planu do zapisu.");
+        throw new Error("AI nie przygotowało planu do zapisu.");
       }
 
       const targetPlan = await getOrCreateMealPlanForDate({
@@ -1368,7 +1401,7 @@ function MealsBoard({
       setAiNotice(
         limitExhausted
           ? `Limit AI wyczerpany, zapisano ${updatedPlan.entries.length} pozycji z lokalnego algorytmu.`
-          : `AI zapisalo ${updatedPlan.entries.length} pozycji w planie.`,
+          : `AI zapisało ${updatedPlan.entries.length} pozycji w planie.`,
       );
       setTimeout(() => setAiNotice(""), 3000);
       await queryClient.invalidateQueries({ queryKey: queryKeys.meal });
@@ -1570,7 +1603,10 @@ function MealsBoard({
       <View style={styles.mealHero}>
         <View style={styles.mealHeroHeader}>
           <View style={styles.mealHeroIcon}>
-            <Utensils color={mockupGreen} size={22} />
+            <Utensils
+              color={theme.isDark ? theme.colors.primary : mockupGreen}
+              size={22}
+            />
           </View>
           <View style={styles.mealHeroText}>
             <Text style={styles.sectionTitle}>Plan posiłków</Text>
@@ -1584,7 +1620,7 @@ function MealsBoard({
 
       <Pressable
         accessibilityLabel={
-          isCalendarExpanded ? "Zwin wybor tygodnia" : "Zmien tydzien posilkow"
+          isCalendarExpanded ? "Zwiń wybór tygodnia" : "Zmień tydzień posiłków"
         }
         accessibilityRole="button"
         onPress={() => setCalendarExpanded((value) => !value)}
@@ -1594,11 +1630,14 @@ function MealsBoard({
         ]}
       >
         <View style={styles.calendarToggleIcon}>
-          <CalendarDays color={mockupGreen} size={19} />
+          <CalendarDays
+            color={theme.isDark ? theme.colors.primary : mockupGreen}
+            size={19}
+          />
         </View>
         <View style={styles.calendarToggleText}>
           <Text style={styles.calendarToggleTitle}>
-            {isCalendarExpanded ? "Zwin kalendarz" : "Zmien tydzien"}
+            {isCalendarExpanded ? "Zwiń kalendarz" : "Zmień tydzień"}
           </Text>
           <Text style={styles.calendarToggleMeta}>
             {formatWeekRange(selectedWeekStartDate)}
@@ -1676,16 +1715,19 @@ function MealsBoard({
                     </Text>
                     {entry.linkUrl ? (
                       <IconButton
-                        accessibilityLabel="Otworz link"
+                        accessibilityLabel="Otwórz link"
                         onPress={() => Linking.openURL(entry.linkUrl!)}
                       >
-                        <ExternalLink color={mockupGreen} size={15} />
+                        <ExternalLink
+                          color={theme.isDark ? theme.colors.primary : mockupGreen}
+                          size={15}
+                        />
                       </IconButton>
                     ) : null}
                   </Pressable>
                 ))}
                 {day.entries.length === 0 ? (
-                  <Text style={styles.mealTileEmpty}>Brak posilkow</Text>
+                  <Text style={styles.mealTileEmpty}>Brak posiłków</Text>
                 ) : null}
                 {day.entries.length > 4 ? (
                   <Text style={styles.mealTileOverflow}>
@@ -1703,7 +1745,10 @@ function MealsBoard({
                     pressed && styles.pressed,
                   ]}
                 >
-                  <Utensils color={mockupGreen} size={16} />
+                  <Utensils
+                    color={theme.isDark ? theme.colors.primary : mockupGreen}
+                    size={16}
+                  />
                   <Text style={styles.mealTileAddText}>Dodaj</Text>
                 </Pressable>
               ) : null}
@@ -1750,10 +1795,13 @@ function MealsBoard({
                   </View>
                   {entry.linkUrl ? (
                     <IconButton
-                      accessibilityLabel="Otworz link"
+                      accessibilityLabel="Otwórz link"
                       onPress={() => Linking.openURL(entry.linkUrl!)}
                     >
-                      <ExternalLink color={mockupGreen} size={17} />
+                      <ExternalLink
+                        color={theme.isDark ? theme.colors.primary : mockupGreen}
+                        size={17}
+                      />
                     </IconButton>
                   ) : null}
                 </Pressable>
@@ -1901,36 +1949,39 @@ function MealsBoard({
         }
         onClose={() => setAiModalVisible(false)}
         subtitle="Rozmawiaj z AI, dopracuj plan i zapisz dopiero gotowy efekt."
-        title="AI plan posilkow"
+        title="AI plan posiłków"
         visible={aiModalVisible}
       >
         <View style={styles.aiHeader}>
           <View style={styles.aiIcon}>
-            <Sparkles color={mockupGreen} size={20} />
+            <Sparkles
+              color={theme.isDark ? theme.colors.primary : mockupGreen}
+              size={20}
+            />
           </View>
           <View style={styles.itemText}>
-            <Text style={styles.sectionTitle}>Tydzien docelowy</Text>
+            <Text style={styles.sectionTitle}>Tydzień docelowy</Text>
             <Text style={styles.sectionMeta}>
               {aiTargetWeekConfirmed
                 ? formatWeekRange(aiTargetWeekStartDate)
-                : "Wybierz tydzien przed wyslaniem planu"}
+                : "Wybierz tydzień przed wysłaniem planu"}
             </Text>
           </View>
         </View>
 
-        <Text style={styles.inputLabel}>Tydzien zapisu *</Text>
+        <Text style={styles.inputLabel}>Tydzień zapisu *</Text>
         <CalendarWeekPicker
           mealWeeks={historyWeeks}
           onSelect={selectAiTargetWeekStart}
           selectedWeekStartDate={aiTargetWeekStartDate}
         />
         {!aiTargetWeekConfirmed ? (
-          <InlineAlert text="Wybierz tydzien, do ktorego AI ma przygotowac i zapisac plan posilkow." />
+          <InlineAlert text="Wybierz tydzień, do którego AI ma przygotować i zapisać plan posiłków." />
         ) : null}
 
         {aiInsights.length > 0 ? (
           <View style={styles.aiInsightCard}>
-            <Text style={styles.groupTitle}>Co AI znalazlo w historii</Text>
+            <Text style={styles.groupTitle}>Co AI znalazło w historii</Text>
             {aiInsights.map((insight, index) => (
               <Text key={`${insight}-${index}`} style={styles.itemMeta}>
                 {insight}
@@ -1997,10 +2048,13 @@ function MealsBoard({
                     </View>
                     {entry.linkUrl ? (
                       <IconButton
-                        accessibilityLabel="Otworz link z AI"
+                        accessibilityLabel="Otwórz link z AI"
                         onPress={() => Linking.openURL(entry.linkUrl!)}
                       >
-                        <ExternalLink color={mockupGreen} size={16} />
+                        <ExternalLink
+                          color={theme.isDark ? theme.colors.primary : mockupGreen}
+                          size={16}
+                        />
                       </IconButton>
                     ) : null}
                   </View>
@@ -2010,11 +2064,11 @@ function MealsBoard({
           </View>
         ) : null}
 
-        <Text style={styles.inputLabel}>Wiadomosc</Text>
+        <Text style={styles.inputLabel}>Wiadomość</Text>
         <TextInput
           multiline
           onChangeText={setAiInput}
-          placeholder="Np. Pon: C kasza manna, KS pieczona kielbasa z warzywami..."
+          placeholder="Np. Pon: C kasza manna, KS pieczona kiełbasa z warzywami..."
           placeholderTextColor={theme.colors.textSubtle}
           style={[styles.input, styles.textArea]}
           value={aiInput}
@@ -2024,7 +2078,7 @@ function MealsBoard({
             tone="error"
             text={getMealAiErrorText(
               aiChatMutation.error,
-              "AI nie odpowiedzialo. Sprobuj wyslac wiadomosc jeszcze raz.",
+              "AI nie odpowiedziało. Spróbuj wysłać wiadomość jeszcze raz.",
             )}
           />
         ) : null}
@@ -2033,7 +2087,7 @@ function MealsBoard({
             tone="error"
             text={getMealAiErrorText(
               aiPromptMutation.error,
-              "Nie udalo sie wygenerowac promptu.",
+              "Nie udało się wygenerować promptu.",
             )}
           />
         ) : null}
@@ -2042,7 +2096,7 @@ function MealsBoard({
             tone="error"
             text={getMealAiErrorText(
               aiSaveMutation.error,
-              "Nie udalo sie zapisac planu z AI.",
+              "Nie udało się zapisać planu z AI.",
             )}
           />
         ) : null}
@@ -2210,7 +2264,7 @@ function CalendarWeekPicker({
         }}
       />
       <Text style={styles.calendarPickerMeta}>
-        Wybrany tydzien: {formatWeekRange(selectedWeekStartDate)}
+        Wybrany tydzień: {formatWeekRange(selectedWeekStartDate)}
       </Text>
     </View>
   );
@@ -2384,10 +2438,10 @@ function buildAiMealNote(entry: MealPlanAiDraftEntry): string | null {
     sourceHint &&
     !note.toLowerCase().includes(sourceHint.toLowerCase())
   ) {
-    return `${note}\nZrodlo: ${sourceHint}`;
+    return `${note}\nŹródło: ${sourceHint}`;
   }
 
-  return note || (sourceHint ? `Zrodlo: ${sourceHint}` : null);
+  return note || (sourceHint ? `Źródło: ${sourceHint}` : null);
 }
 
 function getMealAiErrorText(error: unknown, fallback: string): string {
@@ -2828,7 +2882,7 @@ function _PantryBoard() {
               justifyContent: "center",
             }}
           >
-            <Package color="#FFFFFF" size={32} />
+            <Package color={theme.colors.inverseText} size={32} />
           </IconButton>
         </View>
       ) : null}
@@ -3553,7 +3607,7 @@ function isValidOptionalIsoDate(value: string): boolean {
 }
 
 function createStyles(colors: AppPalette) {
-  const isDark = colors.background === "#0C1220";
+  const isDark = colors.isDark;
   const shoppingCardBackground = isDark ? colors.card : "#FFFFFF";
   const shoppingCardBorder = isDark ? colors.border : "#E8DDCE";
   const shoppingHeaderBackground = isDark ? colors.cardMuted : "#F5F0E6";
@@ -3568,7 +3622,7 @@ function createStyles(colors: AppPalette) {
   const panelShadowOpacity = isDark ? 0.18 : 0.08;
   const softGreenPanel = isDark ? colors.cardMuted : "#F6FAF0";
   const softGreenBorder = isDark ? colors.border : "#E2EAD9";
-  const illustrationSurface = isDark ? "#F6F1E8" : "transparent";
+  const illustrationSurface = isDark ? colors.field : "transparent";
 
   return StyleSheet.create({
     pantryCategoryCard: {
@@ -3637,7 +3691,7 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
     },
     pantryChipLabelActive: {
-      color: "#FFFFFF",
+      color: colors.inverseText,
     },
     pantryChipRow: {
       gap: spacing.sm,
@@ -3953,12 +4007,18 @@ function createStyles(colors: AppPalette) {
       shadowOpacity: panelShadowOpacity,
       shadowRadius: 10,
     },
+    foodAiHeaderLabel: {
+      color: isDark ? colors.primaryDark : mockupGreen,
+      fontSize: 13,
+      fontWeight: "900",
+      letterSpacing: 0.4,
+    },
     foodSecondaryAction: {
       backgroundColor: panelBackground,
       borderColor: softGreenBorder,
     },
     foodSecondaryActionLabel: {
-      color: mockupGreen,
+      color: isDark ? colors.primaryDark : mockupGreen,
     },
     headerActions: {
       alignItems: "center",
@@ -4368,7 +4428,7 @@ function createStyles(colors: AppPalette) {
       width: 28,
     },
     mealSlotText: {
-      color: mockupGreen,
+      color: isDark ? colors.primaryDark : mockupGreen,
       fontSize: 12,
       fontWeight: "900",
       letterSpacing: 0,
@@ -4406,7 +4466,7 @@ function createStyles(colors: AppPalette) {
       minHeight: 32,
     },
     mealTileAddText: {
-      color: mockupGreen,
+      color: isDark ? colors.primaryDark : mockupGreen,
       fontSize: 12,
       fontWeight: "900",
       letterSpacing: 0,
@@ -4497,7 +4557,7 @@ function createStyles(colors: AppPalette) {
       gap: spacing.sm,
     },
     mealTileSlot: {
-      color: mockupGreen,
+      color: isDark ? colors.primaryDark : mockupGreen,
       fontSize: 11,
       fontWeight: "900",
       letterSpacing: 0,

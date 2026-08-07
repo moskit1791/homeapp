@@ -44,6 +44,7 @@ export default function NotificationExpenseImportSettingsScreen() {
   >(null);
   const [error, setError] = useState<string | null>(null);
   const [accessGranted, setAccessGranted] = useState(false);
+  const [accessConnected, setAccessConnected] = useState(false);
   const [reminderPermissionGranted, setReminderPermissionGranted] =
     useState(true);
   const [storageUnavailable, setStorageUnavailable] = useState(false);
@@ -60,6 +61,12 @@ export default function NotificationExpenseImportSettingsScreen() {
     queryFn: () => getMyHousehold({ accessToken }),
     queryKey: queryKeys.household,
   });
+  const goBack = useCallback(() => {
+    router.replace({
+      pathname: "/(tabs)/dom",
+      params: { settings: "1" },
+    } as never);
+  }, [router]);
 
   const reload = useCallback(async () => {
     if (!notificationExpenseImport.available) {
@@ -86,6 +93,7 @@ export default function NotificationExpenseImportSettingsScreen() {
         Notifications.getPermissionsAsync(),
       ]);
       setAccessGranted(access.granted);
+      setAccessConnected(access.connected);
       setReminderPermissionGranted(notificationPermission.status === "granted");
       setStorageUnavailable(storage.state === "unavailable");
       if (storage.state === "unavailable") {
@@ -93,7 +101,7 @@ export default function NotificationExpenseImportSettingsScreen() {
         setSources([]);
         return;
       }
-      if (access.granted) {
+      if (access.connected) {
         await notificationExpenseImport.refreshActiveNotifications();
         await waitForNotificationScan();
       }
@@ -128,7 +136,7 @@ export default function NotificationExpenseImportSettingsScreen() {
           tone="info"
           text="Funkcja jest dostępna tylko na Androidzie. iOS nie pozwala aplikacjom odczytywać powiadomień innych aplikacji."
         />
-        <ActionButton onPress={() => router.back()} title="Wróć" />
+        <ActionButton onPress={goBack} title="Wróć" />
       </AppScreen>
     );
   }
@@ -148,7 +156,7 @@ export default function NotificationExpenseImportSettingsScreen() {
           tone="error"
           text="Nie masz uprawnienia do odczytu finansów."
         />
-        <ActionButton onPress={() => router.back()} title="Wróć" />
+        <ActionButton onPress={goBack} title="Wróć" />
       </AppScreen>
     );
   }
@@ -169,7 +177,15 @@ export default function NotificationExpenseImportSettingsScreen() {
         current ? { ...current, featureEnabled: enabled } : current,
       );
       if (enabled) {
-        await notificationExpenseImport.refreshActiveNotifications();
+        const connected =
+          await notificationExpenseImport.refreshActiveNotifications();
+        setAccessConnected(connected);
+        if (!connected) {
+          setError(
+            "Android nie połączył usługi importu. Na Xiaomi włącz Autostart dla HomeApp.",
+          );
+          return;
+        }
         await waitForNotificationScan();
         setSources(await notificationExpenseImport.listDetectedSources());
       }
@@ -194,7 +210,14 @@ export default function NotificationExpenseImportSettingsScreen() {
         ),
       );
       if (enabled) {
-        await notificationExpenseImport.refreshActiveNotifications();
+        const connected =
+          await notificationExpenseImport.refreshActiveNotifications();
+        setAccessConnected(connected);
+        if (!connected) {
+          setError(
+            "Android nie połączył usługi importu. Na Xiaomi włącz Autostart dla HomeApp.",
+          );
+        }
       }
     } catch {
       setError("Nie udało się zmienić wybranej aplikacji.");
@@ -208,7 +231,15 @@ export default function NotificationExpenseImportSettingsScreen() {
     setBusyAction("sources");
     setError(null);
     try {
-      await notificationExpenseImport.refreshActiveNotifications();
+      const connected =
+        await notificationExpenseImport.refreshActiveNotifications();
+      setAccessConnected(connected);
+      if (!connected) {
+        setError(
+          "Zgoda jest włączona, ale usługa importu nie działa. Na Xiaomi włącz Autostart dla HomeApp.",
+        );
+        return;
+      }
       await waitForNotificationScan();
       setSources(await notificationExpenseImport.listDetectedSources());
     } catch {
@@ -289,7 +320,7 @@ export default function NotificationExpenseImportSettingsScreen() {
     <AppScreen
       actions={
         <ActionButton
-          onPress={() => router.back()}
+          onPress={goBack}
           size="small"
           title="Wróć"
           variant="secondary"
@@ -336,13 +367,24 @@ export default function NotificationExpenseImportSettingsScreen() {
           jest wysyłana na serwer ani do usług zewnętrznych.
         </Text>
         <InlineAlert
-          tone="info"
+          tone={accessGranted && !accessConnected ? "error" : "info"}
           text={
-            accessGranted
+            accessConnected
               ? "Dostęp do powiadomień jest aktywny."
+              : accessGranted
+                ? "Zgoda jest włączona, ale Android nie połączył usługi HomeApp. Na Xiaomi/MIUI włącz Autostart dla HomeApp, a następnie wróć do tego ekranu."
               : "Dostęp nie jest aktywny. To nie jest zwykłe uprawnienie runtime — trzeba włączyć usługę na ekranie systemowym Androida."
           }
         />
+        {accessGranted && !accessConnected ? (
+          <ActionButton
+            onPress={() =>
+              void notificationExpenseImport.openBackgroundSettings()
+            }
+            title="Otwórz Autostart Xiaomi"
+            variant="secondary"
+          />
+        ) : null}
         <ActionButton
           onPress={() => {
             if (accessGranted) {
@@ -366,7 +408,7 @@ export default function NotificationExpenseImportSettingsScreen() {
           title="Działanie i przypomnienie"
         >
           <SettingSwitch
-            disabled={!canCreate || !accessGranted || busyAction !== null}
+            disabled={!canCreate || !accessConnected || busyAction !== null}
             label="Import z powiadomień"
             onValueChange={(value) => void updateFeature(value)}
             value={settings.featureEnabled}
@@ -452,7 +494,7 @@ export default function NotificationExpenseImportSettingsScreen() {
           />
         ) : null}
         <ActionButton
-          disabled={!accessGranted || busyAction !== null}
+          disabled={!accessConnected || busyAction !== null}
           loading={busyAction === "sources"}
           onPress={() => void refreshSources()}
           title="Odśwież wykryte aplikacje"

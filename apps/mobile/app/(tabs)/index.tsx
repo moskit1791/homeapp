@@ -389,8 +389,7 @@ export default function DzisiajScreen() {
 function useTodayStyles() {
   const theme = useAppTheme();
   const { width } = useWindowDimensions();
-  const screenBackground =
-    theme.colors.background === "#0C1220" ? theme.colors.background : "#FCFAF5";
+  const screenBackground = theme.isDark ? theme.colors.background : "#FCFAF5";
   const styles = createStyles(theme.colors, width);
 
   return { screenBackground, styles, theme };
@@ -982,7 +981,7 @@ function formatDateTime(value: string): string {
 }
 
 function createStyles(colors: AppPalette, viewportWidth: number) {
-  const isDark = colors.background === "#0C1220";
+  const isDark = colors.isDark;
   const displayFontFamily = Platform.select({
     android: "serif",
     ios: "Georgia",
@@ -997,21 +996,19 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
   const todayPanelBorder = isDark ? colors.border : "#F1EDE7";
   const todayPanelText = isDark ? colors.text : "#142017";
   const todayPanelMuted = isDark ? colors.textMuted : "#5F635F";
-  const todayPanelEyebrow = isDark ? colors.finance : mockupGreen;
+  const todayPanelEyebrow = isDark ? colors.primaryDark : mockupGreen;
   const todayPanelShadowOpacity = isDark ? 0.18 : 0.045;
   const todayAccentText = isDark ? colors.primaryDarker : mockupGreen;
-  const todayPillBackground = isDark
-    ? "rgba(155, 212, 124, 0.24)"
-    : colors.successSoft;
+  const todayPillBackground = colors.successSoft;
   const todayPillBorder = isDark
-    ? "rgba(199, 242, 174, 0.5)"
+    ? colors.primary
     : "rgba(79, 141, 44, 0.12)";
   const quickActionBackground = isDark ? colors.card : "#FFFCF6";
   const quickActionPressedBackground = isDark ? colors.cardMuted : "#FFF6EA";
 
   return StyleSheet.create({
     bellDot: {
-      backgroundColor: "#27D45B",
+      backgroundColor: colors.finance,
       borderColor: colors.card,
       borderRadius: 999,
       borderWidth: 2,
@@ -1199,7 +1196,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
     },
     miniTodayImageFrame: {
       alignItems: "center",
-      backgroundColor: isDark ? "#F6F1E8" : "transparent",
+      backgroundColor: isDark ? colors.field : "transparent",
       borderRadius: 999,
       bottom: -6,
       height: isNarrow ? 68 : 92,

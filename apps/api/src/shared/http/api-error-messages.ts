@@ -272,35 +272,35 @@ function translatePattern(message: string, field?: string): string | undefined {
   }
 
   if (minLength) {
-    return `${label} musi miec co najmniej ${minLength[1]} znaki.`;
+    return `${label} musi mieć co najmniej ${minLength[1]} znaki.`;
   }
 
   if (maxLength) {
-    return `${label} moze miec maksymalnie ${maxLength[1]} znakow.`;
+    return `${label} może mieć maksymalnie ${maxLength[1]} znaków.`;
   }
 
   if (/^[\w.]+ must be an email$/.test(message)) {
-    return `${label} musi byc poprawnym adresem e-mail.`;
+    return `${label} musi być poprawnym adresem e-mail.`;
   }
 
   if (/^[\w.]+ must be a string$/.test(message)) {
-    return `${label} musi byc tekstem.`;
+    return `${label} musi być tekstem.`;
   }
 
   if (/^[\w.]+ must be a number/.test(message)) {
-    return `${label} musi byc liczba.`;
+    return `${label} musi być liczbą.`;
   }
 
   if (/^[\w.]+ must not be less than/.test(message)) {
-    return `${label} ma zbyt mala wartosc.`;
+    return `${label} ma zbyt małą wartość.`;
   }
 
   if (/^[\w.]+ must not be greater than/.test(message)) {
-    return `${label} ma zbyt duza wartosc.`;
+    return `${label} ma zbyt dużą wartość.`;
   }
 
   if (positiveInteger) {
-    return `Parametr powtarzania ${positiveInteger[1]} musi byc dodatnia liczba calkowita.`;
+    return `Parametr powtarzania ${positiveInteger[1]} musi być dodatnią liczbą całkowitą.`;
   }
 
   if (required) {

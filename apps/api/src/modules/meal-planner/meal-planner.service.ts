@@ -955,30 +955,30 @@ function buildMealAiCopyPrompt(input: {
   const payload = buildMealPromptPayload(input.history, input.mealSlotsPerDay);
 
   return [
-    'Jestes AI pomagajacym ukladac jedzenie dla konkretnego domu.',
-    'To jest prompt uniwersalny: nie zakladaj, ze kazdy dom je tak samo. Styl domu wywnioskuj z danych historycznych doklejonych na koncu.',
+    'Jesteś AI pomagającym układać jedzenie dla konkretnego domu.',
+    'To jest prompt uniwersalny: nie zakładaj, że każdy dom je tak samo. Styl domu wywnioskuj z danych historycznych doklejonych na końcu.',
     '',
     'Cel:',
-    `- Przygotuj propozycje planu jedzenia na tydzien ${payload.summary.suggestedTargetWeekStartDate ?? 'nastepny po ostatnim tygodniu z historii'}.`,
-    `- Dom ma ${input.mealSlotsPerDay} sloty posilkow dziennie. Sloty sa zapisane jako slotIndex 0..${Math.max(input.mealSlotsPerDay - 1, 0)}, ale w odpowiedzi pokazuj je jako Posilek 1..${input.mealSlotsPerDay}.`,
-    '- Najpierw podaj krotkie wnioski z historii, potem plan tygodnia.',
+    `- Przygotuj propozycje planu jedzenia na tydzień ${payload.summary.suggestedTargetWeekStartDate ?? 'następny po ostatnim tygodniu z historii'}.`,
+    `- Dom ma ${input.mealSlotsPerDay} sloty posiłków dziennie. Sloty są zapisane jako slotIndex 0..${Math.max(input.mealSlotsPerDay - 1, 0)}, ale w odpowiedzi pokazuj je jako Posiłek 1..${input.mealSlotsPerDay}.`,
+    '- Najpierw podaj krótkie wnioski z historii, potem plan tygodnia.',
     '',
-    'Jak analizowac dom:',
-    '- Najpierw rozpoznaj, co oznacza kazdy slot. Nie zakladaj z gory, ze slot 0 zawsze jest sniadaniem, a slot 1 obiadem; potwierdz to historia. Jesli profil slotu jest mieszany, napisz to i dobierz ostroznie.',
-    '- Oddziel wzorce slotow: sniadania nie mieszaj z obiadami, obiadami nie z dodatkowymi zupami/kolacjami, chyba ze historia pokazuje taki sposob uzycia.',
-    '- Zlap rytm dni tygodnia: poniedzialki, wtorki itd. moga miec inne stale posilki niz weekend.',
-    '- Rozpoznaj posilki powtarzalne przez kilka dni, resztki, wyjazdy, prace, rodzinne obiady i jedzenie poza domem. Nie zamieniaj kontekstu typu "praca", "knajpa", "Sanok" w przepis, jesli to raczej informacja organizacyjna.',
-    '- Historia jest modelem preferencji, nie lista do bezmyslnego kopiowania. Mieszaj sprawdzone ulubione dania z podobnymi nowymi propozycjami.',
-    '- Nie proponuj bardzo podobnych posilkow z ostatnich 30 dni historii, chyba ze historia pokazuje celowe powtarzanie albo uzytkownik o to prosi.',
-    '- Dbaj o praktycznosc: czesc dan moze sie powtarzac jako resztki, ciezsze gotowanie dawaj wtedy, gdy historia domu zwykle je znosi, a szybkie posilki tam, gdzie dom je czesto stosuje.',
-    '- Zwracaj uwage na zrodla i skroty: C/Cookidoo, KS/Kwestia Smaku, AG/AniaGotuje, IG/Instagram, Knorr, MW/Moje Wypieki, Rozkoszny. Jesli proponujesz linki, dawaj tylko realne URL-e do konkretnych przepisow; nie wymyslaj adresow.',
-    '- Jesli w historii brakuje linkow, nadal mozesz zaproponowac posilki bez linku i oznaczyc preferowane zrodlo.',
+    'Jak analizować dom:',
+    '- Najpierw rozpoznaj, co oznacza każdy slot. Nie zakładaj z góry, że slot 0 zawsze jest śniadaniem, a slot 1 obiadem; potwierdź to historią. Jeśli profil slotu jest mieszany, napisz to i dobierz ostrożnie.',
+    '- Oddziel wzorce slotów: śniadania nie mieszaj z obiadami, obiadów nie mieszaj z dodatkowymi zupami/kolacjami, chyba że historia pokazuje taki sposób użycia.',
+    '- Złap rytm dni tygodnia: poniedziałki, wtorki itd. mogą mieć inne stałe posiłki niż weekend.',
+    '- Rozpoznaj posiłki powtarzalne przez kilka dni, resztki, wyjazdy, pracę, rodzinne obiady i jedzenie poza domem. Nie zamieniaj kontekstu typu "praca", "knajpa", "Sanok" w przepis, jeśli to raczej informacja organizacyjna.',
+    '- Historia jest modelem preferencji, nie listą do bezmyślnego kopiowania. Mieszaj sprawdzone ulubione dania z podobnymi nowymi propozycjami.',
+    '- Nie proponuj bardzo podobnych posiłków z ostatnich 30 dni historii, chyba że historia pokazuje celowe powtarzanie albo użytkownik o to prosi.',
+    '- Dbaj o praktyczność: część dań może się powtarzać jako resztki, cięższe gotowanie dawaj wtedy, gdy historia domu zwykle je znosi, a szybkie posiłki tam, gdzie dom je często stosuje.',
+    '- Zwracaj uwagę na źródła i skróty: C/Cookidoo, KS/Kwestia Smaku, AG/AniaGotuje, IG/Instagram, Knorr, MW/Moje Wypieki, Rozkoszny. Jeśli proponujesz linki, dawaj tylko realne URL-e do konkretnych przepisów; nie wymyślaj adresów.',
+    '- Jeśli w historii brakuje linków, nadal możesz zaproponować posiłki bez linku i oznaczyć preferowane źródło.',
     '',
     'Format odpowiedzi:',
-    '1. "Wnioski z historii" - maksymalnie 8 punktow: sloty, dni tygodnia, ulubione typy dan, zrodla, ostatnio jedzone rzeczy do omijania.',
-    '2. "Plan tygodnia" - tabela: dzien, Posilek 1, Posilek 2, Posilek 3... wedlug liczby slotow domu.',
-    '3. Przy kazdej mniej oczywistej propozycji dodaj bardzo krotkie uzasadnienie w nawiasie, np. "pasuje do piatkowych tortilli" albo "alternatywa do Cookidoo".',
-    '4. Na koncu wypisz "Nie dawaj teraz ponownie" z najwazniejszymi posilkami z ostatnich 30 dni historii.',
+    '1. "Wnioski z historii" - maksymalnie 8 punktów: sloty, dni tygodnia, ulubione typy dań, źródła, ostatnio jedzone rzeczy do omijania.',
+    '2. "Plan tygodnia" - tabela: dzień, Posiłek 1, Posiłek 2, Posiłek 3... według liczby slotów domu.',
+    '3. Przy każdej mniej oczywistej propozycji dodaj bardzo krótkie uzasadnienie w nawiasie, np. "pasuje do piątkowych tortilli" albo "alternatywa do Cookidoo".',
+    '4. Na końcu wypisz "Nie dawaj teraz ponownie" z najważniejszymi posiłkami z ostatnich 30 dni historii.',
     '',
     'DANE DOMU I HISTORIA (JSON do analizy):',
     JSON.stringify(payload, null, 2)
@@ -1205,14 +1205,14 @@ function detectSlotRole(
   }
 
   if (breakfastLikeCount / count >= 0.55) {
-    return 'prawdopodobnie sniadanie';
+    return 'prawdopodobnie śniadanie';
   }
 
   if (mainMealLikeCount / count >= 0.45) {
-    return 'prawdopodobnie obiad lub danie glowne';
+    return 'prawdopodobnie obiad lub danie główne';
   }
 
-  return 'mieszany slot - analizuj ostroznie';
+  return 'mieszany slot - analizuj ostrożnie';
 }
 
 function isBreakfastLike(mealName: string): boolean {
@@ -1298,14 +1298,14 @@ function addDateDays(date: string | null, days: number): string | null {
 function getWeekdayName(weekday: number): string {
   return (
     [
-      'poniedzialek',
+      'poniedziałek',
       'wtorek',
-      'sroda',
+      'środa',
       'czwartek',
-      'piatek',
+      'piątek',
       'sobota',
       'niedziela'
-    ][weekday - 1] ?? `dzien ${weekday}`
+    ][weekday - 1] ?? `dzień ${weekday}`
   );
 }
 

@@ -2,6 +2,7 @@ package com.homeapp.notificationexpenseimport
 
 import android.content.ComponentName
 import android.content.Intent
+import android.net.Uri
 import android.provider.Settings
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -20,7 +21,12 @@ class NotificationExpenseImportModule : Module() {
 
     AsyncFunction("getAccessStatus") {
       io {
-        mapOf("granted" to hasNotificationAccess())
+        val granted = hasNotificationAccess()
+        val connected = granted && NotificationExpenseListenerService.ensureConnected(context)
+        mapOf(
+          "granted" to granted,
+          "connected" to connected
+        )
       }
     }
 
@@ -28,6 +34,32 @@ class NotificationExpenseImportModule : Module() {
       val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
       context.startActivity(intent)
+      true
+    }
+
+    AsyncFunction("openBackgroundSettings") {
+      val packageName = context.packageName
+      val candidates = listOf(
+        Intent("miui.intent.action.OP_AUTO_START")
+          .setClassName(
+            "com.miui.securitycenter",
+            "com.miui.permcenter.autostart.AutoStartManagementActivity"
+          ),
+        Intent("miui.intent.action.APP_PERM_EDITOR")
+          .setClassName(
+            "com.miui.securitycenter",
+            "com.miui.permcenter.permissions.PermissionsEditorActivity"
+          )
+          .putExtra("extra_pkgname", packageName),
+        Intent(
+          Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+          Uri.parse("package:$packageName")
+        )
+      )
+      val intent = candidates.firstOrNull {
+        it.resolveActivity(context.packageManager) != null
+      } ?: return@AsyncFunction false
+      context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
       true
     }
 

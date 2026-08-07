@@ -532,7 +532,7 @@ export class HouseholdsService {
       const response = await fetch(this.expoPushUrl, {
         body: JSON.stringify(
           tokens.rows.map((token) => ({
-            body: `${input.invitedByDisplayName} zaprasza Cie do domu ${input.householdName}.`,
+            body: `${input.invitedByDisplayName} zaprasza Cię do domu ${input.householdName}.`,
             data: {
               kind: 'household-invitation',
               token: input.token

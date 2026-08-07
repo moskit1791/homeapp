@@ -176,7 +176,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
 
   private defaultMessageForStatus(statusCode: number): string {
     return (
-      defaultPolishMessageForStatus(statusCode) ?? "Zadanie nie powiodlo sie."
+      defaultPolishMessageForStatus(statusCode) ?? "Zadanie nie powiodło się."
     );
   }
 }

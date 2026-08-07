@@ -1,6 +1,6 @@
 {
   "name": "@homeapp/mobile",
-  "version": "1.2.3",
+  "version": "1.2.5",
   "private": true,
   "main": "index.js",
   "scripts": {

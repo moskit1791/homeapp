@@ -40,13 +40,13 @@ class UniversalNotificationTransactionParser : NotificationTransactionParser {
     private val completed = Regex(
       """(?i)(zapłacon|zapłacił\p{L}*|płatno(?:ść|sci)|zakup|obciąż|pobran\p{L}*|wydano|""" +
         """transakcj\p{L}*\s+(?:kart\p{L}*|BLIK)|operacj\p{L}*\s+kart\p{L}*|""" +
-        """przelew\s+wychodzący|wypłat[ay]\s+z|""" +
+        """przelew\s+(?:wychodzący|z\s+konta)|wypłat[ay]\s+z|""" +
         """card\s+payment|card\s+charged|payment|purchase|charged|outgoing\s+transfer|withdrawal|""" +
         """kartenzahlung|pago\s+con\s+tarjeta|paiement\s+par\s+carte|transaction\s+completed|completed)"""
     )
     private val refund = Regex("""(?i)\b(zwrot|refund|reembolso|remboursement|erstattung)\b""")
     private val transferOut = Regex(
-      """(?i)\b(przelew\s+wychodzący|wysłano\s+przelew|outgoing\s+transfer|transfer\s+sent)\b"""
+      """(?i)\b(przelew\s+(?:wychodzący|z\s+konta)|wysłano\s+przelew|outgoing\s+transfer|transfer\s+sent)\b"""
     )
     private val withdrawal = Regex(
       """(?i)\b(wypłat[ay]\s+z|bankomat|withdrawal|cash\s+withdrawal|geldautomat)\b"""
@@ -54,6 +54,9 @@ class UniversalNotificationTransactionParser : NotificationTransactionParser {
     private val merchantPattern = Regex(
       """(?i)(?:\bat\b|\bw\b|\bbei\b|\bchez\b|sprzedawca|miejsce|punkt|odbiorca|[—–])""" +
         """\s*[:\-]?\s*([\p{L}\p{N}][\p{L}\p{N} .&'_\-]{1,80})"""
+    )
+    private val transferRecipientPattern = Regex(
+      """(?i)\bdo\s+(?:[*•]+\s*)?([\p{L}\p{N}][\p{L}\p{N} .&'_\-:*•]{0,80})"""
     )
     private val securityCode = Regex(
       """(?i)\b(?:otp|pin|kod|code|hasło|password|verification|logowania|autoryzacyjny)\b.{0,30}\b\d{4,8}\b"""
@@ -99,11 +102,11 @@ class UniversalNotificationTransactionParser : NotificationTransactionParser {
       withdrawal.containsMatchIn(text) -> "withdrawal"
       else -> "payment"
     }
-    val merchant = merchantPattern.find(text)
+    val merchant = (merchantPattern.find(text) ?: transferRecipientPattern.find(text))
       ?.groups
       ?.get(1)
       ?.value
-      ?.trim(' ', '.', ',', '-', '—', '–')
+      ?.trim(' ', '.', ',', '-', '—', '–', ':', '*', '•')
       ?.takeIf { it.isNotBlank() }
       ?.take(80)
       ?.let(::maskLongDigitSequences)

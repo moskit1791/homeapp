@@ -63,8 +63,8 @@ describe('MealPlannerService', () => {
     const payload = parsePromptPayload(result.prompt);
 
     expect(result.prompt).toContain('To jest prompt uniwersalny');
-    expect(result.prompt).toContain('Dom ma 4 sloty posilkow dziennie');
-    expect(result.prompt).toContain('Nie zakladaj z gory, ze slot 0 zawsze jest sniadaniem');
+    expect(result.prompt).toContain('Dom ma 4 sloty posiłków dziennie');
+    expect(result.prompt).toContain('Nie zakładaj z góry, że slot 0 zawsze jest śniadaniem');
     expect(result.prompt).toContain('Nie dawaj teraz ponownie');
     expect(payload.summary).toMatchObject({
       entriesCount: 6,
@@ -75,11 +75,11 @@ describe('MealPlannerService', () => {
     });
     expect(payload.slotProfiles).toHaveLength(4);
     expect(payload.slotProfiles[0]).toMatchObject({
-      detectedRole: 'prawdopodobnie sniadanie',
+      detectedRole: 'prawdopodobnie śniadanie',
       slotIndex: 0
     });
     expect(payload.slotProfiles[1]).toMatchObject({
-      detectedRole: 'prawdopodobnie obiad lub danie glowne',
+      detectedRole: 'prawdopodobnie obiad lub danie główne',
       slotIndex: 1
     });
     expect(payload.sourcePreferences).toEqual(
@@ -126,7 +126,19 @@ function mealHistoryRow(
   };
 }
 
-function parsePromptPayload(prompt: string): any {
+type PromptPayload = {
+  recentWeeks: Array<Record<string, unknown>>;
+  slotProfiles: Array<Record<string, unknown>>;
+  sourcePreferences: Array<Record<string, unknown>>;
+  summary: Record<string, unknown>;
+  weekdaySlotPatterns: Array<{
+    slotIndex: number;
+    topMeals: Array<Record<string, unknown>>;
+    weekday: number;
+  }>;
+};
+
+function parsePromptPayload(prompt: string): PromptPayload {
   const marker = 'DANE DOMU I HISTORIA (JSON do analizy):\n';
   const [, json] = prompt.split(marker);
 
@@ -134,5 +146,5 @@ function parsePromptPayload(prompt: string): any {
     throw new Error('Prompt payload marker not found');
   }
 
-  return JSON.parse(json);
+  return JSON.parse(json) as PromptPayload;
 }

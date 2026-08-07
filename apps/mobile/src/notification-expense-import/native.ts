@@ -43,8 +43,9 @@ export interface NotificationImportSettings {
 }
 
 interface NotificationExpenseImportNativeModule {
-  getAccessStatus(): Promise<{ granted: boolean }>;
+  getAccessStatus(): Promise<{ granted: boolean; connected: boolean }>;
   openAccessSettings(): Promise<boolean>;
+  openBackgroundSettings(): Promise<boolean>;
   getStorageState(): Promise<{
     state: "available" | "unavailable";
     pendingCount: number;
@@ -103,6 +104,7 @@ export const notificationExpenseImport = {
   listPending: () => requireModule().listPending(),
   markImported: (id: string) => requireModule().markImported(id),
   openAccessSettings: () => requireModule().openAccessSettings(),
+  openBackgroundSettings: () => requireModule().openBackgroundSettings(),
   refreshActiveNotifications: () =>
     requireModule().refreshActiveNotifications(),
   resetUnavailableStorage: () => requireModule().resetUnavailableStorage(),

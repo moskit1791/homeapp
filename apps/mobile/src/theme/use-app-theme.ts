@@ -21,6 +21,7 @@ type Palette = { [Key in keyof typeof colors]: string } & {
   cardMuted: string;
   field: string;
   inverseText: string;
+  isDark: boolean;
   line: string;
   modalSurface: string;
   overlay: string;
@@ -56,15 +57,33 @@ type ThemePreferencesContextValue = {
 
 const themePreferencesKey = "homeapp.theme-preferences.v1";
 const homeAccent: DarkAccentKey = "#4F8D2C";
+const darkAccent: DarkAccentKey = "#7C9FF2";
 const defaultFontScale = 1;
 const defaultThemeMode: ThemeMode = "system";
 const fontScaleMin = 0.9;
 const fontScaleMax = 1.3;
-const darkCard = "#262D43";
-const darkCardMuted = "#30384E";
-const darkField = "#1E2436";
-const darkModalSurface = "#121622";
-const darkOverlay = "#20273B";
+const darkCard = "#181F28";
+const darkCardMuted = "#222B36";
+const darkField = "#111821";
+const darkModalSurface = "#141B24";
+const darkOverlay = "#181F28";
+
+const darkShadows = {
+  card: {
+    elevation: 2,
+    shadowColor: "#000000",
+    shadowOffset: { height: 10, width: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+  },
+  control: {
+    elevation: 1,
+    shadowColor: "#000000",
+    shadowOffset: { height: 4, width: 0 },
+    shadowOpacity: 0.24,
+    shadowRadius: 10,
+  },
+} as const;
 
 type StyleSheetCreate = typeof StyleSheet.create;
 
@@ -86,16 +105,17 @@ const ThemePreferencesContext = createContext<ThemePreferencesContextValue>({
 
 const lightPalette: Palette = {
   ...colors,
-  background: "#F7F8FA",
-  backgroundBottom: "#F2F5F8",
-  backgroundTop: "#FFFFFF",
+  background: "#F6F7F8",
+  backgroundBottom: "#EFF2F4",
+  backgroundTop: "#FAFBFC",
   backdrop: "rgba(28, 37, 46, 0.42)",
   card: "#FFFFFF",
-  cardMuted: "#F4F6F8",
+  cardMuted: "#F1F3F5",
   field: "#FFFFFF",
   inverseText: "#FFFFFF",
-  line: "rgba(145, 158, 171, 0.24)",
-  modalSurface: "#F6F7F9",
+  isDark: false,
+  line: "#E3E7EB",
+  modalSurface: "#F4F6F8",
   overlay: "#FFFFFF",
   softBlue: "#EAF2FF",
   softGreen: "#E9FCD4",
@@ -103,51 +123,52 @@ const lightPalette: Palette = {
   shopping: "#4F8D2C",
   shoppingSoft: "#EEF7E8",
   softPurple: "#EEF7E8",
-  text: "#1C252E",
-  textMuted: "#637381",
-  textSubtle: "#919EAB",
+  text: "#17212B",
+  textMuted: "#5E6A77",
+  textSubtle: "#7D8996",
 };
 
 const darkPaletteBase: typeof lightPalette = {
   ...colors,
-  background: "#0C1220",
-  backgroundBottom: "#10182A",
-  backgroundTop: "#1B2032",
-  backdrop: "rgba(6, 9, 18, 0.68)",
-  border: "rgba(238, 244, 255, 0.2)",
-  calendar: "#38BDF8",
+  background: "#090D12",
+  backgroundBottom: "#080C11",
+  backgroundTop: "#111720",
+  backdrop: "rgba(2, 5, 9, 0.74)",
+  border: "#3A4552",
+  calendar: "#76B9E6",
   card: darkCard,
   cardMuted: darkCardMuted,
-  danger: "#FF7A90",
-  dangerSoft: solidDarkSoft("#FF7A90"),
+  danger: "#F08E96",
+  dangerSoft: solidDarkSoft("#F08E96"),
   field: darkField,
-  finance: "#34D399",
-  food: "#FBBF24",
-  info: "#9BD47C",
-  infoSoft: solidDarkSoft("#9BD47C"),
-  inverseText: "#050711",
-  line: "rgba(238, 244, 255, 0.14)",
+  finance: "#67C89B",
+  food: "#E6B762",
+  info: "#7C9FF2",
+  infoSoft: solidDarkSoft("#7C9FF2"),
+  inverseText: "#09101F",
+  isDark: true,
+  line: "#303A46",
   modalSurface: darkModalSurface,
   overlay: darkOverlay,
-  primary: "#9BD47C",
-  primaryDark: "#C7F2AE",
-  primaryDarker: "#E6F9DA",
-  primaryLight: "#B8E59F",
-  primarySoft: solidDarkSoft("#9BD47C"),
-  shopping: "#9BD47C",
-  shoppingSoft: solidDarkSoft("#9BD47C"),
-  softBlue: solidDarkSoft("#38BDF8"),
-  softGreen: solidDarkSoft("#34D399"),
-  softOrange: solidDarkSoft("#FFC766"),
-  softPurple: solidDarkSoft("#9BD47C"),
-  successSoft: solidDarkSoft("#34D399"),
+  primary: "#7C9FF2",
+  primaryDark: "#9BB6F6",
+  primaryDarker: "#C0D0FA",
+  primaryLight: "#89A8F3",
+  primarySoft: solidDarkSoft("#7C9FF2"),
+  shopping: "#7C9FF2",
+  shoppingSoft: solidDarkSoft("#7C9FF2"),
+  softBlue: solidDarkSoft("#76B9E6"),
+  softGreen: solidDarkSoft("#67C89B"),
+  softOrange: solidDarkSoft("#E6B762"),
+  softPurple: solidDarkSoft("#A99DE0"),
+  successSoft: solidDarkSoft("#67C89B"),
   surface: darkCard,
   surfaceMuted: darkCardMuted,
-  text: "#FFFFFF",
-  textMuted: "#E2E7F3",
-  textSubtle: "#B8C2D8",
-  warning: "#FFD977",
-  warningSoft: solidDarkSoft("#FFD977"),
+  text: "#F4F6F8",
+  textMuted: "#C4CBD4",
+  textSubtle: "#9DA7B4",
+  warning: "#E5BA64",
+  warningSoft: solidDarkSoft("#E5BA64"),
 };
 
 export type AppPalette = typeof lightPalette;
@@ -224,7 +245,7 @@ export function useAppTheme() {
   const effectiveScheme = themeMode === "system" ? systemScheme : themeMode;
   const isDark = effectiveScheme === "dark";
   const palette = useMemo(
-    () => (isDark ? buildDarkPalette() : buildLightPalette()),
+    () => getAppPalette(isDark ? "dark" : "light"),
     [isDark],
   );
 
@@ -234,7 +255,7 @@ export function useAppTheme() {
     fontScale,
     isDark,
     radii,
-    shadows,
+    shadows: isDark ? darkShadows : shadows,
     spacing,
     themeMode,
   };
@@ -249,6 +270,10 @@ export function normalizeFontScale(value: number): number {
     fontScaleMax,
     Math.max(fontScaleMin, Math.round(value * 20) / 20),
   );
+}
+
+export function getAppPalette(scheme: "dark" | "light"): AppPalette {
+  return scheme === "dark" ? buildDarkPalette() : buildLightPalette();
 }
 
 function normalizeThemeMode(value: string | null | undefined): ThemeMode {
@@ -320,7 +345,7 @@ function buildLightPalette(): typeof lightPalette {
 }
 
 function buildDarkPalette(): typeof lightPalette {
-  const accent = createDarkAccentPalette(homeAccent);
+  const accent = createDarkAccentPalette(darkAccent);
 
   return {
     ...darkPaletteBase,
@@ -357,22 +382,22 @@ function createDarkAccentPalette(accentValue: string): AccentPalette {
   const color = normalizeAccentValue(accentValue) ?? homeAccent;
   const rgb = hexToRgb(color);
   const primary = !rgb
-    ? "#9BD47C"
-    : getRelativeLuminance(rgb) < 0.4
-      ? mixHex(color, "#FFFFFF", 0.34)
+    ? "#7C9FF2"
+    : getRelativeLuminance(rgb) < 0.36
+      ? mixHex(color, "#FFFFFF", 0.28)
       : color;
 
   return {
     primary,
-    primaryDark: mixHex(primary, "#FFFFFF", 0.34),
-    primaryDarker: mixHex(primary, "#FFFFFF", 0.58),
-    primaryLight: mixHex(primary, "#FFFFFF", 0.18),
+    primaryDark: mixHex(primary, "#FFFFFF", 0.18),
+    primaryDarker: mixHex(primary, "#FFFFFF", 0.38),
+    primaryLight: mixHex(primary, "#FFFFFF", 0.08),
     primarySoft: solidDarkSoft(primary),
   };
 }
 
 function solidDarkSoft(color: string): string {
-  return mixHex(color, darkCard, 0.44);
+  return mixHex(color, darkCard, 0.82);
 }
 
 function mixLightBottom(accent: string): string {
@@ -394,9 +419,9 @@ function mixDarkBottom(accent: string): string {
   }
 
   return rgbToHex({
-    blue: Math.round(base.blue * 0.9 + rgb.blue * 0.1),
-    green: Math.round(base.green * 0.9 + rgb.green * 0.1),
-    red: Math.round(base.red * 0.9 + rgb.red * 0.1),
+    blue: Math.round(base.blue * 0.97 + rgb.blue * 0.03),
+    green: Math.round(base.green * 0.97 + rgb.green * 0.03),
+    red: Math.round(base.red * 0.97 + rgb.red * 0.03),
   });
 }
 

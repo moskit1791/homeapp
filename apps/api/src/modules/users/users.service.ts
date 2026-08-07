@@ -575,7 +575,7 @@ export class UsersService {
           set
             auth_provider_user_id = gen_random_uuid(),
             email = $2,
-            display_name = 'Usuniete konto',
+            display_name = 'Usunięte konto',
             account_status = 'inactive',
             password_hash = null,
             email_verified_at = null,

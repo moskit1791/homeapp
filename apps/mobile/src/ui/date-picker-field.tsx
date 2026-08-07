@@ -123,7 +123,7 @@ export function DatePickerField({
                     [selectedDate]: {
                       selected: true,
                       selectedColor: theme.colors.finance,
-                      selectedTextColor: "#FFFFFF",
+                      selectedTextColor: theme.colors.inverseText,
                     },
                   }
                 : undefined
@@ -136,7 +136,7 @@ export function DatePickerField({
               dayTextColor: theme.colors.text,
               monthTextColor: theme.colors.text,
               selectedDayBackgroundColor: theme.colors.finance,
-              selectedDayTextColor: "#FFFFFF",
+              selectedDayTextColor: theme.colors.inverseText,
               textDisabledColor: theme.colors.textSubtle,
               textMonthFontSize: 15,
               textMonthFontWeight: "800",

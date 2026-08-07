@@ -65,6 +65,7 @@ import {
   CalendarDays,
   CalendarClock,
   CalendarPlus,
+  CalendarRefresh,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -574,14 +575,26 @@ export default function KalendarzScreen() {
                   googleCalendarConnected && styles.googleHeaderButtonConnected,
                 ]}
               >
-                <Image
-                  resizeMode="contain"
-                  source={googleGImage}
-                  style={[
-                    styles.googleHeaderImage,
-                    googleCalendarPending && styles.googleHeaderImageDisabled,
-                  ]}
-                />
+                {googleCalendarConnected ? (
+                  <CalendarRefresh
+                    color={
+                      googleCalendarPending
+                        ? theme.colors.textSubtle
+                        : readableGreen
+                    }
+                    size={22}
+                  />
+                ) : (
+                  <Image
+                    resizeMode="contain"
+                    source={googleGImage}
+                    style={[
+                      styles.googleHeaderImage,
+                      googleCalendarPending &&
+                        styles.googleHeaderImageDisabled,
+                    ]}
+                  />
+                )}
               </IconButton>
             ) : null}
             {calendarPermission.canCreate ? (
@@ -782,8 +795,7 @@ export default function KalendarzScreen() {
 function useCalendarStyles() {
   const theme = useAppTheme();
   const { width } = useWindowDimensions();
-  const screenBackground =
-    theme.colors.background === "#0C1220" ? theme.colors.background : "#FBFAF6";
+  const screenBackground = theme.isDark ? theme.colors.background : "#FBFAF6";
   const styles = createStyles(theme.colors, width);
 
   return { screenBackground, styles, theme };
@@ -2093,7 +2105,7 @@ function formatDateTime(value: string): string {
 }
 
 function createStyles(colors: AppPalette, viewportWidth: number) {
-  const isDark = colors.background === "#0C1220";
+  const isDark = colors.isDark;
   const displayFontFamily = Platform.select({
     android: "serif",
     ios: "Georgia",
@@ -2102,9 +2114,9 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
   const panelBackground = isDark ? colors.card : "#FFFFFF";
   const panelBorder = isDark ? colors.border : "#E8DED2";
   const panelShadowOpacity = isDark ? 0.18 : 0.065;
-  const selectedDayBackground = isDark ? "rgba(155, 212, 124, 0.2)" : "#EEF7E8";
+  const selectedDayBackground = isDark ? colors.primarySoft : "#EEF7E8";
   const selectedDayBorder = isDark
-    ? "rgba(199, 242, 174, 0.5)"
+    ? colors.primary
     : "rgba(79, 141, 44, 0.2)";
   const selectedDayText = isDark ? colors.primaryDarker : "#2F641F";
   const readableGreen = isDark ? colors.primaryDarker : mockupGreen;
