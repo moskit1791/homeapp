@@ -2108,3 +2108,33 @@
 - SHA-256: `1106C60FA2AC6E2C1F15F1633E2EF3616419FC3553D1F7C01C02369F102B4682`.
 - Podpis APK Signature Scheme v2 - poprawny.
 - SHA-256 certyfikatu: `DABDB31074901BB7097FF460326130E0DABB796C94A2A8A8F3BD1F267BA72874`.
+
+## 2026-08-07 - Wydanie HomeApp 1.2.5
+
+### Zakres
+
+- Przebudowano tryb ciemny: neutralne grafitowe powierzchnie, niebieski akcent główny oraz czytelniejsze kolory tekstu i obramowań.
+- Ujednolicono ikony górnych pasków i poprawiono ikonę przełączania układu posiłków.
+- Zapamiętywane są ustawienia filtrów finansów.
+- Ustabilizowano import wydatków z powiadomień Androida i obsługę aktywnych powiadomień mBanku.
+- Poprawiono polskie znaki w aplikacji, komunikatach backendu i wiadomościach e-mail.
+
+### Walidacja i produkcja
+
+- Pełny `typecheck`, lint oraz testy monorepo - OK.
+- API: 25 plików i 96 testów - OK. Mobile: 5 zestawów i 21 testów - OK.
+- Testy jednostkowe natywnego modułu Androida - OK.
+- Commit wdrożonego kodu: `35ed47f3b564b26a30100bf144825796aa9aa309`.
+- Produkcyjne API: `https://app.porabkihome.pl/api/health` - OK.
+- EAS Update group: `d399c01c-2473-49a5-ba5a-682c45eb38e8`; branch i kanał: `production`; runtime: `1.2.5`.
+
+### Finalny APK
+
+- Plik: `builds/homeapp-release.apk`.
+- EAS build: `260a6808-ddfc-4f27-8911-f32249f52440`.
+- Pakiet: `com.homeapp.mobile`.
+- Wersja: `1.2.5` (`versionCode=107`).
+- Rozmiar: `79636706` bajtów.
+- SHA-256: `77FCF9793670E6190E246F3291C538ACEAE053F9E2F102F0EE2730F0410F3A91`.
+- Podpis APK Signature Scheme v2 - poprawny.
+- SHA-256 certyfikatu: `DABDB31074901BB7097FF460326130E0DABB796C94A2A8A8F3BD1F267BA72874`.
