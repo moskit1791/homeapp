@@ -196,8 +196,9 @@ function Banner({ message, tone }: { message: string; tone: "error" | "info" }) 
 }
 
 function PasswordStrength({ value }: { value: string }) {
-  const styles = createStyles(useAppTheme().colors);
-  const result = getPasswordStrength(value);
+  const colors = useAppTheme().colors;
+  const styles = createStyles(colors);
+  const result = getPasswordStrength(value, colors);
 
   return (
     <View style={styles.strengthRoot}>
@@ -244,7 +245,7 @@ function getMessage(error: unknown): string {
   return "Nie udało się zmienić hasła";
 }
 
-function getPasswordStrength(value: string) {
+function getPasswordStrength(value: string, colors: AppPalette) {
   const checks = [
     value.length >= 8,
     /[A-ZĄĆĘŁŃÓŚŹŻ]/.test(value) && /[a-ząćęłńóśźż]/.test(value),
@@ -254,22 +255,22 @@ function getPasswordStrength(value: string) {
   const score = checks.filter(Boolean).length;
 
   if (!value) {
-    return { color: "#DFE3E8", label: "Wpisz hasło, aby zobaczyć siłę.", score: 0 };
+    return { color: colors.border, label: "Wpisz hasło, aby zobaczyć siłę.", score: 0 };
   }
 
   if (score <= 1) {
-    return { color: "#FF5630", label: "Słabe hasło", score: Math.max(score, 1) };
+    return { color: colors.danger, label: "Słabe hasło", score: Math.max(score, 1) };
   }
 
   if (score === 2) {
-    return { color: "#FFAB00", label: "Średnie hasło", score };
+    return { color: colors.warning, label: "Średnie hasło", score };
   }
 
   if (score === 3) {
-    return { color: "#36B37E", label: "Dobre hasło", score };
+    return { color: colors.finance, label: "Dobre hasło", score };
   }
 
-  return { color: "#00AB55", label: "Bardzo mocne hasło", score };
+  return { color: colors.finance, label: "Bardzo mocne hasło", score };
 }
 
 function createStyles(colors: AppPalette) {
@@ -344,7 +345,7 @@ function createStyles(colors: AppPalette) {
     },
     errorBox: {
       backgroundColor: colors.dangerSoft,
-      borderColor: colors.isDark ? colors.danger : "#FFDAD6",
+      borderColor: colors.danger,
     },
     header: {
       paddingHorizontal: spacing.lg,

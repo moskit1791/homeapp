@@ -444,8 +444,9 @@ export default function InvitationScreen() {
 }
 
 function PasswordStrength({ value }: { value: string }) {
-  const styles = createStyles(useAppTheme().colors);
-  const result = getPasswordStrength(value);
+  const colors = useAppTheme().colors;
+  const styles = createStyles(colors);
+  const result = getPasswordStrength(value, colors);
 
   return (
     <View style={styles.strengthRoot}>
@@ -509,7 +510,7 @@ function getMessage(error: unknown): string {
   return "Nie udało się obsłużyć zaproszenia";
 }
 
-function getPasswordStrength(value: string) {
+function getPasswordStrength(value: string, colors: AppPalette) {
   const checks = [
     value.length >= 8,
     /[A-ZĄĆĘŁŃÓŚŹŻ]/.test(value) && /[a-ząćęłńóśźż]/.test(value),
@@ -520,7 +521,7 @@ function getPasswordStrength(value: string) {
 
   if (!value) {
     return {
-      color: "#DFE3E8",
+      color: colors.border,
       label: "Wpisz hasło, aby zobaczyć siłę.",
       score: 0,
     };
@@ -528,21 +529,21 @@ function getPasswordStrength(value: string) {
 
   if (score <= 1) {
     return {
-      color: "#FF5630",
+      color: colors.danger,
       label: "Słabe hasło",
       score: Math.max(score, 1),
     };
   }
 
   if (score === 2) {
-    return { color: "#FFAB00", label: "Średnie hasło", score };
+    return { color: colors.warning, label: "Średnie hasło", score };
   }
 
   if (score === 3) {
-    return { color: "#36B37E", label: "Dobre hasło", score };
+    return { color: colors.finance, label: "Dobre hasło", score };
   }
 
-  return { color: "#00AB55", label: "Bardzo mocne hasło", score };
+  return { color: colors.finance, label: "Bardzo mocne hasło", score };
 }
 
 function createStyles(colors: AppPalette) {
@@ -646,7 +647,7 @@ function createStyles(colors: AppPalette) {
     },
     errorBox: {
       backgroundColor: colors.dangerSoft,
-      borderColor: colors.isDark ? colors.danger : "#FFDAD6",
+      borderColor: colors.danger,
     },
     fieldError: {
       color: colors.danger,

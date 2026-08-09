@@ -48,7 +48,7 @@ function App() {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: '#FFFFFF',
-    borderColor: '#DFE3E8',
+    borderColor: '#737E8A',
     borderRadius: 16,
     borderWidth: 1,
     gap: 12,
@@ -56,7 +56,7 @@ const styles = StyleSheet.create({
     padding: 20
   },
   message: {
-    color: '#637381',
+    color: '#45515E',
     fontSize: 13,
     lineHeight: 19
   },

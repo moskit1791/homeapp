@@ -51,7 +51,7 @@ export function FormModal({
       <GestureHandlerRootView style={styles.gestureRoot}>
         <SafeAreaView style={styles.safeArea}>
           <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
             style={styles.keyboard}
           >
             <Pressable onPress={onClose} style={styles.backdrop} />
@@ -77,12 +77,16 @@ export function FormModal({
             </View>
             {scrollEnabled ? (
               <ScrollView
+                automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
                 contentContainerStyle={[
                   styles.body,
                   footer ? styles.bodyWithFooter : null,
                   compact && styles.bodyCompact,
                 ]}
                 keyboardShouldPersistTaps="handled"
+                keyboardDismissMode={
+                  Platform.OS === "ios" ? "interactive" : "on-drag"
+                }
                 nestedScrollEnabled
                 showsVerticalScrollIndicator={false}
                 style={styles.scroll}

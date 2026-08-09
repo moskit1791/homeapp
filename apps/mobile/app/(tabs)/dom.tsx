@@ -155,7 +155,7 @@ const imageAttachmentMimeTypes = [
   "image/png",
   "image/webp",
 ] as const;
-const mockupGreen = "#4F8D2C";
+const mockupGreen = "#2E5CB8";
 
 type Accent = {
   color: string;
@@ -3983,7 +3983,7 @@ function createStyles(colors: AppPalette) {
     homeHeaderButton: {
       alignItems: "center",
       backgroundColor: colors.card,
-      borderColor: colors.isDark ? colors.border : "#E8DED2",
+      borderColor: colors.border,
       borderRadius: 999,
       borderWidth: 1,
       elevation: 2,
@@ -4114,7 +4114,7 @@ function createStyles(colors: AppPalette) {
     itemRow: {
       alignItems: "center",
       backgroundColor: colors.card,
-      borderColor: colors.isDark ? colors.border : "#E8DED2",
+      borderColor: colors.border,
       borderRadius: 12,
       borderWidth: 1,
       elevation: 1,
@@ -4401,7 +4401,7 @@ function createStyles(colors: AppPalette) {
     },
     panel: {
       backgroundColor: colors.overlay,
-      borderColor: colors.isDark ? colors.border : "#E8DED2",
+      borderColor: colors.border,
       borderRadius: 12,
       borderWidth: 1,
       elevation: 2,

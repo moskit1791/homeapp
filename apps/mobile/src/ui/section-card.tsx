@@ -36,15 +36,13 @@ function createStyles(colors: AppPalette) {
   return StyleSheet.create({
   card: {
     backgroundColor: colors.card,
-    borderColor: colors.border,
     borderRadius: radii.card,
-    borderWidth: 1,
-    elevation: 2,
+    elevation: 1,
     gap: spacing.md,
     padding: spacing.lg,
     shadowColor: '#000000',
     shadowOffset: { height: 10, width: 0 },
-    shadowOpacity: colors.isDark ? 0.26 : 0.06,
+    shadowOpacity: colors.isDark ? 0.2 : 0.05,
     shadowRadius: colors.isDark ? 18 : 22
   },
   header: {

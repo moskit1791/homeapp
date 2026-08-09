@@ -103,7 +103,7 @@ const calendarViewOptions: Array<{ label: string; value: CalendarViewMode }> = [
 ];
 
 const weekdayLabels = ["Pon", "Wto", "Śro", "Czw", "Pią", "Sob", "Nie"];
-const googleCalendarMarkerColors = [
+const googleCalendarMarkerColorsDark = [
   "#22D3EE",
   "#A78BFA",
   "#F472B6",
@@ -111,14 +111,29 @@ const googleCalendarMarkerColors = [
   "#34D399",
   "#FB7185",
 ];
-const localCalendarMarkerColors = [
-  "#B4232D",
-  "#FFC438",
-  "#F27A98",
-  "#FF943D",
-  "#667CE8",
+const googleCalendarMarkerColorsLight = [
+  "#006D77",
+  "#5B3AA4",
+  "#A11B5A",
+  "#8A5500",
+  "#087A46",
+  "#B4234A",
 ];
-const mockupGreen = "#4F8D2C";
+const localCalendarMarkerColorsDark = [
+  "#FF8A95",
+  "#FFD05C",
+  "#FF8FB0",
+  "#FFAA66",
+  "#91A7FF",
+];
+const localCalendarMarkerColorsLight = [
+  "#A3202A",
+  "#795400",
+  "#9C2450",
+  "#9A4C00",
+  "#3654B3",
+];
+const mockupGreen = "#2E5CB8";
 
 export default function KalendarzScreen() {
   const { session } = useSession();
@@ -2014,20 +2029,24 @@ function getCalendarEventMarkerColor(
 ): string {
   if (event.sourceType !== "google") {
     const markerKey = `${event.eventDate}:${event.title}:${event.id}:${index}`;
+    const markerColors = colors.isDark
+      ? localCalendarMarkerColorsDark
+      : localCalendarMarkerColorsLight;
 
     return (
-      localCalendarMarkerColors[
-        hashString(markerKey) % localCalendarMarkerColors.length
+      markerColors[
+        hashString(markerKey) % markerColors.length
       ] ?? colors.calendar
     );
   }
 
   const sourceKey = getCalendarEventSourceKey(event);
+  const markerColors = colors.isDark
+    ? googleCalendarMarkerColorsDark
+    : googleCalendarMarkerColorsLight;
 
   return (
-    googleCalendarMarkerColors[
-      hashString(sourceKey) % googleCalendarMarkerColors.length
-    ] ?? "#22D3EE"
+    markerColors[hashString(sourceKey) % markerColors.length] ?? colors.calendar
   );
 }
 
@@ -2112,7 +2131,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
   });
   const isCompact = viewportWidth < 430;
   const panelBackground = isDark ? colors.card : "#FFFFFF";
-  const panelBorder = isDark ? colors.border : "#E8DED2";
+  const panelBorder = colors.border;
   const panelShadowOpacity = isDark ? 0.18 : 0.065;
   const selectedDayBackground = isDark ? colors.primarySoft : "#EEF7E8";
   const selectedDayBorder = isDark
@@ -2127,7 +2146,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
     addEventDashed: {
       alignItems: "center",
       backgroundColor: panelBackground,
-      borderColor: isDark ? colors.border : "#DDE7D7",
+      borderColor: colors.border,
       borderRadius: 12,
       borderStyle: "solid",
       borderWidth: 1,
@@ -2146,11 +2165,11 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
     },
     addHeaderButton: {
       backgroundColor: panelBackground,
-      borderColor: isDark ? colors.border : "#DDE7D7",
+      borderColor: colors.border,
     },
     calendarCancelButton: {
       backgroundColor: panelBackground,
-      borderColor: isDark ? colors.border : "#DDE7D7",
+      borderColor: colors.border,
     },
     calendarCancelButtonLabel: { color: readableGreen },
     calendarSaveButton: {
@@ -2200,7 +2219,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
     },
     calendarModeOptionActive: {
       backgroundColor: isDark ? colors.cardMuted : "#F6FAF0",
-      borderColor: isDark ? colors.border : "#E2EAD9",
+      borderColor: colors.border,
     },
     calendarModeOptionPressed: { opacity: 0.78 },
     calendarModeText: {
@@ -2369,7 +2388,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
       justifyContent: "flex-start",
     },
     dayCellWeekDivider: {
-      borderTopColor: isDark ? colors.border : "#F1ECE4",
+      borderTopColor: colors.line,
       borderTopWidth: 1,
       paddingTop: isCompact ? 2 : 4,
     },
@@ -2496,7 +2515,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
     formRow: { flexDirection: "row", gap: spacing.sm },
     googleHeaderButton: {
       backgroundColor: isDark ? colors.card : "#FFFFFF",
-      borderColor: isDark ? colors.border : "#E6DFD4",
+      borderColor: colors.border,
     },
     googleHeaderImage: {
       height: isCompact ? 26 : 30,
@@ -2504,7 +2523,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
     },
     googleHeaderImageDisabled: { opacity: 0.48 },
     googleHeaderButtonConnected: {
-      borderColor: isDark ? colors.border : "#EDE7DC",
+      borderColor: colors.border,
     },
     headerIconButton: {
       backgroundColor: panelBackground,
@@ -2523,7 +2542,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
     headerActions: { alignItems: "center", flexDirection: "row", gap: 5 },
     input: {
       backgroundColor: panelBackground,
-      borderColor: isDark ? colors.border : "#E1E7DD",
+      borderColor: colors.border,
       borderRadius: radii.control,
       borderWidth: 1,
       color: colors.text,

@@ -86,11 +86,17 @@ export class BudgetItemsService {
       return null;
     }
 
-    if (dto.ownerMemberId !== undefined) {
+    if (
+      dto.ownerMemberId !== undefined &&
+      dto.ownerMemberId !== current.ownerMemberId
+    ) {
       await this.ensureActiveMember(householdId, dto.ownerMemberId);
     }
 
-    if (dto.categoryId !== undefined) {
+    if (
+      dto.categoryId !== undefined &&
+      dto.categoryId !== current.categoryId
+    ) {
       await this.ensureActiveCategory(householdId, dto.categoryId);
     }
 

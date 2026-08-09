@@ -94,7 +94,6 @@ import {
   CardsView,
   ListBulleted,
   Package,
-  Plus,
   Search,
   ShoppingCart,
   Sparkles,
@@ -117,8 +116,42 @@ import shoppingCategorySnacksImage from "../../assets/shopping-category-snacks.p
 type MainSegment = "shopping" | "meals" | "pantry";
 type MealLayout = "list" | "cards";
 
+const headerPlusIconStyles = StyleSheet.create({
+  horizontal: {
+    borderRadius: 2,
+    height: 3,
+    position: "absolute",
+    width: 17,
+  },
+  root: {
+    alignItems: "center",
+    height: 24,
+    justifyContent: "center",
+    width: 24,
+  },
+  vertical: {
+    borderRadius: 2,
+    height: 17,
+    position: "absolute",
+    width: 3,
+  },
+});
+
+function HeaderPlusIcon({ color }: { color: string }) {
+  return (
+    <View pointerEvents="none" style={headerPlusIconStyles.root}>
+      <View
+        style={[headerPlusIconStyles.horizontal, { backgroundColor: color }]}
+      />
+      <View
+        style={[headerPlusIconStyles.vertical, { backgroundColor: color }]}
+      />
+    </View>
+  );
+}
+
 const mealLayoutStorageKey = "homeapp.meals.layout.v1";
-const mockupGreen = "#4F8D2C";
+const mockupGreen = "#2E5CB8";
 
 const listTypes: Array<{ label: string; value: ShoppingListType }> = [
   { label: "Dzisiaj", value: "daily" },
@@ -399,10 +432,7 @@ export default function ListaScreen() {
                   onPress={() => setMealAddOpenRequest((value) => value + 1)}
                   style={styles.foodHeaderButton}
                 >
-                  <Plus
-                    color={theme.isDark ? theme.colors.primary : mockupGreen}
-                    size={24}
-                  />
+                  <HeaderPlusIcon color={theme.colors.primary} />
                 </IconButton>
               </>
             ) : null}
@@ -434,10 +464,7 @@ export default function ListaScreen() {
             onPress={() => setPantryAddOpenRequest((value) => value + 1)}
             style={styles.foodHeaderButton}
           >
-            <Plus
-              color={theme.isDark ? theme.colors.primary : mockupGreen}
-              size={24}
-            />
+            <HeaderPlusIcon color={theme.colors.primary} />
           </IconButton>
         ) : undefined
       }
@@ -3609,19 +3636,19 @@ function isValidOptionalIsoDate(value: string): boolean {
 function createStyles(colors: AppPalette) {
   const isDark = colors.isDark;
   const shoppingCardBackground = isDark ? colors.card : "#FFFFFF";
-  const shoppingCardBorder = isDark ? colors.border : "#E8DDCE";
+  const shoppingCardBorder = colors.border;
   const shoppingHeaderBackground = isDark ? colors.cardMuted : "#F5F0E6";
   const shoppingRowBorder = isDark ? colors.line : "#EFE5D4";
   const shoppingText = isDark ? colors.text : "#2B2821";
-  const shoppingMetaText = isDark ? colors.textMuted : "#7E7667";
-  const shoppingMutedText = isDark ? colors.textSubtle : "#8B8478";
+  const shoppingMetaText = colors.textMuted;
+  const shoppingMutedText = colors.textSubtle;
   const shoppingCountBackground = isDark ? colors.field : "#E7E0C8";
   const shoppingCountText = isDark ? colors.text : "#4E5435";
   const panelBackground = isDark ? colors.card : "#FFFFFF";
-  const panelBorder = isDark ? colors.border : "#E8DED2";
+  const panelBorder = colors.border;
   const panelShadowOpacity = isDark ? 0.18 : 0.08;
   const softGreenPanel = isDark ? colors.cardMuted : "#F6FAF0";
-  const softGreenBorder = isDark ? colors.border : "#E2EAD9";
+  const softGreenBorder = colors.border;
   const illustrationSurface = isDark ? colors.field : "transparent";
 
   return StyleSheet.create({
@@ -3976,7 +4003,7 @@ function createStyles(colors: AppPalette) {
     checkBox: {
       alignItems: "center",
       backgroundColor: isDark ? colors.field : "#FFFCF5",
-      borderColor: isDark ? colors.border : "#CFC5B3",
+      borderColor: colors.border,
       borderRadius: 999,
       borderWidth: 1,
       height: 22,
@@ -4161,8 +4188,8 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
     },
     checkBoxDone: {
-      backgroundColor: "#4F7D52",
-      borderColor: "#4F7D52",
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
     },
     confirmText: {
       color: colors.textMuted,

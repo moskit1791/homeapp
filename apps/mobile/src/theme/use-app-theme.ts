@@ -56,17 +56,17 @@ type ThemePreferencesContextValue = {
 };
 
 const themePreferencesKey = "homeapp.theme-preferences.v1";
-const homeAccent: DarkAccentKey = "#4F8D2C";
-const darkAccent: DarkAccentKey = "#7C9FF2";
+const homeAccent: DarkAccentKey = "#2E5CB8";
+const darkAccent: DarkAccentKey = "#8CAEFF";
 const defaultFontScale = 1;
 const defaultThemeMode: ThemeMode = "system";
 const fontScaleMin = 0.9;
 const fontScaleMax = 1.3;
-const darkCard = "#181F28";
-const darkCardMuted = "#222B36";
-const darkField = "#111821";
-const darkModalSurface = "#141B24";
-const darkOverlay = "#181F28";
+const darkCard = "#151C25";
+const darkCardMuted = "#202A35";
+const darkField = "#0D141D";
+const darkModalSurface = "#111923";
+const darkOverlay = "#151C25";
 
 const darkShadows = {
   card: {
@@ -105,70 +105,70 @@ const ThemePreferencesContext = createContext<ThemePreferencesContextValue>({
 
 const lightPalette: Palette = {
   ...colors,
-  background: "#F6F7F8",
-  backgroundBottom: "#EFF2F4",
+  background: "#F7F8FA",
+  backgroundBottom: "#F0F3F6",
   backgroundTop: "#FAFBFC",
   backdrop: "rgba(28, 37, 46, 0.42)",
   card: "#FFFFFF",
-  cardMuted: "#F1F3F5",
+  cardMuted: "#EEF1F4",
   field: "#FFFFFF",
   inverseText: "#FFFFFF",
   isDark: false,
-  line: "#E3E7EB",
+  line: "#7F8994",
   modalSurface: "#F4F6F8",
   overlay: "#FFFFFF",
-  softBlue: "#EAF2FF",
-  softGreen: "#E9FCD4",
-  softOrange: "#FFF4DE",
-  shopping: "#4F8D2C",
-  shoppingSoft: "#EEF7E8",
-  softPurple: "#EEF7E8",
-  text: "#17212B",
-  textMuted: "#5E6A77",
-  textSubtle: "#7D8996",
+  softBlue: "#E7EEFC",
+  softGreen: "#E4F4EB",
+  softOrange: "#FFF1D6",
+  shopping: "#3B6D23",
+  shoppingSoft: "#E7F0E2",
+  softPurple: "#EEEAF8",
+  text: "#18212B",
+  textMuted: "#45515E",
+  textSubtle: "#5B6672",
 };
 
 const darkPaletteBase: typeof lightPalette = {
   ...colors,
-  background: "#090D12",
-  backgroundBottom: "#080C11",
-  backgroundTop: "#111720",
+  background: "#080C12",
+  backgroundBottom: "#070B11",
+  backgroundTop: "#101721",
   backdrop: "rgba(2, 5, 9, 0.74)",
-  border: "#3A4552",
-  calendar: "#76B9E6",
+  border: "#768394",
+  calendar: "#82C7F2",
   card: darkCard,
   cardMuted: darkCardMuted,
-  danger: "#F08E96",
-  dangerSoft: solidDarkSoft("#F08E96"),
+  danger: "#FF9AA2",
+  dangerSoft: solidDarkSoft("#FF9AA2"),
   field: darkField,
-  finance: "#67C89B",
-  food: "#E6B762",
-  info: "#7C9FF2",
-  infoSoft: solidDarkSoft("#7C9FF2"),
-  inverseText: "#09101F",
+  finance: "#72D6A7",
+  food: "#F1C36C",
+  info: "#8CAEFF",
+  infoSoft: solidDarkSoft("#8CAEFF"),
+  inverseText: "#07101F",
   isDark: true,
-  line: "#303A46",
+  line: "#667382",
   modalSurface: darkModalSurface,
   overlay: darkOverlay,
-  primary: "#7C9FF2",
-  primaryDark: "#9BB6F6",
-  primaryDarker: "#C0D0FA",
-  primaryLight: "#89A8F3",
-  primarySoft: solidDarkSoft("#7C9FF2"),
-  shopping: "#7C9FF2",
-  shoppingSoft: solidDarkSoft("#7C9FF2"),
-  softBlue: solidDarkSoft("#76B9E6"),
-  softGreen: solidDarkSoft("#67C89B"),
-  softOrange: solidDarkSoft("#E6B762"),
-  softPurple: solidDarkSoft("#A99DE0"),
-  successSoft: solidDarkSoft("#67C89B"),
+  primary: "#8CAEFF",
+  primaryDark: "#AAC2FF",
+  primaryDarker: "#CAD7FF",
+  primaryLight: "#99B6FF",
+  primarySoft: solidDarkSoft("#8CAEFF"),
+  shopping: "#8CAEFF",
+  shoppingSoft: solidDarkSoft("#8CAEFF"),
+  softBlue: solidDarkSoft("#82C7F2"),
+  softGreen: solidDarkSoft("#72D6A7"),
+  softOrange: solidDarkSoft("#F1C36C"),
+  softPurple: solidDarkSoft("#B7A9F2"),
+  successSoft: solidDarkSoft("#72D6A7"),
   surface: darkCard,
   surfaceMuted: darkCardMuted,
-  text: "#F4F6F8",
-  textMuted: "#C4CBD4",
-  textSubtle: "#9DA7B4",
-  warning: "#E5BA64",
-  warningSoft: solidDarkSoft("#E5BA64"),
+  text: "#F5F7FA",
+  textMuted: "#D0D6DE",
+  textSubtle: "#AEB7C2",
+  warning: "#F1C36C",
+  warningSoft: solidDarkSoft("#F1C36C"),
 };
 
 export type AppPalette = typeof lightPalette;
@@ -298,11 +298,7 @@ function installFontScaleStyleSheet() {
 }
 
 function scaleStyleSheetFonts<T>(styles: T): T {
-  if (
-    runtimeFontScale === defaultFontScale ||
-    !styles ||
-    typeof styles !== "object"
-  ) {
+  if (!styles || typeof styles !== "object") {
     return styles;
   }
 
@@ -313,11 +309,18 @@ function scaleStyleSheetFonts<T>(styles: T): T {
   const scaled: Record<string, unknown> = {};
 
   Object.entries(styles as Record<string, unknown>).forEach(([key, value]) => {
-    if (
-      (key === "fontSize" || key === "lineHeight") &&
-      typeof value === "number"
-    ) {
-      scaled[key] = Math.round(value * runtimeFontScale * 10) / 10;
+    if (key === "fontSize" && typeof value === "number") {
+      scaled[key] = scaleTypographyMetric(improveBaseFontSize(value));
+      return;
+    }
+
+    if (key === "lineHeight" && typeof value === "number") {
+      scaled[key] = scaleTypographyMetric(improveBaseLineHeight(value));
+      return;
+    }
+
+    if (key === "fontWeight" && typeof value === "string") {
+      scaled[key] = normalizeFontWeight(value);
       return;
     }
 
@@ -326,6 +329,46 @@ function scaleStyleSheetFonts<T>(styles: T): T {
   });
 
   return scaled as T;
+}
+
+function improveBaseFontSize(value: number): number {
+  if (value <= 11) {
+    return value + 2;
+  }
+
+  if (value <= 17) {
+    return value + 1;
+  }
+
+  return value;
+}
+
+function improveBaseLineHeight(value: number): number {
+  if (value <= 18) {
+    return value + 2;
+  }
+
+  if (value <= 24) {
+    return value + 1;
+  }
+
+  return value;
+}
+
+function normalizeFontWeight(value: string): string {
+  if (value === "900") {
+    return "800";
+  }
+
+  if (value === "800") {
+    return "700";
+  }
+
+  return value;
+}
+
+function scaleTypographyMetric(value: number): number {
+  return Math.round(value * runtimeFontScale * 10) / 10;
 }
 
 function buildLightPalette(): typeof lightPalette {
@@ -373,8 +416,8 @@ function createLightAccentPalette(accentValue: string): AccentPalette {
     primary,
     primaryDark: mixHex(primary, "#111827", 0.22),
     primaryDarker: mixHex(primary, "#111827", 0.55),
-    primaryLight: mixHex(primary, "#FFFFFF", 0.24),
-    primarySoft: toRgba(primary, 0.14),
+    primaryLight: mixHex(primary, "#FFFFFF", 0.12),
+    primarySoft: mixHex(primary, "#FFFFFF", 0.88),
   };
 }
 
@@ -382,7 +425,7 @@ function createDarkAccentPalette(accentValue: string): AccentPalette {
   const color = normalizeAccentValue(accentValue) ?? homeAccent;
   const rgb = hexToRgb(color);
   const primary = !rgb
-    ? "#7C9FF2"
+    ? "#8CAEFF"
     : getRelativeLuminance(rgb) < 0.36
       ? mixHex(color, "#FFFFFF", 0.28)
       : color;
@@ -452,16 +495,6 @@ function mixHex(left: string, right: string, amount: number): string {
     green: Math.round(leftRgb.green * (1 - amount) + rightRgb.green * amount),
     red: Math.round(leftRgb.red * (1 - amount) + rightRgb.red * amount),
   });
-}
-
-function toRgba(value: string, alpha: number): string {
-  const rgb = hexToRgb(value);
-
-  if (!rgb) {
-    return value;
-  }
-
-  return `rgba(${rgb.red}, ${rgb.green}, ${rgb.blue}, ${alpha})`;
 }
 
 function getRelativeLuminance(value: {

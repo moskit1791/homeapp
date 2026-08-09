@@ -51,7 +51,7 @@ const taskSegments: Array<{ label: string; value: TaskSegment }> = [
   { label: "Notatki", value: "notes" },
   { label: "Do zrobienia", value: "todo" },
 ];
-const mockupGreen = "#4F8D2C";
+const mockupGreen = "#2E5CB8";
 
 function setTodoDoneValue(item: TodoItem, done: boolean): TodoItem {
   const now = new Date().toISOString();
@@ -872,7 +872,7 @@ function createStyles(colors: AppPalette) {
     headerIconButton: {
       alignItems: "center",
       backgroundColor: colors.card,
-      borderColor: isDark ? colors.border : "#E8DED2",
+      borderColor: colors.border,
       borderRadius: 999,
       borderWidth: 1,
       elevation: 2,
@@ -908,7 +908,7 @@ function createStyles(colors: AppPalette) {
     },
     noteCard: {
       backgroundColor: colors.card,
-      borderColor: isDark ? colors.border : "#E8DED2",
+      borderColor: colors.border,
       borderRadius: 12,
       borderWidth: 1,
       gap: spacing.sm,
@@ -956,7 +956,7 @@ function createStyles(colors: AppPalette) {
     todoCard: {
       alignItems: "center",
       backgroundColor: colors.card,
-      borderColor: isDark ? colors.border : "#E8DED2",
+      borderColor: colors.border,
       borderRadius: 12,
       borderWidth: 1,
       flexDirection: "row",

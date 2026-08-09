@@ -139,7 +139,7 @@ function createStyles(colors: AppPalette) {
     mockupActive: {
       backgroundColor:
         colors.isDark ? colors.cardMuted : "#F6FAF0",
-      borderColor: colors.isDark ? colors.border : "#E2EAD9",
+      borderColor: colors.border,
       elevation: 0,
       shadowOpacity: 0,
     },
@@ -153,7 +153,7 @@ function createStyles(colors: AppPalette) {
     },
     mockupRoot: {
       backgroundColor: colors.isDark ? colors.card : "#FFFFFF",
-      borderColor: colors.isDark ? colors.border : "#E8DED2",
+      borderColor: colors.border,
       borderRadius: 12,
       elevation: 2,
       shadowColor: "#000000",
@@ -162,7 +162,7 @@ function createStyles(colors: AppPalette) {
       shadowRadius: 18,
     },
     pressed: {
-      opacity: 0.78,
+      transform: [{ scale: 0.99 }],
     },
     root: {
       backgroundColor: colors.cardMuted,

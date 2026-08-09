@@ -56,7 +56,7 @@ import calendarCardImage from "../../assets/today-calendar-card.png";
 import mealCardImage from "../../assets/today-meal-card.png";
 import shoppingCardImage from "../../assets/today-shopping-card.png";
 
-const mockupGreen = "#4F8D2C";
+const mockupGreen = "#2E5CB8";
 
 export default function DzisiajScreen() {
   const { session } = useSession();
@@ -993,7 +993,7 @@ function createStyles(colors: AppPalette, viewportWidth: number) {
   const compactGap = isNarrow ? spacing.sm : spacing.md;
   const contentPadding = isNarrow ? spacing.md : spacing.lg;
   const todayPanelBackground = isDark ? colors.card : "#FFFDF8";
-  const todayPanelBorder = isDark ? colors.border : "#F1EDE7";
+  const todayPanelBorder = colors.border;
   const todayPanelText = isDark ? colors.text : "#142017";
   const todayPanelMuted = isDark ? colors.textMuted : "#5F635F";
   const todayPanelEyebrow = isDark ? colors.primaryDark : mockupGreen;

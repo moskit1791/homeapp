@@ -1,11 +1,8 @@
 ﻿import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
-import DraggableFlatList, {
-  ScaleDecorator,
-} from "react-native-draggable-flatlist";
 import {
   Image,
   Platform,
@@ -32,7 +29,6 @@ import {
   ChevronRight,
   ChevronUp,
   Dumbbell,
-  DragHandle,
   Filter,
   Gamepad2,
   Gift,
@@ -168,6 +164,10 @@ type BudgetCategoryGroup = {
   spent: number;
 };
 
+type GenerateScrollHandle = {
+  scrollTo: (options: { animated?: boolean; y?: number }) => void;
+};
+
 type FinanceModal =
   | "menu"
   | "incomeBreakdown"
@@ -245,7 +245,7 @@ const financeSortOptions: Array<{ id: FinanceSortKey; label: string }> = [
   { id: "remaining", label: "Zostaje" },
 ];
 
-const mockupGreen = "#4F8D2C";
+const mockupGreen = "#2E5CB8";
 
 export default function FinanseScreen() {
   const { session } = useSession();
@@ -344,6 +344,8 @@ export default function FinanseScreen() {
   const [generateCategoryOrder, setGenerateCategoryOrder] = useState<string[]>(
     [],
   );
+  const generateScrollRef = useRef<GenerateScrollHandle | null>(null);
+  const generateCategoryOffsetsRef = useRef<Record<string, number>>({});
   const [budgetViewMode, setBudgetViewMode] = useState<BudgetViewMode>("cards");
   const [budgetViewModeLoaded, setBudgetViewModeLoaded] = useState(false);
   const [financeSearchVisible, setFinanceSearchVisible] = useState(false);
@@ -746,7 +748,7 @@ export default function FinanseScreen() {
   }
 
   function openGenerateMonthModal() {
-    setGenerateCopyItemIds(generateSourceItems.map((item) => item.id));
+    setGenerateCopyItemIds([]);
     setGenerateAmountInputs(
       Object.fromEntries(
         generateSourceItems.map((item) => [
@@ -765,6 +767,51 @@ export default function FinanseScreen() {
         .map((category) => category.id),
     );
     setFinanceModal("generateMonth");
+  }
+
+  function keepGenerateAmountVisible(item: BudgetItemWithCategory) {
+    const offset = generateCategoryOffsetsRef.current[item.category.id];
+
+    if (offset === undefined) {
+      return;
+    }
+
+    const scrollToCategory = () =>
+      generateScrollRef.current?.scrollTo({
+        animated: true,
+        y: Math.max(0, offset - spacing.xl),
+      });
+
+    scrollToCategory();
+    setTimeout(scrollToCategory, 250);
+  }
+
+  function renderGenerateMonthActions() {
+    return (
+      <View style={styles.generateModalActions}>
+        {nextMonthMutation.error ? (
+          <InlineAlert
+            tone="error"
+            text="Nie udało się wygenerować nowego miesiąca."
+          />
+        ) : null}
+        <View style={styles.modalFooter}>
+          <ActionButton
+            onPress={closeFinanceModal}
+            style={styles.modalFooterButton}
+            title="Anuluj"
+            variant="secondary"
+          />
+          <ActionButton
+            disabled={!canGenerateNextMonth}
+            loading={nextMonthMutation.isPending}
+            onPress={() => nextMonthMutation.mutate()}
+            style={styles.modalFooterButton}
+            title="Wygeneruj"
+          />
+        </View>
+      </View>
+    );
   }
 
   function toggleGenerateItemCopy(item: BudgetItemWithCategory) {
@@ -840,6 +887,32 @@ export default function FinanseScreen() {
         ...current,
       }));
     }
+  }
+
+  function moveGenerateCategory(categoryId: string, direction: -1 | 1) {
+    setGenerateCategoryOrder((current) => {
+      const order =
+        current.length > 0
+          ? [...current]
+          : orderedGenerateCategories.map((category) => category.id);
+      const index = order.indexOf(categoryId);
+      const targetIndex = index + direction;
+
+      if (index < 0 || targetIndex < 0 || targetIndex >= order.length) {
+        return current;
+      }
+
+      const currentId = order[index];
+      const targetId = order[targetIndex];
+
+      if (!currentId || !targetId) {
+        return current;
+      }
+
+      order[index] = targetId;
+      order[targetIndex] = currentId;
+      return order;
+    });
   }
 
   useEffect(() => {
@@ -1183,6 +1256,8 @@ export default function FinanseScreen() {
     mutationFn: async () => {
       const budgetAmount = itemAmount.trim() ? parseMoney(itemAmount) : null;
       const name = itemName.trim();
+      const categoryId = selectedItemCategoryId;
+      const ownerMemberId = selectedItemOwnerId;
       const envelope = financeEncryptionEnabled
         ? await sealFinanceEnvelope(
             "budget-item",
@@ -1198,9 +1273,13 @@ export default function FinanseScreen() {
         editingBudgetItem?.id ?? "",
         {
           budgetAmount: financeEncryptionEnabled ? null : budgetAmount,
-          categoryId: selectedItemCategoryId,
+          ...(categoryId !== editingBudgetItem?.category.id
+            ? { categoryId }
+            : {}),
           name: financeEncryptionEnabled ? "[Zaszyfrowana pozycja]" : name,
-          ownerMemberId: selectedItemOwnerId,
+          ...(ownerMemberId !== editingBudgetItem?.owner?.memberId
+            ? { ownerMemberId }
+            : {}),
           ...envelope,
         },
         { accessToken },
@@ -1904,9 +1983,7 @@ export default function FinanseScreen() {
         </View>
       }
       contentStyle={styles.financeScreenContent}
-      backgroundColor={
-        theme.isDark ? theme.colors.background : "#FBFAF6"
-      }
+      backgroundColor={theme.isDark ? theme.colors.background : "#FBFAF6"}
       title="Finanse"
     >
       {!summary ? (
@@ -2252,23 +2329,6 @@ export default function FinanseScreen() {
           </FormModal>
 
           <FormModal
-            footer={
-              <View style={styles.modalFooter}>
-                <ActionButton
-                  onPress={closeFinanceModal}
-                  style={styles.modalFooterButton}
-                  title="Anuluj"
-                  variant="secondary"
-                />
-                <ActionButton
-                  disabled={!canGenerateNextMonth}
-                  loading={nextMonthMutation.isPending}
-                  onPress={() => nextMonthMutation.mutate()}
-                  style={styles.modalFooterButton}
-                  title="Wygeneruj"
-                />
-              </View>
-            }
             onClose={closeFinanceModal}
             scrollEnabled={false}
             subtitle={currentMonth ? formatMonthLong(currentMonth) : undefined}
@@ -2277,7 +2337,17 @@ export default function FinanseScreen() {
           >
             <View style={styles.generateModalBody}>
               {generateSourceCategories.length > 0 ? (
-                <View style={styles.generateCopyList}>
+                <ScrollView
+                  contentContainerStyle={styles.generateCopyList}
+                  keyboardDismissMode="on-drag"
+                  keyboardShouldPersistTaps="handled"
+                  ref={(scrollView) => {
+                    generateScrollRef.current =
+                      scrollView as unknown as GenerateScrollHandle;
+                  }}
+                  showsVerticalScrollIndicator={false}
+                  style={styles.generateCategoryList}
+                >
                   {generateSourceItems.length > 0 ? (
                     <View style={styles.generateToolbar}>
                       <Text style={styles.generateToolbarMeta}>
@@ -2307,208 +2377,207 @@ export default function FinanseScreen() {
                       </View>
                     </View>
                   ) : null}
-                  <DraggableFlatList
-                    activationDistance={8}
-                    autoscrollSpeed={160}
-                    autoscrollThreshold={90}
-                    data={orderedGenerateCategories}
-                    keyExtractor={(category) => category.id}
-                    onDragEnd={({ data }) =>
-                      setGenerateCategoryOrder(
-                        data.map((category) => category.id),
-                      )
-                    }
-                    renderItem={({ drag, isActive, item: category }) => {
-                      const categoryItems = getCategoryItems(category).map(
-                        (item) => ({
-                          ...item,
-                          category,
-                        }),
-                      );
-                      const selectedCount = categoryItems.filter((item) =>
-                        generateSelectedItemSet.has(item.id),
-                      ).length;
-                      const allSelected =
-                        categoryItems.length > 0 &&
-                        selectedCount === categoryItems.length;
-                      const partiallySelected =
-                        selectedCount > 0 && !allSelected;
+                  {orderedGenerateCategories.map((category, categoryIndex) => {
+                    const categoryItems = getCategoryItems(category).map(
+                      (item) => ({
+                        ...item,
+                        category,
+                      }),
+                    );
+                    const selectedCount = categoryItems.filter((item) =>
+                      generateSelectedItemSet.has(item.id),
+                    ).length;
+                    const allSelected =
+                      categoryItems.length > 0 &&
+                      selectedCount === categoryItems.length;
+                    const partiallySelected = selectedCount > 0 && !allSelected;
 
-                      return (
-                        <ScaleDecorator activeScale={1.015}>
-                          <View
-                            style={[
-                              styles.generateCategoryGroup,
-                              isActive && styles.generateCategoryGroupActive,
-                            ]}
+                    return (
+                      <View
+                        key={category.id}
+                        onLayout={({ nativeEvent }) => {
+                          generateCategoryOffsetsRef.current[category.id] =
+                            nativeEvent.layout.y;
+                        }}
+                        style={styles.generateCategoryGroup}
+                      >
+                        <View style={styles.generateCategoryHeader}>
+                          <Pressable
+                            accessibilityRole="checkbox"
+                            accessibilityState={{ checked: allSelected }}
+                            disabled={categoryItems.length === 0}
+                            onPress={() =>
+                              setGenerateCategoryCopy(category, !allSelected)
+                            }
+                            style={styles.generateCategorySelect}
                           >
-                            <View style={styles.generateCategoryHeader}>
-                              <Pressable
-                                accessibilityRole="checkbox"
-                                accessibilityState={{ checked: allSelected }}
-                                disabled={categoryItems.length === 0}
-                                onPress={() =>
-                                  setGenerateCategoryCopy(
-                                    category,
-                                    !allSelected,
-                                  )
-                                }
-                                style={styles.generateCategorySelect}
+                            <View
+                              style={[
+                                styles.generateCheckbox,
+                                allSelected && styles.generateCheckboxChecked,
+                                partiallySelected &&
+                                  styles.generateCheckboxPartial,
+                              ]}
+                            >
+                              {allSelected ? (
+                                <Check
+                                  color={theme.colors.inverseText}
+                                  size={13}
+                                />
+                              ) : partiallySelected ? (
+                                <Minus
+                                  color={theme.colors.inverseText}
+                                  size={13}
+                                />
+                              ) : null}
+                            </View>
+                            <View style={styles.generateCategoryText}>
+                              <Text
+                                numberOfLines={1}
+                                style={styles.generateCategoryTitle}
                               >
-                                <View
-                                  style={[
-                                    styles.generateCheckbox,
-                                    allSelected &&
-                                      styles.generateCheckboxChecked,
-                                    partiallySelected &&
-                                      styles.generateCheckboxPartial,
-                                  ]}
-                                >
-                                  {allSelected ? (
-                                    <Check
-                                      color={theme.colors.inverseText}
-                                      size={13}
-                                    />
-                                  ) : partiallySelected ? (
-                                    <Minus
-                                      color={theme.colors.inverseText}
-                                      size={13}
-                                    />
-                                  ) : null}
-                                </View>
-                                <View style={styles.generateCategoryText}>
-                                  <Text
-                                    numberOfLines={1}
-                                    style={styles.generateCategoryTitle}
-                                  >
-                                    {category.name}
-                                  </Text>
-                                  <Text style={styles.generateCategoryMeta}>
-                                    {categoryItems.length === 0
-                                      ? "Pusta kategoria"
-                                      : `${selectedCount}/${categoryItems.length} pozycji`}
-                                  </Text>
-                                </View>
-                              </Pressable>
-                              <Pressable
-                                accessibilityLabel={`Przeciągnij kategorię ${category.name}`}
-                                accessibilityRole="button"
-                                delayLongPress={180}
-                                disabled={isActive}
-                                onLongPress={drag}
-                                style={({ pressed }) => [
-                                  styles.generateDragHandle,
-                                  (pressed || isActive) &&
-                                    styles.generateDragHandleActive,
+                                {category.name}
+                              </Text>
+                              <Text style={styles.generateCategoryMeta}>
+                                {categoryItems.length === 0
+                                  ? "Pusta kategoria"
+                                  : `${selectedCount}/${categoryItems.length} pozycji`}
+                              </Text>
+                            </View>
+                          </Pressable>
+                          <View style={styles.generateOrderActions}>
+                            <Pressable
+                              accessibilityLabel={`Przenieś kategorię ${category.name} wyżej`}
+                              accessibilityRole="button"
+                              disabled={categoryIndex === 0}
+                              onPress={() =>
+                                moveGenerateCategory(category.id, -1)
+                              }
+                              style={({ pressed }) => [
+                                styles.generateOrderButton,
+                                pressed && styles.generateOrderButtonActive,
+                                categoryIndex === 0 &&
+                                  styles.generateOrderButtonDisabled,
+                              ]}
+                            >
+                              <ChevronUp
+                                color={theme.colors.textMuted}
+                                size={17}
+                              />
+                            </Pressable>
+                            <Pressable
+                              accessibilityLabel={`Przenieś kategorię ${category.name} niżej`}
+                              accessibilityRole="button"
+                              disabled={
+                                categoryIndex ===
+                                orderedGenerateCategories.length - 1
+                              }
+                              onPress={() =>
+                                moveGenerateCategory(category.id, 1)
+                              }
+                              style={({ pressed }) => [
+                                styles.generateOrderButton,
+                                pressed && styles.generateOrderButtonActive,
+                                categoryIndex ===
+                                  orderedGenerateCategories.length - 1 &&
+                                  styles.generateOrderButtonDisabled,
+                              ]}
+                            >
+                              <ChevronDown
+                                color={theme.colors.textMuted}
+                                size={17}
+                              />
+                            </Pressable>
+                          </View>
+                        </View>
+
+                        <View style={styles.generateItemList}>
+                          {categoryItems.map((item) => {
+                            const selected = generateSelectedItemSet.has(
+                              item.id,
+                            );
+
+                            return (
+                              <View
+                                key={item.id}
+                                style={[
+                                  styles.generateItemRow,
+                                  !selected && styles.generateItemRowMuted,
                                 ]}
                               >
-                                <DragHandle
-                                  color={
-                                    isActive
-                                      ? theme.colors.primaryDark
-                                      : theme.colors.textMuted
-                                  }
-                                  size={25}
-                                />
-                              </Pressable>
-                            </View>
-
-                            <View style={styles.generateItemList}>
-                              {categoryItems.map((item) => {
-                                const selected = generateSelectedItemSet.has(
-                                  item.id,
-                                );
-
-                                return (
+                                <Pressable
+                                  accessibilityRole="checkbox"
+                                  accessibilityState={{ checked: selected }}
+                                  onPress={() => toggleGenerateItemCopy(item)}
+                                  style={styles.generateItemCheckButton}
+                                >
                                   <View
-                                    key={item.id}
                                     style={[
-                                      styles.generateItemRow,
-                                      !selected && styles.generateItemRowMuted,
+                                      styles.generateCheckbox,
+                                      selected &&
+                                        styles.generateCheckboxChecked,
                                     ]}
                                   >
-                                    <Pressable
-                                      accessibilityRole="checkbox"
-                                      accessibilityState={{ checked: selected }}
-                                      onPress={() =>
-                                        toggleGenerateItemCopy(item)
-                                      }
-                                      style={styles.generateItemCheckButton}
-                                    >
-                                      <View
-                                        style={[
-                                          styles.generateCheckbox,
-                                          selected &&
-                                            styles.generateCheckboxChecked,
-                                        ]}
-                                      >
-                                        {selected ? (
-                                          <Check
-                                            color={theme.colors.inverseText}
-                                            size={13}
-                                          />
-                                        ) : null}
-                                      </View>
-                                    </Pressable>
-                                    <View style={styles.copyAmountText}>
-                                      <Text
-                                        numberOfLines={1}
-                                        style={styles.copyAmountTitle}
-                                      >
-                                        {item.name}
-                                      </Text>
-                                      <Text
-                                        numberOfLines={1}
-                                        style={styles.copyAmountMeta}
-                                      >
-                                        {formatOwner(item.owner)}
-                                      </Text>
-                                    </View>
                                     {selected ? (
-                                      <TextInput
-                                        keyboardType="decimal-pad"
-                                        onChangeText={(value) =>
-                                          setGenerateAmountInputs(
-                                            (current) => ({
-                                              ...current,
-                                              [item.id]: value,
-                                            }),
-                                          )
-                                        }
-                                        placeholder="0,00"
-                                        placeholderTextColor={
-                                          theme.colors.textSubtle
-                                        }
-                                        style={styles.copyAmountInput}
-                                        value={
-                                          generateAmountInputs[item.id] ?? ""
-                                        }
+                                      <Check
+                                        color={theme.colors.inverseText}
+                                        size={13}
                                       />
                                     ) : null}
                                   </View>
-                                );
-                              })}
-                            </View>
-                          </View>
-                        </ScaleDecorator>
-                      );
-                    }}
-                    showsVerticalScrollIndicator={false}
-                    style={styles.generateCategoryList}
+                                </Pressable>
+                                <View style={styles.copyAmountText}>
+                                  <Text
+                                    numberOfLines={1}
+                                    style={styles.copyAmountTitle}
+                                  >
+                                    {item.name}
+                                  </Text>
+                                  <Text
+                                    numberOfLines={1}
+                                    style={styles.copyAmountMeta}
+                                  >
+                                    {formatOwner(item.owner)}
+                                  </Text>
+                                </View>
+                                {selected ? (
+                                  <TextInput
+                                    keyboardType="decimal-pad"
+                                    onChangeText={(value) =>
+                                      setGenerateAmountInputs((current) => ({
+                                        ...current,
+                                        [item.id]: value,
+                                      }))
+                                    }
+                                    onFocus={() =>
+                                      keepGenerateAmountVisible(item)
+                                    }
+                                    placeholder="0,00"
+                                    placeholderTextColor={
+                                      theme.colors.textSubtle
+                                    }
+                                    style={styles.copyAmountInput}
+                                    value={generateAmountInputs[item.id] ?? ""}
+                                  />
+                                ) : null}
+                              </View>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    );
+                  })}
+                  {renderGenerateMonthActions()}
+                </ScrollView>
+              ) : null}
+              {generateSourceCategories.length === 0 ? (
+                <View style={styles.generateEmptyState}>
+                  <InlineAlert
+                    tone="info"
+                    text="Bieżący miesiąc nie ma jeszcze pozycji budżetu."
                   />
+                  {renderGenerateMonthActions()}
                 </View>
-              ) : null}
-              {generateSourceItems.length === 0 ? (
-                <InlineAlert
-                  tone="info"
-                  text="Bieżący miesiąc nie ma jeszcze pozycji budżetu."
-                />
-              ) : null}
-              {nextMonthMutation.error ? (
-                <InlineAlert
-                  tone="error"
-                  text="Nie udało się wygenerować nowego miesiąca."
-                />
               ) : null}
             </View>
           </FormModal>
@@ -4998,7 +5067,9 @@ function FinanceCategoryCards({
                     ]}
                   >
                     <ReceiptText
-                      color={theme.isDark ? theme.colors.primaryDark : mockupGreen}
+                      color={
+                        theme.isDark ? theme.colors.primaryDark : mockupGreen
+                      }
                       size={22}
                     />
                     <Text style={styles.budgetAddItemText}>Dodaj pozycję</Text>
@@ -5549,9 +5620,33 @@ function getReadableTextColor(color: string): string {
     return "#FFFFFF";
   }
 
-  const luminance = (red * 0.299 + green * 0.587 + blue * 0.114) / 255;
+  const backgroundLuminance = getColorRelativeLuminance(red, green, blue);
+  const darkText = "#07101F";
+  const darkTextLuminance = getColorRelativeLuminance(7, 16, 31);
+  const whiteTextLuminance = 1;
+  const darkContrast =
+    (Math.max(backgroundLuminance, darkTextLuminance) + 0.05) /
+    (Math.min(backgroundLuminance, darkTextLuminance) + 0.05);
+  const whiteContrast =
+    (whiteTextLuminance + 0.05) / (backgroundLuminance + 0.05);
 
-  return luminance > 0.62 ? "#111827" : "#FFFFFF";
+  return darkContrast >= whiteContrast ? darkText : "#FFFFFF";
+}
+
+function getColorRelativeLuminance(red: number, green: number, blue: number) {
+  const normalizeChannel = (value: number) => {
+    const channel = value / 255;
+
+    return channel <= 0.04045
+      ? channel / 12.92
+      : ((channel + 0.055) / 1.055) ** 2.4;
+  };
+
+  return (
+    normalizeChannel(red) * 0.2126 +
+    normalizeChannel(green) * 0.7152 +
+    normalizeChannel(blue) * 0.0722
+  );
 }
 
 function getCategoryItems(category: BudgetCategoryWithItems): BudgetItem[] {
@@ -5736,7 +5831,7 @@ function formatMonthLong(month: BudgetMonth): string {
 function createStyles(colors: AppPalette) {
   const isDark = colors.isDark;
   const panelBackground = isDark ? colors.card : "#FFFFFF";
-  const panelBorder = isDark ? colors.border : "#E8DED2";
+  const panelBorder = colors.border;
   const panelShadowOpacity = isDark ? 0.18 : 0.065;
 
   return StyleSheet.create({
@@ -6565,9 +6660,7 @@ function createStyles(colors: AppPalette) {
     debtOverviewCard: {
       alignItems: "center",
       backgroundColor: panelBackground,
-      borderColor: panelBorder,
       borderRadius: 12,
-      borderWidth: 1,
       elevation: 2,
       flexDirection: "row",
       gap: 10,
@@ -6581,7 +6674,7 @@ function createStyles(colors: AppPalette) {
     },
     debtOverviewDivider: {
       alignSelf: "stretch",
-      backgroundColor: colors.line,
+      backgroundColor: colors.cardMuted,
       width: 1,
     },
     debtOverviewIconWrap: {
@@ -6692,10 +6785,8 @@ function createStyles(colors: AppPalette) {
     },
     debtSummary: {
       alignItems: "center",
-      backgroundColor: colors.card,
-      borderColor: colors.border,
+      backgroundColor: colors.cardMuted,
       borderRadius: radii.card,
-      borderWidth: 1,
       flexDirection: "row",
       justifyContent: "space-between",
       gap: spacing.md,
@@ -6741,9 +6832,7 @@ function createStyles(colors: AppPalette) {
     },
     expenseContextCard: {
       backgroundColor: colors.cardMuted,
-      borderColor: colors.border,
       borderRadius: radii.card,
-      borderWidth: 1,
       gap: spacing.xs,
       padding: spacing.md,
     },
@@ -6809,10 +6898,8 @@ function createStyles(colors: AppPalette) {
     },
     expenseHistorySummary: {
       alignItems: "center",
-      backgroundColor: colors.card,
-      borderColor: colors.border,
+      backgroundColor: colors.cardMuted,
       borderRadius: radii.card,
-      borderWidth: 1,
       flexDirection: "row",
       gap: spacing.md,
       justifyContent: "space-between",
@@ -7108,9 +7195,7 @@ function createStyles(colors: AppPalette) {
     savingsSummaryCard: {
       alignItems: "center",
       backgroundColor: panelBackground,
-      borderColor: panelBorder,
       borderRadius: 16,
-      borderWidth: 1,
       elevation: 2,
       flexDirection: "row",
       gap: spacing.sm,
@@ -7166,7 +7251,7 @@ function createStyles(colors: AppPalette) {
     },
     savingsSummaryStatDivider: {
       alignSelf: "stretch",
-      backgroundColor: colors.line,
+      backgroundColor: colors.cardMuted,
       width: 1,
     },
     savingsSummaryStatLabel: {
@@ -7291,14 +7376,6 @@ function createStyles(colors: AppPalette) {
       marginBottom: spacing.sm,
       overflow: "hidden",
     },
-    generateCategoryGroupActive: {
-      borderColor: colors.primary,
-      elevation: 5,
-      shadowColor: "#000000",
-      shadowOffset: { height: 8, width: 0 },
-      shadowOpacity: isDark ? 0.28 : 0.14,
-      shadowRadius: 16,
-    },
     generateCategoryHeader: {
       alignItems: "center",
       backgroundColor: colors.cardMuted,
@@ -7344,7 +7421,10 @@ function createStyles(colors: AppPalette) {
       backgroundColor: colors.textMuted,
       borderColor: colors.textMuted,
     },
-    generateCopyList: { flexShrink: 1, gap: spacing.sm, minHeight: 0 },
+    generateCopyList: {
+      gap: spacing.sm,
+      paddingBottom: spacing.xxl + spacing.xl,
+    },
     generateToolbar: {
       backgroundColor: colors.cardMuted,
       borderColor: colors.border,
@@ -7380,6 +7460,11 @@ function createStyles(colors: AppPalette) {
       padding: spacing.sm,
     },
     generateItemRowMuted: { opacity: 0.64 },
+    generateEmptyState: { gap: spacing.md },
+    generateModalActions: {
+      gap: spacing.md,
+      paddingTop: spacing.sm,
+    },
     generateModalBody: {
       flexShrink: 1,
       gap: spacing.md,
@@ -7387,20 +7472,21 @@ function createStyles(colors: AppPalette) {
       padding: spacing.lg,
       paddingBottom: spacing.lg,
     },
-    generateDragHandle: {
-      alignItems: "center",
+    generateOrderActions: {
       backgroundColor: colors.card,
       borderColor: colors.border,
       borderRadius: 8,
       borderWidth: 1,
-      height: 38,
-      justifyContent: "center",
+      overflow: "hidden",
       width: 40,
     },
-    generateDragHandleActive: {
-      backgroundColor: colors.softGreen,
-      borderColor: colors.primary,
+    generateOrderButton: {
+      alignItems: "center",
+      height: 28,
+      justifyContent: "center",
     },
+    generateOrderButtonActive: { backgroundColor: colors.softGreen },
+    generateOrderButtonDisabled: { opacity: 0.32 },
     filterChip: {
       alignItems: "center",
       backgroundColor: colors.card,
@@ -7573,9 +7659,7 @@ function createStyles(colors: AppPalette) {
     financeSummaryCard: {
       alignItems: "center",
       backgroundColor: panelBackground,
-      borderColor: panelBorder,
       borderRadius: 14,
-      borderWidth: 1,
       elevation: 2,
       flexDirection: "row",
       gap: spacing.md,
@@ -7620,19 +7704,19 @@ function createStyles(colors: AppPalette) {
     financeSummaryRing: {
       alignItems: "center",
       borderRadius: 999,
-      height: 78,
+      height: 86,
       justifyContent: "center",
       position: "relative",
-      width: 78,
+      width: 86,
     },
     financeSummaryRingInner: {
       backgroundColor: colors.overlay,
       borderColor: colors.cardMuted,
       borderRadius: 999,
       borderWidth: 1,
-      height: 52,
+      height: 64,
       position: "absolute",
-      width: 52,
+      width: 64,
     },
     financeSummaryRingLabel: {
       color: colors.textMuted,
@@ -7643,9 +7727,9 @@ function createStyles(colors: AppPalette) {
     financeSummaryRingSegment: {
       borderRadius: 999,
       height: 10,
-      left: 37,
+      left: 41,
       position: "absolute",
-      top: 34,
+      top: 38,
       width: 4,
     },
     financeSummaryRingValue: {
@@ -7676,10 +7760,8 @@ function createStyles(colors: AppPalette) {
       textAlign: "center",
     },
     metric: {
-      backgroundColor: colors.card,
-      borderColor: colors.border,
+      backgroundColor: colors.cardMuted,
       borderRadius: radii.card,
-      borderWidth: 1,
       flex: 1,
       gap: spacing.xs,
       minHeight: 70,
@@ -7708,7 +7790,7 @@ function createStyles(colors: AppPalette) {
       justifyContent: "space-between",
       minHeight: 34,
       paddingHorizontal: 4,
-      width: 166,
+      width: 196,
     },
     monthSwitcherRow: {
       alignItems: "center",
@@ -7835,9 +7917,7 @@ function createStyles(colors: AppPalette) {
     totalRow: {
       alignItems: "stretch",
       backgroundColor: colors.card,
-      borderColor: colors.border,
       borderRadius: radii.card,
-      borderWidth: 1,
       flexDirection: "row",
       gap: spacing.sm,
       paddingHorizontal: spacing.md,
@@ -7845,9 +7925,7 @@ function createStyles(colors: AppPalette) {
     },
     totalMetric: {
       backgroundColor: colors.cardMuted,
-      borderColor: colors.line,
       borderRadius: radii.control,
-      borderWidth: 1,
       flex: 1,
       gap: 2,
       justifyContent: "center",

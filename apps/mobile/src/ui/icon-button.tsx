@@ -25,6 +25,7 @@ export function IconButton({
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       disabled={disabled}
+      hitSlop={3}
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
@@ -51,10 +52,10 @@ function createStyles() {
     width: 38
   },
   disabled: {
-    opacity: 0.48
+    opacity: 0.64
   },
   pressed: {
-    opacity: 0.62
+    transform: [{ scale: 0.94 }]
   }
 });
 }

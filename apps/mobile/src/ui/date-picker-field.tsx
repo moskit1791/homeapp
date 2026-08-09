@@ -197,7 +197,7 @@ function createStyles(colors: AppPalette) {
       letterSpacing: 0,
     },
     pressed: {
-      opacity: 0.78,
+      transform: [{ scale: 0.99 }],
     },
     trigger: {
       alignItems: "center",

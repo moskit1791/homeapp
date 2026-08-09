@@ -80,6 +80,11 @@ export default function NotificationExpenseImportReviewScreen() {
   const [queueLoading, setQueueLoading] = useState(true);
   const [queueError, setQueueError] = useState<string | null>(null);
   const [resultMessage, setResultMessage] = useState<string | null>(null);
+  const [savingDraftId, setSavingDraftId] = useState<string | null>(null);
+  const [draftSaveErrors, setDraftSaveErrors] = useState<
+    Record<string, string | null>
+  >({});
+  const [savedDrafts, setSavedDrafts] = useState<Record<string, boolean>>({});
 
   const loadQueue = useCallback(async () => {
     if (!notificationExpenseImport.available || !canRead) {
@@ -120,6 +125,8 @@ export default function NotificationExpenseImportReviewScreen() {
           ]),
         ),
       );
+      setDraftSaveErrors({});
+      setSavedDrafts({});
       setQueueError(null);
     } catch {
       setQueueError(
@@ -282,6 +289,16 @@ export default function NotificationExpenseImportReviewScreen() {
   });
 
   function patchDraft(id: string, changes: Partial<Draft>) {
+    const changesEditableData = [
+      "budgetCategoryId",
+      "budgetItemId",
+      "merchant",
+      "sourceAmountCurrency",
+    ].some((key) => key in changes);
+    if (changesEditableData) {
+      setDraftSaveErrors((current) => ({ ...current, [id]: null }));
+      setSavedDrafts((current) => ({ ...current, [id]: false }));
+    }
     setDrafts((current) => {
       const existing = current[id];
       if (!existing) return current;
@@ -291,6 +308,59 @@ export default function NotificationExpenseImportReviewScreen() {
         [id]: { ...existing, ...changes },
       };
     });
+  }
+
+  async function saveDraft(candidate: Draft) {
+    const source = parseSourceAmountCurrency(candidate.sourceAmountCurrency);
+    const name = candidate.merchant?.trim();
+    const budgetAmount = parsePositiveMoney(
+      candidate.budgetAmount || source?.amountText,
+    );
+
+    if (!name || !source || budgetAmount === null || !candidate.budgetItemId) {
+      setDraftSaveErrors((current) => ({
+        ...current,
+        [candidate.id]:
+          "Uzupełnij nazwę, kwotę z walutą oraz pozycję budżetową.",
+      }));
+      return;
+    }
+
+    setSavingDraftId(candidate.id);
+    setDraftSaveErrors((current) => ({ ...current, [candidate.id]: null }));
+    try {
+      const saved = await notificationExpenseImport.updatePending(
+        candidate.id,
+        {
+          amount: source.amount.toFixed(2),
+          budgetAmount: budgetAmount.toFixed(2),
+          budgetItemId: candidate.budgetItemId,
+          currency: source.currency,
+          merchant: name,
+        },
+      );
+      if (!saved) {
+        throw new Error("Nie udało się zapisać zmian płatności.");
+      }
+      patchDraft(candidate.id, {
+        amount: source.amount.toFixed(2),
+        budgetAmount: budgetAmount.toFixed(2),
+        currency: source.currency,
+        expanded: false,
+        merchant: name,
+      });
+      setSavedDrafts((current) => ({ ...current, [candidate.id]: true }));
+    } catch (error) {
+      setDraftSaveErrors((current) => ({
+        ...current,
+        [candidate.id]:
+          error instanceof Error
+            ? error.message
+            : "Nie udało się zapisać zmian płatności.",
+      }));
+    } finally {
+      setSavingDraftId(null);
+    }
   }
 
   if (Platform.OS !== "android") {
@@ -374,37 +444,50 @@ export default function NotificationExpenseImportReviewScreen() {
         );
 
         return (
-          <SectionCard
+          <Pressable
+            accessible={false}
             key={candidate.id}
-            action={
-              <Pressable
-                accessibilityRole="button"
-                onPress={() =>
-                  patchDraft(candidate.id, {
-                    selected: !candidate.selected,
-                  })
-                }
-                style={[
-                  styles.selectionBadge,
-                  candidate.selected && styles.selectionBadgeActive,
-                ]}
-              >
-                <Text
+            onPress={() => {
+              if (!candidate.expanded) {
+                patchDraft(candidate.id, { expanded: true });
+              }
+            }}
+            style={({ pressed }) =>
+              pressed && !candidate.expanded
+                ? styles.candidateCardPressed
+                : undefined
+            }
+          >
+            <SectionCard
+              action={
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() =>
+                    patchDraft(candidate.id, {
+                      selected: !candidate.selected,
+                    })
+                  }
                   style={[
-                    styles.selectionText,
-                    candidate.selected && styles.selectionTextActive,
+                    styles.selectionBadge,
+                    candidate.selected && styles.selectionBadgeActive,
                   ]}
                 >
-                  {candidate.selected ? "Wybrano" : "Pominięto"}
-                </Text>
-              </Pressable>
-            }
-            style={styles.candidateCard}
-            subtitle={`${candidate.sourceAppName} • ${new Date(
-              candidate.occurredAt,
-            ).toLocaleString("pl-PL")}`}
-            title={candidate.merchant?.trim() || "Wydatek z powiadomienia"}
-          >
+                  <Text
+                    style={[
+                      styles.selectionText,
+                      candidate.selected && styles.selectionTextActive,
+                    ]}
+                  >
+                    {candidate.selected ? "Wybrano" : "Pominięto"}
+                  </Text>
+                </Pressable>
+              }
+              style={styles.candidateCard}
+              subtitle={`${candidate.sourceAppName} • ${new Date(
+                candidate.occurredAt,
+              ).toLocaleString("pl-PL")}`}
+              title={candidate.merchant?.trim() || "Wydatek z powiadomienia"}
+            >
             <View style={styles.compactRow}>
               {candidate.sourceIconDataUrl ? (
                 <Image
@@ -419,7 +502,11 @@ export default function NotificationExpenseImportReviewScreen() {
               )}
               <View style={styles.compactInfo}>
                 <Text style={styles.statusText}>
-                  {candidate.requiresReview ? "Sprawdź dane" : "Rozpoznano"}
+                  {savedDrafts[candidate.id]
+                    ? "Zapisano lokalnie"
+                    : candidate.requiresReview
+                      ? "Sprawdź dane"
+                      : "Rozpoznano"}
                 </Text>
                 <Text numberOfLines={1} style={styles.meta}>
                   {selectedBudgetLabel ?? "Wybierz pozycję budżetową"}
@@ -527,17 +614,37 @@ export default function NotificationExpenseImportReviewScreen() {
                     value={candidate.budgetItemId}
                   />
                 </View>
-                <ActionButton
-                  onPress={async () => {
-                    await notificationExpenseImport.ignorePending(candidate.id);
-                    await loadQueue();
-                  }}
-                  title="To nie jest wydatek"
-                  variant="secondary"
-                />
+                {draftSaveErrors[candidate.id] ? (
+                  <InlineAlert
+                    tone="error"
+                    text={draftSaveErrors[candidate.id] ?? ""}
+                  />
+                ) : null}
+                <View style={styles.detailActions}>
+                  <ActionButton
+                    disabled={savingDraftId === candidate.id}
+                    labelStyle={styles.detailActionLabel}
+                    onPress={async () => {
+                      await notificationExpenseImport.ignorePending(
+                        candidate.id,
+                      );
+                      await loadQueue();
+                    }}
+                    style={styles.detailAction}
+                    title="To nie jest wydatek"
+                    variant="secondary"
+                  />
+                  <ActionButton
+                    loading={savingDraftId === candidate.id}
+                    onPress={() => void saveDraft(candidate)}
+                    style={styles.detailAction}
+                    title="Zapisz"
+                  />
+                </View>
               </View>
             ) : null}
-          </SectionCard>
+            </SectionCard>
+          </Pressable>
         );
       })}
 
@@ -656,6 +763,9 @@ function createStyles(colors: AppPalette) {
       gap: spacing.sm,
       padding: spacing.md,
     },
+    candidateCardPressed: {
+      opacity: 0.82,
+    },
     compactActions: {
       alignItems: "center",
       flexDirection: "row",
@@ -681,6 +791,17 @@ function createStyles(colors: AppPalette) {
       borderTopWidth: 1,
       gap: spacing.md,
       paddingTop: spacing.md,
+    },
+    detailAction: {
+      flex: 1,
+    },
+    detailActionLabel: {
+      fontSize: 13,
+    },
+    detailActions: {
+      alignItems: "stretch",
+      flexDirection: "row",
+      gap: spacing.sm,
     },
     expandButton: {
       borderColor: colors.border,
