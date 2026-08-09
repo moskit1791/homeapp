@@ -2138,3 +2138,44 @@
 - SHA-256: `77FCF9793670E6190E246F3291C538ACEAE053F9E2F102F0EE2730F0410F3A91`.
 - Podpis APK Signature Scheme v2 - poprawny.
 - SHA-256 certyfikatu: `DABDB31074901BB7097FF460326130E0DABB796C94A2A8A8F3BD1F267BA72874`.
+
+## 2026-08-09 - Wydanie HomeApp 1.2.6
+
+### Zakres
+
+- Ustawiono wersję aplikacji mobilnej `1.2.6`, Android `versionCode=108` i runtime OTA `1.2.6`.
+- Poprawiono kontrast, typografię i czytelność trybu ciemnego, w szczególności w finansach, oraz ograniczono nadmierne pogrubienia i obramowania.
+- Poprawiono ikony i ich wyśrodkowanie w górnych paskach, formularze mobilne oraz zachowanie przewijania przy aktywnej klawiaturze.
+- W generatorze nowego miesiąca wszystkie pozycje są domyślnie odznaczone, akcje znajdują się pod przewijaną zawartością, a ostatnia pozycja pozostaje dostępna do edycji.
+- Naprawiono zmianę kwoty, kategorii i właściciela pozycji budżetowej, również gdy dotychczasowa kategoria została zarchiwizowana.
+- W oczekujących płatnościach dotknięcie karty otwiera szczegóły, a przycisk `Zapisz` jawnie utrwala zmiany w lokalnej, szyfrowanej kolejce.
+- Zaktualizowano wymuszone wersje zależności z dostępnymi poprawkami bezpieczeństwa.
+
+### Walidacja i produkcja
+
+- Pełny typecheck, lint, testy i build monorepo, w tym eksport Android/iOS - OK.
+- API: 26 plików i 98 testów - OK. Mobile: 5 zestawów i 27 testów - OK.
+- Testy Gradle natywnej części Androida - OK.
+- Oficjalne APK EAS zainstalowano na emulatorze jako `1.2.6 (108)`; cold-start i ekran główny działają bez krytycznych błędów w logcat.
+- Audyt usunął wszystkie podatności high posiadające poprawione wersje. Pozostałe dwa zgłoszenia `image-size` dotyczą Metro podczas przetwarzania ICNS/JXL/HEIF w procesie budowania i nie mają opublikowanej wersji naprawionej.
+- Commit wdrożonego kodu: `1ec9a56ff9ab7c84ae2bc41d928c75c97e42f211`.
+- Produkcyjne API: `https://app.porabkihome.pl/api/health` - OK.
+
+### OTA
+
+- EAS Update group: `dec32ea5-445f-44c8-bbc0-26ec04752e08`.
+- Android update ID: `019fe7d1-63f6-73ac-ba21-00d58dd88bcd`.
+- iOS update ID: `019fe7d1-63f6-7fa7-a2c0-d0e85dab1118`.
+- Branch i kanał: `production`; runtime: `1.2.6`.
+
+### Finalny APK
+
+- Plik: `builds/homeapp-release.apk`.
+- EAS build: `be0bc7de-37a3-4cba-98fc-d462c5a0dedd`.
+- Pakiet: `com.homeapp.mobile`.
+- Wersja: `1.2.6` (`versionCode=108`).
+- Rozmiar: `79619974` bajtów.
+- SHA-256: `BB7D05B6F4176626A793CA6BAA7BD6ACAB949F38B26BFF521BA031AF48A16197`.
+- Podpis APK Signature Scheme v2 - poprawny.
+- SHA-256 certyfikatu: `DABDB31074901BB7097FF460326130E0DABB796C94A2A8A8F3BD1F267BA72874`.
+- Manifest ma `usesCleartextTraffic=false`, aktywne EAS Update, runtime `1.2.6` i nagłówek kanału `production`.
