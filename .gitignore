@@ -30,3 +30,6 @@ apps/mobile/tmp-*
 apps/mobile/web-build/
 apps/api/dist/
 apps/api/coverage/
+
+# Local Minimals source packages used to build apps/web.
+/webapp/
