@@ -1,30 +1,37 @@
 # HomeApp Web
 
-Responsywna aplikacja webowa oparta wizualnie na szablonie Minimals 7.7 i korzystająca z tego samego API co aplikacja mobilna.
+Webowy klient HomeApp zbudowany na pełnym szablonie Minimals TypeScript 7.7.0.
+Korzysta z tego samego API i tych samych kontraktów, co aplikacja mobilna.
 
 ## Uruchomienie
 
+Z katalogu głównego monorepo:
+
 ```powershell
-pnpm.cmd install
-pnpm.cmd --filter @homeapp/web dev
+corepack.cmd pnpm install
+corepack.cmd pnpm --filter @homeapp/web dev
 ```
 
-Domyślnie aplikacja łączy się z `https://app.porabkihome.pl/api`. Inny backend można wskazać w `apps/web/.env`:
+Aplikacja jest dostępna pod adresem <http://127.0.0.1:4173/>.
+
+Domyślnie frontend łączy się z `https://app.porabkihome.pl/api`. Inny backend można
+wskazać przed uruchomieniem przez `VITE_API_URL` w `apps/web/.env.local`:
 
 ```env
-VITE_API_URL=http://localhost:3000/api
+VITE_API_URL=http://127.0.0.1:3000/api
 ```
 
-## Zakres
+## Kontrole jakości
 
-- logowanie, rejestracja, zapamiętywanie i odświeżanie sesji;
-- pulpit dnia;
-- kalendarz;
-- zakupy i spiżarnia;
-- plan posiłków;
-- zadania i notatki;
-- budżet, zobowiązania i oszczędności;
-- sprzątanie, koszty roczne i ważne dane;
-- domownicy, zaproszenia i uprawnienia.
+```powershell
+corepack.cmd pnpm --filter @homeapp/web typecheck
+corepack.cmd pnpm --filter @homeapp/web lint
+corepack.cmd pnpm --filter @homeapp/web test
+corepack.cmd pnpm --filter @homeapp/web build
+```
 
-Domy z włączonym szyfrowaniem end-to-end wymagają osobnego mechanizmu odblokowania klucza w przeglądarce. Ta wersja obsługuje bezpośrednio domy bez E2EE.
+Oryginalne komponenty, layouty i zasoby Minimals pozostają w `src` i `public`.
+Kod integracji HomeApp znajduje się w `src/homeapp`, a aktywne trasy w
+`src/routes/sections/index.tsx`.
+
+Licencja dostarczonego szablonu: [MINIMALS-LICENSE.md](MINIMALS-LICENSE.md).
