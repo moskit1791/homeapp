@@ -37,12 +37,18 @@ const HouseholdPage = lazy(() =>
 const InvitationPage = lazy(() =>
   import('src/homeapp/pages/invitation-page').then((module) => ({ default: module.InvitationPage }))
 );
+const WebMockupsPrototype = lazy(() =>
+  import('src/homeapp/pages/web-mockups-prototype').then((module) => ({
+    default: module.WebMockupsPrototype,
+  }))
+);
 
 const page = (element: React.ReactNode) => (
   <Suspense fallback={<SplashScreen />}>{element}</Suspense>
 );
 
 export const routesSection: RouteObject[] = [
+  { path: '/prototype/web-mockups', element: page(<WebMockupsPrototype />) },
   {
     path: '/',
     element: <HomeAppShell />,
