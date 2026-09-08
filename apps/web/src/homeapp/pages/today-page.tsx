@@ -1,5 +1,6 @@
 import type { Theme } from '@mui/material/styles';
 
+import { useState } from 'react';
 import { Icon } from '@iconify/react';
 import { useQuery } from '@tanstack/react-query';
 import { Link as RouterLink } from 'react-router';
@@ -19,6 +20,71 @@ import mealCardImage from '../../../../mobile/assets/today-meal-card.png';
 import { getMyHousehold, getStartDashboard, listShoppingItems } from '../api';
 import calendarCardImage from '../../../../mobile/assets/today-calendar-card.png';
 import shoppingCardImage from '../../../../mobile/assets/today-shopping-card.png';
+
+const positivePhrases = [
+  'Dobre rzeczy dzieją się w domu',
+  'Tu zaczyna się dobry dzień',
+  'Małe kroki robią wielką różnicę',
+  'Razem wszystko smakuje lepiej',
+  'Spokój też jest dobrym planem',
+  'Twój dom, Twoje dobre tempo',
+  'Dziś wydarzy się coś miłego',
+  'Najlepsze chwile są blisko',
+  'Zrób dziś miejsce na radość',
+  'Każdy dzień ma coś dobrego',
+  'Ciepło domu tworzą ludzie',
+  'Dobrze, że jesteśmy razem',
+  'Niech dziś będzie lekko',
+  'Masz więcej powodów do uśmiechu',
+  'Codzienność też bywa piękna',
+  'To będzie naprawdę dobry dzień',
+  'Dom jest tam, gdzie jesteśmy razem',
+  'Zwolnij, wszystko jest w porządku',
+  'Dziś wybieramy dobre myśli',
+  'Miłe chwile są tuż obok',
+  'Uśmiech pasuje do każdego planu',
+  'W domu zawsze jest miejsce na dobro',
+  'Nie musisz zrobić wszystkiego naraz',
+  'Najważniejsze już masz blisko',
+  'Drobne radości budują piękne dni',
+  'Niech ten dzień dobrze się układa',
+  'Jesteś dokładnie tam, gdzie trzeba',
+  'Wspólny czas to najlepszy plan',
+  'Dziś też może być wyjątkowo',
+  'Czasem wystarczy chwila razem',
+  'Dobry dom rośnie z dobrych chwil',
+  'Zacznij od jednej miłej rzeczy',
+  'Dzisiaj liczą się małe zwycięstwa',
+  'Wszystko po kolei, bez pośpiechu',
+  'Tu mieszkają dobre wspomnienia',
+  'Zwykły dzień też może zachwycić',
+  'Niech w domu będzie dziś spokojnie',
+  'Jeden uśmiech zmienia cały dzień',
+  'Razem łatwiej spełniać plany',
+  'Piękne chwile nie potrzebują okazji',
+  'Dziś zadbaj także o siebie',
+  'W domu dobrze być sobą',
+  'Masz prawo do spokojnego dnia',
+  'Niech dobro wraca dziś podwójnie',
+  'Najlepszy moment może być właśnie teraz',
+  'Zostaw trochę miejsca na niespodzianki',
+  'Wdzięczność dobrze urządza dzień',
+  'Każdy wspólny posiłek ma znaczenie',
+  'Dom pełen śmiechu to dobry dom',
+  'Dziś wystarczy zrobić tyle, ile możesz',
+  'Nawet mały plan może dać wielką radość',
+  'Niech dzisiejszy dzień będzie Twój',
+  'To, co ważne, jest bliżej niż myślisz',
+  'Czułość mieszka w małych gestach',
+  'Dobre słowo zawsze znajdzie miejsce',
+  'Każdy dzień dopisuje coś pięknego',
+  'Niech dzisiaj będzie po prostu dobrze',
+  'Najpiękniej jest wracać do siebie',
+  'Wspólne chwile zostają na długo',
+  'Dom to nasza mała dobra historia',
+] as const;
+
+const phraseSymbols = ['♡', '✦', '☀', '⌂', '☺'] as const;
 
 const dashboardCard = (theme: Theme) => ({
   border: '1px solid rgba(62, 82, 112, 0.18)',
@@ -194,6 +260,11 @@ export function TodayPage() {
     queryKey: ['shopping', 'items', 'daily'],
     queryFn: () => listShoppingItems('daily', { accessToken }),
   });
+  const [phraseIndex] = useState(() => {
+    const randomValue = new Uint32Array(1);
+    crypto.getRandomValues(randomValue);
+    return randomValue[0]! % positivePhrases.length;
+  });
 
   if (dashboard.isLoading) return <LoadingView />;
   if (dashboard.error || !dashboard.data) {
@@ -208,6 +279,7 @@ export function TodayPage() {
       .sort((a, b) => a.slotIndex - b.slotIndex) ?? [];
   const openShopping = shopping.data?.filter((item) => !item.isChecked) ?? [];
   const nextEvent = data.upcomingEvents[0];
+  const positivePhrase = positivePhrases[phraseIndex];
   const currency = household.data?.currencyCode ?? 'PLN';
   const formattedToday = new Intl.DateTimeFormat('pl-PL', {
     day: 'numeric',
@@ -349,9 +421,9 @@ export function TodayPage() {
               src={calendarCardImage}
               alt="Kalendarz"
               sx={{
-                right: { xs: -55, sm: -20 },
+                right: { xs: -55, sm: 74 },
                 bottom: -16,
-                width: { xs: 285, sm: 440 },
+                width: { xs: 285, sm: 370 },
                 height: { xs: 230, sm: 320 },
                 objectFit: 'contain',
                 position: 'absolute',
@@ -360,6 +432,39 @@ export function TodayPage() {
                 filter: 'drop-shadow(0 22px 24px rgba(0,0,0,.2))',
               }}
             />
+            <Box
+              aria-hidden="true"
+              sx={(theme) => ({
+                top: 42,
+                right: 20,
+                zIndex: 1,
+                width: 145,
+                display: { xs: 'none', sm: 'block' },
+                position: 'absolute',
+                textAlign: 'center',
+                pointerEvents: 'none',
+                color: 'rgba(56,77,105,.72)',
+                transform: `rotate(${(phraseIndex % 5) - 2}deg)`,
+                fontFamily: '"Segoe Print", "Bradley Hand", "Comic Sans MS", cursive',
+                ...theme.applyStyles('dark', { color: 'rgba(190,204,225,.82)' }),
+              })}
+            >
+              <Typography
+                component="p"
+                sx={{
+                  m: 0,
+                  font: 'inherit',
+                  fontSize: 17,
+                  lineHeight: 1.35,
+                  letterSpacing: 0.25,
+                }}
+              >
+                {positivePhrase}
+              </Typography>
+              <Typography component="span" sx={{ mt: 0.5, display: 'block', font: 'inherit', fontSize: 25 }}>
+                {phraseSymbols[phraseIndex % phraseSymbols.length]}
+              </Typography>
+            </Box>
           </Box>
         </Grid>
         <Grid size={{ xs: 12, lg: 4 }}>
