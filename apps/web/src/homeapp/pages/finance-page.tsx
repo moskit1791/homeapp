@@ -1,23 +1,30 @@
+import type { Theme } from '@mui/material/styles';
 import type { FinanceDebt, BudgetCategory, BudgetItemSummary } from '../api';
 
 import { Icon } from '@iconify/react';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, Fragment } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import {
   Box,
   Tab,
-  Chip,
-  Grid,
   Tabs,
   Alert,
+  Table,
   Stack,
   Button,
   Divider,
+  Tooltip,
+  TableRow,
   MenuItem,
+  TableBody,
+  TableCell,
+  TableHead,
   TextField,
   IconButton,
   Typography,
+  LinearProgress,
+  TableContainer,
 } from '@mui/material';
 
 import { useSession } from '../auth/session-context';
@@ -28,7 +35,6 @@ import {
   ErrorView,
   EmptyState,
   FormDialog,
-  MetricCard,
   PageHeader,
   LoadingView,
   SectionCard,
@@ -66,6 +72,35 @@ import {
 type FinanceTab = 'budget' | 'debts' | 'savings';
 type ManageKind = 'category' | 'item' | 'income' | 'debt-payment' | 'saving-transaction';
 
+const financeSurface = (theme: Theme) => ({
+  border: '1px solid',
+  borderColor: 'rgba(62,82,112,.18)',
+  borderRadius: 2,
+  bgcolor: 'rgba(255,255,255,.94)',
+  boxShadow: '0 10px 34px rgba(34,51,84,.05)',
+  ...theme.applyStyles('dark', {
+    borderColor: 'rgba(139,166,206,.24)',
+    bgcolor: 'rgba(12,27,45,.86)',
+    boxShadow: '0 14px 38px rgba(0,0,0,.2)',
+  }),
+});
+
+const categoryAccents = ['#FF9F43', '#55D99B', '#4C9AFF', '#A879E8'];
+
+function budgetItemIcon(name: string) {
+  if (/jedz|spoży|zakup/i.test(name)) return 'solar:chef-hat-heart-bold-duotone';
+  if (/paliw/i.test(name)) return 'solar:gas-station-bold-duotone';
+  if (/auto|samoch/i.test(name)) return 'solar:wheel-bold-duotone';
+  if (/internet|wifi/i.test(name)) return 'solar:wi-fi-router-bold-duotone';
+  if (/telefon/i.test(name)) return 'solar:phone-calling-bold-duotone';
+  if (/gaz/i.test(name)) return 'solar:fire-bold-duotone';
+  if (/wod/i.test(name)) return 'solar:waterdrops-bold-duotone';
+  if (/dom/i.test(name)) return 'solar:home-smile-bold-duotone';
+  if (/fryz/i.test(name)) return 'solar:scissors-square-bold-duotone';
+  if (/poduszk|oszcz/i.test(name)) return 'solar:piggy-bank-bold-duotone';
+  return 'solar:receipt-bold-duotone';
+}
+
 export function FinancePage() {
   const { accessToken } = useSession();
   const permission = usePermission('finances');
@@ -83,6 +118,9 @@ export function FinancePage() {
   const [categoryId, setCategoryId] = useState('');
   const [memberId, setMemberId] = useState('');
   const [direction, setDirection] = useState<'add' | 'subtract'>('add');
+  const [ownerFilter, setOwnerFilter] = useState('all');
+  const [showIncomes, setShowIncomes] = useState(false);
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const [editingCategory, setEditingCategory] = useState<BudgetCategory | null>(null);
   const [editingItem, setEditingItem] = useState<BudgetItemSummary | null>(null);
   const [editingDebt, setEditingDebt] = useState<FinanceDebt | null>(null);
@@ -212,10 +250,7 @@ export function FinancePage() {
         };
         return editingItem
           ? updateBudgetItem(editingItem.id, input, { accessToken })
-          : createBudgetItem(
-              { ...input, budgetMonthId: budget.data.month.id },
-              { accessToken }
-            );
+          : createBudgetItem({ ...input, budgetMonthId: budget.data.month.id }, { accessToken });
       }
       if (manageKind === 'income') {
         return upsertIncome(
@@ -315,25 +350,111 @@ export function FinancePage() {
     setMemberId(item.owner.memberId);
   }
 
+  const orderedMonths = [...(months.data ?? [])].sort(
+    (left, right) => left.year - right.year || left.month - right.month
+  );
+  const currentMonthIndex = budget.data
+    ? orderedMonths.findIndex((item) => item.id === budget.data.month.id)
+    : -1;
+  const budgetLimit = Number(budget.data?.summary.totalBudgetAmount ?? 0);
+  const budgetSpent = Number(budget.data?.summary.totalSpentAmount ?? 0);
+  const budgetUsage = budgetLimit > 0 ? Math.round((budgetSpent / budgetLimit) * 100) : 0;
+  const monthLabel = budget.data
+    ? new Intl.DateTimeFormat('pl-PL', { month: 'long', year: 'numeric' }).format(
+        new Date(budget.data.month.year, budget.data.month.month - 1, 1)
+      )
+    : 'Bieżący miesiąc';
+  const displayedCategories =
+    budget.data?.categories
+      .map((category) => ({
+        ...category,
+        items:
+          ownerFilter === 'all'
+            ? category.items
+            : category.items.filter((item) => item.owner.memberId === ownerFilter),
+      }))
+      .filter((category) => ownerFilter === 'all' || category.items.length > 0) ?? [];
+
+  function selectAdjacentMonth(offset: number) {
+    const next = orderedMonths[currentMonthIndex + offset];
+    if (next) setSelectedMonthId(next.id);
+  }
+
+  function toggleCategory(categoryIdToToggle: string) {
+    setCollapsedCategories((previous) => {
+      const next = new Set(previous);
+      if (next.has(categoryIdToToggle)) next.delete(categoryIdToToggle);
+      else next.add(categoryIdToToggle);
+      return next;
+    });
+  }
+
   return (
     <Page>
       <PageHeader
         title="Finanse"
-        description="Budżet domowy, zobowiązania i cele oszczędnościowe."
+        description="Kontroluj wydatki i realizuj budżet."
         action={
-          <PrimaryButton
-            onClick={() => setOpen(true)}
-            disabled={
-              !permission.canCreate || (tab === 'budget' && budgetItems.length === 0)
-            }
-          >
-            Dodaj {tab === 'budget' ? 'wydatek' : tab === 'debts' ? 'zobowiązanie' : 'cel'}
-          </PrimaryButton>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+            {tab === 'budget' && budget.data && (
+              <Stack
+                direction="row"
+                sx={(theme) => ({
+                  overflow: 'hidden',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: 1.5,
+                  bgcolor: 'background.paper',
+                  ...theme.applyStyles('dark', { bgcolor: 'rgba(16,31,50,.82)' }),
+                })}
+              >
+                <IconButton
+                  aria-label="Poprzedni miesiąc"
+                  disabled={currentMonthIndex <= 0}
+                  onClick={() => selectAdjacentMonth(-1)}
+                  sx={{ borderRadius: 0 }}
+                >
+                  <Icon icon="solar:alt-arrow-left-linear" />
+                </IconButton>
+                <Box
+                  sx={{
+                    px: 2,
+                    minWidth: 190,
+                    display: 'grid',
+                    placeItems: 'center',
+                    fontWeight: 700,
+                    color: 'text.primary',
+                    textTransform: 'capitalize',
+                  }}
+                >
+                  {monthLabel}
+                </Box>
+                <IconButton
+                  aria-label="Następny miesiąc"
+                  disabled={currentMonthIndex < 0 || currentMonthIndex >= orderedMonths.length - 1}
+                  onClick={() => selectAdjacentMonth(1)}
+                  sx={{ borderRadius: 0 }}
+                >
+                  <Icon icon="solar:alt-arrow-right-linear" />
+                </IconButton>
+              </Stack>
+            )}
+            <PrimaryButton
+              onClick={() => setOpen(true)}
+              disabled={!permission.canCreate || (tab === 'budget' && budgetItems.length === 0)}
+            >
+              Dodaj {tab === 'budget' ? 'wydatek' : tab === 'debts' ? 'zobowiązanie' : 'cel'}
+            </PrimaryButton>
+          </Stack>
         }
       />
-      <Tabs value={tab} onChange={(_, value) => setTab(value)}>
+      <Tabs
+        value={tab}
+        onChange={(_, value) => setTab(value)}
+        sx={{ borderBottom: '1px solid', borderColor: 'divider' }}
+      >
         <Tab value="budget" label="Budżet" />
-        <Tab value="debts" label="Zobowiązania" />
+        <Tab value="debts" label="Pożyczki" />
         <Tab value="savings" label="Oszczędności" />
       </Tabs>
       {tab === 'budget' &&
@@ -354,216 +475,545 @@ export function FinancePage() {
           </SectionCard>
         ) : (
           <>
-            <SectionCard>
+            <Box sx={(theme) => ({ ...financeSurface(theme), p: 1.25 })}>
               <Stack
-                direction={{ xs: 'column', md: 'row' }}
-                spacing={1.5}
-                sx={{ alignItems: { md: 'center' } }}
+                direction={{ xs: 'column', lg: 'row' }}
+                spacing={1.25}
+                sx={{ alignItems: { lg: 'center' } }}
               >
-                <TextField
-                  select
-                  label="Miesiąc budżetowy"
-                  value={selectedMonthId ?? ''}
-                  onChange={(event) => setSelectedMonthId(event.target.value || null)}
-                  sx={{ minWidth: 230 }}
-                >
-                  <MenuItem value="">Bieżący miesiąc</MenuItem>
-                  {(months.data ?? []).map((item) => (
-                    <MenuItem key={item.id} value={item.id}>
-                      {String(item.month).padStart(2, '0')}/{item.year}
-                      {item.isCurrent ? ' · bieżący' : ''}
-                    </MenuItem>
-                  ))}
-                </TextField>
+                <Typography variant="body2" color="text.secondary" sx={{ px: 0.5 }}>
+                  Pokaż:
+                </Typography>
+                <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap' }}>
+                  <Button
+                    size="small"
+                    variant={ownerFilter === 'all' ? 'contained' : 'outlined'}
+                    onClick={() => setOwnerFilter('all')}
+                    sx={{ minWidth: 98 }}
+                  >
+                    Wszyscy
+                  </Button>
+                  {(members.data ?? [])
+                    .filter((member) => member.isActive)
+                    .map((member) => (
+                      <Tooltip key={member.id} title={member.displayName}>
+                        <Button
+                          size="small"
+                          variant={ownerFilter === member.id ? 'contained' : 'outlined'}
+                          onClick={() => setOwnerFilter(member.id)}
+                          sx={{ minWidth: 54 }}
+                        >
+                          {member.displayName.slice(0, 1).toUpperCase()}
+                        </Button>
+                      </Tooltip>
+                    ))}
+                </Stack>
+                <Divider
+                  orientation="vertical"
+                  flexItem
+                  sx={{ display: { xs: 'none', lg: 'block' }, mx: 0.5 }}
+                />
                 <Button
-                  variant="outlined"
-                  onClick={() => generateMonth.mutate()}
-                  disabled={!permission.canCreate || generateMonth.isPending}
+                  size="small"
+                  variant={showIncomes ? 'soft' : 'text'}
+                  startIcon={<Icon icon="solar:users-group-rounded-bold-duotone" />}
+                  onClick={() => setShowIncomes((value) => !value)}
                 >
-                  Generuj kolejny miesiąc
-                </Button>
-                <Button
-                  variant="outlined"
-                  onClick={() => openManage('income')}
-                  disabled={!permission.canUpdate}
-                >
-                  Ustaw dochód
-                </Button>
-                <Button
-                  variant="outlined"
-                  onClick={() => openManage('category')}
-                  disabled={!permission.canCreate}
-                >
-                  Dodaj kategorię
-                </Button>
-                <Button
-                  variant="outlined"
-                  onClick={() => openManage('item')}
-                  disabled={!permission.canCreate || activeCategories.length === 0}
-                >
-                  Dodaj pozycję
+                  Podział na osoby
                 </Button>
                 <Box sx={{ flexGrow: 1 }} />
-                {selectedMonthId && (
-                  <IconButton
-                    color="error"
-                    disabled={!permission.canDelete}
-                    onClick={() =>
-                      confirmDelete('ten miesiąc budżetowy') &&
-                      removeMonth.mutate(selectedMonthId)
-                    }
-                  >
-                    <Icon icon="solar:trash-bin-trash-bold-duotone" />
-                  </IconButton>
-                )}
+                <Stack direction="row" spacing={0.5}>
+                  <Tooltip title="Generuj kolejny miesiąc">
+                    <span>
+                      <IconButton
+                        aria-label="Generuj kolejny miesiąc"
+                        disabled={!permission.canCreate || generateMonth.isPending}
+                        onClick={() => generateMonth.mutate()}
+                      >
+                        <Icon icon="solar:calendar-add-bold-duotone" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                  <Tooltip title="Ustaw dochód">
+                    <span>
+                      <IconButton
+                        aria-label="Ustaw dochód"
+                        disabled={!permission.canUpdate}
+                        onClick={() => openManage('income')}
+                      >
+                        <Icon icon="solar:wad-of-money-bold-duotone" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                  <Tooltip title="Dodaj kategorię">
+                    <span>
+                      <IconButton
+                        aria-label="Dodaj kategorię"
+                        disabled={!permission.canCreate}
+                        onClick={() => openManage('category')}
+                      >
+                        <Icon icon="solar:folder-add-bold-duotone" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                  <Tooltip title="Dodaj pozycję budżetu">
+                    <span>
+                      <IconButton
+                        aria-label="Dodaj pozycję budżetu"
+                        disabled={!permission.canCreate || activeCategories.length === 0}
+                        onClick={() => openManage('item')}
+                      >
+                        <Icon icon="solar:list-plus-bold-duotone" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                  {selectedMonthId && (
+                    <Tooltip title="Usuń miesiąc">
+                      <span>
+                        <IconButton
+                          aria-label="Usuń miesiąc"
+                          color="error"
+                          disabled={!permission.canDelete}
+                          onClick={() =>
+                            confirmDelete('ten miesiąc budżetowy') &&
+                            removeMonth.mutate(selectedMonthId)
+                          }
+                        >
+                          <Icon icon="solar:trash-bin-trash-bold-duotone" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  )}
+                </Stack>
               </Stack>
               {(generateMonth.error || removeMonth.error) && (
                 <Alert severity="error" sx={{ mt: 2 }}>
                   {(generateMonth.error ?? removeMonth.error)?.message}
                 </Alert>
               )}
-            </SectionCard>
-            <Grid container spacing={2.5}>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <MetricCard
-                  icon="solar:wad-of-money-bold-duotone"
-                  label="Dochody"
-                  value={money(budget.data.summary.incomeAmount, currency)}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <MetricCard
-                  icon="solar:card-send-bold-duotone"
-                  label="Wydano"
-                  value={money(budget.data.summary.totalSpentAmount, currency)}
-                  color="error.main"
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <MetricCard
-                  icon="solar:wallet-money-bold-duotone"
-                  label="Pozostało"
-                  value={money(budget.data.summary.totalRemainingAmount, currency)}
-                  color="secondary.main"
-                />
-              </Grid>
-            </Grid>
-            <SectionCard title="Dochody domowników">
-              <Stack divider={<Divider flexItem />}>
-                {budget.data.incomes.map((income) => (
-                  <Stack
-                    key={income.ownerMemberId}
-                    direction="row"
-                    spacing={2}
-                    sx={{ py: 1.2, alignItems: 'center' }}
-                  >
-                    <Box sx={{ flex: 1 }}>
-                      <Typography sx={{ fontWeight: 700 }}>{income.displayName}</Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {income.email}
-                      </Typography>
-                    </Box>
-                    <Typography variant="h6">{money(income.amount, currency)}</Typography>
-                    <IconButton
-                      disabled={!permission.canUpdate}
-                      onClick={() => {
-                        openManage('income');
-                        setMemberId(income.ownerMemberId);
-                        setAmount(income.amount);
-                      }}
-                    >
-                      <Icon icon="solar:pen-bold-duotone" />
-                    </IconButton>
-                  </Stack>
-                ))}
+            </Box>
+
+            <Box
+              sx={(theme) => ({
+                ...financeSurface(theme),
+                px: { xs: 2, md: 4 },
+                py: 2,
+                display: 'grid',
+                alignItems: 'center',
+                gridTemplateColumns: { xs: '1fr', sm: '1fr auto 1fr' },
+                gap: 2,
+              })}
+            >
+              <Stack
+                direction="row"
+                spacing={1.5}
+                sx={{ alignItems: 'center', justifyContent: { sm: 'flex-start' } }}
+              >
+                <Box
+                  sx={{
+                    width: 44,
+                    height: 44,
+                    display: 'grid',
+                    placeItems: 'center',
+                    borderRadius: 1.5,
+                    color: '#52DA99',
+                    bgcolor: 'rgba(82,218,153,.12)',
+                  }}
+                >
+                  <Icon icon="solar:wallet-money-bold-duotone" width={27} />
+                </Box>
+                <Box>
+                  <Typography variant="subtitle2" sx={{ color: '#52DA99' }}>
+                    Do dyspozycji
+                  </Typography>
+                  <Typography variant="h3" sx={{ color: '#52DA99' }}>
+                    {money(budget.data.summary.totalRemainingAmount, currency)}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    z {money(budget.data.summary.totalBudgetAmount, currency)}
+                  </Typography>
+                </Box>
               </Stack>
-            </SectionCard>
-            <Stack spacing={2.5}>
-              {budget.data.categories.map((category) => (
-                <SectionCard key={category.id}>
-                  <Stack direction="row" sx={{ alignItems: 'center', mb: 1.5 }}>
-                    <Typography variant="h5" sx={{ flex: 1 }}>
-                      {category.name}
-                    </Typography>
-                    <Stack direction="row">
+              <Box
+                sx={{
+                  width: 98,
+                  height: 98,
+                  display: 'grid',
+                  borderRadius: '50%',
+                  placeItems: 'center',
+                  background: `conic-gradient(#FF9F43 ${Math.min(budgetUsage, 100) * 3.6}deg, rgba(126,148,178,.18) 0deg)`,
+                  '&::before': {
+                    content: '""',
+                    width: 74,
+                    height: 74,
+                    borderRadius: '50%',
+                    bgcolor: 'background.paper',
+                    gridArea: '1 / 1',
+                  },
+                }}
+              >
+                <Box sx={{ gridArea: '1 / 1', zIndex: 1, textAlign: 'center' }}>
+                  <Typography variant="h5">{budgetUsage}%</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    wykorzystane
+                  </Typography>
+                </Box>
+              </Box>
+              <Stack
+                direction="row"
+                spacing={1.5}
+                sx={{ alignItems: 'center', justifyContent: { sm: 'flex-end' } }}
+              >
+                <Box
+                  sx={{
+                    width: 44,
+                    height: 44,
+                    display: 'grid',
+                    placeItems: 'center',
+                    borderRadius: 1.5,
+                    color: '#FFAD32',
+                    bgcolor: 'rgba(255,173,50,.12)',
+                  }}
+                >
+                  <Icon icon="solar:receipt-bold-duotone" width={27} />
+                </Box>
+                <Box>
+                  <Typography variant="subtitle2" sx={{ color: '#FFAD32' }}>
+                    Wydano
+                  </Typography>
+                  <Typography variant="h3">
+                    {money(budget.data.summary.totalSpentAmount, currency)}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    z {money(budget.data.summary.totalBudgetAmount, currency)}
+                  </Typography>
+                </Box>
+              </Stack>
+            </Box>
+
+            {showIncomes && (
+              <Box sx={(theme) => ({ ...financeSurface(theme), p: 2.5 })}>
+                <Typography variant="h6" sx={{ mb: 1 }}>
+                  Dochody domowników
+                </Typography>
+                <Stack divider={<Divider flexItem />}>
+                  {budget.data.incomes.map((income) => (
+                    <Stack
+                      key={income.ownerMemberId}
+                      direction="row"
+                      spacing={2}
+                      sx={{ py: 1.2, alignItems: 'center' }}
+                    >
+                      <Box sx={{ flex: 1 }}>
+                        <Typography sx={{ fontWeight: 700 }}>{income.displayName}</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {income.email}
+                        </Typography>
+                      </Box>
+                      <Typography variant="h6">{money(income.amount, currency)}</Typography>
                       <IconButton
+                        aria-label={`Edytuj dochód: ${income.displayName}`}
                         disabled={!permission.canUpdate}
-                        onClick={() =>
-                          openCategoryEdit({
-                            ...category,
-                            createdAt: '',
-                            updatedAt: '',
-                          })
-                        }
+                        onClick={() => {
+                          openManage('income');
+                          setMemberId(income.ownerMemberId);
+                          setAmount(income.amount);
+                        }}
                       >
                         <Icon icon="solar:pen-bold-duotone" />
                       </IconButton>
-                      <IconButton
-                        color="error"
-                        disabled={!permission.canDelete}
-                        onClick={() =>
-                          confirmDelete(category.name) &&
-                          updateBudgetCategory(category.id, { isActive: false }, { accessToken }).then(
-                            invalidate
-                          )
+                    </Stack>
+                  ))}
+                </Stack>
+              </Box>
+            )}
+
+            <TableContainer sx={(theme) => ({ ...financeSurface(theme), overflowX: 'auto' })}>
+              <Table
+                size="small"
+                sx={{ minWidth: 1050, '& .MuiTableCell-root': { borderColor: 'divider' } }}
+              >
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ width: '31%' }}>Pozycja</TableCell>
+                    <TableCell>Osoba</TableCell>
+                    <TableCell align="right">Budżet</TableCell>
+                    <TableCell align="right">Wydano</TableCell>
+                    <TableCell align="right">Zostaje</TableCell>
+                    <TableCell sx={{ width: 190 }}>%</TableCell>
+                    <TableCell align="right" sx={{ width: 88 }} />
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {displayedCategories.map((category, categoryIndex) => {
+                    const categoryBudget = category.items.reduce(
+                      (sum, item) => sum + Number(item.budgetAmount ?? 0),
+                      0
+                    );
+                    const categorySpent = category.items.reduce(
+                      (sum, item) => sum + Number(item.spentAmount),
+                      0
+                    );
+                    const categoryRemaining = categoryBudget - categorySpent;
+                    const categoryUsage =
+                      categoryBudget > 0 ? Math.round((categorySpent / categoryBudget) * 100) : 0;
+                    const accent = categoryAccents[categoryIndex % categoryAccents.length];
+                    const collapsed = collapsedCategories.has(category.id);
+
+                    return (
+                      <Fragment key={category.id}>
+                        <TableRow
+                          sx={(theme) => ({
+                            bgcolor: 'rgba(226,233,243,.48)',
+                            ...theme.applyStyles('dark', { bgcolor: 'rgba(32,52,76,.64)' }),
+                          })}
+                        >
+                          <TableCell>
+                            <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
+                              <IconButton
+                                size="small"
+                                aria-label={`${collapsed ? 'Rozwiń' : 'Zwiń'} kategorię ${category.name}`}
+                                onClick={() => toggleCategory(category.id)}
+                              >
+                                <Icon
+                                  icon={
+                                    collapsed
+                                      ? 'solar:alt-arrow-right-linear'
+                                      : 'solar:alt-arrow-down-linear'
+                                  }
+                                  width={18}
+                                />
+                              </IconButton>
+                              <Box
+                                sx={{
+                                  width: 38,
+                                  height: 38,
+                                  display: 'grid',
+                                  placeItems: 'center',
+                                  borderRadius: 1.25,
+                                  color: '#102238',
+                                  bgcolor: accent,
+                                }}
+                              >
+                                <Icon icon="solar:folder-with-files-bold-duotone" width={23} />
+                              </Box>
+                              <Typography variant="subtitle1">{category.name}</Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {category.items.length} pozycji
+                              </Typography>
+                            </Stack>
+                          </TableCell>
+                          <TableCell />
+                          <TableCell align="right">
+                            <Typography variant="subtitle2">
+                              {money(categoryBudget, currency)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="right">
+                            <Typography variant="subtitle2">
+                              {money(categorySpent, currency)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="right">
+                            <Typography
+                              variant="subtitle2"
+                              color={categoryRemaining < 0 ? 'error.main' : 'success.main'}
+                            >
+                              {money(categoryRemaining, currency)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
+                              <Typography variant="subtitle2" sx={{ minWidth: 40 }}>
+                                {categoryUsage}%
+                              </Typography>
+                              <LinearProgress
+                                variant="determinate"
+                                value={Math.min(categoryUsage, 100)}
+                                color={categoryUsage >= 100 ? 'error' : 'warning'}
+                                sx={{ flex: 1, height: 8, borderRadius: 4 }}
+                              />
+                            </Stack>
+                          </TableCell>
+                          <TableCell align="right">
+                            <IconButton
+                              aria-label={`Edytuj kategorię ${category.name}`}
+                              disabled={!permission.canUpdate}
+                              onClick={() =>
+                                openCategoryEdit({ ...category, createdAt: '', updatedAt: '' })
+                              }
+                            >
+                              <Icon icon="solar:pen-bold-duotone" width={19} />
+                            </IconButton>
+                            <IconButton
+                              aria-label={`Usuń kategorię ${category.name}`}
+                              color="error"
+                              disabled={!permission.canDelete}
+                              onClick={() =>
+                                confirmDelete(category.name) &&
+                                updateBudgetCategory(
+                                  category.id,
+                                  { isActive: false },
+                                  { accessToken }
+                                ).then(invalidate)
+                              }
+                            >
+                              <Icon icon="solar:trash-bin-trash-bold-duotone" width={19} />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                        {!collapsed &&
+                          category.items.map((item) => {
+                            const itemBudget = Number(item.budgetAmount ?? 0);
+                            const itemSpent = Number(item.spentAmount);
+                            const itemUsage =
+                              itemBudget > 0 ? Math.round((itemSpent / itemBudget) * 100) : 0;
+                            const remaining =
+                              item.remainingAmount === null ? null : Number(item.remainingAmount);
+
+                            return (
+                              <TableRow key={item.id} hover>
+                                <TableCell sx={{ pl: 10 }}>
+                                  <Stack
+                                    direction="row"
+                                    spacing={1.25}
+                                    sx={{ alignItems: 'center' }}
+                                  >
+                                    <Icon
+                                      icon={budgetItemIcon(item.name)}
+                                      width={22}
+                                      color={accent}
+                                    />
+                                    <Typography>{item.name}</Typography>
+                                  </Stack>
+                                </TableCell>
+                                <TableCell>{item.owner.displayName}</TableCell>
+                                <TableCell align="right">
+                                  {item.budgetAmount === null
+                                    ? '—'
+                                    : money(item.budgetAmount, currency)}
+                                </TableCell>
+                                <TableCell align="right">
+                                  {money(item.spentAmount, currency)}
+                                </TableCell>
+                                <TableCell align="right">
+                                  <Typography
+                                    color={
+                                      remaining !== null && remaining < 0
+                                        ? 'error.main'
+                                        : remaining
+                                          ? 'success.main'
+                                          : 'text.primary'
+                                    }
+                                  >
+                                    {remaining === null ? '—' : money(remaining, currency)}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell>
+                                  <Stack
+                                    direction="row"
+                                    spacing={1.25}
+                                    sx={{ alignItems: 'center' }}
+                                  >
+                                    <Typography variant="body2" sx={{ minWidth: 40 }}>
+                                      {item.budgetAmount === null ? '—' : `${itemUsage}%`}
+                                    </Typography>
+                                    <LinearProgress
+                                      variant="determinate"
+                                      value={Math.min(itemUsage, 100)}
+                                      color={
+                                        itemUsage >= 100
+                                          ? 'error'
+                                          : itemUsage >= 80
+                                            ? 'warning'
+                                            : 'info'
+                                      }
+                                      sx={{ flex: 1, height: 7, borderRadius: 4 }}
+                                    />
+                                  </Stack>
+                                </TableCell>
+                                <TableCell align="right">
+                                  <IconButton
+                                    size="small"
+                                    aria-label={`Edytuj pozycję ${item.name}`}
+                                    disabled={!permission.canUpdate}
+                                    onClick={() => openItemEdit(item)}
+                                  >
+                                    <Icon icon="solar:pen-bold-duotone" width={18} />
+                                  </IconButton>
+                                  <IconButton
+                                    size="small"
+                                    aria-label={`Usuń pozycję ${item.name}`}
+                                    color="error"
+                                    disabled={!permission.canDelete}
+                                    onClick={() =>
+                                      confirmDelete(item.name) &&
+                                      deleteBudgetItem(item.id, { accessToken }).then(invalidate)
+                                    }
+                                  >
+                                    <Icon icon="solar:trash-bin-trash-bold-duotone" width={18} />
+                                  </IconButton>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                      </Fragment>
+                    );
+                  })}
+                  <TableRow
+                    sx={(theme) => ({
+                      bgcolor: 'rgba(226,233,243,.4)',
+                      ...theme.applyStyles('dark', { bgcolor: 'rgba(32,52,76,.55)' }),
+                    })}
+                  >
+                    <TableCell>
+                      <Typography variant="subtitle1">Razem</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="caption" color="text.secondary">
+                        {budgetItems.length} pozycji
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Typography variant="subtitle1">
+                        {money(budget.data.summary.totalBudgetAmount, currency)}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Typography variant="subtitle1">
+                        {money(budget.data.summary.totalSpentAmount, currency)}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Typography
+                        variant="subtitle1"
+                        color={
+                          Number(budget.data.summary.totalRemainingAmount) < 0
+                            ? 'error.main'
+                            : 'success.main'
                         }
                       >
-                        <Icon icon="solar:trash-bin-trash-bold-duotone" />
-                      </IconButton>
-                    </Stack>
-                  </Stack>
-                  {category.items.length === 0 ? (
-                    <EmptyState text="Brak pozycji w tej kategorii." />
-                  ) : (
-                    <Stack divider={<Divider flexItem />}>
-                      {category.items.map((item) => (
-                        <Stack
-                          key={item.id}
-                          direction={{ xs: 'column', sm: 'row' }}
-                          spacing={1}
-                          sx={{ py: 1.25, alignItems: { sm: 'center' } }}
-                        >
-                          <Box sx={{ flex: 1 }}>
-                            <Typography sx={{ fontWeight: 700 }}>{item.name}</Typography>
-                            <Typography variant="body2" color="text.secondary">
-                              {item.owner.displayName}
-                            </Typography>
-                          </Box>
-                          <Typography color="text.secondary">
-                            wydano {money(item.spentAmount, currency)}
-                          </Typography>
-                          <Chip
-                            label={
-                              item.remainingAmount === null
-                                ? 'bez limitu'
-                                : `zostało ${money(item.remainingAmount, currency)}`
-                            }
-                            color={Number(item.remainingAmount) < 0 ? 'error' : 'success'}
-                            variant="outlined"
-                          />
-                          <IconButton
-                            disabled={!permission.canUpdate}
-                            onClick={() => openItemEdit(item)}
-                          >
-                            <Icon icon="solar:pen-bold-duotone" />
-                          </IconButton>
-                          <IconButton
-                            color="error"
-                            disabled={!permission.canDelete}
-                            onClick={() =>
-                              confirmDelete(item.name) &&
-                              deleteBudgetItem(item.id, { accessToken }).then(invalidate)
-                            }
-                          >
-                            <Icon icon="solar:trash-bin-trash-bold-duotone" />
-                          </IconButton>
-                        </Stack>
-                      ))}
-                    </Stack>
-                  )}
-                </SectionCard>
-              ))}
-            </Stack>
+                        {money(budget.data.summary.totalRemainingAmount, currency)}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
+                        <Typography variant="subtitle1" sx={{ minWidth: 40 }}>
+                          {budgetUsage}%
+                        </Typography>
+                        <LinearProgress
+                          variant="determinate"
+                          value={Math.min(budgetUsage, 100)}
+                          color={budgetUsage >= 100 ? 'error' : 'warning'}
+                          sx={{ flex: 1, height: 8, borderRadius: 4 }}
+                        />
+                      </Stack>
+                    </TableCell>
+                    <TableCell />
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
           </>
         ))}
       {tab === 'debts' &&
@@ -630,7 +1080,8 @@ export function FinancePage() {
                   <Stack spacing={0.5} sx={{ mt: 1.5 }}>
                     {debt.payments.slice(0, 3).map((payment) => (
                       <Typography key={payment.id} variant="caption" color="text.secondary">
-                        {shortDate(payment.paidAt ?? payment.createdAt)} · {money(payment.amount, currency)}
+                        {shortDate(payment.paidAt ?? payment.createdAt)} ·{' '}
+                        {money(payment.amount, currency)}
                         {payment.note ? ` · ${payment.note}` : ''}
                       </Typography>
                     ))}
@@ -706,10 +1157,10 @@ export function FinancePage() {
           editingDebt
             ? 'Edytuj zobowiązanie'
             : tab === 'budget'
-            ? 'Nowy wydatek'
-            : tab === 'debts'
-              ? 'Nowe zobowiązanie'
-              : 'Nowy cel oszczędnościowy'
+              ? 'Nowy wydatek'
+              : tab === 'debts'
+                ? 'Nowe zobowiązanie'
+                : 'Nowy cel oszczędnościowy'
         }
         open={open}
         onClose={() => {
@@ -719,7 +1170,9 @@ export function FinancePage() {
         onSubmit={() => (editingDebt ? saveDebt.mutate() : create.mutate())}
         loading={create.isPending || saveDebt.isPending}
         submitDisabled={
-          !amount || Number(amount) < 0 || (tab === 'budget' && !editingDebt ? !budgetItemId : !name.trim())
+          !amount ||
+          Number(amount) < 0 ||
+          (tab === 'budget' && !editingDebt ? !budgetItemId : !name.trim())
         }
       >
         {(create.error || saveDebt.error) && (
