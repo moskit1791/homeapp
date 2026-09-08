@@ -34,6 +34,9 @@ const HomePage = lazy(() =>
 const HouseholdPage = lazy(() =>
   import('src/homeapp/pages/household-page').then((module) => ({ default: module.HouseholdPage }))
 );
+const InvitationPage = lazy(() =>
+  import('src/homeapp/pages/invitation-page').then((module) => ({ default: module.InvitationPage }))
+);
 
 const page = (element: React.ReactNode) => (
   <Suspense fallback={<SplashScreen />}>{element}</Suspense>
@@ -53,6 +56,7 @@ export const routesSection: RouteObject[] = [
       { path: 'finanse', element: page(<FinancePage />) },
       { path: 'dom', element: page(<HomePage />) },
       { path: 'domownicy', element: page(<HouseholdPage />) },
+      { path: 'auth/invitation', element: page(<InvitationPage />) },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },

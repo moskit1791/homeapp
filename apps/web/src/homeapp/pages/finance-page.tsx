@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import type { FinanceDebt, BudgetCategory, BudgetItemSummary } from '../api';
+
 import { Icon } from '@iconify/react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import {
@@ -19,6 +21,7 @@ import {
 } from '@mui/material';
 
 import { useSession } from '../auth/session-context';
+import { usePermission } from '../auth/use-permission';
 import { money, todayIso, shortDate } from '../utils/format';
 import {
   Page,
@@ -33,22 +36,39 @@ import {
   PrimaryButton,
 } from '../components/ui';
 import {
+  upsertIncome,
   createExpense,
+  getBudgetMonth,
   getMyHousehold,
+  listBudgetMonths,
+  createBudgetItem,
+  updateBudgetItem,
+  deleteBudgetItem,
   listFinanceDebts,
   createBudgetMonth,
+  deleteBudgetMonth,
   createFinanceDebt,
+  updateFinanceDebt,
   deleteFinanceDebt,
   listFinanceSavings,
+  listHouseholdMembers,
+  listBudgetCategories,
+  createBudgetCategory,
+  updateBudgetCategory,
   getCurrentBudgetMonth,
+  generateNextBudgetMonth,
+  createFinanceDebtPayment,
   createFinanceSavingsAccount,
   deleteFinanceSavingsAccount,
+  createFinanceSavingsTransaction,
 } from '../api';
 
 type FinanceTab = 'budget' | 'debts' | 'savings';
+type ManageKind = 'category' | 'item' | 'income' | 'debt-payment' | 'saving-transaction';
 
 export function FinancePage() {
   const { accessToken } = useSession();
+  const permission = usePermission('finances');
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<FinanceTab>('budget');
   const [open, setOpen] = useState(false);
@@ -57,14 +77,38 @@ export function FinancePage() {
   const [targetAmount, setTargetAmount] = useState('');
   const [budgetItemId, setBudgetItemId] = useState('');
   const [dueDate, setDueDate] = useState('');
+  const [selectedMonthId, setSelectedMonthId] = useState<string | null>(null);
+  const [manageKind, setManageKind] = useState<ManageKind | null>(null);
+  const [selectedId, setSelectedId] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [memberId, setMemberId] = useState('');
+  const [direction, setDirection] = useState<'add' | 'subtract'>('add');
+  const [editingCategory, setEditingCategory] = useState<BudgetCategory | null>(null);
+  const [editingItem, setEditingItem] = useState<BudgetItemSummary | null>(null);
+  const [editingDebt, setEditingDebt] = useState<FinanceDebt | null>(null);
   const household = useQuery({
     queryKey: ['household'],
     queryFn: () => getMyHousehold({ accessToken }),
   });
   const budget = useQuery({
-    queryKey: ['finances', 'current'],
-    queryFn: () => getCurrentBudgetMonth({ accessToken }),
+    queryKey: ['finances', 'month', selectedMonthId],
+    queryFn: () =>
+      selectedMonthId
+        ? getBudgetMonth(selectedMonthId, { accessToken })
+        : getCurrentBudgetMonth({ accessToken }),
     retry: false,
+  });
+  const months = useQuery({
+    queryKey: ['finances', 'months'],
+    queryFn: () => listBudgetMonths({ accessToken }),
+  });
+  const categories = useQuery({
+    queryKey: ['finances', 'categories'],
+    queryFn: () => listBudgetCategories({ accessToken }),
+  });
+  const members = useQuery({
+    queryKey: ['household', 'members'],
+    queryFn: () => listHouseholdMembers({ accessToken }),
   });
   const debts = useQuery({
     queryKey: ['finances', 'debts'],
@@ -85,6 +129,20 @@ export function FinancePage() {
       );
     },
     onSuccess: invalidate,
+  });
+  const generateMonth = useMutation({
+    mutationFn: () => generateNextBudgetMonth({ accessToken }),
+    onSuccess: async (result) => {
+      setSelectedMonthId(result.month.id);
+      await invalidate();
+    },
+  });
+  const removeMonth = useMutation({
+    mutationFn: (id: string) => deleteBudgetMonth(id, { accessToken }),
+    onSuccess: async () => {
+      setSelectedMonthId(null);
+      await invalidate();
+    },
   });
   const create = useMutation<unknown, Error>({
     mutationFn: () => {
@@ -130,10 +188,132 @@ export function FinancePage() {
     mutationFn: (id: string) => deleteFinanceSavingsAccount(id, { accessToken }),
     onSuccess: invalidate,
   });
+  const manage = useMutation<unknown, Error>({
+    mutationFn: () => {
+      if (!budget.data) throw new Error('Najpierw wybierz lub utwórz miesiąc budżetowy.');
+      if (manageKind === 'category') {
+        return editingCategory
+          ? updateBudgetCategory(
+              editingCategory.id,
+              { name: name.trim(), copyBudgetToNextMonth: true },
+              { accessToken }
+            )
+          : createBudgetCategory(
+              { name: name.trim(), copyBudgetToNextMonth: true },
+              { accessToken }
+            );
+      }
+      if (manageKind === 'item') {
+        const input = {
+          name: name.trim(),
+          categoryId,
+          ownerMemberId: memberId,
+          budgetAmount: amount ? Number(amount) : null,
+        };
+        return editingItem
+          ? updateBudgetItem(editingItem.id, input, { accessToken })
+          : createBudgetItem(
+              { ...input, budgetMonthId: budget.data.month.id },
+              { accessToken }
+            );
+      }
+      if (manageKind === 'income') {
+        return upsertIncome(
+          memberId,
+          { amount: Number(amount), budgetMonthId: budget.data.month.id },
+          { accessToken }
+        );
+      }
+      if (manageKind === 'debt-payment') {
+        return createFinanceDebtPayment(
+          selectedId,
+          { amount: Number(amount), note: name.trim() || null, paidAt: todayIso() },
+          { accessToken }
+        );
+      }
+      if (manageKind === 'saving-transaction') {
+        return createFinanceSavingsTransaction(
+          selectedId,
+          {
+            amount: Number(amount),
+            direction,
+            note: name.trim() || null,
+            changedAt: todayIso(),
+          },
+          { accessToken }
+        );
+      }
+      throw new Error('Nie wybrano operacji.');
+    },
+    onSuccess: async () => {
+      closeManage();
+      await invalidate();
+    },
+  });
+  const saveDebt = useMutation({
+    mutationFn: () => {
+      if (!editingDebt) throw new Error('Nie wybrano zobowiązania.');
+      return updateFinanceDebt(
+        editingDebt.id,
+        {
+          lenderName: name.trim(),
+          purpose: targetAmount.trim() || 'Zobowiązanie',
+          amount: Number(amount),
+          dueDate: dueDate || null,
+        },
+        { accessToken }
+      );
+    },
+    onSuccess: async () => {
+      setEditingDebt(null);
+      setOpen(false);
+      await invalidate();
+    },
+  });
   const budgetItems =
     budget.data?.categories.flatMap((category) =>
       category.items.map((item) => ({ ...item, categoryName: category.name }))
     ) ?? [];
+  const activeCategories = useMemo(
+    () => (categories.data ?? []).filter((category) => category.isActive),
+    [categories.data]
+  );
+
+  function openManage(kind: ManageKind, id = '') {
+    setManageKind(kind);
+    setSelectedId(id);
+    setEditingCategory(null);
+    setEditingItem(null);
+    setName('');
+    setAmount('');
+    setCategoryId(activeCategories[0]?.id ?? '');
+    setMemberId(members.data?.[0]?.id ?? '');
+    setDirection('add');
+  }
+
+  function closeManage() {
+    setManageKind(null);
+    setSelectedId('');
+    setEditingCategory(null);
+    setEditingItem(null);
+    setName('');
+    setAmount('');
+  }
+
+  function openCategoryEdit(category: BudgetCategory) {
+    openManage('category');
+    setEditingCategory(category);
+    setName(category.name);
+  }
+
+  function openItemEdit(item: BudgetItemSummary) {
+    openManage('item');
+    setEditingItem(item);
+    setName(item.name);
+    setAmount(item.budgetAmount ?? '');
+    setCategoryId(item.categoryId);
+    setMemberId(item.owner.memberId);
+  }
 
   return (
     <Page>
@@ -143,7 +323,9 @@ export function FinancePage() {
         action={
           <PrimaryButton
             onClick={() => setOpen(true)}
-            disabled={tab === 'budget' && budgetItems.length === 0}
+            disabled={
+              !permission.canCreate || (tab === 'budget' && budgetItems.length === 0)
+            }
           >
             Dodaj {tab === 'budget' ? 'wydatek' : tab === 'debts' ? 'zobowiązanie' : 'cel'}
           </PrimaryButton>
@@ -172,6 +354,75 @@ export function FinancePage() {
           </SectionCard>
         ) : (
           <>
+            <SectionCard>
+              <Stack
+                direction={{ xs: 'column', md: 'row' }}
+                spacing={1.5}
+                sx={{ alignItems: { md: 'center' } }}
+              >
+                <TextField
+                  select
+                  label="Miesiąc budżetowy"
+                  value={selectedMonthId ?? ''}
+                  onChange={(event) => setSelectedMonthId(event.target.value || null)}
+                  sx={{ minWidth: 230 }}
+                >
+                  <MenuItem value="">Bieżący miesiąc</MenuItem>
+                  {(months.data ?? []).map((item) => (
+                    <MenuItem key={item.id} value={item.id}>
+                      {String(item.month).padStart(2, '0')}/{item.year}
+                      {item.isCurrent ? ' · bieżący' : ''}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <Button
+                  variant="outlined"
+                  onClick={() => generateMonth.mutate()}
+                  disabled={!permission.canCreate || generateMonth.isPending}
+                >
+                  Generuj kolejny miesiąc
+                </Button>
+                <Button
+                  variant="outlined"
+                  onClick={() => openManage('income')}
+                  disabled={!permission.canUpdate}
+                >
+                  Ustaw dochód
+                </Button>
+                <Button
+                  variant="outlined"
+                  onClick={() => openManage('category')}
+                  disabled={!permission.canCreate}
+                >
+                  Dodaj kategorię
+                </Button>
+                <Button
+                  variant="outlined"
+                  onClick={() => openManage('item')}
+                  disabled={!permission.canCreate || activeCategories.length === 0}
+                >
+                  Dodaj pozycję
+                </Button>
+                <Box sx={{ flexGrow: 1 }} />
+                {selectedMonthId && (
+                  <IconButton
+                    color="error"
+                    disabled={!permission.canDelete}
+                    onClick={() =>
+                      confirmDelete('ten miesiąc budżetowy') &&
+                      removeMonth.mutate(selectedMonthId)
+                    }
+                  >
+                    <Icon icon="solar:trash-bin-trash-bold-duotone" />
+                  </IconButton>
+                )}
+              </Stack>
+              {(generateMonth.error || removeMonth.error) && (
+                <Alert severity="error" sx={{ mt: 2 }}>
+                  {(generateMonth.error ?? removeMonth.error)?.message}
+                </Alert>
+              )}
+            </SectionCard>
             <Grid container spacing={2.5}>
               <Grid size={{ xs: 12, sm: 4 }}>
                 <MetricCard
@@ -197,9 +448,70 @@ export function FinancePage() {
                 />
               </Grid>
             </Grid>
+            <SectionCard title="Dochody domowników">
+              <Stack divider={<Divider flexItem />}>
+                {budget.data.incomes.map((income) => (
+                  <Stack
+                    key={income.ownerMemberId}
+                    direction="row"
+                    spacing={2}
+                    sx={{ py: 1.2, alignItems: 'center' }}
+                  >
+                    <Box sx={{ flex: 1 }}>
+                      <Typography sx={{ fontWeight: 700 }}>{income.displayName}</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {income.email}
+                      </Typography>
+                    </Box>
+                    <Typography variant="h6">{money(income.amount, currency)}</Typography>
+                    <IconButton
+                      disabled={!permission.canUpdate}
+                      onClick={() => {
+                        openManage('income');
+                        setMemberId(income.ownerMemberId);
+                        setAmount(income.amount);
+                      }}
+                    >
+                      <Icon icon="solar:pen-bold-duotone" />
+                    </IconButton>
+                  </Stack>
+                ))}
+              </Stack>
+            </SectionCard>
             <Stack spacing={2.5}>
               {budget.data.categories.map((category) => (
-                <SectionCard key={category.id} title={category.name}>
+                <SectionCard key={category.id}>
+                  <Stack direction="row" sx={{ alignItems: 'center', mb: 1.5 }}>
+                    <Typography variant="h5" sx={{ flex: 1 }}>
+                      {category.name}
+                    </Typography>
+                    <Stack direction="row">
+                      <IconButton
+                        disabled={!permission.canUpdate}
+                        onClick={() =>
+                          openCategoryEdit({
+                            ...category,
+                            createdAt: '',
+                            updatedAt: '',
+                          })
+                        }
+                      >
+                        <Icon icon="solar:pen-bold-duotone" />
+                      </IconButton>
+                      <IconButton
+                        color="error"
+                        disabled={!permission.canDelete}
+                        onClick={() =>
+                          confirmDelete(category.name) &&
+                          updateBudgetCategory(category.id, { isActive: false }, { accessToken }).then(
+                            invalidate
+                          )
+                        }
+                      >
+                        <Icon icon="solar:trash-bin-trash-bold-duotone" />
+                      </IconButton>
+                    </Stack>
+                  </Stack>
                   {category.items.length === 0 ? (
                     <EmptyState text="Brak pozycji w tej kategorii." />
                   ) : (
@@ -229,6 +541,22 @@ export function FinancePage() {
                             color={Number(item.remainingAmount) < 0 ? 'error' : 'success'}
                             variant="outlined"
                           />
+                          <IconButton
+                            disabled={!permission.canUpdate}
+                            onClick={() => openItemEdit(item)}
+                          >
+                            <Icon icon="solar:pen-bold-duotone" />
+                          </IconButton>
+                          <IconButton
+                            color="error"
+                            disabled={!permission.canDelete}
+                            onClick={() =>
+                              confirmDelete(item.name) &&
+                              deleteBudgetItem(item.id, { accessToken }).then(invalidate)
+                            }
+                          >
+                            <Icon icon="solar:trash-bin-trash-bold-duotone" />
+                          </IconButton>
                         </Stack>
                       ))}
                     </Stack>
@@ -263,7 +591,21 @@ export function FinancePage() {
                     <Typography color="text.secondary">{debt.purpose}</Typography>
                   </Box>
                   <IconButton
+                    disabled={!permission.canUpdate}
+                    onClick={() => {
+                      setEditingDebt(debt);
+                      setName(debt.lenderName);
+                      setTargetAmount(debt.purpose);
+                      setAmount(debt.amount);
+                      setDueDate(debt.dueDate ?? '');
+                      setOpen(true);
+                    }}
+                  >
+                    <Icon icon="solar:pen-bold-duotone" />
+                  </IconButton>
+                  <IconButton
                     color="error"
+                    disabled={!permission.canDelete}
                     onClick={() => confirmDelete(debt.lenderName) && removeDebt.mutate(debt.id)}
                   >
                     <Icon icon="solar:trash-bin-trash-bold-duotone" />
@@ -275,6 +617,25 @@ export function FinancePage() {
                 <Typography variant="body2" color="text.secondary">
                   z {money(debt.amount, currency)} · termin {shortDate(debt.dueDate)}
                 </Typography>
+                <Button
+                  size="small"
+                  startIcon={<Icon icon="solar:hand-money-bold-duotone" />}
+                  sx={{ mt: 2 }}
+                  disabled={!permission.canUpdate || debt.isSettled}
+                  onClick={() => openManage('debt-payment', debt.id)}
+                >
+                  Zapisz spłatę
+                </Button>
+                {debt.payments.length > 0 && (
+                  <Stack spacing={0.5} sx={{ mt: 1.5 }}>
+                    {debt.payments.slice(0, 3).map((payment) => (
+                      <Typography key={payment.id} variant="caption" color="text.secondary">
+                        {shortDate(payment.paidAt ?? payment.createdAt)} · {money(payment.amount, currency)}
+                        {payment.note ? ` · ${payment.note}` : ''}
+                      </Typography>
+                    ))}
+                  </Stack>
+                )}
               </SectionCard>
             ))}
           </Box>
@@ -302,6 +663,7 @@ export function FinancePage() {
                   <Typography variant="h3">{account.name}</Typography>
                   <IconButton
                     color="error"
+                    disabled={!permission.canDelete}
                     onClick={() => confirmDelete(account.name) && removeSaving.mutate(account.id)}
                   >
                     <Icon icon="solar:trash-bin-trash-bold-duotone" />
@@ -315,28 +677,55 @@ export function FinancePage() {
                     ? `cel: ${money(account.targetAmount, currency)}`
                     : 'Bez określonego celu'}
                 </Typography>
+                <Button
+                  size="small"
+                  startIcon={<Icon icon="solar:wallet-money-bold-duotone" />}
+                  sx={{ mt: 2 }}
+                  disabled={!permission.canUpdate}
+                  onClick={() => openManage('saving-transaction', account.id)}
+                >
+                  Wpłata / wypłata
+                </Button>
+                {account.transactions.length > 0 && (
+                  <Stack spacing={0.5} sx={{ mt: 1.5 }}>
+                    {account.transactions.slice(0, 3).map((transaction) => (
+                      <Typography key={transaction.id} variant="caption" color="text.secondary">
+                        {shortDate(transaction.changedAt)} ·{' '}
+                        {transaction.direction === 'add' ? '+' : '-'}
+                        {money(transaction.amount, currency)}
+                      </Typography>
+                    ))}
+                  </Stack>
+                )}
               </SectionCard>
             ))}
           </Box>
         ))}
       <FormDialog
         title={
-          tab === 'budget'
+          editingDebt
+            ? 'Edytuj zobowiązanie'
+            : tab === 'budget'
             ? 'Nowy wydatek'
             : tab === 'debts'
               ? 'Nowe zobowiązanie'
               : 'Nowy cel oszczędnościowy'
         }
         open={open}
-        onClose={() => setOpen(false)}
-        onSubmit={() => create.mutate()}
-        loading={create.isPending}
+        onClose={() => {
+          setOpen(false);
+          setEditingDebt(null);
+        }}
+        onSubmit={() => (editingDebt ? saveDebt.mutate() : create.mutate())}
+        loading={create.isPending || saveDebt.isPending}
         submitDisabled={
-          !amount || Number(amount) < 0 || (tab === 'budget' ? !budgetItemId : !name.trim())
+          !amount || Number(amount) < 0 || (tab === 'budget' && !editingDebt ? !budgetItemId : !name.trim())
         }
       >
-        {create.error && <Alert severity="error">{create.error.message}</Alert>}
-        {tab === 'budget' && (
+        {(create.error || saveDebt.error) && (
+          <Alert severity="error">{(create.error ?? saveDebt.error)?.message}</Alert>
+        )}
+        {tab === 'budget' && !editingDebt && (
           <TextField
             select
             label="Pozycja budżetu"
@@ -363,6 +752,13 @@ export function FinancePage() {
           onChange={(e) => setName(e.target.value)}
           required={tab !== 'budget'}
         />
+        {(tab === 'debts' || editingDebt) && (
+          <TextField
+            label="Cel zobowiązania"
+            value={targetAmount}
+            onChange={(event) => setTargetAmount(event.target.value)}
+          />
+        )}
         <TextField
           label={tab === 'savings' ? 'Kwota początkowa' : 'Kwota'}
           type="number"
@@ -371,7 +767,7 @@ export function FinancePage() {
           required
           slotProps={{ htmlInput: { min: 0, step: 0.01 } }}
         />
-        {tab === 'debts' && (
+        {(tab === 'debts' || editingDebt) && (
           <TextField
             label="Termin"
             type="date"
@@ -387,6 +783,101 @@ export function FinancePage() {
             value={targetAmount}
             onChange={(e) => setTargetAmount(e.target.value)}
             slotProps={{ htmlInput: { min: 0, step: 0.01 } }}
+          />
+        )}
+      </FormDialog>
+      <FormDialog
+        title={
+          manageKind === 'category'
+            ? editingCategory
+              ? 'Edytuj kategorię'
+              : 'Nowa kategoria'
+            : manageKind === 'item'
+              ? editingItem
+                ? 'Edytuj pozycję budżetu'
+                : 'Nowa pozycja budżetu'
+              : manageKind === 'income'
+                ? 'Dochód domownika'
+                : manageKind === 'debt-payment'
+                  ? 'Spłata zobowiązania'
+                  : 'Operacja na oszczędnościach'
+        }
+        open={manageKind !== null}
+        onClose={closeManage}
+        onSubmit={() => manage.mutate()}
+        loading={manage.isPending}
+        submitDisabled={
+          manageKind === 'category'
+            ? !name.trim()
+            : manageKind === 'item'
+              ? !name.trim() || !categoryId || !memberId
+              : !amount || Number(amount) <= 0 || (manageKind === 'income' && !memberId)
+        }
+      >
+        {manage.error && <Alert severity="error">{manage.error.message}</Alert>}
+        {(manageKind === 'category' || manageKind === 'item') && (
+          <TextField
+            label={manageKind === 'category' ? 'Nazwa kategorii' : 'Nazwa pozycji'}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            required
+          />
+        )}
+        {manageKind === 'item' && (
+          <TextField
+            select
+            label="Kategoria"
+            value={categoryId}
+            onChange={(event) => setCategoryId(event.target.value)}
+          >
+            {activeCategories.map((category) => (
+              <MenuItem key={category.id} value={category.id}>
+                {category.name}
+              </MenuItem>
+            ))}
+          </TextField>
+        )}
+        {(manageKind === 'item' || manageKind === 'income') && (
+          <TextField
+            select
+            label="Domownik"
+            value={memberId}
+            onChange={(event) => setMemberId(event.target.value)}
+          >
+            {(members.data ?? []).map((member) => (
+              <MenuItem key={member.id} value={member.id}>
+                {member.displayName}
+              </MenuItem>
+            ))}
+          </TextField>
+        )}
+        {manageKind === 'saving-transaction' && (
+          <TextField
+            select
+            label="Rodzaj operacji"
+            value={direction}
+            onChange={(event) => setDirection(event.target.value as 'add' | 'subtract')}
+          >
+            <MenuItem value="add">Wpłata</MenuItem>
+            <MenuItem value="subtract">Wypłata</MenuItem>
+          </TextField>
+        )}
+        {manageKind !== 'category' && (
+          <TextField
+            label={manageKind === 'item' ? 'Limit miesięczny' : 'Kwota'}
+            type="number"
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+            slotProps={{ htmlInput: { min: 0, step: 0.01 } }}
+          />
+        )}
+        {(manageKind === 'debt-payment' || manageKind === 'saving-transaction') && (
+          <TextField
+            label="Notatka (opcjonalnie)"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            multiline
+            minRows={2}
           />
         )}
       </FormDialog>

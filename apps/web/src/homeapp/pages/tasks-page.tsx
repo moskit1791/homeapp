@@ -1,3 +1,5 @@
+import type { Note, TodoItem } from '../api';
+
 import { useState } from 'react';
 import { Icon } from '@iconify/react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -17,16 +19,7 @@ import {
 
 import { shortDate } from '../utils/format';
 import { useSession } from '../auth/session-context';
-import {
-  listNotes,
-  createNote,
-  deleteNote,
-  listTodoItems,
-  createTodoItem,
-  deleteTodoItem,
-  reopenTodoItem,
-  completeTodoItem,
-} from '../api';
+import { usePermission } from '../auth/use-permission';
 import {
   Page,
   ErrorView,
@@ -38,14 +31,31 @@ import {
   confirmDelete,
   PrimaryButton,
 } from '../components/ui';
+import {
+  listNotes,
+  createNote,
+  deleteNote,
+  updateNote,
+  moveTodoItem,
+  listTodoItems,
+  createTodoItem,
+  deleteTodoItem,
+  reopenTodoItem,
+  updateTodoItem,
+  completeTodoItem,
+} from '../api';
 
 export function TasksPage() {
   const { accessToken } = useSession();
+  const todoPermission = usePermission('todo');
+  const notesPermission = usePermission('notes');
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<'notes' | 'todo'>('todo');
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [editingTodo, setEditingTodo] = useState<TodoItem | null>(null);
+  const [editingNote, setEditingNote] = useState<Note | null>(null);
   const todos = useQuery({
     queryKey: ['todo'],
     queryFn: () => listTodoItems(undefined, { accessToken }),
@@ -55,18 +65,20 @@ export function TasksPage() {
     queryFn: () => listNotes({ accessToken }),
   });
   const invalidate = () => queryClient.invalidateQueries({ queryKey: [tab] });
-  const create = useMutation<unknown, Error>({
+  const save = useMutation<unknown, Error>({
     mutationFn: () =>
       tab === 'todo'
-        ? createTodoItem(
-            { title: title.trim(), description, scopeType: 'household' },
-            { accessToken }
-          )
-        : createNote({ title: title.trim(), description }, { accessToken }),
+        ? editingTodo
+          ? updateTodoItem(editingTodo.id, { title: title.trim(), description }, { accessToken })
+          : createTodoItem(
+              { title: title.trim(), description, scopeType: 'household' },
+              { accessToken }
+            )
+        : editingNote
+          ? updateNote(editingNote.id, { title: title.trim(), description }, { accessToken })
+          : createNote({ title: title.trim(), description }, { accessToken }),
     onSuccess: async () => {
-      setOpen(false);
-      setTitle('');
-      setDescription('');
+      closeForm();
       await invalidate();
     },
   });
@@ -83,7 +95,46 @@ export function TasksPage() {
     mutationFn: (id: string) => deleteNote(id, { accessToken }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notes'] }),
   });
+  const moveTodo = useMutation({
+    mutationFn: ({ id, direction }: { id: string; direction: 'down' | 'up' }) =>
+      moveTodoItem(id, { direction }, { accessToken }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['todo'] }),
+  });
   const active = tab === 'todo' ? todos : notes;
+  const activePermission = tab === 'todo' ? todoPermission : notesPermission;
+
+  function openCreate() {
+    setEditingTodo(null);
+    setEditingNote(null);
+    setTitle('');
+    setDescription('');
+    setOpen(true);
+  }
+
+  function openTodo(item: TodoItem) {
+    setEditingTodo(item);
+    setEditingNote(null);
+    setTitle(item.title);
+    setDescription(item.description ?? '');
+    setOpen(true);
+  }
+
+  function openNote(item: Note) {
+    setEditingNote(item);
+    setEditingTodo(null);
+    setTitle(item.title);
+    setDescription(item.description ?? '');
+    setOpen(true);
+  }
+
+  function closeForm() {
+    setOpen(false);
+    setEditingTodo(null);
+    setEditingNote(null);
+    setTitle('');
+    setDescription('');
+    save.reset();
+  }
 
   return (
     <Page>
@@ -91,7 +142,7 @@ export function TasksPage() {
         title="Zadania i notatki"
         description="Wszystko, o czym warto pamiętać."
         action={
-          <PrimaryButton onClick={() => setOpen(true)}>
+          <PrimaryButton onClick={openCreate} disabled={!activePermission.canCreate}>
             Dodaj {tab === 'todo' ? 'zadanie' : 'notatkę'}
           </PrimaryButton>
         }
@@ -120,6 +171,7 @@ export function TasksPage() {
                         done: todo.status === 'done',
                       })
                     }
+                    disabled={!todoPermission.canUpdate}
                   />
                   <Box sx={{ flex: 1 }}>
                     <Typography
@@ -137,8 +189,30 @@ export function TasksPage() {
                     )}
                   </Box>
                   <IconButton
+                    aria-label="Przesuń zadanie w górę"
+                    onClick={() => moveTodo.mutate({ id: todo.id, direction: 'up' })}
+                    disabled={!todoPermission.canUpdate}
+                  >
+                    <Icon icon="solar:alt-arrow-up-bold" />
+                  </IconButton>
+                  <IconButton
+                    aria-label="Przesuń zadanie w dół"
+                    onClick={() => moveTodo.mutate({ id: todo.id, direction: 'down' })}
+                    disabled={!todoPermission.canUpdate}
+                  >
+                    <Icon icon="solar:alt-arrow-down-bold" />
+                  </IconButton>
+                  <IconButton
+                    aria-label="Edytuj zadanie"
+                    onClick={() => openTodo(todo)}
+                    disabled={!todoPermission.canUpdate}
+                  >
+                    <Icon icon="solar:pen-bold-duotone" />
+                  </IconButton>
+                  <IconButton
                     color="error"
                     onClick={() => confirmDelete(todo.title) && removeTodo.mutate(todo.id)}
+                    disabled={!todoPermission.canDelete}
                   >
                     <Icon icon="solar:trash-bin-trash-bold-duotone" />
                   </IconButton>
@@ -166,9 +240,18 @@ export function TasksPage() {
                     </Typography>
                   </Box>
                   <IconButton
+                    size="small"
+                    aria-label="Edytuj notatkę"
+                    onClick={() => openNote(note)}
+                    disabled={!notesPermission.canUpdate}
+                  >
+                    <Icon icon="solar:pen-bold-duotone" />
+                  </IconButton>
+                  <IconButton
                     color="error"
                     size="small"
                     onClick={() => confirmDelete(note.title) && removeNote.mutate(note.id)}
+                    disabled={!notesPermission.canDelete}
                   >
                     <Icon icon="solar:trash-bin-trash-bold-duotone" />
                   </IconButton>
@@ -182,14 +265,18 @@ export function TasksPage() {
         )}
       </SectionCard>
       <FormDialog
-        title={tab === 'todo' ? 'Nowe zadanie' : 'Nowa notatka'}
+        title={
+          editingTodo || editingNote
+            ? `Edytuj ${tab === 'todo' ? 'zadanie' : 'notatkę'}`
+            : `Now${tab === 'todo' ? 'e zadanie' : 'a notatka'}`
+        }
         open={open}
-        onClose={() => setOpen(false)}
-        onSubmit={() => create.mutate()}
-        loading={create.isPending}
+        onClose={closeForm}
+        onSubmit={() => save.mutate()}
+        loading={save.isPending}
         submitDisabled={!title.trim()}
       >
-        {create.error && <Alert severity="error">{create.error.message}</Alert>}
+        {save.error && <Alert severity="error">{save.error.message}</Alert>}
         <TextField
           label="Tytuł"
           value={title}

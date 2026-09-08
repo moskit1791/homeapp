@@ -1,3 +1,5 @@
+import type { CalendarEvent } from '../api';
+
 import { Icon } from '@iconify/react';
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -7,6 +9,7 @@ import {
   Chip,
   Alert,
   Stack,
+  Button,
   Divider,
   MenuItem,
   TextField,
@@ -16,7 +19,8 @@ import {
 
 import { useSession } from '../auth/session-context';
 import { todayIso, shortDate } from '../utils/format';
-import { listCalendarEvents, createCalendarEvent, deleteCalendarEvent } from '../api';
+import { usePermission } from '../auth/use-permission';
+import { encryptRuntimePayload } from '../encryption-runtime';
 import {
   Page,
   ErrorView,
@@ -25,9 +29,20 @@ import {
   PageHeader,
   LoadingView,
   SectionCard,
+  errorMessage,
   confirmDelete,
   PrimaryButton,
 } from '../components/ui';
+import {
+  syncGoogleCalendar,
+  listCalendarEvents,
+  createCalendarEvent,
+  deleteCalendarEvent,
+  updateCalendarEvent,
+  connectGoogleCalendar,
+  getGoogleCalendarStatus,
+  commitGoogleCalendarEncryptedSync,
+} from '../api';
 
 function monthRange(value: string) {
   const [year = 0, month = 1] = value.split('-').map(Number);
@@ -40,6 +55,7 @@ function monthRange(value: string) {
 
 export function CalendarPage() {
   const { accessToken } = useSession();
+  const permission = usePermission('calendar');
   const queryClient = useQueryClient();
   const [month, setMonth] = useState(todayIso().slice(0, 7));
   const [open, setOpen] = useState(false);
@@ -47,27 +63,42 @@ export function CalendarPage() {
   const [eventDate, setEventDate] = useState(todayIso());
   const [eventTime, setEventTime] = useState('');
   const [location, setLocation] = useState('');
+  const [locationUrl, setLocationUrl] = useState('');
+  const [note, setNote] = useState('');
+  const [recurrenceRule, setRecurrenceRule] = useState('');
+  const [reminderOffset, setReminderOffset] = useState('1440');
   const [scopeType, setScopeType] = useState<'household' | 'member'>('household');
+  const [editing, setEditing] = useState<CalendarEvent | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const range = useMemo(() => monthRange(month), [month]);
   const events = useQuery({
     queryKey: ['calendar', range],
     queryFn: () => listCalendarEvents(range.from, range.to, { accessToken }),
   });
-  const create = useMutation({
-    mutationFn: () =>
-      createCalendarEvent(
-        {
-          eventDate,
-          eventTime: eventTime || null,
-          locationName: location || null,
-          scopeType,
-          title: title.trim(),
-        },
-        { accessToken }
-      ),
+  const google = useQuery({
+    queryKey: ['calendar', 'google'],
+    queryFn: () => getGoogleCalendarStatus({ accessToken }),
+  });
+  const save = useMutation({
+    mutationFn: () => {
+      const input = {
+        eventDate,
+        eventTime: eventTime || null,
+        locationName: location || null,
+        locationUrl: locationUrl || null,
+        note: note || null,
+        recurrenceRule: recurrenceRule || null,
+        reminderOffsetMinutes: reminderOffset ? Number(reminderOffset) : null,
+        scopeType,
+        title: title.trim(),
+      };
+
+      return editing
+        ? updateCalendarEvent(editing.id, input, { accessToken })
+        : createCalendarEvent(input, { accessToken });
+    },
     onSuccess: async () => {
-      setOpen(false);
-      setTitle('');
+      closeForm();
       await queryClient.invalidateQueries({ queryKey: ['calendar'] });
     },
   });
@@ -75,19 +106,159 @@ export function CalendarPage() {
     mutationFn: (id: string) => deleteCalendarEvent(id, { accessToken }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['calendar'] }),
   });
+  const connectGoogle = useMutation({
+    mutationFn: () => connectGoogleCalendar({ accessToken }),
+    onSuccess: ({ authorizationUrl }) => window.location.assign(authorizationUrl),
+  });
+  const syncGoogle = useMutation({
+    mutationFn: async () => {
+      const result = await syncGoogleCalendar({ accessToken });
+      if (!result.clientEncryptionRequired) return result;
+      let importedCount = 0;
+      let updatedCount = 0;
+      let skippedCount = result.skippedCount;
+      const eventDates = new Set<string>();
+      const batchSize = 50;
+
+      for (let offset = 0; offset < result.events.length; offset += batchSize) {
+        const batch = result.events.slice(offset, offset + batchSize);
+        const encryptedEvents = await Promise.all(
+          batch.map(async (event) => ({
+            eventDate: event.eventDate,
+            eventTime: event.eventTime,
+            googleEventId: event.googleEventId,
+            googleUpdatedAt: event.googleUpdatedAt,
+            ...(await encryptRuntimePayload('calendar', 'calendar-event', {
+              title: event.title,
+              locationName: event.locationName,
+              locationUrl: event.locationUrl,
+              note: event.note,
+            })),
+          }))
+        );
+        const committed = await commitGoogleCalendarEncryptedSync(
+          { events: encryptedEvents, finalize: offset + batchSize >= result.events.length },
+          { accessToken }
+        );
+        importedCount += committed.importedCount;
+        updatedCount += committed.updatedCount;
+        skippedCount += committed.skippedCount;
+        committed.eventDates.forEach((date) => eventDates.add(date));
+      }
+
+      return {
+        clientEncryptionRequired: false as const,
+        eventDates: [...eventDates].sort(),
+        from: result.from,
+        importedCount,
+        skippedCount,
+        to: result.to,
+        updatedCount,
+      };
+    },
+    onSuccess: async (result) => {
+      setNotice(
+        `Google: dodano ${result.importedCount}, zaktualizowano ${result.updatedCount}, pominięto ${result.skippedCount}.`
+      );
+      await queryClient.invalidateQueries({ queryKey: ['calendar'] });
+    },
+  });
 
   const grouped = (events.data ?? []).reduce<Record<string, typeof events.data>>((acc, event) => {
     (acc[event.eventDate] ??= []).push(event);
     return acc;
   }, {});
 
+  function openCreate() {
+    setEditing(null);
+    setTitle('');
+    setEventDate(todayIso());
+    setEventTime('');
+    setLocation('');
+    setLocationUrl('');
+    setNote('');
+    setRecurrenceRule('');
+    setReminderOffset('1440');
+    setScopeType('household');
+    setOpen(true);
+  }
+
+  function openEdit(event: CalendarEvent) {
+    setEditing(event);
+    setTitle(event.title);
+    setEventDate(event.eventDate);
+    setEventTime(event.eventTime?.slice(0, 5) ?? '');
+    setLocation(event.locationName ?? '');
+    setLocationUrl(event.locationUrl ?? '');
+    setNote(event.note ?? '');
+    setRecurrenceRule(event.recurrenceRule ?? '');
+    setReminderOffset(String(event.reminderOffsetMinutes ?? ''));
+    setScopeType(event.scopeType);
+    setOpen(true);
+  }
+
+  function closeForm() {
+    setOpen(false);
+    setEditing(null);
+    save.reset();
+  }
+
   return (
     <Page>
       <PageHeader
         title="Kalendarz"
         description="Wspólne i prywatne wydarzenia domowników."
-        action={<PrimaryButton onClick={() => setOpen(true)}>Nowe wydarzenie</PrimaryButton>}
+        action={
+          <PrimaryButton onClick={openCreate} disabled={!permission.canCreate}>
+            Nowe wydarzenie
+          </PrimaryButton>
+        }
       />
+      {notice && (
+        <Alert severity="info" onClose={() => setNotice(null)}>
+          {notice}
+        </Alert>
+      )}
+      <SectionCard>
+        <Stack
+          direction={{ xs: 'column', md: 'row' }}
+          spacing={2}
+          sx={{ alignItems: { md: 'center' }, justifyContent: 'space-between' }}
+        >
+          <Box>
+            <Typography variant="subtitle1">Kalendarz Google</Typography>
+            <Typography variant="body2" color="text.secondary">
+              {google.data?.connected
+                ? `${google.data.googleAccountEmail ?? 'Połączono'} · ostatnia synchronizacja ${shortDate(google.data.lastSyncedAt)}`
+                : 'Połącz konto Google, aby pobierać wydarzenia.'}
+            </Typography>
+          </Box>
+          {google.data?.connected ? (
+            <Button
+              variant="outlined"
+              startIcon={<Icon icon="solar:refresh-bold" />}
+              onClick={() => syncGoogle.mutate()}
+              disabled={syncGoogle.isPending}
+            >
+              Synchronizuj
+            </Button>
+          ) : (
+            <Button
+              variant="outlined"
+              startIcon={<Icon icon="logos:google-icon" />}
+              onClick={() => connectGoogle.mutate()}
+              disabled={connectGoogle.isPending}
+            >
+              Połącz Google
+            </Button>
+          )}
+        </Stack>
+        {(google.error || connectGoogle.error || syncGoogle.error) && (
+          <Alert severity="error" sx={{ mt: 2 }}>
+            {errorMessage(google.error || connectGoogle.error || syncGoogle.error)}
+          </Alert>
+        )}
+      </SectionCard>
       <SectionCard>
         <TextField
           label="Miesiąc"
@@ -141,13 +312,23 @@ export function CalendarPage() {
                           variant="outlined"
                         />
                         {event.sourceType === 'manual' && (
-                          <IconButton
-                            color="error"
-                            onClick={() => confirmDelete(event.title) && remove.mutate(event.id)}
-                            aria-label="Usuń wydarzenie"
-                          >
-                            <Icon icon="solar:trash-bin-trash-bold-duotone" />
-                          </IconButton>
+                          <>
+                            <IconButton
+                              onClick={() => openEdit(event)}
+                              aria-label="Edytuj wydarzenie"
+                              disabled={!permission.canUpdate}
+                            >
+                              <Icon icon="solar:pen-bold-duotone" />
+                            </IconButton>
+                            <IconButton
+                              color="error"
+                              onClick={() => confirmDelete(event.title) && remove.mutate(event.id)}
+                              aria-label="Usuń wydarzenie"
+                              disabled={!permission.canDelete}
+                            >
+                              <Icon icon="solar:trash-bin-trash-bold-duotone" />
+                            </IconButton>
+                          </>
                         )}
                       </Stack>
                     ))}
@@ -158,14 +339,14 @@ export function CalendarPage() {
         )}
       </SectionCard>
       <FormDialog
-        title="Nowe wydarzenie"
+        title={editing ? 'Edytuj wydarzenie' : 'Nowe wydarzenie'}
         open={open}
-        onClose={() => setOpen(false)}
-        onSubmit={() => create.mutate()}
-        loading={create.isPending}
+        onClose={closeForm}
+        onSubmit={() => save.mutate()}
+        loading={save.isPending}
         submitDisabled={!title.trim() || !eventDate}
       >
-        {create.error && <Alert severity="error">{create.error.message}</Alert>}
+        {save.error && <Alert severity="error">{errorMessage(save.error)}</Alert>}
         <TextField
           label="Tytuł"
           value={title}
@@ -192,6 +373,41 @@ export function CalendarPage() {
           />
         </Stack>
         <TextField label="Miejsce" value={location} onChange={(e) => setLocation(e.target.value)} />
+        <TextField
+          label="Link do lokalizacji"
+          value={locationUrl}
+          onChange={(e) => setLocationUrl(e.target.value)}
+          placeholder="https://maps.google.com/…"
+        />
+        <TextField
+          label="Notatka"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          multiline
+          minRows={3}
+        />
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+          <TextField
+            fullWidth
+            select
+            label="Przypomnienie"
+            value={reminderOffset}
+            onChange={(e) => setReminderOffset(e.target.value)}
+          >
+            <MenuItem value="">Bez przypomnienia</MenuItem>
+            <MenuItem value="30">30 minut wcześniej</MenuItem>
+            <MenuItem value="60">Godzinę wcześniej</MenuItem>
+            <MenuItem value="1440">Dzień wcześniej</MenuItem>
+            <MenuItem value="10080">Tydzień wcześniej</MenuItem>
+          </TextField>
+          <TextField
+            fullWidth
+            label="Powtarzanie (RRULE)"
+            value={recurrenceRule}
+            onChange={(e) => setRecurrenceRule(e.target.value)}
+            placeholder="np. FREQ=WEEKLY"
+          />
+        </Stack>
         <TextField
           select
           label="Widoczność"

@@ -1,7 +1,8 @@
 import { Icon } from '@iconify/react';
 import { useQuery } from '@tanstack/react-query';
+import { Link as RouterLink } from 'react-router';
 
-import { Box, Chip, Grid, Stack, Divider, Typography } from '@mui/material';
+import { Box, Chip, Grid, Stack, Button, Divider, Typography } from '@mui/material';
 
 import { useSession } from '../auth/session-context';
 import { getMyHousehold, getStartDashboard } from '../api';
@@ -56,6 +57,27 @@ export function TodayPage() {
           dateStyle: 'full',
         }).format(new Date())}
       />
+      <SectionCard
+        sx={{
+          overflow: 'hidden',
+          color: 'common.white',
+          background: 'linear-gradient(135deg, #004B50 0%, #00A76F 58%, #5BE49B 140%)',
+        }}
+      >
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} sx={{ alignItems: { md: 'center' } }}>
+          <Box sx={{ flex: 1 }}>
+            <Typography variant="h2">Wszystko, co ważne w domu</Typography>
+            <Typography sx={{ mt: 1, maxWidth: 620, opacity: 0.8 }}>
+              Dodaj wydatek, zaplanuj obiad albo sprawdź dzisiejsze obowiązki — bez przechodzenia przez kilka ekranów.
+            </Typography>
+          </Box>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+            <Button component={RouterLink} to="/finanse" variant="contained" color="inherit" startIcon={<Icon icon="solar:card-send-bold-duotone" />} sx={{ color: '#004B50', bgcolor: 'common.white', '&:hover': { bgcolor: 'grey.200' } }}>Dodaj wydatek</Button>
+            <Button component={RouterLink} to="/zakupy" variant="outlined" startIcon={<Icon icon="solar:cart-plus-bold-duotone" />} sx={{ color: 'common.white', borderColor: 'rgba(255,255,255,.5)' }}>Lista zakupów</Button>
+            <Button component={RouterLink} to="/posilki" variant="outlined" startIcon={<Icon icon="solar:chef-hat-bold-duotone" />} sx={{ color: 'common.white', borderColor: 'rgba(255,255,255,.5)' }}>Plan posiłków</Button>
+          </Stack>
+        </Stack>
+      </SectionCard>
       <Grid container spacing={2.5}>
         <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
           <MetricCard

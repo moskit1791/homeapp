@@ -1109,8 +1109,9 @@ export interface LocalAttachmentUploadResponse {
 }
 
 export interface UploadAttachmentFileRequest {
+  file?: Blob;
   fileName: string;
-  fileUri: string;
+  fileUri?: string;
   mimeType: Attachment['mimeType'];
   storagePath: string;
   uploadUrl: string;

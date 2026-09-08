@@ -15,6 +15,7 @@ import {
   verifyEmail,
   logoutSession,
   refreshSession,
+  loginWithGoogle,
   createHousehold,
   getMyPermissions,
   type LoginRequest,
@@ -38,7 +39,8 @@ interface SessionContextValue {
   createFirstHousehold: (input: CreateHouseholdRequest) => Promise<void>;
   logout: () => Promise<void>;
   registerAccount: (input: RegisterRequest) => Promise<'signed-in' | 'verification-required'>;
-  signIn: (input: LoginRequest, remember: boolean) => Promise<void>;
+  signIn: (input: LoginRequest, remember: boolean) => Promise<string>;
+  signInWithGoogle: (idToken: string, remember: boolean) => Promise<string>;
   permissions: EffectivePermission[];
   status: SessionStatus;
 }
@@ -188,6 +190,15 @@ export function SessionProvider({ children }: PropsWithChildren) {
         setRemember(shouldRemember);
         storeSession(next, shouldRemember);
         await verifyHousehold(next);
+        return next.accessToken;
+      },
+      signInWithGoogle: async (idToken, shouldRemember) => {
+        const next = toSession(await loginWithGoogle({ idToken }));
+        setSession(next);
+        setRemember(shouldRemember);
+        storeSession(next, shouldRemember);
+        await verifyHousehold(next);
+        return next.accessToken;
       },
       permissions,
       status,

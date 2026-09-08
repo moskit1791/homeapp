@@ -1552,14 +1552,15 @@ export async function uploadAttachmentFile(
 ): Promise<LocalAttachmentUploadResponse> {
   const requestOptions = normalizeApiCallOptions(options);
   const formData = new FormData();
+  const file = input.file ?? (input.fileUri ? await fetch(input.fileUri).then((result) => result.blob()) : null);
+
+  if (!file) {
+    throw new Error('Missing attachment file');
+  }
 
   formData.append('storagePath', input.storagePath);
   formData.append('mimeType', input.mimeType);
-  formData.append('file', {
-    name: input.fileName,
-    type: input.mimeType,
-    uri: input.fileUri,
-  } as unknown as Blob);
+  formData.append('file', file, input.fileName);
 
   const headers: Record<string, string> = { Accept: 'application/json' };
 

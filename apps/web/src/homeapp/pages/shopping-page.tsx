@@ -1,27 +1,26 @@
-import { useState } from 'react';
+import type { ShoppingItem, ShoppingListType } from '../api';
+
 import { Icon } from '@iconify/react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import {
   Box,
-  Chip,
+  Tab,
+  Tabs,
   Alert,
   Stack,
+  Button,
   Divider,
   Checkbox,
+  MenuItem,
   TextField,
   IconButton,
   Typography,
 } from '@mui/material';
 
 import { useSession } from '../auth/session-context';
-import {
-  listShoppingItems,
-  type ShoppingItem,
-  createShoppingItem,
-  deleteShoppingItem,
-  toggleShoppingItem,
-} from '../api';
+import { usePermission } from '../auth/use-permission';
 import {
   Page,
   ErrorView,
@@ -30,9 +29,28 @@ import {
   PageHeader,
   LoadingView,
   SectionCard,
-  confirmDelete,
+  errorMessage,
   PrimaryButton,
+  confirmDelete,
 } from '../components/ui';
+import {
+  moveShoppingItem,
+  clearShoppingList,
+  listShoppingItems,
+  listShoppingLists,
+  createShoppingItem,
+  deleteShoppingItem,
+  toggleShoppingItem,
+  updateShoppingItem,
+  importShoppingItemsWithAi,
+  moveUncheckedShoppingToTomorrow,
+} from '../api';
+
+const listTypes: Array<{ label: string; value: ShoppingListType }> = [
+  { label: 'Dzisiaj', value: 'daily' },
+  { label: 'Jutro', value: 'tomorrow' },
+  { label: 'Na później', value: 'long_term' },
+];
 
 const categories: Record<string, { emoji: string; label: string }> = {
   bakery: { emoji: '🥖', label: 'Pieczywo' },
@@ -46,28 +64,63 @@ const categories: Record<string, { emoji: string; label: string }> = {
   other: { emoji: '🛒', label: 'Inne' },
 };
 
+type ItemDraft = Pick<ShoppingItem, 'category' | 'expirationDate' | 'name' | 'quantity'>;
+
+const emptyDraft: ItemDraft = {
+  category: 'other',
+  expirationDate: null,
+  name: '',
+  quantity: '1 szt.',
+};
+
 export function ShoppingPage() {
   const { accessToken } = useSession();
+  const permission = usePermission('shopping');
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState('');
-  const [quantity, setQuantity] = useState('1 szt.');
-  const [itemCategory, setItemCategory] = useState('other');
-  const query = useQuery({
-    queryKey: ['shopping', 'daily'],
-    queryFn: () => listShoppingItems('daily', { accessToken }),
+  const [activeType, setActiveType] = useState<ShoppingListType>('daily');
+  const [draft, setDraft] = useState<ItemDraft>(emptyDraft);
+  const [editing, setEditing] = useState<ShoppingItem | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiMessage, setAiMessage] = useState('');
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const lists = useQuery({
+    queryKey: ['shopping', 'lists'],
+    queryFn: () => listShoppingLists({ accessToken }),
+  });
+  const items = useQuery({
+    queryKey: ['shopping', activeType],
+    queryFn: () => listShoppingItems(activeType, { accessToken }),
   });
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['shopping'] });
-  const create = useMutation({
+
+  const save = useMutation({
     mutationFn: () =>
-      createShoppingItem(
-        'daily',
-        { name: name.trim(), quantity, category: itemCategory },
-        { accessToken }
-      ),
+      editing
+        ? updateShoppingItem(
+            editing.id,
+            {
+              category: draft.category,
+              expirationDate: draft.expirationDate,
+              name: draft.name.trim(),
+              quantity: draft.quantity.trim(),
+            },
+            { accessToken }
+          )
+        : createShoppingItem(
+            activeType,
+            {
+              category: draft.category,
+              expirationDate: draft.expirationDate,
+              name: draft.name.trim(),
+              quantity: draft.quantity.trim(),
+            },
+            { accessToken }
+          ),
     onSuccess: async () => {
-      setOpen(false);
-      setName('');
+      closeForm();
+      setNotice(editing ? 'Produkt został zaktualizowany.' : 'Produkt został dodany.');
       await invalidate();
     },
   });
@@ -79,61 +132,222 @@ export function ShoppingPage() {
     mutationFn: (id: string) => deleteShoppingItem(id, { accessToken }),
     onSuccess: invalidate,
   });
-  const groups = (query.data ?? []).reduce<Record<string, ShoppingItem[]>>((acc, item) => {
-    (acc[item.category ?? 'other'] ??= []).push(item);
-    return acc;
-  }, {});
+  const move = useMutation({
+    mutationFn: ({ id, targetType }: { id: string; targetType: ShoppingListType }) =>
+      moveShoppingItem(id, { targetType }, { accessToken }),
+    onSuccess: invalidate,
+  });
+  const clear = useMutation({
+    mutationFn: () => clearShoppingList(activeType, { accessToken }),
+    onSuccess: async (result) => {
+      setNotice(`Usunięto ${result.deleted ?? 0} produktów.`);
+      await invalidate();
+    },
+  });
+  const moveTomorrow = useMutation({
+    mutationFn: () => moveUncheckedShoppingToTomorrow({ accessToken }),
+    onSuccess: async (result) => {
+      setNotice(`Przeniesiono ${result.moved ?? 0} produktów na jutro.`);
+      await invalidate();
+    },
+  });
+  const aiImport = useMutation({
+    mutationFn: () =>
+      importShoppingItemsWithAi(activeType, { message: aiMessage.trim() }, { accessToken }),
+    onSuccess: async (result) => {
+      setAiOpen(false);
+      setAiMessage('');
+      setNotice(
+        result.importedCount
+          ? `AI dodało ${result.importedCount} produktów.`
+          : `AI przygotowało ${result.plannedItems.length} produktów do listy.`
+      );
+      await invalidate();
+    },
+  });
+
+  const grouped = useMemo(
+    () =>
+      (items.data ?? []).reduce<Record<string, ShoppingItem[]>>((acc, item) => {
+        (acc[item.category ?? 'other'] ??= []).push(item);
+        return acc;
+      }, {}),
+    [items.data]
+  );
+  const currentList = lists.data?.find((item) => item.type === activeType);
+  const uncheckedCount = items.data?.filter((item) => !item.isChecked).length ?? 0;
+
+  function openCreate() {
+    setEditing(null);
+    setDraft(emptyDraft);
+    setFormOpen(true);
+  }
+
+  function openEdit(item: ShoppingItem) {
+    setEditing(item);
+    setDraft({
+      category: item.category ?? 'other',
+      expirationDate: item.expirationDate,
+      name: item.name,
+      quantity: item.quantity,
+    });
+    setFormOpen(true);
+  }
+
+  function closeForm() {
+    setFormOpen(false);
+    setEditing(null);
+    setDraft(emptyDraft);
+    save.reset();
+  }
 
   return (
     <Page>
       <PageHeader
-        title="Lista zakupów"
-        description={`${query.data?.filter((i) => !i.isChecked).length ?? 0} produktów do kupienia`}
-        action={<PrimaryButton onClick={() => setOpen(true)}>Dodaj produkt</PrimaryButton>}
+        title="Zakupy"
+        description="Trzy listy, wspólne odhaczanie, przenoszenie produktów i import z AI."
+        action={
+          <Stack direction="row" spacing={1}>
+            <Button
+              variant="outlined"
+              startIcon={<Icon icon="solar:magic-stick-3-bold-duotone" />}
+              onClick={() => setAiOpen(true)}
+              disabled={!permission.canCreate}
+            >
+              Dodaj z AI
+            </Button>
+            <PrimaryButton onClick={openCreate} disabled={!permission.canCreate}>
+              Dodaj produkt
+            </PrimaryButton>
+          </Stack>
+        }
       />
-      {query.isLoading ? (
+
+      {notice && (
+        <Alert severity="success" onClose={() => setNotice(null)}>
+          {notice}
+        </Alert>
+      )}
+
+      <SectionCard>
+        <Stack
+          direction={{ xs: 'column', md: 'row' }}
+          spacing={2}
+          sx={{ alignItems: { md: 'center' }, justifyContent: 'space-between' }}
+        >
+          <Tabs value={activeType} onChange={(_, value) => setActiveType(value)}>
+            {listTypes.map((item) => (
+              <Tab key={item.value} value={item.value} label={item.label} />
+            ))}
+          </Tabs>
+          <Stack direction="row" spacing={1}>
+            {activeType === 'daily' && (
+              <Button
+                size="small"
+                variant="soft"
+                onClick={() => moveTomorrow.mutate()}
+                disabled={!permission.canUpdate || !uncheckedCount || moveTomorrow.isPending}
+              >
+                Przenieś niekupione na jutro
+              </Button>
+            )}
+            <Button
+              size="small"
+              color="error"
+              onClick={() =>
+                window.confirm('Wyczyścić całą aktualną listę?') && clear.mutate()
+              }
+              disabled={!permission.canDelete || !(items.data?.length ?? 0) || clear.isPending}
+            >
+              Wyczyść listę
+            </Button>
+          </Stack>
+        </Stack>
+      </SectionCard>
+
+      {items.isLoading ? (
         <LoadingView />
-      ) : query.error ? (
-        <ErrorView error={query.error} retry={() => void query.refetch()} />
-      ) : (query.data?.length ?? 0) === 0 ? (
+      ) : items.error ? (
+        <ErrorView error={items.error} retry={() => void items.refetch()} />
+      ) : (items.data?.length ?? 0) === 0 ? (
         <SectionCard>
           <EmptyState
             icon="solar:cart-check-bold-duotone"
-            text="Lista jest pusta. Dodaj pierwszy produkt."
+            text={`${currentList?.name ?? 'Ta lista'} jest pusta.`}
           />
         </SectionCard>
       ) : (
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+            gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, minmax(0, 1fr))' },
             gap: 2.5,
           }}
         >
-          {Object.entries(groups).map(([key, items]) => {
+          {Object.entries(grouped).map(([key, groupItems]) => {
             const meta = categories[key] ?? categories.other!;
             return (
               <SectionCard key={key} title={`${meta.emoji} ${meta.label}`}>
                 <Stack divider={<Divider flexItem />}>
-                  {items.map((item) => (
-                    <Stack key={item.id} direction="row" sx={{ py: 1, alignItems: 'center' }}>
-                      <Checkbox checked={item.isChecked} onChange={() => toggle.mutate(item.id)} />
+                  {groupItems.map((item) => (
+                    <Stack
+                      key={item.id}
+                      direction="row"
+                      spacing={1}
+                      sx={{ py: 1, alignItems: 'center' }}
+                    >
+                      <Checkbox
+                        checked={item.isChecked}
+                        onChange={() => toggle.mutate(item.id)}
+                        disabled={!permission.canUpdate}
+                      />
                       <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Typography
+                          noWrap
                           sx={{
+                            fontWeight: 600,
                             textDecoration: item.isChecked ? 'line-through' : 'none',
                             color: item.isChecked ? 'text.disabled' : 'text.primary',
                           }}
                         >
                           {item.name}
                         </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {item.quantity || '1 szt.'}
+                        </Typography>
                       </Box>
-                      <Chip label={item.quantity || '1 szt.'} size="small" variant="filled" />
+                      {activeType !== 'daily' && permission.canUpdate && (
+                        <IconButton
+                          size="small"
+                          aria-label="Przenieś na dzisiaj"
+                          onClick={() => move.mutate({ id: item.id, targetType: 'daily' })}
+                        >
+                          <Icon icon="solar:calendar-mark-bold-duotone" />
+                        </IconButton>
+                      )}
+                      {activeType === 'long_term' && permission.canUpdate && (
+                        <IconButton
+                          size="small"
+                          aria-label="Przenieś na jutro"
+                          onClick={() => move.mutate({ id: item.id, targetType: 'tomorrow' })}
+                        >
+                          <Icon icon="solar:forward-2-bold-duotone" />
+                        </IconButton>
+                      )}
+                      <IconButton
+                        size="small"
+                        aria-label="Edytuj produkt"
+                        onClick={() => openEdit(item)}
+                        disabled={!permission.canUpdate}
+                      >
+                        <Icon icon="solar:pen-bold-duotone" />
+                      </IconButton>
                       <IconButton
                         size="small"
                         color="error"
-                        onClick={() => confirmDelete(item.name) && remove.mutate(item.id)}
                         aria-label="Usuń produkt"
+                        onClick={() => confirmDelete(item.name) && remove.mutate(item.id)}
+                        disabled={!permission.canDelete}
                       >
                         <Icon icon="solar:trash-bin-trash-bold-duotone" />
                       </IconButton>
@@ -145,36 +359,65 @@ export function ShoppingPage() {
           })}
         </Box>
       )}
+
       <FormDialog
-        title="Dodaj produkt"
-        open={open}
-        onClose={() => setOpen(false)}
-        onSubmit={() => create.mutate()}
-        loading={create.isPending}
-        submitDisabled={!name.trim()}
+        title={editing ? 'Edytuj produkt' : 'Dodaj produkt'}
+        open={formOpen}
+        onClose={closeForm}
+        onSubmit={() => save.mutate()}
+        loading={save.isPending}
+        submitDisabled={!draft.name.trim()}
       >
-        {create.error && <Alert severity="error">{create.error.message}</Alert>}
+        {save.error && <Alert severity="error">{errorMessage(save.error)}</Alert>}
         <TextField
           label="Produkt"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
+          value={draft.name}
+          onChange={(event) => setDraft({ ...draft, name: event.target.value })}
           required
           autoFocus
         />
-        <TextField label="Ilość" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
+        <TextField
+          label="Ilość"
+          value={draft.quantity}
+          onChange={(event) => setDraft({ ...draft, quantity: event.target.value })}
+        />
         <TextField
           select
           label="Kategoria"
-          value={itemCategory}
-          onChange={(e) => setItemCategory(e.target.value)}
-          slotProps={{ select: { native: true } }}
+          value={draft.category ?? 'other'}
+          onChange={(event) => setDraft({ ...draft, category: event.target.value })}
         >
           {Object.entries(categories).map(([value, meta]) => (
-            <option key={value} value={value}>
+            <MenuItem key={value} value={value}>
               {meta.emoji} {meta.label}
-            </option>
+            </MenuItem>
           ))}
         </TextField>
+      </FormDialog>
+
+      <FormDialog
+        title="AI lista zakupów"
+        open={aiOpen}
+        onClose={() => setAiOpen(false)}
+        onSubmit={() => aiImport.mutate()}
+        submitLabel="Dodaj produkty"
+        loading={aiImport.isPending}
+        submitDisabled={!aiMessage.trim()}
+      >
+        <Alert severity="info">
+          Wklej wiadomość, przepis albo luźną listę. AI rozbije tekst na produkty i przypisze
+          kategorie.
+        </Alert>
+        {aiImport.error && <Alert severity="error">{errorMessage(aiImport.error)}</Alert>}
+        <TextField
+          label="Treść dla AI"
+          placeholder="Papryka, boczniaki, kurczak i chleb tostowy…"
+          multiline
+          minRows={6}
+          value={aiMessage}
+          onChange={(event) => setAiMessage(event.target.value)}
+          autoFocus
+        />
       </FormDialog>
     </Page>
   );

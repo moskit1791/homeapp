@@ -82,13 +82,14 @@ export function MetricCard({
   return (
     <Card>
       <CardContent>
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
           <Box
             sx={{
               display: 'grid',
               placeItems: 'center',
-              width: 48,
-              height: 48,
+              width: 44,
+              height: 44,
+              flexShrink: 0,
               borderRadius: '50%',
               color,
               bgcolor: 'action.hover',
@@ -96,8 +97,10 @@ export function MetricCard({
           >
             <Icon icon={icon} width={26} />
           </Box>
-          <Box>
-            <Typography variant="h2">{value}</Typography>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="h2" sx={{ fontSize: { xs: '1.75rem', lg: '1.5rem', xl: '2rem' }, lineHeight: 1.15 }}>
+              {value}
+            </Typography>
             <Typography variant="body2" color="text.secondary">
               {label}
             </Typography>

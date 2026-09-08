@@ -7,6 +7,7 @@ import App from './app';
 import { routesSection } from './routes/sections';
 import { ErrorBoundary } from './routes/components';
 import { SessionProvider } from './homeapp/auth/session-context';
+import { EncryptionProvider } from './homeapp/auth/encryption-context';
 
 // ----------------------------------------------------------------------
 
@@ -34,7 +35,9 @@ root.render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <SessionProvider>
-        <RouterProvider router={router} />
+        <EncryptionProvider>
+          <RouterProvider router={router} />
+        </EncryptionProvider>
       </SessionProvider>
     </QueryClientProvider>
   </StrictMode>

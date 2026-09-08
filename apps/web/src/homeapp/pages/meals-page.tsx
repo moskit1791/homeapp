@@ -1,239 +1,223 @@
-import { useState } from 'react';
+import type { MealPlanEntry, MealPlanAiMessage, MealPlanAiDraftEntry } from '../api';
+
 import { Icon } from '@iconify/react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
-import {
-  Box,
-  Chip,
-  Alert,
-  Stack,
-  Divider,
-  MenuItem,
-  TextField,
-  IconButton,
-  Typography,
-} from '@mui/material';
+import { Box, Chip, Alert, Stack, Button, Divider, MenuItem, TextField, IconButton, Typography } from '@mui/material';
 
 import { useSession } from '../auth/session-context';
+import { usePermission } from '../auth/use-permission';
 import { shortDate, weekStartIso } from '../utils/format';
-import { createMealPlan, deleteMealSlot, updateMealPlan, getCurrentMealPlanWeek } from '../api';
+import { Page, ErrorView, EmptyState, FormDialog, PageHeader, LoadingView, SectionCard, confirmDelete, PrimaryButton } from '../components/ui';
 import {
-  Page,
-  ErrorView,
-  EmptyState,
-  FormDialog,
-  PageHeader,
-  LoadingView,
-  SectionCard,
-  confirmDelete,
-  PrimaryButton,
-} from '../components/ui';
+  listMealIdeas,
+  createMealIdea,
+  createMealPlan,
+  updateMealPlan,
+  deleteMealSlot,
+  getMealPlanWeek,
+  copyMealPlanWeek,
+  deleteMealPlanWeek,
+  chatMealPlanWithAi,
+  listMealPlanHistory,
+  drawMealInspirations,
+  getCurrentMealPlanWeek,
+  finalizeMealPlanWithAi,
+} from '../api';
 
 const weekdays = ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek', 'Sobota', 'Niedziela'];
+const slots = ['Śniadanie', 'Obiad', 'Kolacja'];
+
+function nextWeekStart(value: string) {
+  const date = new Date(`${value}T12:00:00`);
+  date.setDate(date.getDate() + 7);
+  return date.toISOString().slice(0, 10);
+}
 
 export function MealsPage() {
   const { accessToken } = useSession();
+  const permission = usePermission('meal_planner');
   const queryClient = useQueryClient();
+  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<MealPlanEntry | null>(null);
   const [mealName, setMealName] = useState('');
   const [note, setNote] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
   const [weekday, setWeekday] = useState(1);
   const [slotIndex, setSlotIndex] = useState(0);
-  const query = useQuery({
-    queryKey: ['meal', 'current'],
-    queryFn: () => getCurrentMealPlanWeek({ accessToken }),
-  });
+  const [targetWeek, setTargetWeek] = useState(weekStartIso());
+  const [ideaOpen, setIdeaOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiInput, setAiInput] = useState('');
+  const [aiMessages, setAiMessages] = useState<MealPlanAiMessage[]>([]);
+  const [aiDraft, setAiDraft] = useState<MealPlanAiDraftEntry[]>([]);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const current = useQuery({ queryKey: ['meal', 'current'], queryFn: () => getCurrentMealPlanWeek({ accessToken }) });
+  const history = useQuery({ queryKey: ['meal', 'history'], queryFn: () => listMealPlanHistory({ accessToken }) });
+  const selected = useQuery({ queryKey: ['meal', 'plan', selectedPlanId], queryFn: () => getMealPlanWeek(selectedPlanId!, { accessToken }), enabled: Boolean(selectedPlanId) });
+  const ideas = useQuery({ queryKey: ['meal', 'ideas'], queryFn: () => listMealIdeas({ accessToken }) });
+  const plan = selectedPlanId ? selected.data : current.data;
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['meal'] });
+
   const createWeek = useMutation({
-    mutationFn: () => createMealPlan({ weekStartDate: weekStartIso() }, { accessToken }),
-    onSuccess: invalidate,
+    mutationFn: (weekStartDate: string) => createMealPlan({ weekStartDate }, { accessToken }),
+    onSuccess: async (result) => { setSelectedPlanId(result.week.id); await invalidate(); },
   });
   const save = useMutation({
     mutationFn: async () => {
-      const plan =
-        query.data ?? (await createMealPlan({ weekStartDate: weekStartIso() }, { accessToken }));
-      const entries = plan.entries
-        .filter((item) => !(item.weekday === weekday && item.slotIndex === slotIndex))
-        .map((item) => ({
-          weekday: item.weekday,
-          slotIndex: item.slotIndex,
-          mealName: item.mealName,
-          note: item.note,
-          linkUrl: item.linkUrl,
-        }));
-      entries.push({
-        weekday,
-        slotIndex,
-        mealName: mealName.trim(),
-        note: note || null,
-        linkUrl: linkUrl || null,
-      });
-      return updateMealPlan(plan.week.id, { entries }, { accessToken });
+      const activePlan = plan ?? (await createMealPlan({ weekStartDate: targetWeek }, { accessToken }));
+      const entries = activePlan.entries
+        .filter((item) => editing ? item.id !== editing.id : !(item.weekday === weekday && item.slotIndex === slotIndex))
+        .map((item) => ({ weekday: item.weekday, slotIndex: item.slotIndex, mealName: item.mealName, note: item.note, linkUrl: item.linkUrl }));
+      entries.push({ weekday, slotIndex, mealName: mealName.trim(), note: note || null, linkUrl: linkUrl || null });
+      return updateMealPlan(activePlan.week.id, { entries }, { accessToken });
     },
-    onSuccess: async () => {
-      setOpen(false);
-      setMealName('');
-      setNote('');
-      setLinkUrl('');
-      await invalidate();
-    },
+    onSuccess: async () => { closeMeal(); await invalidate(); },
   });
   const remove = useMutation({
-    mutationFn: ({ planId, day, slot }: { planId: string; day: number; slot: number }) =>
-      deleteMealSlot(planId, { weekday: day, slotIndex: slot }, { accessToken }),
+    mutationFn: ({ planId, day, slot }: { planId: string; day: number; slot: number }) => deleteMealSlot(planId, { weekday: day, slotIndex: slot }, { accessToken }),
     onSuccess: invalidate,
   });
+  const copy = useMutation({
+    mutationFn: () => {
+      if (!plan) throw new Error('Nie wybrano planu.');
+      return copyMealPlanWeek(plan.week.id, { targetWeekStartDate: targetWeek }, { accessToken });
+    },
+    onSuccess: async (result) => { setSelectedPlanId(result.week.id); setNotice('Skopiowano plan na wybrany tydzień.'); await invalidate(); },
+  });
+  const removeWeek = useMutation({
+    mutationFn: () => deleteMealPlanWeek(plan!.week.id, { accessToken }),
+    onSuccess: async () => { setSelectedPlanId(null); await invalidate(); },
+  });
+  const addIdea = useMutation({
+    mutationFn: () => createMealIdea({ title: mealName.trim(), note: note || null, linkUrl: linkUrl || null }, { accessToken }),
+    onSuccess: async () => { setIdeaOpen(false); resetFields(); await queryClient.invalidateQueries({ queryKey: ['meal', 'ideas'] }); },
+  });
+  const inspire = useMutation({
+    mutationFn: () => drawMealInspirations({ targetWeekStartDate: plan?.week.weekStartDate ?? targetWeek }, { accessToken }),
+    onSuccess: (result) => {
+      setAiDraft(result.suggestions.map((item) => ({ ...item, sourceHint: item.sourceWeekStartDate })));
+      setAiMessages([{ role: 'assistant', content: `Znalazłem ${result.suggestions.length} propozycji z wcześniejszych tygodni.` }]);
+      setAiOpen(true);
+    },
+  });
+  const aiChat = useMutation({
+    mutationFn: async () => {
+      const messages: MealPlanAiMessage[] = [...aiMessages, { role: 'user', content: aiInput.trim() }];
+      const response = await chatMealPlanWithAi({ messages, currentDraft: aiDraft, targetWeekStartDate: targetWeek }, { accessToken });
+      return { messages, response };
+    },
+    onSuccess: ({ messages, response }) => {
+      setAiMessages([...messages, { role: 'assistant', content: response.assistantMessage }]);
+      if (response.entries.length) setAiDraft(response.entries);
+      setAiInput('');
+    },
+  });
+  const aiSave = useMutation({
+    mutationFn: async () => {
+      const response = aiMessages.some((message) => message.role === 'user')
+        ? await finalizeMealPlanWithAi({ messages: aiMessages, currentDraft: aiDraft, targetWeekStartDate: targetWeek }, { accessToken })
+        : { entries: aiDraft };
+      if (!response.entries.length) throw new Error('AI nie przygotowało planu do zapisu.');
+      const summary = history.data?.find((item) => item.weekStartDate === targetWeek);
+      let detail = summary ? await getMealPlanWeek(summary.id, { accessToken }) : null;
+      detail ??= await createMealPlan({ weekStartDate: targetWeek }, { accessToken });
+      return updateMealPlan(detail.week.id, { entries: response.entries.map(({ sourceHint: _sourceHint, ...entry }) => entry) }, { accessToken });
+    },
+    onSuccess: async (result) => { setSelectedPlanId(result.week.id); setAiOpen(false); setAiDraft([]); setAiMessages([]); await invalidate(); },
+  });
+
+  const weekOptions = useMemo(() => {
+    const map = new Map((history.data ?? []).map((item) => [item.id, item]));
+    if (current.data) map.set(current.data.week.id, { ...current.data.week, entriesCount: current.data.entries.length, entriesByWeekday: {} });
+    return [...map.values()].sort((a, b) => b.weekStartDate.localeCompare(a.weekStartDate));
+  }, [current.data, history.data]);
+
+  function resetFields() { setMealName(''); setNote(''); setLinkUrl(''); }
+  function closeMeal() { setOpen(false); setEditing(null); resetFields(); }
+  function openEdit(entry: MealPlanEntry) {
+    setEditing(entry); setMealName(entry.mealName); setNote(entry.note ?? ''); setLinkUrl(entry.linkUrl ?? ''); setWeekday(entry.weekday); setSlotIndex(entry.slotIndex); setOpen(true);
+  }
+
+  const loading = current.isLoading || (selectedPlanId ? selected.isLoading : false);
+  const error = current.error ?? selected.error;
 
   return (
     <Page>
       <PageHeader
         title="Plan posiłków"
-        description={
-          query.data
-            ? `Tydzień od ${shortDate(query.data.week.weekStartDate)}`
-            : 'Zaplanuj posiłki na bieżący tydzień.'
-        }
-        action={<PrimaryButton onClick={() => setOpen(true)}>Dodaj posiłek</PrimaryButton>}
+        description={plan ? `Tydzień od ${shortDate(plan.week.weekStartDate)}` : 'Planowanie, inspiracje i historia tygodni.'}
+        action={<PrimaryButton disabled={!permission.canCreate} onClick={() => setOpen(true)}>Dodaj posiłek</PrimaryButton>}
       />
-      {query.isLoading ? (
-        <LoadingView />
-      ) : query.error ? (
-        <ErrorView error={query.error} retry={() => void query.refetch()} />
-      ) : !query.data ? (
-        <SectionCard>
-          <EmptyState
-            icon="solar:chef-hat-minimalistic-bold-duotone"
-            text="Nie masz jeszcze planu na ten tydzień."
-          />
-          <Box sx={{ textAlign: 'center' }}>
-            <PrimaryButton onClick={() => createWeek.mutate()} disabled={createWeek.isPending}>
-              Utwórz plan tygodnia
-            </PrimaryButton>
-          </Box>
-        </SectionCard>
-      ) : (
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: {
-              xs: '1fr',
-              md: 'repeat(2, 1fr)',
-              xl: 'repeat(3, 1fr)',
-            },
-            gap: 2.5,
-          }}
-        >
-          {weekdays.map((label, index) => {
-            const meals = query
-              .data!.entries.filter((entry) => entry.weekday === index + 1)
-              .sort((a, b) => a.slotIndex - b.slotIndex);
-            return (
-              <SectionCard key={label} title={label} sx={{ minHeight: 180 }}>
-                {meals.length === 0 ? (
-                  <EmptyState icon="solar:plate-bold-duotone" text="Brak posiłków" />
-                ) : (
-                  <Stack divider={<Divider flexItem />}>
-                    {meals.map((meal) => (
-                      <Stack
-                        key={meal.id}
-                        direction="row"
-                        spacing={1.5}
-                        sx={{ py: 1.25, alignItems: 'center' }}
-                      >
-                        <Chip size="small" label={meal.slotIndex + 1} color="warning" />
-                        <Box sx={{ flex: 1 }}>
-                          <Typography sx={{ fontWeight: 700 }}>{meal.mealName}</Typography>
-                          {meal.note && (
-                            <Typography variant="body2" color="text.secondary">
-                              {meal.note}
-                            </Typography>
-                          )}
-                        </Box>
-                        {meal.linkUrl && (
-                          <IconButton
-                            component="a"
-                            href={meal.linkUrl}
-                            target="_blank"
-                            size="small"
-                          >
-                            <Icon icon="solar:link-bold" />
-                          </IconButton>
-                        )}
-                        <IconButton
-                          color="error"
-                          size="small"
-                          onClick={() =>
-                            confirmDelete(meal.mealName) &&
-                            remove.mutate({
-                              planId: query.data!.week.id,
-                              day: meal.weekday,
-                              slot: meal.slotIndex,
-                            })
-                          }
-                        >
-                          <Icon icon="solar:trash-bin-trash-bold-duotone" />
-                        </IconButton>
-                      </Stack>
-                    ))}
-                  </Stack>
-                )}
-              </SectionCard>
-            );
-          })}
+      {notice && <Alert severity="success" onClose={() => setNotice(null)}>{notice}</Alert>}
+      <SectionCard>
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ alignItems: { md: 'center' } }}>
+          <TextField select label="Wyświetlany tydzień" value={selectedPlanId ?? ''} onChange={(event) => setSelectedPlanId(event.target.value || null)} sx={{ minWidth: 240 }}>
+            <MenuItem value="">Bieżący tydzień</MenuItem>
+            {weekOptions.map((item) => <MenuItem key={item.id} value={item.id}>{shortDate(item.weekStartDate)} · {item.entriesCount} posiłków</MenuItem>)}
+          </TextField>
+          <TextField label="Tydzień docelowy" type="date" value={targetWeek} onChange={(event) => setTargetWeek(event.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
+          <Button variant="outlined" disabled={!permission.canCreate || !plan || copy.isPending} onClick={() => copy.mutate()}>Kopiuj tydzień</Button>
+          <Button variant="outlined" disabled={!permission.canCreate || inspire.isPending} onClick={() => inspire.mutate()} startIcon={<Icon icon="solar:magic-stick-3-bold-duotone" />}>Inspiracje</Button>
+          <Button variant="contained" color="secondary" disabled={!permission.canCreate} onClick={() => { setTargetWeek(plan ? nextWeekStart(plan.week.weekStartDate) : weekStartIso()); setAiOpen(true); }} startIcon={<Icon icon="solar:stars-bold-duotone" />}>Ułóż z AI</Button>
+          <Button variant="text" disabled={!permission.canCreate} onClick={() => setIdeaOpen(true)}>Dodaj pomysł</Button>
+          <Box sx={{ flex: 1 }} />
+          {plan && <IconButton color="error" disabled={!permission.canDelete} onClick={() => confirmDelete('cały plan tygodnia') && removeWeek.mutate()}><Icon icon="solar:trash-bin-trash-bold-duotone" /></IconButton>}
+        </Stack>
+        {(copy.error || inspire.error || removeWeek.error) && <Alert severity="error" sx={{ mt: 2 }}>{(copy.error ?? inspire.error ?? removeWeek.error)?.message}</Alert>}
+      </SectionCard>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', xl: 'minmax(0, 3fr) minmax(280px, 1fr)' }, gap: 2.5 }}>
+        <Box>
+          {loading ? <LoadingView /> : error ? <ErrorView error={error} /> : !plan ? (
+            <SectionCard><EmptyState icon="solar:chef-hat-minimalistic-bold-duotone" text="Nie masz jeszcze planu na ten tydzień." /><Box sx={{ textAlign: 'center' }}><PrimaryButton onClick={() => createWeek.mutate(targetWeek)} disabled={!permission.canCreate || createWeek.isPending}>Utwórz plan tygodnia</PrimaryButton></Box></SectionCard>
+          ) : (
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' }, gap: 2.5 }}>
+              {weekdays.map((label, index) => {
+                const meals = plan.entries.filter((entry) => entry.weekday === index + 1).sort((a, b) => a.slotIndex - b.slotIndex);
+                return <SectionCard key={label} title={label} sx={{ minHeight: 190 }}>
+                  {meals.length === 0 ? <EmptyState icon="solar:plate-bold-duotone" text="Brak posiłków" /> : <Stack divider={<Divider flexItem />}>
+                    {meals.map((meal) => <Stack key={meal.id} direction="row" spacing={1} sx={{ py: 1.2, alignItems: 'center' }}>
+                      <Chip size="small" label={slots[meal.slotIndex] ?? meal.slotIndex + 1} color="warning" />
+                      <Box sx={{ flex: 1 }}><Typography sx={{ fontWeight: 700 }}>{meal.mealName}</Typography>{meal.note && <Typography variant="body2" color="text.secondary">{meal.note}</Typography>}</Box>
+                      {meal.linkUrl && <IconButton component="a" href={meal.linkUrl} target="_blank" size="small"><Icon icon="solar:link-bold" /></IconButton>}
+                      <IconButton size="small" disabled={!permission.canUpdate} onClick={() => openEdit(meal)}><Icon icon="solar:pen-bold-duotone" /></IconButton>
+                      <IconButton color="error" size="small" disabled={!permission.canDelete} onClick={() => confirmDelete(meal.mealName) && remove.mutate({ planId: plan.week.id, day: meal.weekday, slot: meal.slotIndex })}><Icon icon="solar:trash-bin-trash-bold-duotone" /></IconButton>
+                    </Stack>)}
+                  </Stack>}
+                </SectionCard>;
+              })}
+            </Box>
+          )}
         </Box>
-      )}
-      <FormDialog
-        title="Dodaj posiłek"
-        open={open}
-        onClose={() => setOpen(false)}
-        onSubmit={() => save.mutate()}
-        loading={save.isPending}
-        submitDisabled={!mealName.trim()}
-      >
+        <SectionCard title="Pomysły na posiłki">
+          {ideas.isLoading ? <LoadingView /> : (ideas.data?.length ?? 0) === 0 ? <EmptyState text="Dodaj bazę ulubionych dań." /> : <Stack divider={<Divider flexItem />}>
+            {ideas.data?.map((idea) => <Box key={idea.id} sx={{ py: 1.2 }}><Typography sx={{ fontWeight: 700 }}>{idea.title}</Typography>{idea.note && <Typography variant="body2" color="text.secondary">{idea.note}</Typography>}{idea.linkUrl && <Button size="small" component="a" href={idea.linkUrl} target="_blank">Przepis</Button>}</Box>)}
+          </Stack>}
+        </SectionCard>
+      </Box>
+      <FormDialog title={editing ? 'Edytuj posiłek' : 'Dodaj posiłek'} open={open} onClose={closeMeal} onSubmit={() => save.mutate()} loading={save.isPending} submitDisabled={!mealName.trim()}>
         {save.error && <Alert severity="error">{save.error.message}</Alert>}
-        <TextField
-          select
-          label="Dzień"
-          value={weekday}
-          onChange={(e) => setWeekday(Number(e.target.value))}
-        >
-          {weekdays.map((label, index) => (
-            <MenuItem key={label} value={index + 1}>
-              {label}
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField
-          select
-          label="Posiłek"
-          value={slotIndex}
-          onChange={(e) => setSlotIndex(Number(e.target.value))}
-        >
-          <MenuItem value={0}>Śniadanie</MenuItem>
-          <MenuItem value={1}>Obiad</MenuItem>
-          <MenuItem value={2}>Kolacja</MenuItem>
-        </TextField>
-        <TextField
-          label="Nazwa posiłku"
-          value={mealName}
-          onChange={(e) => setMealName(e.target.value)}
-          required
-          autoFocus
-        />
-        <TextField
-          label="Notatka"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          multiline
-          minRows={2}
-        />
-        <TextField
-          label="Link do przepisu"
-          type="url"
-          value={linkUrl}
-          onChange={(e) => setLinkUrl(e.target.value)}
-        />
+        <TextField select label="Dzień" value={weekday} onChange={(event) => setWeekday(Number(event.target.value))}>{weekdays.map((label, index) => <MenuItem key={label} value={index + 1}>{label}</MenuItem>)}</TextField>
+        <TextField select label="Posiłek" value={slotIndex} onChange={(event) => setSlotIndex(Number(event.target.value))}>{slots.map((label, index) => <MenuItem key={label} value={index}>{label}</MenuItem>)}</TextField>
+        <TextField label="Nazwa posiłku" value={mealName} onChange={(event) => setMealName(event.target.value)} required autoFocus />
+        <TextField label="Notatka" value={note} onChange={(event) => setNote(event.target.value)} multiline minRows={2} />
+        <TextField label="Link do przepisu" type="url" value={linkUrl} onChange={(event) => setLinkUrl(event.target.value)} />
+      </FormDialog>
+      <FormDialog title="Nowy pomysł" open={ideaOpen} onClose={() => setIdeaOpen(false)} onSubmit={() => addIdea.mutate()} loading={addIdea.isPending} submitDisabled={!mealName.trim()}>
+        {addIdea.error && <Alert severity="error">{addIdea.error.message}</Alert>}
+        <TextField label="Nazwa dania" value={mealName} onChange={(event) => setMealName(event.target.value)} autoFocus />
+        <TextField label="Notatka" value={note} onChange={(event) => setNote(event.target.value)} multiline minRows={2} />
+        <TextField label="Link do przepisu" value={linkUrl} onChange={(event) => setLinkUrl(event.target.value)} />
+      </FormDialog>
+      <FormDialog title="Asystent planowania posiłków" open={aiOpen} onClose={() => setAiOpen(false)} onSubmit={() => aiSave.mutate()} loading={aiSave.isPending} submitLabel="Zapisz plan" submitDisabled={aiDraft.length === 0} maxWidth="md">
+        {(aiChat.error || aiSave.error) && <Alert severity="error">{(aiChat.error ?? aiSave.error)?.message}</Alert>}
+        <TextField label="Tydzień docelowy" type="date" value={targetWeek} onChange={(event) => setTargetWeek(event.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
+        <Stack spacing={1} sx={{ maxHeight: 240, overflowY: 'auto' }}>{aiMessages.map((message, index) => <Box key={`${message.role}-${index}`} sx={{ p: 1.5, borderRadius: 1.5, bgcolor: message.role === 'user' ? 'primary.lighter' : 'background.neutral', alignSelf: message.role === 'user' ? 'flex-end' : 'stretch' }}><Typography variant="body2">{message.content}</Typography></Box>)}</Stack>
+        {aiDraft.length > 0 && <Alert severity="info">Gotowy szkic: {aiDraft.length} posiłków. Możesz go doprecyzować albo od razu zapisać.</Alert>}
+        <Stack direction="row" spacing={1}><TextField fullWidth label="Napisz, czego potrzebujesz" value={aiInput} onChange={(event) => setAiInput(event.target.value)} placeholder="Np. szybkie obiady, bez ryb, dla 4 osób" /><Button variant="contained" disabled={!aiInput.trim() || aiChat.isPending} onClick={() => aiChat.mutate()}>Wyślij</Button></Stack>
       </FormDialog>
     </Page>
   );
