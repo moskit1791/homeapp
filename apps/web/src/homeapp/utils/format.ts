@@ -22,6 +22,16 @@ export function todayIso(): string {
   return new Date(now.getTime() - offset).toISOString().slice(0, 10);
 }
 
+export function monthCalendarDays(date: Date): Array<number | null> {
+  const firstDayOffset = (new Date(date.getFullYear(), date.getMonth(), 1).getDay() + 6) % 7;
+  const daysInMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const day = index - firstDayOffset + 1;
+    return day > 0 && day <= daysInMonth ? day : null;
+  });
+}
+
 export function weekStartIso(): string {
   const now = new Date(`${todayIso()}T12:00:00`);
   now.setDate(now.getDate() - ((now.getDay() + 6) % 7));

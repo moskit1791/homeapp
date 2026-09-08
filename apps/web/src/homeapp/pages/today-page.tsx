@@ -14,10 +14,10 @@ import Divider from '@mui/material/Divider';
 import Typography from '@mui/material/Typography';
 
 import { useSession } from '../auth/session-context';
-import { money, todayIso, shortDate } from '../utils/format';
 import { Page, ErrorView, LoadingView } from '../components/ui';
 import mealCardImage from '../../../../mobile/assets/today-meal-card.png';
 import { getMyHousehold, getStartDashboard, listShoppingItems } from '../api';
+import { money, todayIso, shortDate, monthCalendarDays } from '../utils/format';
 import calendarCardImage from '../../../../mobile/assets/today-calendar-card.png';
 import shoppingCardImage from '../../../../mobile/assets/today-shopping-card.png';
 
@@ -272,7 +272,8 @@ export function TodayPage() {
   }
 
   const data = dashboard.data;
-  const currentWeekday = ((new Date(`${todayIso()}T12:00:00`).getDay() + 6) % 7) + 1;
+  const currentDate = new Date(`${todayIso()}T12:00:00`);
+  const currentWeekday = ((currentDate.getDay() + 6) % 7) + 1;
   const todaysMeals =
     data.mealPlan?.entries
       .filter((entry) => entry.weekday === currentWeekday)
@@ -281,6 +282,13 @@ export function TodayPage() {
   const nextEvent = data.upcomingEvents[0];
   const positivePhrase = positivePhrases[phraseIndex];
   const currency = household.data?.currencyCode ?? 'PLN';
+  const calendarMonth = new Intl.DateTimeFormat('pl-PL', {
+    month: 'long',
+    year: 'numeric',
+  })
+    .format(currentDate)
+    .toLocaleUpperCase('pl-PL');
+  const calendarDays = monthCalendarDays(currentDate);
   const formattedToday = new Intl.DateTimeFormat('pl-PL', {
     day: 'numeric',
     month: 'long',
@@ -417,9 +425,8 @@ export function TodayPage() {
               </Button>
             </Stack>
             <Box
-              component="img"
-              src={calendarCardImage}
-              alt="Kalendarz"
+              role="img"
+              aria-label={`Kalendarz: ${calendarMonth}`}
               sx={{
                 right: { xs: -55, sm: 74 },
                 bottom: -16,
@@ -431,7 +438,92 @@ export function TodayPage() {
                 pointerEvents: 'none',
                 filter: 'drop-shadow(0 22px 24px rgba(0,0,0,.2))',
               }}
-            />
+            >
+              <Box
+                component="img"
+                src={calendarCardImage}
+                alt=""
+                sx={{ width: '100%', height: '100%', objectFit: 'contain' }}
+              />
+              <Typography
+                aria-hidden="true"
+                sx={{
+                  top: { xs: 43, sm: 60 },
+                  left: { xs: 77, sm: 94 },
+                  width: { xs: 108, sm: 150 },
+                  position: 'absolute',
+                  color: '#6B5644',
+                  fontSize: { xs: 6.5, sm: 8.5 },
+                  fontWeight: 800,
+                  lineHeight: 1,
+                  textAlign: 'center',
+                  letterSpacing: 0.25,
+                  transform: 'rotate(6deg)',
+                }}
+              >
+                {calendarMonth}
+              </Typography>
+              <Box
+                aria-hidden="true"
+                sx={{
+                  top: { xs: 56, sm: 78 },
+                  left: { xs: 58, sm: 70 },
+                  width: { xs: 143, sm: 200 },
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(7, 1fr)',
+                  position: 'absolute',
+                  color: '#826E5A',
+                  fontSize: { xs: 4.5, sm: 6.5 },
+                  fontWeight: 800,
+                  lineHeight: 1,
+                  textAlign: 'center',
+                  transform: 'rotate(6deg)',
+                }}
+              >
+                {['PN', 'WT', 'ŚR', 'CZ', 'PT', 'SB', 'ND'].map((weekday) => (
+                  <Box key={weekday}>{weekday}</Box>
+                ))}
+              </Box>
+              <Box
+                aria-hidden="true"
+                sx={{
+                  top: { xs: 67, sm: 93 },
+                  left: { xs: 54, sm: 63 },
+                  width: { xs: 137, sm: 191 },
+                  height: { xs: 128, sm: 178 },
+                  display: 'grid',
+                  gridTemplateRows: 'repeat(6, 1fr)',
+                  gridTemplateColumns: 'repeat(7, 1fr)',
+                  position: 'absolute',
+                  color: '#7A6755',
+                  fontSize: { xs: 5.5, sm: 7.5 },
+                  fontWeight: 700,
+                  transform: 'rotate(6deg)',
+                  transformOrigin: 'top left',
+                }}
+              >
+                {calendarDays.map((day, index) => (
+                  <Box
+                    key={index}
+                    sx={{
+                      display: 'grid',
+                      placeItems: 'center',
+                      ...(day === currentDate.getDate() && {
+                        mx: 'auto',
+                        width: { xs: 13, sm: 18 },
+                        height: { xs: 13, sm: 18 },
+                        color: '#fff',
+                        borderRadius: '50%',
+                        bgcolor: '#7298F7',
+                        boxShadow: '0 2px 5px rgba(55,91,180,.35)',
+                      }),
+                    }}
+                  >
+                    {day}
+                  </Box>
+                ))}
+              </Box>
+            </Box>
             <Box
               aria-hidden="true"
               sx={(theme) => ({
