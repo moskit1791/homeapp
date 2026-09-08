@@ -5,6 +5,7 @@ import type { NavSectionProps } from 'src/components/nav-section';
 import { Icon } from '@iconify/react';
 
 type HomeAppNavItem = {
+  children?: HomeAppNavItem[];
   icon: string;
   moduleKeys?: ModuleKey[];
   path: string;
@@ -19,25 +20,6 @@ const items: HomeAppNavItem[] = [
     icon: 'solar:calendar-bold-duotone',
     moduleKeys: ['calendar'],
   },
-  { title: 'Zakupy', path: '/zakupy', icon: 'solar:cart-3-bold-duotone', moduleKeys: ['shopping'] },
-  {
-    title: 'Spiżarnia',
-    path: '/spizarnia',
-    icon: 'solar:box-bold-duotone',
-    moduleKeys: ['shopping'],
-  },
-  {
-    title: 'Plan posiłków',
-    path: '/posilki',
-    icon: 'solar:chef-hat-bold-duotone',
-    moduleKeys: ['meal_planner'],
-  },
-  {
-    title: 'Zadania i notatki',
-    path: '/zadania',
-    icon: 'solar:checklist-bold-duotone',
-    moduleKeys: ['todo', 'notes'],
-  },
   {
     title: 'Finanse',
     path: '/finanse',
@@ -45,16 +27,42 @@ const items: HomeAppNavItem[] = [
     moduleKeys: ['finances'],
   },
   {
+    title: 'Jedzenie',
+    path: '/zakupy',
+    icon: 'solar:chef-hat-heart-bold-duotone',
+    moduleKeys: ['shopping', 'meal_planner'],
+    children: [
+      {
+        title: 'Zakupy',
+        path: '/zakupy',
+        icon: 'solar:cart-3-bold-duotone',
+        moduleKeys: ['shopping'],
+      },
+      {
+        title: 'Spiżarnia',
+        path: '/spizarnia',
+        icon: 'solar:box-bold-duotone',
+        moduleKeys: ['shopping'],
+      },
+      {
+        title: 'Plan posiłków',
+        path: '/posilki',
+        icon: 'solar:chef-hat-bold-duotone',
+        moduleKeys: ['meal_planner'],
+      },
+    ],
+  },
+  {
+    title: 'Zadania',
+    path: '/zadania',
+    icon: 'solar:checklist-bold-duotone',
+    moduleKeys: ['todo', 'notes'],
+  },
+  {
     title: 'Dom',
     path: '/dom',
     icon: 'solar:sofa-2-bold-duotone',
     moduleKeys: ['cleaning', 'annual_costs', 'data_entries', 'attachments'],
-  },
-  {
-    title: 'Domownicy',
-    path: '/domownicy',
-    icon: 'solar:users-group-rounded-bold-duotone',
-    moduleKeys: ['household_members', 'permissions'],
   },
 ];
 
@@ -65,13 +73,19 @@ export function buildHomeAppNavData(permissions: EffectivePermission[]): NavSect
 
   return [
     {
-      subheader: 'HomeApp',
+      subheader: '',
       items: items
         .filter((item) => !item.moduleKeys || item.moduleKeys.some((key) => readable.has(key)))
         .map((item) => ({
           title: item.title,
           path: item.path,
           icon: <Icon width={24} icon={item.icon} />,
+          children: item.children
+            ?.filter(
+              (child) =>
+                !child.moduleKeys || child.moduleKeys.some((key) => readable.has(key))
+            )
+            .map((child) => ({ title: child.title, path: child.path })),
         })),
     },
   ];
