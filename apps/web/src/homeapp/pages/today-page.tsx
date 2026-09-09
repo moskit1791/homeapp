@@ -18,7 +18,6 @@ import { Page, ErrorView, LoadingView } from '../components/ui';
 import mealCardImage from '../../../../mobile/assets/today-meal-card.png';
 import { getMyHousehold, getStartDashboard, listShoppingItems } from '../api';
 import { money, todayIso, shortDate, monthCalendarDays } from '../utils/format';
-import calendarCardImage from '../../../../mobile/assets/today-calendar-card.png';
 import shoppingCardImage from '../../../../mobile/assets/today-shopping-card.png';
 
 const positivePhrases = [
@@ -246,6 +245,189 @@ function MiniOverviewCard({
   );
 }
 
+function DashboardCalendar({
+  days,
+  month,
+  today,
+}: {
+  days: Array<number | null>;
+  month: string;
+  today: number;
+}) {
+  const gridX = 72;
+  const gridY = 134;
+  const cellWidth = 35;
+  const cellHeight = 25;
+
+  return (
+    <Box
+      component="svg"
+      role="img"
+      aria-label={`Kalendarz: ${month}`}
+      viewBox="0 0 420 340"
+      sx={{
+        right: { xs: -55, sm: 62 },
+        bottom: -12,
+        width: { xs: 285, sm: 385 },
+        height: { xs: 230, sm: 330 },
+        position: 'absolute',
+        overflow: 'visible',
+        opacity: { xs: 0.52, sm: 1 },
+        pointerEvents: 'none',
+      }}
+    >
+      <defs>
+        <linearGradient id="calendar-paper" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#fffdf7" />
+          <stop offset="0.72" stopColor="#f8edd9" />
+          <stop offset="1" stopColor="#ead6b5" />
+        </linearGradient>
+        <linearGradient id="calendar-edge" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#f2d49c" />
+          <stop offset="1" stopColor="#9f6b2b" />
+        </linearGradient>
+        <linearGradient id="calendar-ring" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#f8d07a" />
+          <stop offset="0.45" stopColor="#b9771f" />
+          <stop offset="0.72" stopColor="#704116" />
+          <stop offset="1" stopColor="#e5b353" />
+        </linearGradient>
+        <filter id="calendar-shadow" x="-30%" y="-30%" width="170%" height="180%">
+          <feDropShadow dx="0" dy="13" stdDeviation="11" floodColor="#0e2038" floodOpacity="0.28" />
+        </filter>
+      </defs>
+
+      <ellipse cx="220" cy="310" rx="163" ry="18" fill="rgba(18,31,48,.18)" />
+      <path
+        d="M285 70 L393 286 Q397 297 384 300 L298 308 L266 82 Z"
+        fill="url(#calendar-edge)"
+        stroke="#bb8844"
+        strokeWidth="2"
+      />
+      <path d="M305 91 L373 281 L310 292 Z" fill="rgba(88,48,12,.2)" />
+
+      <g transform="rotate(3 194 181)" filter="url(#calendar-shadow)">
+        <rect x="60" y="48" width="292" height="251" rx="20" fill="#ddc18f" />
+        <rect
+          x="48"
+          y="55"
+          width="292"
+          height="250"
+          rx="20"
+          fill="url(#calendar-paper)"
+          stroke="#e5c996"
+          strokeWidth="2"
+        />
+        <path d="M64 286 Q190 304 324 286" fill="none" stroke="#dfc498" strokeWidth="2" />
+
+        <text
+          x="194"
+          y="91"
+          fill="#5f4a36"
+          fontSize="13"
+          fontWeight="800"
+          textAnchor="middle"
+          fontFamily="Barlow, sans-serif"
+          letterSpacing="0.7"
+        >
+          {month}
+        </text>
+
+        {['PN', 'WT', 'ŚR', 'CZ', 'PT', 'SB', 'ND'].map((weekday, index) => (
+          <text
+            key={weekday}
+            x={gridX + cellWidth * (index + 0.5)}
+            y="119"
+            fill="#8b755e"
+            fontSize="8.5"
+            fontWeight="800"
+            textAnchor="middle"
+            fontFamily="Barlow, sans-serif"
+          >
+            {weekday}
+          </text>
+        ))}
+
+        <rect
+          x={gridX}
+          y={gridY}
+          width={cellWidth * 7}
+          height={cellHeight * 6}
+          rx="3"
+          fill="rgba(255,255,255,.28)"
+          stroke="#d7b985"
+          strokeWidth="1.2"
+        />
+        {Array.from({ length: 6 }, (_, index) => (
+          <line
+            key={`row-${index}`}
+            x1={gridX}
+            x2={gridX + cellWidth * 7}
+            y1={gridY + cellHeight * (index + 1)}
+            y2={gridY + cellHeight * (index + 1)}
+            stroke="#ddc89f"
+            strokeWidth="1"
+          />
+        ))}
+        {Array.from({ length: 6 }, (_, index) => (
+          <line
+            key={`column-${index}`}
+            x1={gridX + cellWidth * (index + 1)}
+            x2={gridX + cellWidth * (index + 1)}
+            y1={gridY}
+            y2={gridY + cellHeight * 6}
+            stroke="#ddc89f"
+            strokeWidth="1"
+          />
+        ))}
+
+        {days.map((day, index) => {
+          if (!day) return null;
+          const x = gridX + cellWidth * ((index % 7) + 0.5);
+          const y = gridY + cellHeight * (Math.floor(index / 7) + 0.5);
+          const isToday = day === today;
+
+          return (
+            <g key={day}>
+              {isToday && (
+                <circle cx={x} cy={y} r="9" fill="#668EF0" stroke="#fff" strokeWidth="1.5" />
+              )}
+              <text
+                x={x}
+                y={y + 0.5}
+                fill={isToday ? '#fff' : '#745f49'}
+                fontSize="9.5"
+                fontWeight={isToday ? 800 : 650}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fontFamily="Barlow, sans-serif"
+              >
+                {day}
+              </text>
+            </g>
+          );
+        })}
+
+        {[94, 160, 226, 292].map((x) => (
+          <g key={x}>
+            <ellipse cx={x} cy="57" rx="12" ry="7" fill="rgba(78,43,13,.32)" />
+            <ellipse
+              cx={x}
+              cy="42"
+              rx="11"
+              ry="29"
+              fill="none"
+              stroke="url(#calendar-ring)"
+              strokeWidth="8"
+            />
+            <path d={`M${x - 7} 61 Q${x} 70 ${x + 7} 61`} fill="none" stroke="#704116" strokeWidth="5" strokeLinecap="round" />
+          </g>
+        ))}
+      </g>
+    </Box>
+  );
+}
+
 export function TodayPage() {
   const { accessToken } = useSession();
   const dashboard = useQuery({
@@ -424,106 +606,11 @@ export function TodayPage() {
                 {nextEvent ? 'Zobacz szczegóły' : 'Dodaj wydarzenie'}
               </Button>
             </Stack>
-            <Box
-              role="img"
-              aria-label={`Kalendarz: ${calendarMonth}`}
-              sx={{
-                right: { xs: -55, sm: 74 },
-                bottom: -16,
-                width: { xs: 285, sm: 370 },
-                height: { xs: 230, sm: 320 },
-                objectFit: 'contain',
-                position: 'absolute',
-                opacity: { xs: 0.52, sm: 1 },
-                pointerEvents: 'none',
-                filter: 'drop-shadow(0 22px 24px rgba(0,0,0,.2))',
-              }}
-            >
-              <Box
-                component="img"
-                src={calendarCardImage}
-                alt=""
-                sx={{ width: '100%', height: '100%', objectFit: 'contain' }}
-              />
-              <Typography
-                aria-hidden="true"
-                sx={{
-                  top: { xs: 43, sm: 60 },
-                  left: { xs: 77, sm: 94 },
-                  width: { xs: 108, sm: 150 },
-                  position: 'absolute',
-                  color: '#6B5644',
-                  fontSize: { xs: 6.5, sm: 8.5 },
-                  fontWeight: 800,
-                  lineHeight: 1,
-                  textAlign: 'center',
-                  letterSpacing: 0.25,
-                  transform: 'rotate(6deg)',
-                }}
-              >
-                {calendarMonth}
-              </Typography>
-              <Box
-                aria-hidden="true"
-                sx={{
-                  top: { xs: 56, sm: 78 },
-                  left: { xs: 58, sm: 70 },
-                  width: { xs: 143, sm: 200 },
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(7, 1fr)',
-                  position: 'absolute',
-                  color: '#826E5A',
-                  fontSize: { xs: 4.5, sm: 6.5 },
-                  fontWeight: 800,
-                  lineHeight: 1,
-                  textAlign: 'center',
-                  transform: 'rotate(6deg)',
-                }}
-              >
-                {['PN', 'WT', 'ŚR', 'CZ', 'PT', 'SB', 'ND'].map((weekday) => (
-                  <Box key={weekday}>{weekday}</Box>
-                ))}
-              </Box>
-              <Box
-                aria-hidden="true"
-                sx={{
-                  top: { xs: 67, sm: 93 },
-                  left: { xs: 54, sm: 63 },
-                  width: { xs: 137, sm: 191 },
-                  height: { xs: 128, sm: 178 },
-                  display: 'grid',
-                  gridTemplateRows: 'repeat(6, 1fr)',
-                  gridTemplateColumns: 'repeat(7, 1fr)',
-                  position: 'absolute',
-                  color: '#7A6755',
-                  fontSize: { xs: 5.5, sm: 7.5 },
-                  fontWeight: 700,
-                  transform: 'rotate(6deg)',
-                  transformOrigin: 'top left',
-                }}
-              >
-                {calendarDays.map((day, index) => (
-                  <Box
-                    key={index}
-                    sx={{
-                      display: 'grid',
-                      placeItems: 'center',
-                      ...(day === currentDate.getDate() && {
-                        mx: 'auto',
-                        width: { xs: 13, sm: 18 },
-                        height: { xs: 13, sm: 18 },
-                        color: '#fff',
-                        borderRadius: '50%',
-                        bgcolor: '#7298F7',
-                        boxShadow: '0 2px 5px rgba(55,91,180,.35)',
-                      }),
-                    }}
-                  >
-                    {day}
-                  </Box>
-                ))}
-              </Box>
-            </Box>
+            <DashboardCalendar
+              days={calendarDays}
+              month={calendarMonth}
+              today={currentDate.getDate()}
+            />
             <Box
               aria-hidden="true"
               sx={(theme) => ({
