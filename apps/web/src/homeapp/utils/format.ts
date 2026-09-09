@@ -32,6 +32,35 @@ export function monthCalendarDays(date: Date): Array<number | null> {
   });
 }
 
+function localIso(date: Date): string {
+  return [date.getFullYear(), date.getMonth() + 1, date.getDate()]
+    .map((part, index) => String(part).padStart(index ? 2 : 4, '0'))
+    .join('-');
+}
+
+export function calendarMonthDates(month: string): string[] {
+  const [year = 0, monthNumber = 1] = month.split('-').map(Number);
+  const first = new Date(year, monthNumber - 1, 1, 12);
+  first.setDate(first.getDate() - ((first.getDay() + 6) % 7));
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(first);
+    date.setDate(first.getDate() + index);
+    return localIso(date);
+  });
+}
+
+export function calendarWeekDates(value: string): string[] {
+  const first = new Date(`${value}T12:00:00`);
+  first.setDate(first.getDate() - ((first.getDay() + 6) % 7));
+
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(first);
+    date.setDate(first.getDate() + index);
+    return localIso(date);
+  });
+}
+
 export function weekStartIso(): string {
   const now = new Date(`${todayIso()}T12:00:00`);
   now.setDate(now.getDate() - ((now.getDay() + 6) % 7));
