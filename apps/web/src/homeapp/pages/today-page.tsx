@@ -266,13 +266,13 @@ function DashboardCalendar({
       aria-label={`Kalendarz: ${month}`}
       viewBox="0 0 420 340"
       sx={{
-        right: { xs: -55, sm: 62 },
+        right: { sm: 8, md: 20, lg: 30 },
         bottom: -12,
-        width: { xs: 285, sm: 385 },
-        height: { xs: 230, sm: 330 },
+        width: { sm: 250, md: 330, lg: 385 },
+        height: { sm: 215, md: 285, lg: 330 },
+        display: { xs: 'none', sm: 'block' },
         position: 'absolute',
         overflow: 'visible',
-        opacity: { xs: 0.52, sm: 1 },
         pointerEvents: 'none',
       }}
     >
@@ -564,7 +564,7 @@ export function TodayPage() {
             sx={(theme) => ({
               ...dashboardCard(theme),
               p: { xs: 2.5, sm: 3 },
-              minHeight: { xs: 370, sm: 350 },
+              minHeight: { xs: 310, sm: 350 },
               height: '100%',
               overflow: 'hidden',
               position: 'relative',
@@ -579,10 +579,25 @@ export function TodayPage() {
             <Typography variant="overline" sx={{ color: '#7298F7', fontWeight: 800, letterSpacing: 1.2 }}>
               Plan dnia
             </Typography>
-            <Typography variant="h3" sx={{ mt: 0.25, fontSize: { xs: 27, sm: 34 }, maxWidth: 500 }}>
+            <Typography
+              variant="h3"
+              sx={{
+                mt: 0.25,
+                fontSize: { xs: 27, sm: 34 },
+                maxWidth: { xs: '100%', sm: '52%', md: '55%', lg: 500 },
+              }}
+            >
               Najbliższe wydarzenie
             </Typography>
-            <Stack spacing={1.25} sx={{ mt: 2.25, maxWidth: { xs: '100%', sm: '52%' }, position: 'relative', zIndex: 2 }}>
+            <Stack
+              spacing={1.25}
+              sx={{
+                mt: 2.25,
+                maxWidth: { xs: '100%', sm: '52%', lg: '48%' },
+                position: 'relative',
+                zIndex: 2,
+              }}
+            >
               <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
                 <Icon icon="solar:calendar-bold-duotone" width={27} color="#7298F7" />
                 <Typography variant="h6">
@@ -615,9 +630,9 @@ export function TodayPage() {
               aria-hidden="true"
               sx={(theme) => ({
                 top: 42,
-                right: 20,
+                right: { sm: 8, md: 20 },
                 zIndex: 1,
-                width: 145,
+                width: { sm: 125, md: 145 },
                 display: { xs: 'none', sm: 'block' },
                 position: 'absolute',
                 textAlign: 'center',
@@ -633,7 +648,7 @@ export function TodayPage() {
                 sx={{
                   m: 0,
                   font: 'inherit',
-                  fontSize: 17,
+                  fontSize: { sm: 14, md: 17 },
                   lineHeight: 1.35,
                   letterSpacing: 0.25,
                 }}
