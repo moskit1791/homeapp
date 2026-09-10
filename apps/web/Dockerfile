@@ -12,6 +12,7 @@ COPY tsconfig.base.json ./
 ARG VITE_GOOGLE_CLIENT_ID=""
 ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
 ENV VITE_API_URL=/api
+ENV NODE_OPTIONS=--max-old-space-size=1536
 RUN pnpm --filter @homeapp/shared-types build && pnpm --filter @homeapp/web build
 
 FROM nginx:stable-alpine

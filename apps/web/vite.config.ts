@@ -12,6 +12,9 @@ export default defineConfig({
   plugins: [
     react(),
     checker({
+      // The build script checks TypeScript before Vite; CI runs ESLint separately.
+      // Avoid a second compiler process on the 2 GB production build host.
+      enableBuild: false,
       typescript: true,
       eslint: {
         lintCommand:
