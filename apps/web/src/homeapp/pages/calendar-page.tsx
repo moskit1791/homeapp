@@ -103,21 +103,39 @@ function CalendarGrid({
   const today = todayIso();
 
   return (
-    <Card variant="outlined" sx={{ overflow: 'hidden', borderRadius: 2.5 }}>
+    <Card
+      variant="outlined"
+      sx={(theme) => ({
+        overflow: 'hidden',
+        borderRadius: 2.5,
+        borderColor: 'rgba(49,75,112,.2)',
+        boxShadow: '0 16px 42px rgba(36,55,88,.07)',
+        ...theme.applyStyles('dark', {
+          borderColor: 'rgba(129,157,199,.24)',
+          boxShadow: '0 18px 46px rgba(0,0,0,.22)',
+        }),
+      })}
+    >
       <Box sx={{ display: { xs: 'none', sm: 'grid' }, gridTemplateColumns: 'repeat(7, 1fr)' }}>
-        {weekdays.map((day) => (
+        {weekdays.map((day, index) => (
           <Box
             key={day}
-            sx={{
+            sx={(theme) => ({
               py: 1.5,
               textAlign: 'center',
               borderBottom: '1px solid',
               borderRight: '1px solid',
               borderColor: 'divider',
+              bgcolor: index > 4 ? 'rgba(91,141,239,.055)' : 'rgba(132,151,177,.035)',
               '&:nth-of-type(7)': { borderRight: 0 },
-            }}
+              ...theme.applyStyles('dark', {
+                bgcolor: index > 4 ? 'rgba(91,141,239,.095)' : 'rgba(255,255,255,.025)',
+              }),
+            })}
           >
-            <Typography variant="subtitle2">{day}</Typography>
+            <Typography variant="subtitle2" color={index > 4 ? 'primary.main' : 'text.primary'}>
+              {day}
+            </Typography>
           </Box>
         ))}
         {dates.map((date, index) => {
@@ -125,6 +143,7 @@ function CalendarGrid({
           const isSelected = date === selectedDate;
           const isToday = date === today;
           const isCurrentMonth = date.startsWith(month);
+          const isWeekend = index % 7 > 4;
 
           return (
             <Box
@@ -134,33 +153,42 @@ function CalendarGrid({
               onClick={() => onSelect(date)}
               onKeyDown={(event) => event.key === 'Enter' && onSelect(date)}
               sx={(theme) => ({
-                p: 1,
+                p: { sm: 0.9, lg: 1.15 },
                 minWidth: 0,
-                minHeight: { sm: 104, lg: 122 },
+                minHeight: { sm: 112, lg: 126 },
                 cursor: 'pointer',
                 borderRight: index % 7 === 6 ? 0 : '1px solid',
                 borderBottom: index >= dates.length - 7 ? 0 : '1px solid',
                 borderColor: 'divider',
-                bgcolor: isSelected ? 'rgba(59,130,246,.09)' : 'background.paper',
+                bgcolor: isSelected
+                  ? 'rgba(59,130,246,.105)'
+                  : isWeekend
+                    ? 'rgba(91,141,239,.025)'
+                    : 'background.paper',
                 opacity: isCurrentMonth ? 1 : 0.46,
-                transition: theme.transitions.create('background-color'),
-                '&:hover': { bgcolor: 'action.hover' },
+                transition: theme.transitions.create(['background-color', 'box-shadow']),
+                boxShadow: isSelected ? 'inset 0 0 0 1px rgba(59,130,246,.42)' : 'none',
+                '&:hover': { bgcolor: 'action.hover', boxShadow: 'inset 0 0 0 1px #5B8DEF' },
                 ...theme.applyStyles('dark', {
-                  bgcolor: isSelected ? 'rgba(87,139,246,.16)' : 'background.paper',
+                  bgcolor: isSelected
+                    ? 'rgba(87,139,246,.18)'
+                    : isWeekend
+                      ? 'rgba(91,141,239,.05)'
+                      : 'background.paper',
                 }),
               })}
             >
               <Box
                 sx={{
-                  mb: 0.75,
-                  width: 26,
-                  height: 26,
+                  mb: 0.8,
+                  width: 28,
+                  height: 28,
                   display: 'grid',
                   borderRadius: '50%',
                   placeItems: 'center',
                   color: isToday || isSelected ? '#fff' : 'text.primary',
                   bgcolor: isToday || isSelected ? 'primary.main' : 'transparent',
-                  fontSize: 13,
+                  fontSize: 14,
                   fontWeight: 800,
                 }}
               >
@@ -177,14 +205,17 @@ function CalendarGrid({
                         onEdit(event);
                       }}
                       sx={{
-                        px: 0.75,
-                        py: 0.45,
+                        px: 0.8,
+                        py: 0.55,
                         minWidth: 0,
                         display: 'flex',
                         gap: 0.6,
-                        borderRadius: 0.75,
+                        borderRadius: 0.85,
                         alignItems: 'center',
+                        borderLeft: `3px solid ${color}`,
                         bgcolor: `${color}14`,
+                        transition: 'filter .15s ease',
+                        '&:hover': { filter: 'brightness(1.05)' },
                       }}
                     >
                       <Box
@@ -207,7 +238,7 @@ function CalendarGrid({
                         <Typography
                           variant="caption"
                           color="text.secondary"
-                          sx={{ display: { sm: 'none', lg: 'block' } }}
+                          sx={{ display: { sm: 'none', md: 'block' } }}
                         >
                           {event.eventTime.slice(0, 5)}
                         </Typography>
@@ -631,7 +662,7 @@ export function CalendarPage() {
           display: 'grid',
           gap: 2,
           alignItems: 'start',
-          gridTemplateColumns: { xs: 'minmax(0, 1fr)', xl: 'minmax(0, 1fr) 310px' },
+          gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'minmax(0, 1fr) 310px' },
         }}
       >
         <Box sx={{ minWidth: 0 }}>

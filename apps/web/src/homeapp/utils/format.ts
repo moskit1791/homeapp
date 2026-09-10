@@ -42,8 +42,11 @@ export function calendarMonthDates(month: string): string[] {
   const [year = 0, monthNumber = 1] = month.split('-').map(Number);
   const first = new Date(year, monthNumber - 1, 1, 12);
   first.setDate(first.getDate() - ((first.getDay() + 6) % 7));
+  const last = new Date(year, monthNumber, 0, 12);
+  last.setDate(last.getDate() + ((7 - last.getDay()) % 7));
+  const dayCount = Math.round((last.getTime() - first.getTime()) / 86_400_000) + 1;
 
-  return Array.from({ length: 42 }, (_, index) => {
+  return Array.from({ length: dayCount }, (_, index) => {
     const date = new Date(first);
     date.setDate(first.getDate() + index);
     return localIso(date);

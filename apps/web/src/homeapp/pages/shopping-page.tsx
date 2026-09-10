@@ -4,12 +4,6 @@ import { Icon } from '@iconify/react';
 import { useSearchParams } from 'react-router';
 import { useMemo, useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  SHOPPING_CATEGORIES,
-  getShoppingCategoryMeta,
-  categorizeShoppingProduct,
-  getShoppingProductSuggestions,
-} from '@homeapp/shared-types';
 
 import {
   Box,
@@ -42,6 +36,12 @@ import familyImage from '../../../../mobile/assets/shopping-category-family.png'
 import produceImage from '../../../../mobile/assets/shopping-category-produce.png';
 import defaultImage from '../../../../mobile/assets/shopping-category-default.png';
 import cleaningImage from '../../../../mobile/assets/shopping-category-cleaning.png';
+import {
+  SHOPPING_CATEGORIES,
+  getShoppingCategoryMeta,
+  categorizeShoppingProduct,
+  getShoppingProductSuggestions,
+} from '../utils/shopping-catalog';
 import {
   Page,
   ErrorView,

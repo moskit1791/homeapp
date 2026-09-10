@@ -10,6 +10,7 @@ import {
   Box,
   Tab,
   Tabs,
+  Chip,
   Alert,
   Table,
   Stack,
@@ -33,6 +34,7 @@ import {
 import { useSession } from '../auth/session-context';
 import { usePermission } from '../auth/use-permission';
 import { money, todayIso, shortDate } from '../utils/format';
+import { summarizeBudgetCategories } from '../utils/finance';
 import savingsCarImage from '../../../../mobile/assets/savings-goal-car.png';
 import savingsHomeImage from '../../../../mobile/assets/savings-goal-home.png';
 import savingsGiftImage from '../../../../mobile/assets/savings-goal-gift.png';
@@ -119,6 +121,46 @@ function savingsImage(name: string) {
   if (/prezent/i.test(name)) return savingsGiftImage;
   if (/poduszk|awaryj|rezerw/i.test(name)) return savingsEmergencyImage;
   return savingsDefaultImage;
+}
+
+function BudgetUsageRing({ value }: { value: number }) {
+  const segmentCount = 36;
+  const activeSegments = Math.round((Math.min(Math.max(value, 0), 100) / 100) * segmentCount);
+
+  return (
+    <Box
+      sx={{ position: 'relative', width: 112, height: 112, flexShrink: 0, justifySelf: 'center' }}
+    >
+      <Box component="svg" viewBox="0 0 112 112" sx={{ width: 112, height: 112 }}>
+        {Array.from({ length: segmentCount }, (_, index) => (
+          <Box
+            key={index}
+            component="line"
+            x1="56"
+            y1="5"
+            x2="56"
+            y2="16"
+            stroke={index < activeSegments ? '#FF9F43' : 'currentColor'}
+            strokeWidth="5"
+            strokeLinecap="round"
+            transform={`rotate(${index * (360 / segmentCount)} 56 56)`}
+            sx={{ color: 'rgba(126,148,178,.22)' }}
+          />
+        ))}
+      </Box>
+      <Stack
+        spacing={0}
+        sx={{ position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center' }}
+      >
+        <Typography variant="h5" sx={{ lineHeight: 1 }}>
+          {value}%
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.4 }}>
+          wykorzystane
+        </Typography>
+      </Stack>
+    </Box>
+  );
 }
 
 export function FinancePage() {
@@ -468,9 +510,6 @@ export function FinancePage() {
   const currentMonthIndex = budget.data
     ? orderedMonths.findIndex((item) => item.id === budget.data.month.id)
     : -1;
-  const budgetLimit = Number(budget.data?.summary.totalBudgetAmount ?? 0);
-  const budgetSpent = Number(budget.data?.summary.totalSpentAmount ?? 0);
-  const budgetUsage = budgetLimit > 0 ? Math.round((budgetSpent / budgetLimit) * 100) : 0;
   const monthLabel = budget.data
     ? new Intl.DateTimeFormat('pl-PL', { month: 'long', year: 'numeric' }).format(
         new Date(budget.data.month.year, budget.data.month.month - 1, 1)
@@ -486,6 +525,19 @@ export function FinancePage() {
             : category.items.filter((item) => item.owner.memberId === ownerFilter),
       }))
       .filter((category) => ownerFilter === 'all' || category.items.length > 0) ?? [];
+  const filteredBudget = summarizeBudgetCategories(displayedCategories);
+  const budgetLimit = filteredBudget.budget;
+  const budgetSpent = filteredBudget.spent;
+  const budgetRemaining = filteredBudget.remaining;
+  const budgetUsage = filteredBudget.usage;
+  const debtTotals = (debts.data ?? []).reduce(
+    (total, debt) => ({
+      amount: total.amount + Number(debt.amount || 0),
+      paid: total.paid + Number(debt.paidAmount || 0),
+      remaining: total.remaining + Number(debt.remainingAmount || 0),
+    }),
+    { amount: 0, paid: 0, remaining: 0 }
+  );
   const expenseCategories =
     budget.data?.categories.filter((category) =>
       category.items.some((item) => !memberId || item.owner.memberId === memberId)
@@ -752,38 +804,14 @@ export function FinancePage() {
                     Do dyspozycji
                   </Typography>
                   <Typography variant="h3" sx={{ color: '#52DA99' }}>
-                    {money(budget.data.summary.totalRemainingAmount, currency)}
+                    {money(budgetRemaining, currency)}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    z {money(budget.data.summary.totalBudgetAmount, currency)}
+                    z {money(budgetLimit, currency)}
                   </Typography>
                 </Box>
               </Stack>
-              <Box
-                sx={{
-                  width: 98,
-                  height: 98,
-                  display: 'grid',
-                  borderRadius: '50%',
-                  placeItems: 'center',
-                  background: `conic-gradient(#FF9F43 ${Math.min(budgetUsage, 100) * 3.6}deg, rgba(126,148,178,.18) 0deg)`,
-                  '&::before': {
-                    content: '""',
-                    width: 74,
-                    height: 74,
-                    borderRadius: '50%',
-                    bgcolor: 'background.paper',
-                    gridArea: '1 / 1',
-                  },
-                }}
-              >
-                <Box sx={{ gridArea: '1 / 1', zIndex: 1, textAlign: 'center' }}>
-                  <Typography variant="h5">{budgetUsage}%</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    wykorzystane
-                  </Typography>
-                </Box>
-              </Box>
+              <BudgetUsageRing value={budgetUsage} />
               <Stack
                 direction="row"
                 spacing={1.5}
@@ -806,11 +834,9 @@ export function FinancePage() {
                   <Typography variant="subtitle2" sx={{ color: '#FFAD32' }}>
                     Wydano
                   </Typography>
-                  <Typography variant="h3">
-                    {money(budget.data.summary.totalSpentAmount, currency)}
-                  </Typography>
+                  <Typography variant="h3">{money(budgetSpent, currency)}</Typography>
                   <Typography variant="caption" color="text.secondary">
-                    z {money(budget.data.summary.totalBudgetAmount, currency)}
+                    z {money(budgetLimit, currency)}
                   </Typography>
                 </Box>
               </Stack>
@@ -1232,29 +1258,21 @@ export function FinancePage() {
                     </TableCell>
                     <TableCell>
                       <Typography variant="caption" color="text.secondary">
-                        {budgetItems.length} pozycji
+                        {filteredBudget.itemCount} pozycji
                       </Typography>
                     </TableCell>
                     <TableCell align="right">
-                      <Typography variant="subtitle1">
-                        {money(budget.data.summary.totalBudgetAmount, currency)}
-                      </Typography>
+                      <Typography variant="subtitle1">{money(budgetLimit, currency)}</Typography>
                     </TableCell>
                     <TableCell align="right">
-                      <Typography variant="subtitle1">
-                        {money(budget.data.summary.totalSpentAmount, currency)}
-                      </Typography>
+                      <Typography variant="subtitle1">{money(budgetSpent, currency)}</Typography>
                     </TableCell>
                     <TableCell align="right">
                       <Typography
                         variant="subtitle1"
-                        color={
-                          Number(budget.data.summary.totalRemainingAmount) < 0
-                            ? 'error.main'
-                            : 'success.main'
-                        }
+                        color={budgetRemaining < 0 ? 'error.main' : 'success.main'}
                       >
-                        {money(budget.data.summary.totalRemainingAmount, currency)}
+                        {money(budgetRemaining, currency)}
                       </Typography>
                     </TableCell>
                     <TableCell>
@@ -1287,72 +1305,212 @@ export function FinancePage() {
             <EmptyState text="Brak zobowiązań." />
           </SectionCard>
         ) : (
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
-              gap: 2.5,
-            }}
-          >
-            {debts.data?.map((debt) => (
-              <SectionCard key={debt.id}>
-                <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
-                  <Box>
-                    <Typography variant="h3">{debt.lenderName}</Typography>
-                    <Typography color="text.secondary">{debt.purpose}</Typography>
-                  </Box>
-                  <IconButton
-                    disabled={!permission.canUpdate}
-                    onClick={() => {
-                      setEditingDebt(debt);
-                      setName(debt.lenderName);
-                      setTargetAmount(debt.purpose);
-                      setAmount(debt.amount);
-                      setDueDate(debt.dueDate ?? '');
-                      setNoteText(debt.note ?? '');
-                      setDebtIsSettled(debt.isSettled);
-                      setOpen(true);
-                    }}
-                  >
-                    <Icon icon="solar:pen-bold-duotone" />
-                  </IconButton>
-                  <IconButton
-                    color="error"
-                    disabled={!permission.canDelete}
-                    onClick={() => confirmDelete(debt.lenderName) && removeDebt.mutate(debt.id)}
-                  >
-                    <Icon icon="solar:trash-bin-trash-bold-duotone" />
-                  </IconButton>
-                </Stack>
-                <Typography variant="h2" sx={{ mt: 2 }}>
-                  {money(debt.remainingAmount, currency)}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  z {money(debt.amount, currency)} · termin {shortDate(debt.dueDate)}
-                </Typography>
-                <Button
-                  size="small"
-                  startIcon={<Icon icon="solar:hand-money-bold-duotone" />}
-                  sx={{ mt: 2 }}
-                  disabled={!permission.canUpdate || debt.isSettled}
-                  onClick={() => openManage('debt-payment', debt.id)}
-                >
-                  Zapisz spłatę
-                </Button>
-                {debt.payments.length > 0 && (
-                  <Stack spacing={0.5} sx={{ mt: 1.5 }}>
-                    {debt.payments.slice(0, 3).map((payment) => (
-                      <Typography key={payment.id} variant="caption" color="text.secondary">
-                        {shortDate(payment.paidAt ?? payment.createdAt)} ·{' '}
-                        {money(payment.amount, currency)}
-                        {payment.note ? ` · ${payment.note}` : ''}
+          <Stack spacing={2.5}>
+            <Box
+              sx={{
+                display: 'grid',
+                gap: 1.5,
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' },
+              }}
+            >
+              {[
+                {
+                  label: 'Pozostało do spłaty',
+                  value: debtTotals.remaining,
+                  icon: 'solar:wallet-money-bold-duotone',
+                  color: '#FF9F43',
+                },
+                {
+                  label: 'Spłacono łącznie',
+                  value: debtTotals.paid,
+                  icon: 'solar:hand-money-bold-duotone',
+                  color: '#52DA99',
+                },
+                {
+                  label: 'Wartość zobowiązań',
+                  value: debtTotals.amount,
+                  icon: 'solar:document-text-bold-duotone',
+                  color: '#6C8CFF',
+                },
+              ].map((metric) => (
+                <Box key={metric.label} sx={(theme) => ({ ...financeSurface(theme), p: 2 })}>
+                  <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+                    <Box
+                      sx={{
+                        width: 44,
+                        height: 44,
+                        display: 'grid',
+                        placeItems: 'center',
+                        borderRadius: 1.5,
+                        color: metric.color,
+                        bgcolor: `${metric.color}1A`,
+                      }}
+                    >
+                      <Icon icon={metric.icon} width={25} />
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        {metric.label}
                       </Typography>
-                    ))}
+                      <Typography variant="h5">{money(metric.value, currency)}</Typography>
+                    </Box>
                   </Stack>
-                )}
-              </SectionCard>
-            ))}
-          </Box>
+                </Box>
+              ))}
+            </Box>
+
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', xl: 'repeat(3, 1fr)' },
+                gap: 2,
+              }}
+            >
+              {debts.data?.map((debt, index) => {
+                const total = Number(debt.amount || 0);
+                const paid = Number(debt.paidAmount || 0);
+                const progress = total > 0 ? Math.min(Math.round((paid / total) * 100), 100) : 0;
+                const accent = categoryAccents[index % categoryAccents.length];
+
+                return (
+                  <Box
+                    key={debt.id}
+                    sx={(theme) => ({
+                      ...financeSurface(theme),
+                      p: 2.5,
+                      position: 'relative',
+                      overflow: 'hidden',
+                      borderTop: `3px solid ${debt.isSettled ? '#52DA99' : accent}`,
+                    })}
+                  >
+                    <Stack direction="row" spacing={1.25} sx={{ alignItems: 'flex-start' }}>
+                      <Box
+                        sx={{
+                          width: 46,
+                          height: 46,
+                          display: 'grid',
+                          placeItems: 'center',
+                          flexShrink: 0,
+                          borderRadius: 1.5,
+                          color: debt.isSettled ? '#52DA99' : accent,
+                          bgcolor: debt.isSettled ? 'rgba(82,218,153,.12)' : `${accent}1A`,
+                        }}
+                      >
+                        <Icon
+                          icon={
+                            debt.isSettled
+                              ? 'solar:check-circle-bold-duotone'
+                              : 'solar:bill-check-bold-duotone'
+                          }
+                          width={27}
+                        />
+                      </Box>
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                          <Typography variant="h5" noWrap>
+                            {debt.lenderName}
+                          </Typography>
+                          <Chip
+                            size="small"
+                            color={debt.isSettled ? 'success' : 'warning'}
+                            label={debt.isSettled ? 'Spłacone' : `${progress}%`}
+                          />
+                        </Stack>
+                        <Typography variant="body2" color="text.secondary" noWrap>
+                          {debt.purpose || 'Bez opisu celu'}
+                        </Typography>
+                      </Box>
+                      <Stack direction="row" spacing={0}>
+                        <IconButton
+                          size="small"
+                          aria-label={`Edytuj zobowiązanie ${debt.lenderName}`}
+                          disabled={!permission.canUpdate}
+                          onClick={() => {
+                            setEditingDebt(debt);
+                            setName(debt.lenderName);
+                            setTargetAmount(debt.purpose);
+                            setAmount(debt.amount);
+                            setDueDate(debt.dueDate ?? '');
+                            setNoteText(debt.note ?? '');
+                            setDebtIsSettled(debt.isSettled);
+                            setOpen(true);
+                          }}
+                        >
+                          <Icon icon="solar:pen-bold-duotone" />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          aria-label={`Usuń zobowiązanie ${debt.lenderName}`}
+                          color="error"
+                          disabled={!permission.canDelete}
+                          onClick={() =>
+                            confirmDelete(debt.lenderName) && removeDebt.mutate(debt.id)
+                          }
+                        >
+                          <Icon icon="solar:trash-bin-trash-bold-duotone" />
+                        </IconButton>
+                      </Stack>
+                    </Stack>
+
+                    <Stack direction="row" sx={{ mt: 2.5, alignItems: 'baseline' }}>
+                      <Typography variant="h3">{money(debt.remainingAmount, currency)}</Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+                        pozostało
+                      </Typography>
+                    </Stack>
+                    <LinearProgress
+                      variant="determinate"
+                      value={progress}
+                      color={debt.isSettled ? 'success' : 'warning'}
+                      sx={{ mt: 1.25, height: 8, borderRadius: 4 }}
+                    />
+                    <Stack
+                      direction="row"
+                      sx={{ mt: 1, justifyContent: 'space-between', color: 'text.secondary' }}
+                    >
+                      <Typography variant="caption">Spłacono {money(paid, currency)}</Typography>
+                      <Typography variant="caption">z {money(total, currency)}</Typography>
+                    </Stack>
+
+                    <Stack spacing={0.8} sx={{ mt: 2 }}>
+                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                        <Icon icon="solar:calendar-minimalistic-bold-duotone" width={18} />
+                        <Typography variant="body2">Termin: {shortDate(debt.dueDate)}</Typography>
+                      </Stack>
+                      {debt.note && (
+                        <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
+                          <Icon icon="solar:notes-bold-duotone" width={18} />
+                          <Typography variant="body2" color="text.secondary" noWrap>
+                            {debt.note}
+                          </Typography>
+                        </Stack>
+                      )}
+                    </Stack>
+
+                    {debt.payments.length > 0 && (
+                      <Box sx={{ mt: 2, pt: 1.5, borderTop: '1px dashed', borderColor: 'divider' }}>
+                        <Typography variant="caption" color="text.secondary">
+                          Ostatnia spłata:{' '}
+                          {shortDate(debt.payments[0].paidAt ?? debt.payments[0].createdAt)} ·{' '}
+                          {money(debt.payments[0].amount, currency)}
+                        </Typography>
+                      </Box>
+                    )}
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      startIcon={<Icon icon="solar:hand-money-bold-duotone" />}
+                      sx={{ mt: 2 }}
+                      disabled={!permission.canUpdate || debt.isSettled}
+                      onClick={() => openManage('debt-payment', debt.id)}
+                    >
+                      {debt.isSettled ? 'Zobowiązanie spłacone' : 'Zapisz spłatę'}
+                    </Button>
+                  </Box>
+                );
+              })}
+            </Box>
+          </Stack>
         ))}
       {tab === 'savings' &&
         (savings.isLoading ? (

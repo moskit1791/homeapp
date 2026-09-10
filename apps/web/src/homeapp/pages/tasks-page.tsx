@@ -9,9 +9,9 @@ import {
   Box,
   Tab,
   Tabs,
+  Chip,
   Alert,
   Stack,
-  Divider,
   Checkbox,
   TextField,
   IconButton,
@@ -21,6 +21,7 @@ import {
 import { shortDate } from '../utils/format';
 import { useSession } from '../auth/session-context';
 import { usePermission } from '../auth/use-permission';
+import { todoMovePlan, reorderTodosAfterDrop } from '../utils/todo-order';
 import {
   Page,
   ErrorView,
@@ -58,6 +59,8 @@ export function TasksPage() {
   const [description, setDescription] = useState('');
   const [editingTodo, setEditingTodo] = useState<TodoItem | null>(null);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
+  const [draggedTodoId, setDraggedTodoId] = useState<string | null>(null);
+  const [dragOverTodoId, setDragOverTodoId] = useState<string | null>(null);
   const todos = useQuery({
     queryKey: ['todo'],
     queryFn: () => listTodoItems(undefined, { accessToken }),
@@ -118,8 +121,24 @@ export function TasksPage() {
     },
   });
   const moveTodo = useMutation({
-    mutationFn: ({ id, direction }: { id: string; direction: 'down' | 'up' }) =>
-      moveTodoItem(id, { direction }, { accessToken }),
+    mutationFn: async ({ id, targetId }: { id: string; targetId: string }) => {
+      const plan = todoMovePlan(todos.data ?? [], id, targetId);
+      if (!plan) return;
+      for (let step = 0; step < plan.steps; step += 1) {
+        await moveTodoItem(id, { direction: plan.direction }, { accessToken });
+      }
+    },
+    onMutate: async ({ id, targetId }) => {
+      await queryClient.cancelQueries({ queryKey: ['todo'] });
+      const previous = queryClient.getQueryData<TodoItem[]>(['todo']);
+      queryClient.setQueryData<TodoItem[]>(['todo'], (current = []) =>
+        reorderTodosAfterDrop(current, id, targetId)
+      );
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) queryClient.setQueryData(['todo'], context.previous);
+    },
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['todo'] }),
@@ -222,6 +241,11 @@ export function TasksPage() {
             label={`Do zrobienia (${todos.data?.length ?? 0})`}
           />
         </Tabs>
+        {moveTodo.error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            Nie udało się zapisać nowej kolejności. Przywrócono poprzedni układ.
+          </Alert>
+        )}
         {active.isLoading ? (
           <LoadingView />
         ) : active.error ? (
@@ -230,14 +254,66 @@ export function TasksPage() {
           (todos.data?.length ?? 0) === 0 ? (
             <EmptyState text="Brak zadań." />
           ) : (
-            <Stack divider={<Divider flexItem />}>
+            <Stack spacing={1}>
               {todos.data?.map((todo) => (
                 <Stack
                   key={todo.id}
+                  onDragEnter={() => todo.status !== 'done' && setDragOverTodoId(todo.id)}
+                  onDragOver={(event) => {
+                    if (todo.status === 'done') return;
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = 'move';
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const sourceId = draggedTodoId ?? event.dataTransfer.getData('text/plain');
+                    if (sourceId && sourceId !== todo.id) {
+                      moveTodo.mutate({ id: sourceId, targetId: todo.id });
+                    }
+                    setDraggedTodoId(null);
+                    setDragOverTodoId(null);
+                  }}
+                  onDragEnd={() => {
+                    setDraggedTodoId(null);
+                    setDragOverTodoId(null);
+                  }}
                   direction="row"
-                  spacing={0.5}
-                  sx={{ py: 1.25, alignItems: 'center' }}
+                  spacing={1}
+                  sx={(theme) => ({
+                    px: 1.25,
+                    py: 1,
+                    alignItems: 'center',
+                    border: '1px solid',
+                    borderColor:
+                      dragOverTodoId === todo.id && draggedTodoId !== todo.id
+                        ? 'primary.main'
+                        : 'divider',
+                    borderRadius: 1.75,
+                    bgcolor:
+                      dragOverTodoId === todo.id && draggedTodoId !== todo.id
+                        ? 'primary.lighter'
+                        : 'transparent',
+                    opacity: draggedTodoId === todo.id ? 0.55 : 1,
+                    transition: theme.transitions.create(['border-color', 'background-color']),
+                  })}
                 >
+                  <Box
+                    aria-label="Przeciągnij, aby zmienić kolejność"
+                    draggable={todo.status !== 'done' && todoPermission.canUpdate}
+                    onDragStart={(event) => {
+                      event.dataTransfer.effectAllowed = 'move';
+                      event.dataTransfer.setData('text/plain', todo.id);
+                      setDraggedTodoId(todo.id);
+                    }}
+                    sx={{
+                      display: todo.status === 'done' ? 'none' : 'grid',
+                      placeItems: 'center',
+                      color: 'text.disabled',
+                      cursor: todoPermission.canUpdate ? 'grab' : 'default',
+                    }}
+                  >
+                    <Icon icon="solar:hamburger-menu-linear" width={22} />
+                  </Box>
                   <Checkbox
                     checked={todo.status === 'done'}
                     onChange={() =>
@@ -275,22 +351,6 @@ export function TasksPage() {
                       </Typography>
                     )}
                   </Box>
-                  <Stack direction="row" sx={{ display: { xs: 'none', sm: 'flex' } }}>
-                    <IconButton
-                      aria-label="Przesuń zadanie w górę"
-                      onClick={() => moveTodo.mutate({ id: todo.id, direction: 'up' })}
-                      disabled={!todoPermission.canUpdate}
-                    >
-                      <Icon icon="solar:alt-arrow-up-bold" />
-                    </IconButton>
-                    <IconButton
-                      aria-label="Przesuń zadanie w dół"
-                      onClick={() => moveTodo.mutate({ id: todo.id, direction: 'down' })}
-                      disabled={!todoPermission.canUpdate}
-                    >
-                      <Icon icon="solar:alt-arrow-down-bold" />
-                    </IconButton>
-                  </Stack>
                   <IconButton
                     aria-label="Edytuj zadanie"
                     onClick={() => openTodo(todo)}
@@ -315,69 +375,127 @@ export function TasksPage() {
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
-              gap: 2,
+              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', xl: 'repeat(3, 1fr)' },
+              gap: 1.75,
             }}
           >
-            {notes.data?.map((note) => (
-              <Box
-                key={note.id}
-                sx={(theme) => ({
-                  p: 2.25,
-                  minHeight: 180,
-                  border: '1px solid rgba(238,171,68,.24)',
-                  borderRadius: 2,
-                  bgcolor: 'rgba(255,184,77,.075)',
-                  transition: theme.transitions.create(['transform', 'box-shadow', 'border-color']),
-                  '&:hover': {
-                    transform: 'translateY(-2px)',
-                    borderColor: 'warning.main',
-                    boxShadow: '0 12px 30px rgba(70,50,20,.08)',
-                  },
-                  ...theme.applyStyles('dark', { bgcolor: 'rgba(255,184,77,.06)' }),
-                })}
-              >
-                <Stack direction="row" spacing={1} sx={{ justifyContent: 'space-between' }}>
-                  <Box
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => notesPermission.canUpdate && openNote(note)}
-                    onKeyDown={(event) =>
-                      event.key === 'Enter' && notesPermission.canUpdate && openNote(note)
-                    }
-                    sx={{
-                      flex: 1,
-                      minWidth: 0,
-                      cursor: notesPermission.canUpdate ? 'pointer' : 'default',
-                    }}
-                  >
-                    <Typography variant="h5">{note.title}</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {shortDate(note.updatedAt)}
+            {notes.data?.map((note, index) => {
+              const accents = ['#F6B94D', '#A879E8', '#55D99B', '#5B8DEF'];
+              const accent = accents[index % accents.length];
+              return (
+                <Box
+                  key={note.id}
+                  sx={(theme) => ({
+                    p: 2,
+                    minHeight: 210,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    borderRadius: 2,
+                    bgcolor: 'background.paper',
+                    boxShadow: '0 10px 28px rgba(38,54,82,.06)',
+                    '&::before': {
+                      content: '""',
+                      position: 'absolute',
+                      inset: '0 0 auto',
+                      height: 4,
+                      bgcolor: accent,
+                    },
+                    transition: theme.transitions.create([
+                      'transform',
+                      'box-shadow',
+                      'border-color',
+                    ]),
+                    '&:hover': {
+                      transform: 'translateY(-2px)',
+                      borderColor: accent,
+                      boxShadow: '0 16px 38px rgba(38,54,82,.12)',
+                    },
+                    ...theme.applyStyles('dark', {
+                      bgcolor: 'rgba(18,34,54,.86)',
+                      boxShadow: '0 12px 30px rgba(0,0,0,.18)',
+                    }),
+                  })}
+                >
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                    <Box
+                      sx={{
+                        width: 42,
+                        height: 42,
+                        display: 'grid',
+                        placeItems: 'center',
+                        flexShrink: 0,
+                        borderRadius: 1.5,
+                        color: accent,
+                        bgcolor: `${accent}18`,
+                      }}
+                    >
+                      <Icon icon="solar:notes-bold-duotone" width={24} />
+                    </Box>
+                    <Box
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => notesPermission.canUpdate && openNote(note)}
+                      onKeyDown={(event) =>
+                        event.key === 'Enter' && notesPermission.canUpdate && openNote(note)
+                      }
+                      sx={{
+                        flex: 1,
+                        minWidth: 0,
+                        cursor: notesPermission.canUpdate ? 'pointer' : 'default',
+                      }}
+                    >
+                      <Typography variant="h6" noWrap>
+                        {note.title}
+                      </Typography>
+                      <Chip size="small" label="Prywatna" sx={{ mt: 0.5, height: 22 }} />
+                    </Box>
+                    <IconButton
+                      size="small"
+                      aria-label="Edytuj notatkę"
+                      onClick={() => openNote(note)}
+                      disabled={!notesPermission.canUpdate}
+                    >
+                      <Icon icon="solar:pen-bold-duotone" />
+                    </IconButton>
+                    <IconButton
+                      color="error"
+                      size="small"
+                      onClick={() => confirmDelete(note.title) && removeNote.mutate(note.id)}
+                      disabled={!notesPermission.canDelete}
+                    >
+                      <Icon icon="solar:trash-bin-trash-bold-duotone" />
+                    </IconButton>
+                  </Stack>
+                  {note.description && (
+                    <Typography
+                      color="text.secondary"
+                      sx={{
+                        mt: 2,
+                        whiteSpace: 'pre-wrap',
+                        display: '-webkit-box',
+                        overflow: 'hidden',
+                        WebkitLineClamp: 5,
+                        WebkitBoxOrient: 'vertical',
+                      }}
+                    >
+                      {note.description}
                     </Typography>
-                  </Box>
-                  <IconButton
-                    size="small"
-                    aria-label="Edytuj notatkę"
-                    onClick={() => openNote(note)}
-                    disabled={!notesPermission.canUpdate}
+                  )}
+                  <Stack
+                    direction="row"
+                    spacing={0.75}
+                    sx={{ mt: 'auto', pt: 2, alignItems: 'center', color: 'text.disabled' }}
                   >
-                    <Icon icon="solar:pen-bold-duotone" />
-                  </IconButton>
-                  <IconButton
-                    color="error"
-                    size="small"
-                    onClick={() => confirmDelete(note.title) && removeNote.mutate(note.id)}
-                    disabled={!notesPermission.canDelete}
-                  >
-                    <Icon icon="solar:trash-bin-trash-bold-duotone" />
-                  </IconButton>
-                </Stack>
-                {note.description && (
-                  <Typography sx={{ mt: 2, whiteSpace: 'pre-wrap' }}>{note.description}</Typography>
-                )}
-              </Box>
-            ))}
+                    <Icon icon="solar:clock-circle-linear" width={16} />
+                    <Typography variant="caption">Edytowano {shortDate(note.updatedAt)}</Typography>
+                  </Stack>
+                </Box>
+              );
+            })}
           </Box>
         )}
       </SectionCard>

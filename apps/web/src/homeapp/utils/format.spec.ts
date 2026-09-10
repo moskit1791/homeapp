@@ -25,10 +25,14 @@ describe('formatowanie danych HomeApp', () => {
 
   it('zwraca pełne zakresy miesiąca i tygodnia', () => {
     const august2026 = calendarMonthDates('2026-08');
+    const september2026 = calendarMonthDates('2026-09');
 
     expect(august2026).toHaveLength(42);
     expect(august2026[0]).toBe('2026-07-27');
     expect(august2026.at(-1)).toBe('2026-09-06');
+    expect(september2026).toHaveLength(35);
+    expect(september2026[0]).toBe('2026-08-31');
+    expect(september2026.at(-1)).toBe('2026-10-04');
     expect(calendarWeekDates('2026-08-08')).toEqual([
       '2026-08-03',
       '2026-08-04',

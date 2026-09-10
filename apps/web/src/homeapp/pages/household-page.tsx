@@ -251,13 +251,78 @@ export function HouseholdPage() {
         }
       />
       <Box
+        sx={(theme) => ({
+          p: { xs: 2.25, md: 3 },
+          display: 'grid',
+          gap: 2.5,
+          alignItems: 'center',
+          gridTemplateColumns: { xs: '1fr', md: '1fr auto' },
+          border: '1px solid',
+          borderColor: 'rgba(77,123,235,.2)',
+          borderRadius: 2.5,
+          background:
+            'linear-gradient(120deg, rgba(91,141,239,.12), rgba(168,121,232,.06) 58%, rgba(82,218,153,.08))',
+          ...theme.applyStyles('dark', {
+            borderColor: 'rgba(126,163,255,.25)',
+            background:
+              'linear-gradient(120deg, rgba(38,73,130,.34), rgba(87,58,126,.17) 58%, rgba(36,116,87,.15))',
+          }),
+        })}
+      >
+        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
+          <Box
+            sx={{
+              width: { xs: 58, md: 68 },
+              height: { xs: 58, md: 68 },
+              display: 'grid',
+              placeItems: 'center',
+              flexShrink: 0,
+              borderRadius: 2,
+              color: 'primary.main',
+              bgcolor: 'primary.lighter',
+              boxShadow: '0 12px 28px rgba(56,98,190,.18)',
+            }}
+          >
+            <Icon icon="solar:home-smile-bold-duotone" width={36} />
+          </Box>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="overline" color="primary.main">
+              Twój dom
+            </Typography>
+            <Typography variant="h3" noWrap>
+              {household.data.name}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Wspólna przestrzeń dla {members.data?.length ?? 0}{' '}
+              {(members.data?.length ?? 0) === 1 ? 'domownika' : 'domowników'}
+            </Typography>
+          </Box>
+        </Stack>
+        <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+          <Chip
+            icon={<Icon icon="solar:wallet-bold-duotone" />}
+            label={household.data.currencyCode}
+          />
+          <Chip
+            icon={<Icon icon="solar:chef-hat-heart-bold-duotone" />}
+            label={`${household.data.mealSlotsPerDay} posiłki dziennie`}
+          />
+          <Chip
+            color={encryption.lockState === 'unlocked' ? 'success' : 'default'}
+            icon={<Icon icon="solar:shield-check-bold-duotone" />}
+            label={encryption.lockState === 'unlocked' ? 'E2EE aktywne' : 'Ochrona standardowa'}
+          />
+        </Stack>
+      </Box>
+      <Box
         sx={{
           display: 'grid',
           gridTemplateColumns: { xs: '1fr', lg: '1.4fr 1fr' },
           gap: 3,
+          alignItems: 'start',
         }}
       >
-        <SectionCard title="Dom">
+        <SectionCard title="Dom" sx={{ borderTop: '3px solid #5B8DEF' }}>
           <Stack spacing={2}>
             <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
               <Box
@@ -294,7 +359,7 @@ export function HouseholdPage() {
             </PrimaryButton>
           </Stack>
         </SectionCard>
-        <SectionCard title="Domownicy">
+        <SectionCard title="Domownicy" sx={{ borderTop: '3px solid #A879E8' }}>
           <Stack direction="row" sx={{ mb: 1.5, justifyContent: 'flex-end' }}>
             <PrimaryButton size="small" onClick={() => setInviteOpen(true)}>
               Zaproś domownika
@@ -370,7 +435,7 @@ export function HouseholdPage() {
             ))}
           </Stack>
         </SectionCard>
-        <SectionCard title="Wygląd aplikacji">
+        <SectionCard title="Wygląd aplikacji" sx={{ borderTop: '3px solid #F6B94D' }}>
           <Stack spacing={1.5}>
             <Typography color="text.secondary">
               Wybierz wygląd zgodny z systemem, jasny albo ciemny.
@@ -421,7 +486,7 @@ export function HouseholdPage() {
             </Box>
           </Stack>
         </SectionCard>
-        <SectionCard title="Powiadomienia">
+        <SectionCard title="Powiadomienia" sx={{ borderTop: '3px solid #55D99B' }}>
           <Stack spacing={1.5}>
             <Typography color="text.secondary">
               Wybierz, o jakich zmianach w domu chcesz otrzymywać powiadomienia.
@@ -435,7 +500,7 @@ export function HouseholdPage() {
             </PrimaryButton>
           </Stack>
         </SectionCard>
-        <SectionCard title="Szyfrowanie end-to-end">
+        <SectionCard title="Szyfrowanie end-to-end" sx={{ borderTop: '3px solid #4C9AFF' }}>
           <Stack spacing={1.5}>
             <Typography color="text.secondary">
               {encryption.lockState === 'not-configured'
@@ -467,16 +532,29 @@ export function HouseholdPage() {
             )}
           </Stack>
         </SectionCard>
-        <SectionCard title="Twoje uprawnienia">
+        <SectionCard title="Twoje uprawnienia" sx={{ borderTop: '3px solid #7C6CE7' }}>
           {permissions.error ? (
             <ErrorView error={permissions.error} />
           ) : (
-            <Stack spacing={1.25}>
+            <Box
+              sx={{
+                display: 'grid',
+                gap: 1,
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: '1fr' },
+              }}
+            >
               {permissions.data?.map((permission) => (
                 <Stack
                   key={permission.moduleKey}
                   direction="row"
-                  sx={{ justifyContent: 'space-between', alignItems: 'center' }}
+                  sx={{
+                    px: 1.25,
+                    py: 0.8,
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    borderRadius: 1.25,
+                    bgcolor: 'action.hover',
+                  }}
                 >
                   <Typography>
                     {moduleNames[permission.moduleKey] ?? permission.moduleKey}
@@ -494,7 +572,7 @@ export function HouseholdPage() {
                   />
                 </Stack>
               ))}
-            </Stack>
+            </Box>
           )}
         </SectionCard>
         <SectionCard title="Usuwanie konta" sx={{ borderColor: 'error.main' }}>

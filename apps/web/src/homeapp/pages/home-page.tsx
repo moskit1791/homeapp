@@ -1,7 +1,7 @@
 import type { DataEntry, Attachment, CleaningTask } from '../api';
 
-import { useState } from 'react';
 import { Icon } from '@iconify/react';
+import { useState, useEffect } from 'react';
 import { Link as RouterLink } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
@@ -65,6 +65,77 @@ const homeTabs: Array<{ icon: string; label: string; value: HomeTab }> = [
   { icon: 'solar:folder-with-files-bold-duotone', label: 'Pliki', value: 'attachments' },
 ];
 
+function AttachmentThumbnail({
+  accessToken,
+  attachment,
+}: {
+  accessToken: string | null;
+  attachment: Attachment;
+}) {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!attachment.mimeType.startsWith('image/')) return undefined;
+    let active = true;
+    let objectUrl: string | null = null;
+
+    const request = getAttachmentFileRequest(attachment.id, { accessToken });
+    void fetch(request.uri, { headers: request.headers })
+      .then((response) => {
+        if (!response.ok) throw new Error('Nie udało się pobrać miniatury.');
+        return response.blob();
+      })
+      .then((blob) => {
+        objectUrl = URL.createObjectURL(blob);
+        if (active) setUrl(objectUrl);
+        else {
+          URL.revokeObjectURL(objectUrl);
+          objectUrl = null;
+        }
+      })
+      .catch(() => undefined);
+
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [accessToken, attachment.id, attachment.mimeType]);
+
+  return (
+    <Box
+      sx={{
+        width: 72,
+        height: 64,
+        display: 'grid',
+        flexShrink: 0,
+        overflow: 'hidden',
+        placeItems: 'center',
+        borderRadius: 1.5,
+        color: 'primary.main',
+        bgcolor: 'primary.lighter',
+      }}
+    >
+      {url ? (
+        <Box
+          component="img"
+          src={url}
+          alt={`Miniatura ${attachment.fileName}`}
+          sx={{ width: 1, height: 1, objectFit: 'cover' }}
+        />
+      ) : (
+        <Icon
+          icon={
+            attachment.mimeType === 'application/pdf'
+              ? 'solar:file-text-bold-duotone'
+              : 'solar:gallery-bold-duotone'
+          }
+          width={28}
+        />
+      )}
+    </Box>
+  );
+}
+
 export function HomePage() {
   const { accessToken } = useSession();
   const cleaningPermission = usePermission('cleaning');
@@ -86,6 +157,16 @@ export function HomePage() {
   const [selectedDataEntry, setSelectedDataEntry] = useState<DataEntry | null>(null);
   const [historyYear, setHistoryYear] = useState(new Date().getFullYear());
   const [completionCostId, setCompletionCostId] = useState<string | null>(null);
+  const [previewingAttachment, setPreviewingAttachment] = useState<Attachment | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  useEffect(
+    () => () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    },
+    [previewUrl]
+  );
   const cleaning = useQuery({
     queryKey: ['cleaning'],
     queryFn: () => listCleaningTasks({ accessToken }),
@@ -286,24 +367,44 @@ export function HomePage() {
   }
 
   async function downloadAttachment(attachment: Attachment) {
-    const request = getAttachmentFileRequest(attachment.id, { accessToken });
-    const response = await fetch(request.uri, { headers: request.headers });
-    if (!response.ok) throw new Error('Nie udało się pobrać pliku.');
-    const url = URL.createObjectURL(await response.blob());
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = attachment.fileName;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    try {
+      setAttachmentError(null);
+      const request = getAttachmentFileRequest(attachment.id, { accessToken });
+      const response = await fetch(request.uri, { headers: request.headers });
+      if (!response.ok) throw new Error('Nie udało się pobrać pliku.');
+      const url = URL.createObjectURL(await response.blob());
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = attachment.fileName;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setAttachmentError(error instanceof Error ? error.message : 'Nie udało się pobrać pliku.');
+    }
   }
 
   async function previewAttachment(attachment: Attachment) {
-    const request = getAttachmentFileRequest(attachment.id, { accessToken });
-    const response = await fetch(request.uri, { headers: request.headers });
-    if (!response.ok) throw new Error('Nie udało się otworzyć pliku.');
-    const url = URL.createObjectURL(await response.blob());
-    window.open(url, '_blank', 'noopener,noreferrer');
-    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    setPreviewingAttachment(attachment);
+    setPreviewLoading(true);
+    setAttachmentError(null);
+    setPreviewUrl(null);
+
+    try {
+      const request = getAttachmentFileRequest(attachment.id, { accessToken });
+      const response = await fetch(request.uri, { headers: request.headers });
+      if (!response.ok) throw new Error('Nie udało się otworzyć pliku.');
+      setPreviewUrl(URL.createObjectURL(await response.blob()));
+    } catch (error) {
+      setAttachmentError(error instanceof Error ? error.message : 'Nie udało się otworzyć pliku.');
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
+  function closeAttachmentPreview() {
+    setPreviewUrl(null);
+    setPreviewingAttachment(null);
+    setAttachmentError(null);
   }
 
   function openCleaningEdit(task: CleaningTask) {
@@ -383,6 +484,11 @@ export function HomePage() {
           onChange={(event) => setSearch(event.target.value)}
           sx={{ maxWidth: 520 }}
         />
+      )}
+      {tab === 'attachments' && attachmentError && (
+        <Alert severity="error" onClose={() => setAttachmentError(null)}>
+          {attachmentError}
+        </Alert>
       )}
       <SectionCard>
         <Stack direction="row" spacing={1.5} sx={{ mb: 2, alignItems: 'center' }}>
@@ -573,25 +679,7 @@ export function HomePage() {
             {attachments.data?.map((attachment) => (
               <SectionCard key={attachment.id} sx={{ bgcolor: 'action.hover' }}>
                 <Stack direction="row" sx={{ gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <Box
-                    sx={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: 1.5,
-                      bgcolor: 'primary.lighter',
-                      display: 'grid',
-                      placeItems: 'center',
-                    }}
-                  >
-                    <Icon
-                      icon={
-                        attachment.mimeType === 'application/pdf'
-                          ? 'solar:file-text-bold-duotone'
-                          : 'solar:gallery-bold-duotone'
-                      }
-                      width={26}
-                    />
-                  </Box>
+                  <AttachmentThumbnail accessToken={accessToken} attachment={attachment} />
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Typography sx={{ fontWeight: 700 }} noWrap>
                       {attachment.fileName}
@@ -643,6 +731,36 @@ export function HomePage() {
           </Box>
         )}
       </SectionCard>
+      <FormDialog
+        title={previewingAttachment?.fileName ?? 'Podgląd pliku'}
+        subtitle={previewingAttachment?.caption || 'Dokument zapisany w HomeApp.'}
+        icon="solar:gallery-wide-bold-duotone"
+        open={Boolean(previewingAttachment)}
+        onClose={closeAttachmentPreview}
+        onSubmit={() => undefined}
+        hideSubmit
+        maxWidth="lg"
+      >
+        {previewLoading ? (
+          <LoadingView />
+        ) : attachmentError ? (
+          <Alert severity="error">{attachmentError}</Alert>
+        ) : previewUrl && previewingAttachment?.mimeType === 'application/pdf' ? (
+          <Box
+            component="iframe"
+            src={previewUrl}
+            title={previewingAttachment.fileName}
+            sx={{ width: 1, height: '72vh', border: 0, borderRadius: 1.5, bgcolor: 'common.white' }}
+          />
+        ) : previewUrl ? (
+          <Box
+            component="img"
+            src={previewUrl}
+            alt={previewingAttachment?.fileName ?? 'Podgląd załącznika'}
+            sx={{ width: 1, maxHeight: '72vh', objectFit: 'contain', borderRadius: 1.5 }}
+          />
+        ) : null}
+      </FormDialog>
       {tab === 'costs' && (
         <SectionCard title="Historia opłat">
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mb: 2 }}>
