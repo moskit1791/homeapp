@@ -5,6 +5,7 @@ import { Icon } from '@iconify/react';
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
+import { useColorScheme } from '@mui/material/styles';
 import {
   Box,
   Chip,
@@ -12,6 +13,7 @@ import {
   Stack,
   Avatar,
   Button,
+  Slider,
   Divider,
   Checkbox,
   TextField,
@@ -19,6 +21,8 @@ import {
   Typography,
   FormControlLabel,
 } from '@mui/material';
+
+import { useSettingsContext } from 'src/components/settings';
 
 import { useSession } from '../auth/session-context';
 import { useEncryption } from '../auth/encryption-context';
@@ -59,6 +63,34 @@ const moduleNames: Record<string, string> = {
   attachments: 'Załączniki',
 };
 
+const notificationLabels: Record<string, { label: string; meta: string }> = {
+  'annual_cost.changed': { label: 'Koszty roczne', meta: 'Nowe i opłacone koszty roczne.' },
+  'attachment.changed': { label: 'Pliki', meta: 'Dodanie, opis i usunięcie plików.' },
+  'calendar.changed': {
+    label: 'Kalendarz',
+    meta: 'Wydarzenia dodane lub zmienione przez domowników.',
+  },
+  'cleaning.changed': { label: 'Sprzątanie', meta: 'Zadania sprzątania i oznaczenia wykonania.' },
+  'data.changed': { label: 'Dane', meta: 'Wpisy w domowym sejfie danych.' },
+  'finance.changed': { label: 'Finanse', meta: 'Kategorie, budżety, wydatki i dochody.' },
+  'finance.month.deleted': {
+    label: 'Usunięcie miesiąca finansów',
+    meta: 'Gdy domownik usunie miesiąc budżetu.',
+  },
+  'finance.month.generated': {
+    label: 'Nowy miesiąc finansów',
+    meta: 'Gdy domownik wygeneruje kolejny miesiąc.',
+  },
+  'household.changed': { label: 'Dom', meta: 'Zmiany ustawień domu i składu domowników.' },
+  'meal.changed': { label: 'Plan posiłków', meta: 'Tygodnie, posiłki i inspiracje kulinarne.' },
+  'permissions.changed': { label: 'Uprawnienia', meta: 'Zmiany dostępu do modułów.' },
+  'shopping.changed': { label: 'Zakupy', meta: 'Produkty dodane, odhaczone lub usunięte z list.' },
+  'todo.changed': {
+    label: 'Do zrobienia',
+    meta: 'Wspólne rzeczy dodane, zamknięte lub przywrócone.',
+  },
+};
+
 const encryptableModuleKeys: EncryptableModuleKey[] = [
   'finances',
   'calendar',
@@ -74,6 +106,8 @@ const encryptableModuleKeys: EncryptableModuleKey[] = [
 
 export function HouseholdPage() {
   const { accessToken, logout } = useSession();
+  const settings = useSettingsContext();
+  const { mode, setMode } = useColorScheme();
   const encryption = useEncryption();
   const queryClient = useQueryClient();
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -87,6 +121,8 @@ export function HouseholdPage() {
   const [encryptionPassphrase, setEncryptionPassphrase] = useState('');
   const [encryptionModules, setEncryptionModules] = useState<EncryptableModuleKey[]>([]);
   const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const household = useQuery({
     queryKey: ['household'],
     queryFn: () => getMyHousehold({ accessToken }),
@@ -122,10 +158,11 @@ export function HouseholdPage() {
     },
   });
   const update = useMutation({
-    mutationFn: () => updateMyHousehold(
-      { name: houseName.trim(), currencyCode, mealSlotsPerDay: Number(mealSlotsPerDay) },
-      { accessToken }
-    ),
+    mutationFn: () =>
+      updateMyHousehold(
+        { name: houseName.trim(), currencyCode, mealSlotsPerDay: Number(mealSlotsPerDay) },
+        { accessToken }
+      ),
     onSuccess: async () => {
       setSettingsOpen(false);
       await queryClient.invalidateQueries({ queryKey: ['household'] });
@@ -136,14 +173,20 @@ export function HouseholdPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['household', 'members'] }),
   });
   const savePermissions = useMutation({
-    mutationFn: () => updateMemberPermissions(selectedMember!.id, { permissions: permissionDraft }, { accessToken }),
+    mutationFn: () =>
+      updateMemberPermissions(
+        selectedMember!.id,
+        { permissions: permissionDraft },
+        { accessToken }
+      ),
     onSuccess: async () => {
       setPermissionsOpen(false);
       await queryClient.invalidateQueries({ queryKey: ['permissions'] });
     },
   });
   const saveNotifications = useMutation({
-    mutationFn: () => updateNotificationPreferences({ preferences: notifications.data ?? [] }, { accessToken }),
+    mutationFn: () =>
+      updateNotificationPreferences({ preferences: notifications.data ?? [] }, { accessToken }),
     onSuccess: () => setNotificationsOpen(false),
   });
   const deleteAccount = useMutation({
@@ -169,12 +212,23 @@ export function HouseholdPage() {
     onSuccess: () => setEncryptionOpen(false),
   });
 
-  function changePermission(moduleKey: string, key: keyof Pick<EffectivePermission, 'canRead' | 'canCreate' | 'canUpdate' | 'canDelete'>, checked: boolean) {
-    setPermissionDraft((current) => current.map((item) => {
-      if (item.moduleKey !== moduleKey) return item;
-      if (key === 'canRead' && !checked) return { ...item, canRead: false, canCreate: false, canUpdate: false, canDelete: false };
-      return { ...item, [key]: checked, canRead: key === 'canRead' ? checked : checked || item.canRead };
-    }));
+  function changePermission(
+    moduleKey: string,
+    key: keyof Pick<EffectivePermission, 'canRead' | 'canCreate' | 'canUpdate' | 'canDelete'>,
+    checked: boolean
+  ) {
+    setPermissionDraft((current) =>
+      current.map((item) => {
+        if (item.moduleKey !== moduleKey) return item;
+        if (key === 'canRead' && !checked)
+          return { ...item, canRead: false, canCreate: false, canUpdate: false, canDelete: false };
+        return {
+          ...item,
+          [key]: checked,
+          canRead: key === 'canRead' ? checked : checked || item.canRead,
+        };
+      })
+    );
   }
 
   if (household.isLoading || members.isLoading) return <LoadingView />;
@@ -184,10 +238,48 @@ export function HouseholdPage() {
   return (
     <Page>
       <PageHeader
-        title={household.data.name}
-        description={`${members.data?.length ?? 0} domowników · ${household.data.currencyCode}`}
+        title="Ustawienia i konto"
+        description="Profil, powiadomienia i konfiguracja domu."
         action={
-          <Stack direction="row" spacing={1}>
+          <Button
+            variant="outlined"
+            startIcon={<Icon icon="solar:logout-2-bold-duotone" />}
+            onClick={logout}
+          >
+            Wyloguj się
+          </Button>
+        }
+      />
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', lg: '1.4fr 1fr' },
+          gap: 3,
+        }}
+      >
+        <SectionCard title="Dom">
+          <Stack spacing={2}>
+            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+              <Box
+                sx={{
+                  width: 48,
+                  height: 48,
+                  display: 'grid',
+                  placeItems: 'center',
+                  borderRadius: 1.5,
+                  color: 'primary.main',
+                  bgcolor: 'primary.lighter',
+                }}
+              >
+                <Icon icon="solar:home-smile-bold-duotone" width={27} />
+              </Box>
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="h5">{household.data.name}</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {household.data.currencyCode} · {household.data.mealSlotsPerDay} posiłki dziennie
+                </Typography>
+              </Box>
+            </Stack>
             <PrimaryButton
               icon="solar:settings-bold-duotone"
               variant="outlined"
@@ -198,83 +290,149 @@ export function HouseholdPage() {
                 setSettingsOpen(true);
               }}
             >
-              Ustawienia
+              Zmień ustawienia domu
             </PrimaryButton>
-            <PrimaryButton onClick={() => setInviteOpen(true)}>Zaproś</PrimaryButton>
           </Stack>
-        }
-      />
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr', lg: '1.4fr 1fr' },
-          gap: 3,
-        }}
-      >
+        </SectionCard>
         <SectionCard title="Domownicy">
+          <Stack direction="row" sx={{ mb: 1.5, justifyContent: 'flex-end' }}>
+            <PrimaryButton size="small" onClick={() => setInviteOpen(true)}>
+              Zaproś domownika
+            </PrimaryButton>
+          </Stack>
           <Stack divider={<Divider flexItem />}>
             {members.data?.map((member) => (
               <Stack
                 key={member.id}
-                direction="row"
-                spacing={2}
-                sx={{ py: 1.5, alignItems: 'center' }}
+                direction={{ xs: 'column', sm: 'row' }}
+                sx={{ py: 1.5, gap: 1.25, alignItems: { sm: 'center' } }}
               >
-                <Avatar
+                <Stack
+                  direction="row"
+                  sx={{ flex: 1, minWidth: 0, gap: 1.5, alignItems: 'center' }}
+                >
+                  <Avatar
+                    sx={{
+                      bgcolor: member.role === 'owner' ? 'primary.main' : 'secondary.main',
+                    }}
+                  >
+                    {member.displayName.slice(0, 1).toUpperCase()}
+                  </Avatar>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography sx={{ fontWeight: 700 }}>{member.displayName}</Typography>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ wordBreak: 'break-word' }}
+                    >
+                      {member.email}
+                    </Typography>
+                  </Box>
+                </Stack>
+                <Stack
+                  direction="row"
                   sx={{
-                    bgcolor: member.role === 'owner' ? 'primary.main' : 'secondary.main',
+                    gap: 0.5,
+                    alignItems: 'center',
+                    justifyContent: { xs: 'space-between', sm: 'flex-end' },
                   }}
                 >
-                  {member.displayName.slice(0, 1).toUpperCase()}
-                </Avatar>
-                <Box sx={{ flex: 1 }}>
-                  <Typography sx={{ fontWeight: 700 }}>{member.displayName}</Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {member.email}
-                  </Typography>
-                </Box>
-                <Chip
-                  label={member.role === 'owner' ? 'Właściciel' : 'Domownik'}
-                  color={member.role === 'owner' ? 'primary' : 'default'}
-                  variant="outlined"
-                />
-                {member.role !== 'owner' && (
-                  <Stack direction="row">
-                    <IconButton onClick={() => {
-                      setSelectedMember(member);
-                      setPermissionDraft([]);
-                      setPermissionsOpen(true);
-                    }}>
-                      <Icon icon="solar:shield-user-bold-duotone" />
-                    </IconButton>
-                    <IconButton color="error" onClick={() => confirmDelete(member.displayName) && remove.mutate(member.id)}>
-                      <Icon icon="solar:user-minus-bold-duotone" />
-                    </IconButton>
-                  </Stack>
-                )}
+                  <Chip
+                    label={member.role === 'owner' ? 'Właściciel' : 'Domownik'}
+                    color={member.role === 'owner' ? 'primary' : 'default'}
+                    variant="outlined"
+                  />
+                  {member.role !== 'owner' && (
+                    <Stack direction="row">
+                      <IconButton
+                        aria-label={`Uprawnienia: ${member.displayName}`}
+                        onClick={() => {
+                          setSelectedMember(member);
+                          setPermissionDraft([]);
+                          setPermissionsOpen(true);
+                        }}
+                      >
+                        <Icon icon="solar:shield-user-bold-duotone" />
+                      </IconButton>
+                      <IconButton
+                        color="error"
+                        aria-label={`Usuń domownika: ${member.displayName}`}
+                        onClick={() =>
+                          confirmDelete(member.displayName) && remove.mutate(member.id)
+                        }
+                      >
+                        <Icon icon="solar:user-minus-bold-duotone" />
+                      </IconButton>
+                    </Stack>
+                  )}
+                </Stack>
               </Stack>
             ))}
           </Stack>
         </SectionCard>
-        <SectionCard title="Konto i powiadomienia">
+        <SectionCard title="Wygląd aplikacji">
           <Stack spacing={1.5}>
-            <Typography color="text.secondary">Wybierz, o jakich zmianach w domu chcesz otrzymywać powiadomienia.</Typography>
-            <PrimaryButton variant="outlined" icon="solar:bell-bold-duotone" onClick={() => setNotificationsOpen(true)}>
+            <Typography color="text.secondary">
+              Wybierz wygląd zgodny z systemem, jasny albo ciemny.
+            </Typography>
+            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+              {(['system', 'light', 'dark'] as const).map((themeMode) => (
+                <Button
+                  key={themeMode}
+                  variant={mode === themeMode ? 'contained' : 'outlined'}
+                  startIcon={
+                    <Icon
+                      icon={
+                        themeMode === 'system'
+                          ? 'solar:monitor-smartphone-bold-duotone'
+                          : themeMode === 'light'
+                            ? 'solar:sun-2-bold-duotone'
+                            : 'solar:moon-bold-duotone'
+                      }
+                    />
+                  }
+                  onClick={() => {
+                    setMode(themeMode);
+                    settings.setState({ mode: themeMode });
+                  }}
+                >
+                  {themeMode === 'system' ? 'System' : themeMode === 'light' ? 'Jasny' : 'Ciemny'}
+                </Button>
+              ))}
+            </Stack>
+            <Box sx={{ pt: 1 }}>
+              <Stack direction="row" sx={{ mb: 1, justifyContent: 'space-between' }}>
+                <Typography variant="subtitle2">Rozmiar tekstu</Typography>
+                <Typography variant="subtitle2" color="primary.main">
+                  {Math.round((settings.state.fontSize / 16) * 100)}%
+                </Typography>
+              </Stack>
+              <Slider
+                marks
+                min={12}
+                max={20}
+                step={1}
+                value={settings.state.fontSize}
+                valueLabelDisplay="auto"
+                valueLabelFormat={(value) => `${Math.round((value / 16) * 100)}%`}
+                onChange={(_, value) => settings.setState({ fontSize: value as number })}
+                aria-label="Rozmiar tekstu"
+              />
+            </Box>
+          </Stack>
+        </SectionCard>
+        <SectionCard title="Powiadomienia">
+          <Stack spacing={1.5}>
+            <Typography color="text.secondary">
+              Wybierz, o jakich zmianach w domu chcesz otrzymywać powiadomienia.
+            </Typography>
+            <PrimaryButton
+              variant="outlined"
+              icon="solar:bell-bold-duotone"
+              onClick={() => setNotificationsOpen(true)}
+            >
               Ustaw powiadomienia
             </PrimaryButton>
-            <Button
-              color="error"
-              variant="outlined"
-              startIcon={<Icon icon="solar:trash-bin-trash-bold-duotone" />}
-              disabled={deleteAccount.isPending}
-              onClick={() => {
-                const confirmation = window.prompt('Aby usunąć konto, wpisz USUŃ KONTO');
-                if (confirmation === 'USUŃ KONTO') deleteAccount.mutate();
-              }}
-            >
-              Usuń moje konto
-            </Button>
-            {deleteAccount.error && <Alert severity="error">{deleteAccount.error.message}</Alert>}
           </Stack>
         </SectionCard>
         <SectionCard title="Szyfrowanie end-to-end">
@@ -284,6 +442,10 @@ export function HouseholdPage() {
                 ? 'Włącz E2EE dla wybranych modułów. Serwer nie otrzyma ich czytelnej treści.'
                 : `Aktywne moduły: ${encryption.settings?.enabledModules.length ?? 0}. Klucz jest odblokowany tylko w tej karcie.`}
             </Typography>
+            <Alert severity="info">
+              Zaszyfrowane treści nie są wysyłane do AI automatycznie. Aplikacja poprosi o osobną
+              zgodę przed ich odszyfrowaniem i przekazaniem do zewnętrznej usługi.
+            </Alert>
             <PrimaryButton
               variant="outlined"
               icon="solar:lock-keyhole-bold-duotone"
@@ -294,9 +456,15 @@ export function HouseholdPage() {
                 setEncryptionOpen(true);
               }}
             >
-              {encryption.lockState === 'not-configured' ? 'Włącz szyfrowanie' : 'Zarządzaj szyfrowaniem'}
+              {encryption.lockState === 'not-configured'
+                ? 'Włącz szyfrowanie'
+                : 'Zarządzaj szyfrowaniem'}
             </PrimaryButton>
-            {encryption.lockState === 'unlocked' && <Button variant="text" onClick={encryption.lock}>Zablokuj teraz</Button>}
+            {encryption.lockState === 'unlocked' && (
+              <Button variant="text" onClick={encryption.lock}>
+                Zablokuj teraz
+              </Button>
+            )}
           </Stack>
         </SectionCard>
         <SectionCard title="Twoje uprawnienia">
@@ -329,9 +497,31 @@ export function HouseholdPage() {
             </Stack>
           )}
         </SectionCard>
+        <SectionCard title="Usuwanie konta" sx={{ borderColor: 'error.main' }}>
+          <Stack spacing={1.5}>
+            <Typography color="text.secondary">
+              Konto zostanie wylogowane, a adres e-mail odłączony od profilu.
+            </Typography>
+            <Button
+              color="error"
+              variant="contained"
+              startIcon={<Icon icon="solar:trash-bin-trash-bold-duotone" />}
+              disabled={deleteAccount.isPending}
+              onClick={() => {
+                setDeleteConfirmation('');
+                setDeleteOpen(true);
+              }}
+            >
+              Usuń moje konto
+            </Button>
+            {deleteAccount.error && <Alert severity="error">{deleteAccount.error.message}</Alert>}
+          </Stack>
+        </SectionCard>
       </Box>
       <FormDialog
         title="Zaproś domownika"
+        subtitle="Wyślij zaproszenie na adres e-mail."
+        icon="solar:user-plus-bold-duotone"
         open={inviteOpen}
         onClose={() => setInviteOpen(false)}
         onSubmit={() => invite.mutate()}
@@ -346,6 +536,127 @@ export function HouseholdPage() {
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          required
+          autoFocus
+        />
+      </FormDialog>
+      <FormDialog
+        title={`Uprawnienia: ${selectedMember?.displayName ?? ''}`}
+        subtitle="Określ osobno odczyt, dodawanie, edycję i usuwanie."
+        icon="solar:shield-user-bold-duotone"
+        open={permissionsOpen}
+        onClose={() => {
+          setPermissionsOpen(false);
+          setSelectedMember(null);
+        }}
+        onSubmit={() => savePermissions.mutate()}
+        loading={savePermissions.isPending || memberPermissions.isLoading}
+        submitLabel="Zapisz uprawnienia"
+        maxWidth="md"
+      >
+        {savePermissions.error && <Alert severity="error">{savePermissions.error.message}</Alert>}
+        <Stack divider={<Divider flexItem />}>
+          {permissionDraft.map((item) => (
+            <Stack
+              key={item.moduleKey}
+              direction={{ xs: 'column', sm: 'row' }}
+              sx={{ py: 1, alignItems: { sm: 'center' } }}
+            >
+              <Typography sx={{ flex: 1, fontWeight: 700 }}>
+                {moduleNames[item.moduleKey] ?? item.moduleKey}
+              </Typography>
+              {(['canRead', 'canCreate', 'canUpdate', 'canDelete'] as const).map((key) => (
+                <FormControlLabel
+                  key={key}
+                  label={
+                    {
+                      canRead: 'Odczyt',
+                      canCreate: 'Dodawanie',
+                      canUpdate: 'Edycja',
+                      canDelete: 'Usuwanie',
+                    }[key]
+                  }
+                  control={
+                    <Checkbox
+                      checked={item[key]}
+                      onChange={(event) =>
+                        changePermission(item.moduleKey, key, event.target.checked)
+                      }
+                    />
+                  }
+                />
+              ))}
+            </Stack>
+          ))}
+        </Stack>
+      </FormDialog>
+      <FormDialog
+        title="Powiadomienia"
+        subtitle="Wybierz zdarzenia, o których chcesz wiedzieć."
+        icon="solar:bell-bold-duotone"
+        open={notificationsOpen}
+        onClose={() => setNotificationsOpen(false)}
+        onSubmit={() => saveNotifications.mutate()}
+        loading={saveNotifications.isPending}
+        submitLabel="Zapisz"
+      >
+        {notifications.error && <Alert severity="error">{notifications.error.message}</Alert>}
+        <Stack spacing={0.5}>
+          {notifications.data
+            ?.filter((preference) => preference.eventType !== 'note.changed')
+            .map((preference) => {
+              const content = notificationLabels[preference.eventType] ?? {
+                label: preference.eventType,
+                meta: 'Powiadomienia o zmianach tego typu.',
+              };
+              return (
+                <FormControlLabel
+                  key={preference.eventType}
+                  sx={{ m: 0, py: 0.75, alignItems: 'flex-start' }}
+                  label={
+                    <Box sx={{ pt: 0.35 }}>
+                      <Typography variant="subtitle2">{content.label}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {content.meta}
+                      </Typography>
+                    </Box>
+                  }
+                  control={
+                    <Checkbox
+                      checked={preference.enabled}
+                      onChange={(event) =>
+                        queryClient.setQueryData(
+                          ['notifications', 'preferences'],
+                          (current: typeof notifications.data) =>
+                            current?.map((item) =>
+                              item.eventType === preference.eventType
+                                ? { ...item, enabled: event.target.checked }
+                                : item
+                            )
+                        )
+                      }
+                    />
+                  }
+                />
+              );
+            })}
+        </Stack>
+      </FormDialog>
+      <FormDialog
+        title="Ustawienia domu"
+        subtitle="Nazwa, waluta i liczba posiłków dziennie."
+        icon="solar:home-smile-bold-duotone"
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        onSubmit={() => update.mutate()}
+        loading={update.isPending}
+        submitDisabled={!houseName.trim()}
+      >
+        {update.error && <Alert severity="error">{update.error.message}</Alert>}
+        <TextField
+          label="Nazwa domu"
+          value={houseName}
+          onChange={(e) => setHouseName(e.target.value)}
           required
           autoFocus
         />
@@ -364,71 +675,9 @@ export function HouseholdPage() {
         />
       </FormDialog>
       <FormDialog
-        title={`Uprawnienia: ${selectedMember?.displayName ?? ''}`}
-        open={permissionsOpen}
-        onClose={() => { setPermissionsOpen(false); setSelectedMember(null); }}
-        onSubmit={() => savePermissions.mutate()}
-        loading={savePermissions.isPending || memberPermissions.isLoading}
-        submitLabel="Zapisz uprawnienia"
-        maxWidth="md"
-      >
-        {savePermissions.error && <Alert severity="error">{savePermissions.error.message}</Alert>}
-        <Stack divider={<Divider flexItem />}>
-          {permissionDraft.map((item) => (
-            <Stack key={item.moduleKey} direction={{ xs: 'column', sm: 'row' }} sx={{ py: 1, alignItems: { sm: 'center' } }}>
-              <Typography sx={{ flex: 1, fontWeight: 700 }}>{moduleNames[item.moduleKey] ?? item.moduleKey}</Typography>
-              {(['canRead', 'canCreate', 'canUpdate', 'canDelete'] as const).map((key) => (
-                <FormControlLabel
-                  key={key}
-                  label={{ canRead: 'Odczyt', canCreate: 'Dodawanie', canUpdate: 'Edycja', canDelete: 'Usuwanie' }[key]}
-                  control={<Checkbox checked={item[key]} onChange={(event) => changePermission(item.moduleKey, key, event.target.checked)} />}
-                />
-              ))}
-            </Stack>
-          ))}
-        </Stack>
-      </FormDialog>
-      <FormDialog
-        title="Powiadomienia"
-        open={notificationsOpen}
-        onClose={() => setNotificationsOpen(false)}
-        onSubmit={() => saveNotifications.mutate()}
-        loading={saveNotifications.isPending}
-        submitLabel="Zapisz"
-      >
-        {notifications.error && <Alert severity="error">{notifications.error.message}</Alert>}
-        <Stack spacing={0.5}>
-          {notifications.data?.map((preference) => (
-            <FormControlLabel
-              key={preference.eventType}
-              label={preference.eventType.replaceAll('_', ' ')}
-              control={<Checkbox checked={preference.enabled} onChange={(event) => queryClient.setQueryData(
-                ['notifications', 'preferences'],
-                (current: typeof notifications.data) => current?.map((item) => item.eventType === preference.eventType ? { ...item, enabled: event.target.checked } : item)
-              )} />}
-            />
-          ))}
-        </Stack>
-      </FormDialog>
-      <FormDialog
-        title="Ustawienia domu"
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        onSubmit={() => update.mutate()}
-        loading={update.isPending}
-        submitDisabled={!houseName.trim()}
-      >
-        {update.error && <Alert severity="error">{update.error.message}</Alert>}
-        <TextField
-          label="Nazwa domu"
-          value={houseName}
-          onChange={(e) => setHouseName(e.target.value)}
-          required
-          autoFocus
-        />
-      </FormDialog>
-      <FormDialog
         title="Szyfrowanie end-to-end"
+        subtitle="Wybierz moduły chronione kluczem dostępnym tylko na Twoich urządzeniach."
+        icon="solar:lock-keyhole-bold-duotone"
         open={encryptionOpen}
         onClose={() => setEncryptionOpen(false)}
         onSubmit={() => saveEncryption.mutate()}
@@ -441,12 +690,21 @@ export function HouseholdPage() {
         }
       >
         {(saveEncryption.error || disableEncryption.error) && (
-          <Alert severity="error">{(saveEncryption.error ?? disableEncryption.error)?.message}</Alert>
+          <Alert severity="error">
+            {(saveEncryption.error ?? disableEncryption.error)?.message}
+          </Alert>
         )}
         {recoveryCode ? (
           <Alert severity="warning">
-            <Typography sx={{ fontWeight: 700 }}>Zapisz kod odzyskiwania. Nie będzie pokazany ponownie.</Typography>
-            <Typography component="code" sx={{ display: 'block', mt: 1, wordBreak: 'break-all', userSelect: 'all' }}>{recoveryCode}</Typography>
+            <Typography sx={{ fontWeight: 700 }}>
+              Zapisz kod odzyskiwania. Nie będzie pokazany ponownie.
+            </Typography>
+            <Typography
+              component="code"
+              sx={{ display: 'block', mt: 1, wordBreak: 'break-all', userSelect: 'all' }}
+            >
+              {recoveryCode}
+            </Typography>
           </Alert>
         ) : (
           <>
@@ -491,6 +749,30 @@ export function HouseholdPage() {
             )}
           </>
         )}
+      </FormDialog>
+      <FormDialog
+        title="Usuń konto"
+        subtitle="Ta operacja jest nieodwracalna. Potwierdź ją świadomie."
+        icon="solar:danger-triangle-bold-duotone"
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        onSubmit={() => deleteAccount.mutate()}
+        loading={deleteAccount.isPending}
+        submitLabel="Usuń konto"
+        submitColor="error"
+        submitDisabled={deleteConfirmation !== 'USUŃ KONTO'}
+      >
+        {deleteAccount.error && <Alert severity="error">{deleteAccount.error.message}</Alert>}
+        <Alert severity="error">
+          Konto zostanie wylogowane, tokeny powiadomień wyłączone, a adres e-mail odłączony od
+          profilu.
+        </Alert>
+        <TextField
+          label="Wpisz: USUŃ KONTO"
+          value={deleteConfirmation}
+          onChange={(event) => setDeleteConfirmation(event.target.value)}
+          autoFocus
+        />
       </FormDialog>
     </Page>
   );

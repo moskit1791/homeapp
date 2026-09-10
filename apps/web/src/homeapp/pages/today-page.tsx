@@ -194,7 +194,11 @@ function MiniOverviewCard({
         overflow: 'hidden',
       })}
     >
-      <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', position: 'relative', zIndex: 1 }}>
+      <Stack
+        direction="row"
+        spacing={1.25}
+        sx={{ alignItems: 'center', position: 'relative', zIndex: 1 }}
+      >
         <Box
           sx={{
             width: 38,
@@ -420,7 +424,13 @@ function DashboardCalendar({
               stroke="url(#calendar-ring)"
               strokeWidth="8"
             />
-            <path d={`M${x - 7} 61 Q${x} 70 ${x + 7} 61`} fill="none" stroke="#704116" strokeWidth="5" strokeLinecap="round" />
+            <path
+              d={`M${x - 7} 61 Q${x} 70 ${x + 7} 61`}
+              fill="none"
+              stroke="#704116"
+              strokeWidth="5"
+              strokeLinecap="round"
+            />
           </g>
         ))}
       </g>
@@ -484,7 +494,7 @@ export function TodayPage() {
       icon: 'solar:calendar-date-bold-duotone',
       title: nextEvent.eventTime ? nextEvent.eventTime.slice(0, 5) : 'Cały dzień',
       description: nextEvent.title,
-      path: '/kalendarz',
+      path: `/kalendarz?date=${nextEvent.eventDate}`,
     },
     data.finance && {
       accent: '#51D59A',
@@ -498,7 +508,10 @@ export function TodayPage() {
       icon: 'solar:cart-3-bold-duotone',
       title: `${openShopping.length} ${openShopping.length === 1 ? 'produkt' : 'produkty'} na liście`,
       description: openShopping.length
-        ? openShopping.slice(0, 3).map((item) => item.name).join(', ')
+        ? openShopping
+            .slice(0, 3)
+            .map((item) => item.name)
+            .join(', ')
         : 'Lista zakupów jest pusta',
       path: '/zakupy',
     },
@@ -545,16 +558,44 @@ export function TodayPage() {
 
       <Grid container spacing={1.5}>
         <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-          <QuickAction accent="#5687F5" darkAccent="rgba(69,112,210,.25)" icon="solar:calendar-add-bold-duotone" title="Wydarzenie" description="Dodaj wydarzenie" path="/kalendarz" />
+          <QuickAction
+            accent="#5687F5"
+            darkAccent="rgba(69,112,210,.25)"
+            icon="solar:calendar-add-bold-duotone"
+            title="Wydarzenie"
+            description="Dodaj wydarzenie"
+            path={`/kalendarz?action=create&date=${todayIso()}`}
+          />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-          <QuickAction accent="#43C88A" darkAccent="rgba(38,157,105,.25)" icon="solar:bill-list-bold-duotone" title="Wydatek" description="Dodaj wydatek" path="/finanse" />
+          <QuickAction
+            accent="#43C88A"
+            darkAccent="rgba(38,157,105,.25)"
+            icon="solar:bill-list-bold-duotone"
+            title="Wydatek"
+            description="Dodaj wydatek"
+            path="/finanse?action=expense"
+          />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-          <QuickAction accent="#F3B64E" darkAccent="rgba(188,126,32,.26)" icon="solar:cart-large-2-bold-duotone" title="Zakupy" description="Dodaj do listy" path="/zakupy" />
+          <QuickAction
+            accent="#F3B64E"
+            darkAccent="rgba(188,126,32,.26)"
+            icon="solar:cart-large-2-bold-duotone"
+            title="Zakupy"
+            description="Dodaj do listy"
+            path="/zakupy?action=create"
+          />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-          <QuickAction accent="#A879E8" darkAccent="rgba(123,72,190,.26)" icon="solar:notes-bold-duotone" title="Notatka" description="Zapisz notatkę" path="/zadania" />
+          <QuickAction
+            accent="#A879E8"
+            darkAccent="rgba(123,72,190,.26)"
+            icon="solar:notes-bold-duotone"
+            title="Notatka"
+            description="Zapisz notatkę"
+            path="/zadania?action=note"
+          />
         </Grid>
       </Grid>
 
@@ -576,7 +617,10 @@ export function TodayPage() {
               }),
             })}
           >
-            <Typography variant="overline" sx={{ color: '#7298F7', fontWeight: 800, letterSpacing: 1.2 }}>
+            <Typography
+              variant="overline"
+              sx={{ color: '#7298F7', fontWeight: 800, letterSpacing: 1.2 }}
+            >
               Plan dnia
             </Typography>
             <Typography
@@ -609,15 +653,31 @@ export function TodayPage() {
               {nextEvent && (
                 <>
                   <Typography variant="h4">{nextEvent.title}</Typography>
-                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center', color: 'text.secondary' }}>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{ alignItems: 'center', color: 'text.secondary' }}
+                  >
                     <Icon icon="solar:users-group-rounded-bold-duotone" width={21} />
                     <Typography variant="body2">
-                      {nextEvent.scopeType === 'household' ? 'Wszyscy domownicy' : 'Wydarzenie prywatne'}
+                      {nextEvent.scopeType === 'household'
+                        ? 'Wszyscy domownicy'
+                        : 'Wydarzenie prywatne'}
                     </Typography>
                   </Stack>
                 </>
               )}
-              <Button component={RouterLink} to="/kalendarz" variant="outlined" endIcon={<Icon icon="solar:arrow-right-linear" />} sx={{ mt: 1.5, alignSelf: 'flex-start', borderRadius: 8, px: 2.5 }}>
+              <Button
+                component={RouterLink}
+                to={
+                  nextEvent
+                    ? `/kalendarz?date=${nextEvent.eventDate}`
+                    : `/kalendarz?action=create&date=${todayIso()}`
+                }
+                variant="outlined"
+                endIcon={<Icon icon="solar:arrow-right-linear" />}
+                sx={{ mt: 1.5, alignSelf: 'flex-start', borderRadius: 8, px: 2.5 }}
+              >
                 {nextEvent ? 'Zobacz szczegóły' : 'Dodaj wydarzenie'}
               </Button>
             </Stack>
@@ -655,7 +715,10 @@ export function TodayPage() {
               >
                 {positivePhrase}
               </Typography>
-              <Typography component="span" sx={{ mt: 0.5, display: 'block', font: 'inherit', fontSize: 25 }}>
+              <Typography
+                component="span"
+                sx={{ mt: 0.5, display: 'block', font: 'inherit', fontSize: 25 }}
+              >
                 {phraseSymbols[phraseIndex % phraseSymbols.length]}
               </Typography>
             </Box>
@@ -663,21 +726,52 @@ export function TodayPage() {
         </Grid>
         <Grid size={{ xs: 12, lg: 4 }}>
           <Stack spacing={2} sx={{ height: '100%' }}>
-            <MiniOverviewCard accent="#43C88A" icon="solar:cart-3-bold-duotone" title="Zakupy" value={`${openShopping.length} ${openShopping.length === 1 ? 'produkt' : 'produkty'}`} description="na liście zakupów" action="Otwórz listę" path="/zakupy" image={shoppingCardImage} />
-            <MiniOverviewCard accent="#7298F7" icon="solar:chef-hat-heart-bold-duotone" title="Plan posiłków" value={`${todaysMeals.length} ${todaysMeals.length === 1 ? 'posiłek' : 'posiłków'}`} description="na dziś" action="Zaplanuj" path="/posilki" image={mealCardImage} />
+            <MiniOverviewCard
+              accent="#43C88A"
+              icon="solar:cart-3-bold-duotone"
+              title="Zakupy"
+              value={`${openShopping.length} ${openShopping.length === 1 ? 'produkt' : 'produkty'}`}
+              description="na liście zakupów"
+              action="Otwórz listę"
+              path="/zakupy"
+              image={shoppingCardImage}
+            />
+            <MiniOverviewCard
+              accent="#7298F7"
+              icon="solar:chef-hat-heart-bold-duotone"
+              title="Plan posiłków"
+              value={`${todaysMeals.length} ${todaysMeals.length === 1 ? 'posiłek' : 'posiłków'}`}
+              description="na dziś"
+              action="Zaplanuj"
+              path="/posilki"
+              image={mealCardImage}
+            />
           </Stack>
         </Grid>
       </Grid>
 
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, lg: 8 }}>
-          <Box sx={(theme) => ({ ...dashboardCard(theme), p: { xs: 2.25, sm: 3 }, height: '100%' })}>
-            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+          <Box
+            sx={(theme) => ({ ...dashboardCard(theme), p: { xs: 2.25, sm: 3 }, height: '100%' })}
+          >
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={1.5}
+              sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
+            >
               <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
                 <Typography variant="h5">Do zrobienia</Typography>
                 <Chip label={data.todoCount} size="small" color="primary" />
               </Stack>
-              <Button component={RouterLink} to="/zadania" variant="outlined" size="small" startIcon={<Icon icon="solar:add-circle-linear" />} sx={{ borderRadius: 8 }}>
+              <Button
+                component={RouterLink}
+                to="/zadania?action=todo"
+                variant="outlined"
+                size="small"
+                startIcon={<Icon icon="solar:add-circle-linear" />}
+                sx={{ borderRadius: 8, alignSelf: { xs: 'stretch', sm: 'auto' } }}
+              >
                 Dodaj zadanie
               </Button>
             </Stack>
@@ -685,11 +779,31 @@ export function TodayPage() {
             <Stack divider={<Divider flexItem />}>
               {data.todoPreview.length ? (
                 data.todoPreview.slice(0, 4).map((todo) => (
-                  <Stack key={todo.id} direction="row" spacing={1.5} sx={{ py: 1.25, alignItems: 'center' }}>
-                    <Box sx={{ width: 26, height: 26, border: '2px solid', flexShrink: 0, borderRadius: '50%', borderColor: 'text.secondary' }} />
+                  <Stack
+                    key={todo.id}
+                    direction="row"
+                    spacing={1.5}
+                    sx={{ py: 1.25, alignItems: 'center' }}
+                  >
+                    <Box
+                      sx={{
+                        width: 26,
+                        height: 26,
+                        border: '2px solid',
+                        flexShrink: 0,
+                        borderRadius: '50%',
+                        borderColor: 'text.secondary',
+                      }}
+                    />
                     <Typography sx={{ flex: 1, fontWeight: 600 }}>{todo.title}</Typography>
-                    <Chip label={todo.scopeType === 'household' ? 'Dom' : 'Prywatne'} size="small" variant="soft" />
-                    <Typography variant="body2" color="text.secondary">Dzisiaj</Typography>
+                    <Chip
+                      label={todo.scopeType === 'household' ? 'Dom' : 'Prywatne'}
+                      size="small"
+                      variant="soft"
+                    />
+                    <Typography variant="body2" color="text.secondary">
+                      Dzisiaj
+                    </Typography>
                   </Stack>
                 ))
               ) : (
@@ -698,13 +812,20 @@ export function TodayPage() {
                 </Typography>
               )}
             </Stack>
-            <Button component={RouterLink} to="/zadania" endIcon={<Icon icon="solar:arrow-right-linear" />} sx={{ mt: 1.25, px: 0 }}>
+            <Button
+              component={RouterLink}
+              to="/zadania"
+              endIcon={<Icon icon="solar:arrow-right-linear" />}
+              sx={{ mt: 1.25, px: 0 }}
+            >
               Zobacz wszystkie zadania
             </Button>
           </Box>
         </Grid>
         <Grid size={{ xs: 12, lg: 4 }}>
-          <Box sx={(theme) => ({ ...dashboardCard(theme), p: { xs: 2.25, sm: 3 }, height: '100%' })}>
+          <Box
+            sx={(theme) => ({ ...dashboardCard(theme), p: { xs: 2.25, sm: 3 }, height: '100%' })}
+          >
             <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
               <Typography variant="h5">Dzisiaj w skrócie</Typography>
               <Icon icon="solar:menu-dots-bold" color="#8292AA" />
@@ -716,14 +837,42 @@ export function TodayPage() {
                   key={`${row.path}-${row.title}`}
                   component={RouterLink}
                   to={row.path}
-                  sx={{ py: 1.25, gap: 1.4, display: 'flex', color: 'text.primary', alignItems: 'center', textDecoration: 'none', '&:hover': { color: row.accent } }}
+                  sx={{
+                    py: 1.25,
+                    gap: 1.4,
+                    display: 'flex',
+                    color: 'text.primary',
+                    alignItems: 'center',
+                    textDecoration: 'none',
+                    '&:hover': { color: row.accent },
+                  }}
                 >
-                  <Box sx={{ width: 42, height: 42, display: 'grid', flexShrink: 0, borderRadius: 1.35, placeItems: 'center', color: row.accent, bgcolor: `${row.accent}16` }}>
+                  <Box
+                    sx={{
+                      width: 42,
+                      height: 42,
+                      display: 'grid',
+                      flexShrink: 0,
+                      borderRadius: 1.35,
+                      placeItems: 'center',
+                      color: row.accent,
+                      bgcolor: `${row.accent}16`,
+                    }}
+                  >
                     <Icon icon={row.icon} width={24} />
                   </Box>
                   <Box sx={{ minWidth: 0, flex: 1 }}>
-                    <Typography variant="subtitle2" noWrap>{row.title}</Typography>
-                    <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>{row.description}</Typography>
+                    <Typography variant="subtitle2" noWrap>
+                      {row.title}
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      noWrap
+                      sx={{ display: 'block' }}
+                    >
+                      {row.description}
+                    </Typography>
                   </Box>
                   <Icon icon="solar:alt-arrow-right-linear" width={19} />
                 </Box>

@@ -2,7 +2,8 @@ import type { Theme } from '@mui/material/styles';
 import type { FinanceDebt, BudgetCategory, BudgetItemSummary } from '../api';
 
 import { Icon } from '@iconify/react';
-import { useMemo, useState, Fragment } from 'react';
+import { useSearchParams } from 'react-router';
+import { useMemo, useState, Fragment, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import {
@@ -15,6 +16,7 @@ import {
   Button,
   Divider,
   Tooltip,
+  Checkbox,
   TableRow,
   MenuItem,
   TableBody,
@@ -25,11 +27,19 @@ import {
   Typography,
   LinearProgress,
   TableContainer,
+  FormControlLabel,
 } from '@mui/material';
 
 import { useSession } from '../auth/session-context';
 import { usePermission } from '../auth/use-permission';
 import { money, todayIso, shortDate } from '../utils/format';
+import savingsCarImage from '../../../../mobile/assets/savings-goal-car.png';
+import savingsHomeImage from '../../../../mobile/assets/savings-goal-home.png';
+import savingsGiftImage from '../../../../mobile/assets/savings-goal-gift.png';
+import savingsPhoneImage from '../../../../mobile/assets/savings-goal-phone.png';
+import savingsTravelImage from '../../../../mobile/assets/savings-goal-travel.png';
+import savingsDefaultImage from '../../../../mobile/assets/savings-goal-default.png';
+import savingsEmergencyImage from '../../../../mobile/assets/savings-goal-emergency.png';
 import {
   Page,
   ErrorView,
@@ -101,15 +111,28 @@ function budgetItemIcon(name: string) {
   return 'solar:receipt-bold-duotone';
 }
 
+function savingsImage(name: string) {
+  if (/auto|samoch/i.test(name)) return savingsCarImage;
+  if (/dom|mieszkan/i.test(name)) return savingsHomeImage;
+  if (/podró|wakac|urlop/i.test(name)) return savingsTravelImage;
+  if (/telefon|komór/i.test(name)) return savingsPhoneImage;
+  if (/prezent/i.test(name)) return savingsGiftImage;
+  if (/poduszk|awaryj|rezerw/i.test(name)) return savingsEmergencyImage;
+  return savingsDefaultImage;
+}
+
 export function FinancePage() {
   const { accessToken } = useSession();
   const permission = usePermission('finances');
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<FinanceTab>('budget');
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
   const [targetAmount, setTargetAmount] = useState('');
+  const [targetDate, setTargetDate] = useState('');
+  const [noteText, setNoteText] = useState('');
   const [budgetItemId, setBudgetItemId] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [selectedMonthId, setSelectedMonthId] = useState<string | null>(null);
@@ -123,7 +146,13 @@ export function FinancePage() {
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const [editingCategory, setEditingCategory] = useState<BudgetCategory | null>(null);
   const [editingItem, setEditingItem] = useState<BudgetItemSummary | null>(null);
+  const [historyItem, setHistoryItem] = useState<BudgetItemSummary | null>(null);
   const [editingDebt, setEditingDebt] = useState<FinanceDebt | null>(null);
+  const [debtIsSettled, setDebtIsSettled] = useState(false);
+  const [copyToNextMonth, setCopyToNextMonth] = useState(true);
+  const [generateOpen, setGenerateOpen] = useState(false);
+  const [generateItemIds, setGenerateItemIds] = useState<Set<string>>(new Set());
+  const [generateAmounts, setGenerateAmounts] = useState<Record<string, string>>({});
   const household = useQuery({
     queryKey: ['household'],
     queryFn: () => getMyHousehold({ accessToken }),
@@ -169,9 +198,25 @@ export function FinancePage() {
     onSuccess: invalidate,
   });
   const generateMonth = useMutation({
-    mutationFn: () => generateNextBudgetMonth({ accessToken }),
+    mutationFn: () =>
+      generateNextBudgetMonth(
+        {
+          categories: (budget.data?.categories ?? []).map((category, displayOrder) => ({
+            categoryId: category.id,
+            displayOrder,
+          })),
+          items: budgetItems
+            .filter((item) => generateItemIds.has(item.id))
+            .map((item) => ({
+              budgetAmount: generateAmounts[item.id] ? Number(generateAmounts[item.id]) : null,
+              budgetItemId: item.id,
+            })),
+        },
+        { accessToken }
+      ),
     onSuccess: async (result) => {
       setSelectedMonthId(result.month.id);
+      setGenerateOpen(false);
       await invalidate();
     },
   });
@@ -194,8 +239,9 @@ export function FinancePage() {
           {
             amount: Number(amount),
             lenderName: name.trim(),
-            purpose: 'Pożyczka',
+            purpose: targetAmount.trim() || 'Pożyczka',
             dueDate: dueDate || null,
+            note: noteText.trim() || null,
           },
           { accessToken }
         );
@@ -203,7 +249,10 @@ export function FinancePage() {
         {
           amount: Number(amount || 0),
           name: name.trim(),
+          note: noteText.trim() || null,
+          ownerMemberId: memberId || null,
           targetAmount: targetAmount ? Number(targetAmount) : null,
+          targetDate: targetDate || null,
           changedAt: todayIso(),
         },
         { accessToken }
@@ -214,6 +263,8 @@ export function FinancePage() {
       setName('');
       setAmount('');
       setTargetAmount('');
+      setTargetDate('');
+      setNoteText('');
       setDueDate('');
       await invalidate();
     },
@@ -233,11 +284,11 @@ export function FinancePage() {
         return editingCategory
           ? updateBudgetCategory(
               editingCategory.id,
-              { name: name.trim(), copyBudgetToNextMonth: true },
+              { name: name.trim(), copyBudgetToNextMonth: copyToNextMonth },
               { accessToken }
             )
           : createBudgetCategory(
-              { name: name.trim(), copyBudgetToNextMonth: true },
+              { name: name.trim(), copyBudgetToNextMonth: copyToNextMonth },
               { accessToken }
             );
       }
@@ -295,6 +346,8 @@ export function FinancePage() {
           purpose: targetAmount.trim() || 'Zobowiązanie',
           amount: Number(amount),
           dueDate: dueDate || null,
+          isSettled: debtIsSettled,
+          note: noteText.trim() || null,
         },
         { accessToken }
       );
@@ -314,6 +367,33 @@ export function FinancePage() {
     [categories.data]
   );
 
+  useEffect(() => {
+    if (searchParams.get('action') !== 'expense' || !permission.canCreate || !budget.data) {
+      return;
+    }
+
+    const firstItem = budget.data.categories.flatMap((category) => category.items)[0];
+    if (!firstItem) return;
+
+    setTab('budget');
+    setEditingDebt(null);
+    setName('');
+    setAmount('');
+    setTargetAmount('');
+    setTargetDate('');
+    setDueDate('');
+    setNoteText('');
+    setDebtIsSettled(false);
+    setBudgetItemId(firstItem.id);
+    setCategoryId(firstItem.categoryId);
+    setMemberId(firstItem.owner.memberId ?? members.data?.[0]?.id ?? '');
+    setOpen(true);
+
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('action');
+    setSearchParams(nextParams, { replace: true });
+  }, [budget.data, members.data, permission.canCreate, searchParams, setSearchParams]);
+
   function openManage(kind: ManageKind, id = '') {
     setManageKind(kind);
     setSelectedId(id);
@@ -324,6 +404,7 @@ export function FinancePage() {
     setCategoryId(activeCategories[0]?.id ?? '');
     setMemberId(members.data?.[0]?.id ?? '');
     setDirection('add');
+    setCopyToNextMonth(true);
   }
 
   function closeManage() {
@@ -339,6 +420,7 @@ export function FinancePage() {
     openManage('category');
     setEditingCategory(category);
     setName(category.name);
+    setCopyToNextMonth(category.copyBudgetToNextMonth);
   }
 
   function openItemEdit(item: BudgetItemSummary) {
@@ -348,6 +430,36 @@ export function FinancePage() {
     setAmount(item.budgetAmount ?? '');
     setCategoryId(item.categoryId);
     setMemberId(item.owner.memberId);
+  }
+
+  function openPrimaryCreate(item?: BudgetItemSummary) {
+    setEditingDebt(null);
+    setName('');
+    setAmount('');
+    setTargetAmount('');
+    setTargetDate('');
+    setDueDate('');
+    setNoteText('');
+    setDebtIsSettled(false);
+
+    if (tab === 'budget') {
+      const firstItem = item ?? budgetItems[0];
+      setBudgetItemId(firstItem?.id ?? '');
+      setCategoryId(firstItem?.categoryId ?? '');
+      setMemberId(firstItem?.owner.memberId ?? members.data?.[0]?.id ?? '');
+    } else {
+      setMemberId(members.data?.[0]?.id ?? '');
+    }
+
+    setOpen(true);
+  }
+
+  function openGenerateMonth() {
+    setGenerateItemIds(new Set(budgetItems.map((item) => item.id)));
+    setGenerateAmounts(
+      Object.fromEntries(budgetItems.map((item) => [item.id, item.budgetAmount ?? '']))
+    );
+    setGenerateOpen(true);
   }
 
   const orderedMonths = [...(months.data ?? [])].sort(
@@ -374,6 +486,15 @@ export function FinancePage() {
             : category.items.filter((item) => item.owner.memberId === ownerFilter),
       }))
       .filter((category) => ownerFilter === 'all' || category.items.length > 0) ?? [];
+  const expenseCategories =
+    budget.data?.categories.filter((category) =>
+      category.items.some((item) => !memberId || item.owner.memberId === memberId)
+    ) ?? [];
+  const expenseItems = budgetItems.filter(
+    (item) =>
+      (!memberId || item.owner.memberId === memberId) &&
+      (!categoryId || item.categoryId === categoryId)
+  );
 
   function selectAdjacentMonth(offset: number) {
     const next = orderedMonths[currentMonthIndex + offset];
@@ -395,7 +516,11 @@ export function FinancePage() {
         title="Finanse"
         description="Kontroluj wydatki i realizuj budżet."
         action={
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1}
+            sx={{ alignItems: { sm: 'center' } }}
+          >
             {tab === 'budget' && budget.data && (
               <Stack
                 direction="row"
@@ -440,7 +565,7 @@ export function FinancePage() {
               </Stack>
             )}
             <PrimaryButton
-              onClick={() => setOpen(true)}
+              onClick={() => openPrimaryCreate()}
               disabled={!permission.canCreate || (tab === 'budget' && budgetItems.length === 0)}
             >
               Dodaj {tab === 'budget' ? 'wydatek' : tab === 'debts' ? 'zobowiązanie' : 'cel'}
@@ -528,7 +653,7 @@ export function FinancePage() {
                       <IconButton
                         aria-label="Generuj kolejny miesiąc"
                         disabled={!permission.canCreate || generateMonth.isPending}
-                        onClick={() => generateMonth.mutate()}
+                        onClick={openGenerateMonth}
                       >
                         <Icon icon="solar:calendar-add-bold-duotone" />
                       </IconButton>
@@ -728,7 +853,137 @@ export function FinancePage() {
               </Box>
             )}
 
-            <TableContainer sx={(theme) => ({ ...financeSurface(theme), overflowX: 'auto' })}>
+            <Stack spacing={1.5} sx={{ display: { xs: 'flex', md: 'none' } }}>
+              {displayedCategories.map((category, categoryIndex) => {
+                const categoryBudget = category.items.reduce(
+                  (sum, item) => sum + Number(item.budgetAmount ?? 0),
+                  0
+                );
+                const categorySpent = category.items.reduce(
+                  (sum, item) => sum + Number(item.spentAmount),
+                  0
+                );
+                const categoryRemaining = categoryBudget - categorySpent;
+                const categoryUsage =
+                  categoryBudget > 0 ? Math.round((categorySpent / categoryBudget) * 100) : 0;
+                const accent = categoryAccents[categoryIndex % categoryAccents.length];
+                const collapsed = collapsedCategories.has(category.id);
+
+                return (
+                  <SectionCard key={category.id}>
+                    <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
+                      <Box
+                        sx={{
+                          width: 44,
+                          height: 44,
+                          display: 'grid',
+                          flexShrink: 0,
+                          placeItems: 'center',
+                          borderRadius: 1.5,
+                          color: '#102238',
+                          bgcolor: accent,
+                        }}
+                      >
+                        <Icon icon="solar:folder-with-files-bold-duotone" width={24} />
+                      </Box>
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography variant="h6">{category.name}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {category.items.length} pozycji · wydano {money(categorySpent, currency)}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ textAlign: 'right' }}>
+                        <Typography variant="subtitle1">
+                          {money(categoryBudget, currency)}
+                        </Typography>
+                        <Typography
+                          variant="caption"
+                          color={categoryRemaining < 0 ? 'error.main' : 'success.main'}
+                        >
+                          {money(categoryRemaining, currency)}
+                        </Typography>
+                      </Box>
+                      <IconButton size="small" onClick={() => toggleCategory(category.id)}>
+                        <Icon
+                          icon={
+                            collapsed ? 'solar:alt-arrow-down-linear' : 'solar:alt-arrow-up-linear'
+                          }
+                        />
+                      </IconButton>
+                    </Stack>
+                    <LinearProgress
+                      variant="determinate"
+                      value={Math.min(categoryUsage, 100)}
+                      color={categoryUsage >= 100 ? 'error' : 'warning'}
+                      sx={{ mt: 1.5, height: 7, borderRadius: 4 }}
+                    />
+                    {!collapsed && (
+                      <Stack divider={<Divider flexItem />} sx={{ mt: 1.25 }}>
+                        {category.items.map((item) => {
+                          const remaining =
+                            item.remainingAmount === null ? null : Number(item.remainingAmount);
+                          return (
+                            <Stack
+                              key={item.id}
+                              direction="row"
+                              spacing={1}
+                              sx={{ py: 1.2, alignItems: 'center' }}
+                            >
+                              <Icon icon={budgetItemIcon(item.name)} width={22} color={accent} />
+                              <Box
+                                role="button"
+                                tabIndex={0}
+                                onClick={() => setHistoryItem(item)}
+                                onKeyDown={(event) => event.key === 'Enter' && setHistoryItem(item)}
+                                sx={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
+                              >
+                                <Typography sx={{ fontWeight: 700 }}>{item.name}</Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  wydano {money(item.spentAmount, currency)}
+                                </Typography>
+                              </Box>
+                              <Box sx={{ textAlign: 'right' }}>
+                                <Typography variant="subtitle2">
+                                  {item.budgetAmount === null
+                                    ? '—'
+                                    : money(item.budgetAmount, currency)}
+                                </Typography>
+                                <Typography
+                                  variant="caption"
+                                  color={
+                                    remaining !== null && remaining < 0
+                                      ? 'error.main'
+                                      : 'primary.main'
+                                  }
+                                >
+                                  {remaining === null ? '—' : money(remaining, currency)}
+                                </Typography>
+                              </Box>
+                              <IconButton
+                                size="small"
+                                aria-label={`Edytuj ${item.name}`}
+                                disabled={!permission.canUpdate}
+                                onClick={() => openItemEdit(item)}
+                              >
+                                <Icon icon="solar:pen-bold-duotone" />
+                              </IconButton>
+                            </Stack>
+                          );
+                        })}
+                      </Stack>
+                    )}
+                  </SectionCard>
+                );
+              })}
+            </Stack>
+
+            <TableContainer
+              sx={(theme) => ({
+                ...financeSurface(theme),
+                display: { xs: 'none', md: 'block' },
+                overflowX: 'auto',
+              })}
+            >
               <Table
                 size="small"
                 sx={{ minWidth: 1050, '& .MuiTableCell-root': { borderColor: 'divider' } }}
@@ -884,7 +1139,13 @@ export function FinancePage() {
                                       width={22}
                                       color={accent}
                                     />
-                                    <Typography>{item.name}</Typography>
+                                    <Button
+                                      color="inherit"
+                                      onClick={() => setHistoryItem(item)}
+                                      sx={{ p: 0, minWidth: 0, justifyContent: 'flex-start' }}
+                                    >
+                                      {item.name}
+                                    </Button>
                                   </Stack>
                                 </TableCell>
                                 <TableCell>{item.owner.displayName}</TableCell>
@@ -1048,6 +1309,8 @@ export function FinancePage() {
                       setTargetAmount(debt.purpose);
                       setAmount(debt.amount);
                       setDueDate(debt.dueDate ?? '');
+                      setNoteText(debt.note ?? '');
+                      setDebtIsSettled(debt.isSettled);
                       setOpen(true);
                     }}
                   >
@@ -1108,48 +1371,98 @@ export function FinancePage() {
               gap: 2.5,
             }}
           >
-            {savings.data?.map((account) => (
-              <SectionCard key={account.id}>
-                <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
-                  <Typography variant="h3">{account.name}</Typography>
-                  <IconButton
-                    color="error"
-                    disabled={!permission.canDelete}
-                    onClick={() => confirmDelete(account.name) && removeSaving.mutate(account.id)}
+            {savings.data?.map((account) => {
+              const progress =
+                account.targetAmount && Number(account.targetAmount) > 0
+                  ? Math.round((Number(account.currentAmount) / Number(account.targetAmount)) * 100)
+                  : 0;
+              const owner = members.data?.find((member) => member.id === account.ownerMemberId);
+              return (
+                <SectionCard key={account.id} sx={{ position: 'relative', overflow: 'hidden' }}>
+                  <Stack
+                    direction="row"
+                    sx={{ alignItems: 'flex-start', justifyContent: 'space-between' }}
                   >
-                    <Icon icon="solar:trash-bin-trash-bold-duotone" />
-                  </IconButton>
-                </Stack>
-                <Typography variant="h2" color="primary.main" sx={{ mt: 2 }}>
-                  {money(account.currentAmount, currency)}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {account.targetAmount
-                    ? `cel: ${money(account.targetAmount, currency)}`
-                    : 'Bez określonego celu'}
-                </Typography>
-                <Button
-                  size="small"
-                  startIcon={<Icon icon="solar:wallet-money-bold-duotone" />}
-                  sx={{ mt: 2 }}
-                  disabled={!permission.canUpdate}
-                  onClick={() => openManage('saving-transaction', account.id)}
-                >
-                  Wpłata / wypłata
-                </Button>
-                {account.transactions.length > 0 && (
-                  <Stack spacing={0.5} sx={{ mt: 1.5 }}>
-                    {account.transactions.slice(0, 3).map((transaction) => (
-                      <Typography key={transaction.id} variant="caption" color="text.secondary">
-                        {shortDate(transaction.changedAt)} ·{' '}
-                        {transaction.direction === 'add' ? '+' : '-'}
-                        {money(transaction.amount, currency)}
+                    <Box sx={{ minWidth: 0, position: 'relative', zIndex: 1 }}>
+                      <Typography variant="h4">{account.name}</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {owner?.displayName ?? 'Wspólny cel'}
+                        {account.targetDate ? ` · do ${shortDate(account.targetDate)}` : ''}
                       </Typography>
-                    ))}
+                    </Box>
+                    <IconButton
+                      color="error"
+                      disabled={!permission.canDelete}
+                      onClick={() => confirmDelete(account.name) && removeSaving.mutate(account.id)}
+                      sx={{ position: 'relative', zIndex: 2 }}
+                    >
+                      <Icon icon="solar:trash-bin-trash-bold-duotone" />
+                    </IconButton>
                   </Stack>
-                )}
-              </SectionCard>
-            ))}
+                  <Typography
+                    variant="h2"
+                    color="primary.main"
+                    sx={{ mt: 2, position: 'relative', zIndex: 1 }}
+                  >
+                    {money(account.currentAmount, currency)}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ position: 'relative', zIndex: 1 }}
+                  >
+                    {account.targetAmount
+                      ? `cel: ${money(account.targetAmount, currency)} · ${Math.min(progress, 999)}%`
+                      : 'Bez określonego celu'}
+                  </Typography>
+                  {account.targetAmount && (
+                    <LinearProgress
+                      variant="determinate"
+                      value={Math.min(progress, 100)}
+                      color={progress >= 100 ? 'success' : 'primary'}
+                      sx={{ mt: 1.5, mr: 12, height: 7, borderRadius: 4 }}
+                    />
+                  )}
+                  <Box
+                    component="img"
+                    src={savingsImage(account.name)}
+                    alt=""
+                    sx={{
+                      right: 8,
+                      bottom: 52,
+                      width: 115,
+                      height: 100,
+                      objectFit: 'contain',
+                      position: 'absolute',
+                      opacity: 0.9,
+                      filter: 'drop-shadow(0 10px 12px rgba(0,0,0,.18))',
+                    }}
+                  />
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<Icon icon="solar:wallet-money-bold-duotone" />}
+                    sx={{ mt: 2, position: 'relative', zIndex: 1 }}
+                    disabled={!permission.canUpdate}
+                    onClick={() => openManage('saving-transaction', account.id)}
+                  >
+                    Dodaj lub odejmij środki
+                  </Button>
+                  {account.transactions.length > 0 && (
+                    <Stack spacing={0.5} sx={{ mt: 1.5, position: 'relative', zIndex: 1 }}>
+                      {account.transactions.slice(0, 3).map((transaction) => (
+                        <Typography key={transaction.id} variant="caption" color="text.secondary">
+                          {shortDate(transaction.changedAt)} ·{' '}
+                          {transaction.direction === 'add' ? '+' : '-'}
+                          {money(transaction.amount, currency)}
+                          {transaction.note ? ` · ${transaction.note}` : ''}
+                        </Typography>
+                      ))}
+                    </Stack>
+                  )}
+                </SectionCard>
+              );
+            })}
           </Box>
         ))}
       <FormDialog
@@ -1162,35 +1475,124 @@ export function FinancePage() {
                 ? 'Nowe zobowiązanie'
                 : 'Nowy cel oszczędnościowy'
         }
+        subtitle={
+          editingDebt
+            ? 'Zmień dane, status i termin zobowiązania.'
+            : tab === 'budget'
+              ? 'Wybierz osobę, kategorię i pozycję, a następnie podaj kwotę.'
+              : tab === 'debts'
+                ? 'Zapisz kwotę, termin i szczegóły zobowiązania.'
+                : 'Określ właściciela, cel i planowany termin.'
+        }
+        icon={
+          tab === 'budget'
+            ? 'solar:bill-list-bold-duotone'
+            : tab === 'debts'
+              ? 'solar:hand-money-bold-duotone'
+              : 'solar:piggy-bank-bold-duotone'
+        }
         open={open}
         onClose={() => {
           setOpen(false);
           setEditingDebt(null);
+          setNoteText('');
         }}
         onSubmit={() => (editingDebt ? saveDebt.mutate() : create.mutate())}
         loading={create.isPending || saveDebt.isPending}
         submitDisabled={
-          !amount ||
-          Number(amount) < 0 ||
-          (tab === 'budget' && !editingDebt ? !budgetItemId : !name.trim())
+          tab === 'budget' && !editingDebt
+            ? !budgetItemId || !amount || Number(amount) <= 0
+            : tab === 'debts' || editingDebt
+              ? !name.trim() || !targetAmount.trim() || !amount || Number(amount) <= 0
+              : !memberId ||
+                !name.trim() ||
+                !targetAmount ||
+                Number(targetAmount) <= 0 ||
+                !targetDate ||
+                Number(amount || 0) < 0
         }
       >
         {(create.error || saveDebt.error) && (
           <Alert severity="error">{(create.error ?? saveDebt.error)?.message}</Alert>
         )}
         {tab === 'budget' && !editingDebt && (
+          <>
+            <TextField
+              select
+              label="1. Domownik"
+              value={memberId}
+              onChange={(event) => {
+                const nextMemberId = event.target.value;
+                const nextCategory = budget.data?.categories.find((category) =>
+                  category.items.some((item) => item.owner.memberId === nextMemberId)
+                );
+                const nextItem = nextCategory?.items.find(
+                  (item) => item.owner.memberId === nextMemberId
+                );
+                setMemberId(nextMemberId);
+                setCategoryId(nextCategory?.id ?? '');
+                setBudgetItemId(nextItem?.id ?? '');
+              }}
+              required
+            >
+              {(members.data ?? [])
+                .filter((member) => member.isActive)
+                .map((member) => (
+                  <MenuItem key={member.id} value={member.id}>
+                    {member.displayName}
+                  </MenuItem>
+                ))}
+            </TextField>
+            <TextField
+              select
+              label="2. Kategoria"
+              value={categoryId}
+              onChange={(event) => {
+                const nextCategoryId = event.target.value;
+                const nextItem = budgetItems.find(
+                  (item) => item.categoryId === nextCategoryId && item.owner.memberId === memberId
+                );
+                setCategoryId(nextCategoryId);
+                setBudgetItemId(nextItem?.id ?? '');
+              }}
+              required
+            >
+              {expenseCategories.map((category) => (
+                <MenuItem key={category.id} value={category.id}>
+                  {category.name}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              select
+              label="3. Pozycja budżetu"
+              value={budgetItemId}
+              onChange={(event) => setBudgetItemId(event.target.value)}
+              required
+            >
+              {expenseItems.map((item) => (
+                <MenuItem key={item.id} value={item.id}>
+                  {item.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          </>
+        )}
+        {tab === 'savings' && !editingDebt && (
           <TextField
             select
-            label="Pozycja budżetu"
-            value={budgetItemId}
-            onChange={(e) => setBudgetItemId(e.target.value)}
+            label="Domownik"
+            value={memberId}
+            onChange={(event) => setMemberId(event.target.value)}
             required
           >
-            {budgetItems.map((item) => (
-              <MenuItem key={item.id} value={item.id}>
-                {item.categoryName} — {item.name}
-              </MenuItem>
-            ))}
+            {(members.data ?? [])
+              .filter((member) => member.isActive)
+              .map((member) => (
+                <MenuItem key={member.id} value={member.id}>
+                  {member.displayName}
+                </MenuItem>
+              ))}
           </TextField>
         )}
         <TextField
@@ -1229,14 +1631,50 @@ export function FinancePage() {
             slotProps={{ inputLabel: { shrink: true } }}
           />
         )}
-        {tab === 'savings' && (
+        {(tab === 'debts' || editingDebt) && (
           <TextField
-            label="Kwota docelowa"
-            type="number"
-            value={targetAmount}
-            onChange={(e) => setTargetAmount(e.target.value)}
-            slotProps={{ htmlInput: { min: 0, step: 0.01 } }}
+            label="Notatka"
+            value={noteText}
+            onChange={(event) => setNoteText(event.target.value)}
+            multiline
+            minRows={2}
           />
+        )}
+        {editingDebt && (
+          <FormControlLabel
+            label="Zobowiązanie spłacone"
+            control={
+              <Checkbox
+                checked={debtIsSettled}
+                onChange={(event) => setDebtIsSettled(event.target.checked)}
+              />
+            }
+          />
+        )}
+        {tab === 'savings' && (
+          <>
+            <TextField
+              label="Kwota docelowa"
+              type="number"
+              value={targetAmount}
+              onChange={(e) => setTargetAmount(e.target.value)}
+              slotProps={{ htmlInput: { min: 0, step: 0.01 } }}
+            />
+            <TextField
+              label="Termin celu"
+              type="date"
+              value={targetDate}
+              onChange={(event) => setTargetDate(event.target.value)}
+              slotProps={{ inputLabel: { shrink: true } }}
+            />
+            <TextField
+              label="Notatka"
+              value={noteText}
+              onChange={(event) => setNoteText(event.target.value)}
+              multiline
+              minRows={2}
+            />
+          </>
         )}
       </FormDialog>
       <FormDialog
@@ -1254,6 +1692,26 @@ export function FinancePage() {
                 : manageKind === 'debt-payment'
                   ? 'Spłata zobowiązania'
                   : 'Operacja na oszczędnościach'
+        }
+        subtitle={
+          manageKind === 'category'
+            ? 'Nazwa i zasady przenoszenia do kolejnego miesiąca.'
+            : manageKind === 'item'
+              ? 'Przypisz limit do kategorii i domownika.'
+              : manageKind === 'income'
+                ? 'Ustaw dochód wybranego domownika.'
+                : manageKind === 'debt-payment'
+                  ? 'Dodaj spłatę do historii zobowiązania.'
+                  : 'Dodaj albo odejmij środki od celu.'
+        }
+        icon={
+          manageKind === 'category'
+            ? 'solar:folder-add-bold-duotone'
+            : manageKind === 'item'
+              ? 'solar:list-plus-bold-duotone'
+              : manageKind === 'income'
+                ? 'solar:wad-of-money-bold-duotone'
+                : 'solar:wallet-money-bold-duotone'
         }
         open={manageKind !== null}
         onClose={closeManage}
@@ -1274,6 +1732,17 @@ export function FinancePage() {
             value={name}
             onChange={(event) => setName(event.target.value)}
             required
+          />
+        )}
+        {manageKind === 'category' && (
+          <FormControlLabel
+            label="Przenoś tę kategorię do kolejnych miesięcy"
+            control={
+              <Checkbox
+                checked={copyToNextMonth}
+                onChange={(event) => setCopyToNextMonth(event.target.checked)}
+              />
+            }
           />
         )}
         {manageKind === 'item' && (
@@ -1333,6 +1802,181 @@ export function FinancePage() {
             minRows={2}
           />
         )}
+      </FormDialog>
+      <FormDialog
+        title={historyItem?.name ?? 'Historia wydatków'}
+        subtitle="Wykorzystanie limitu i historia transakcji tej pozycji."
+        icon="solar:history-bold-duotone"
+        open={Boolean(historyItem)}
+        onClose={() => setHistoryItem(null)}
+        onSubmit={() => {
+          const item = historyItem;
+          setHistoryItem(null);
+          if (item) openPrimaryCreate(item);
+        }}
+        cancelLabel="Zamknij"
+        submitLabel="Dodaj wydatek"
+        submitDisabled={!permission.canCreate}
+      >
+        {historyItem && (
+          <>
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, minmax(0, 1fr))' },
+                gap: 1,
+              }}
+            >
+              <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: 'background.paper' }}>
+                <Typography variant="caption" color="text.secondary">
+                  Budżet
+                </Typography>
+                <Typography variant="h6">
+                  {historyItem.budgetAmount === null
+                    ? '—'
+                    : money(historyItem.budgetAmount, currency)}
+                </Typography>
+              </Box>
+              <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: 'background.paper' }}>
+                <Typography variant="caption" color="text.secondary">
+                  Wydano
+                </Typography>
+                <Typography variant="h6">{money(historyItem.spentAmount, currency)}</Typography>
+              </Box>
+              <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: 'background.paper' }}>
+                <Typography variant="caption" color="text.secondary">
+                  Zostaje
+                </Typography>
+                <Typography
+                  variant="h6"
+                  color={
+                    Number(historyItem.remainingAmount ?? 0) < 0 ? 'error.main' : 'success.main'
+                  }
+                >
+                  {historyItem.remainingAmount === null
+                    ? '—'
+                    : money(historyItem.remainingAmount, currency)}
+                </Typography>
+              </Box>
+            </Box>
+            <Typography variant="subtitle1">Historia transakcji</Typography>
+            {historyItem.expenses.length === 0 ? (
+              <EmptyState icon="solar:bill-list-bold-duotone" text="Brak zapisanych wydatków." />
+            ) : (
+              <Stack divider={<Divider flexItem />}>
+                {[...historyItem.expenses]
+                  .sort((left, right) =>
+                    (right.occurredAt ?? right.createdAt).localeCompare(
+                      left.occurredAt ?? left.createdAt
+                    )
+                  )
+                  .map((expense) => (
+                    <Stack
+                      key={expense.id}
+                      direction="row"
+                      spacing={1.5}
+                      sx={{ py: 1.1, alignItems: 'center' }}
+                    >
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography sx={{ fontWeight: 700 }}>
+                          {expense.name || 'Wydatek'}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {shortDate(expense.occurredAt ?? expense.createdAt)} ·{' '}
+                          {expense.source === 'bank_notification'
+                            ? 'Import z banku'
+                            : 'Wpis ręczny'}
+                        </Typography>
+                      </Box>
+                      <Typography variant="subtitle1">{money(expense.amount, currency)}</Typography>
+                    </Stack>
+                  ))}
+              </Stack>
+            )}
+          </>
+        )}
+      </FormDialog>
+      <FormDialog
+        title="Generuj kolejny miesiąc"
+        subtitle="Wybierz pozycje i w razie potrzeby skoryguj ich limity."
+        icon="solar:calendar-add-bold-duotone"
+        open={generateOpen}
+        onClose={() => setGenerateOpen(false)}
+        onSubmit={() => generateMonth.mutate()}
+        loading={generateMonth.isPending}
+        submitLabel="Utwórz miesiąc"
+        submitDisabled={generateItemIds.size === 0}
+        maxWidth="md"
+      >
+        {generateMonth.error && <Alert severity="error">{generateMonth.error.message}</Alert>}
+        <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={() => setGenerateItemIds(new Set(budgetItems.map((item) => item.id)))}
+          >
+            Zaznacz wszystkie
+          </Button>
+          <Button size="small" onClick={() => setGenerateItemIds(new Set())}>
+            Wyczyść wybór
+          </Button>
+          <Typography variant="body2" color="text.secondary" sx={{ alignSelf: 'center' }}>
+            Wybrano {generateItemIds.size} z {budgetItems.length}
+          </Typography>
+        </Stack>
+        <Stack divider={<Divider flexItem />}>
+          {(budget.data?.categories ?? []).map((category) => (
+            <Box key={category.id} sx={{ py: 1 }}>
+              <Typography variant="subtitle1" sx={{ mb: 0.75 }}>
+                {category.name}
+              </Typography>
+              <Stack spacing={1}>
+                {category.items.map((item) => (
+                  <Box
+                    key={item.id}
+                    sx={{
+                      display: 'grid',
+                      gap: 1,
+                      alignItems: 'center',
+                      gridTemplateColumns: {
+                        xs: 'auto minmax(0, 1fr)',
+                        sm: 'auto minmax(0, 1fr) 140px',
+                      },
+                    }}
+                  >
+                    <Checkbox
+                      checked={generateItemIds.has(item.id)}
+                      onChange={(event) =>
+                        setGenerateItemIds((current) => {
+                          const next = new Set(current);
+                          if (event.target.checked) next.add(item.id);
+                          else next.delete(item.id);
+                          return next;
+                        })
+                      }
+                    />
+                    <Typography sx={{ minWidth: 0 }}>{item.name}</Typography>
+                    <TextField
+                      size="small"
+                      label="Limit"
+                      type="number"
+                      value={generateAmounts[item.id] ?? ''}
+                      onChange={(event) =>
+                        setGenerateAmounts((current) => ({
+                          ...current,
+                          [item.id]: event.target.value,
+                        }))
+                      }
+                      disabled={!generateItemIds.has(item.id)}
+                      sx={{ width: 1, gridColumn: { xs: '2', sm: 'auto' } }}
+                      slotProps={{ htmlInput: { min: 0, step: 0.01 } }}
+                    />
+                  </Box>
+                ))}
+              </Stack>
+            </Box>
+          ))}
+        </Stack>
       </FormDialog>
     </Page>
   );

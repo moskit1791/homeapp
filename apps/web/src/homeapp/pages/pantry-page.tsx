@@ -20,6 +20,15 @@ import {
 import { useSession } from '../auth/session-context';
 import { todayIso, shortDate } from '../utils/format';
 import { usePermission } from '../auth/use-permission';
+import { FoodNavigation } from '../components/food-navigation';
+import dryImage from '../../../../mobile/assets/shopping-category-pantry.png';
+import dairyImage from '../../../../mobile/assets/shopping-category-dairy.png';
+import drinksImage from '../../../../mobile/assets/shopping-category-drinks.png';
+import snacksImage from '../../../../mobile/assets/shopping-category-snacks.png';
+import frozenImage from '../../../../mobile/assets/shopping-category-default.png';
+import defaultImage from '../../../../mobile/assets/shopping-category-family.png';
+import preservesImage from '../../../../mobile/assets/shopping-category-care.png';
+import spicesImage from '../../../../mobile/assets/shopping-category-produce.png';
 import {
   createShoppingItem,
   deleteShoppingItem,
@@ -32,7 +41,6 @@ import {
   EmptyState,
   FormDialog,
   MetricCard,
-  PageHeader,
   LoadingView,
   SectionCard,
   errorMessage,
@@ -48,6 +56,49 @@ const emptyDraft: PantryDraft = {
   name: '',
   quantity: '1 szt.',
 };
+
+const pantryGroups = [
+  {
+    categories: ['Sypkie', 'Pieczywo', 'Pieczenie i dodatki', 'Kawa i herbata'],
+    emoji: '🌾',
+    image: dryImage,
+    label: 'Artykuły suche',
+  },
+  { categories: ['Nabiał i jaja'], emoji: '🥛', image: dairyImage, label: 'Nabiał' },
+  {
+    categories: ['Konserwy i przetwory'],
+    emoji: '🥫',
+    image: preservesImage,
+    label: 'Konserwy i puszki',
+  },
+  { categories: ['Mrożonki'], emoji: '❄️', image: frozenImage, label: 'Mrożonki' },
+  {
+    categories: ['Przyprawy, sosy i oleje'],
+    emoji: '🌿',
+    image: spicesImage,
+    label: 'Przyprawy i dodatki',
+  },
+  {
+    categories: ['Woda i napoje', 'Alkohole'],
+    emoji: '🧃',
+    image: drinksImage,
+    label: 'Napoje',
+  },
+  {
+    categories: ['Słodycze i przekąski'],
+    emoji: '🍪',
+    image: snacksImage,
+    label: 'Słodycze i przekąski',
+  },
+  { categories: ['Inne'], emoji: '📦', image: defaultImage, label: 'Inne' },
+] as const;
+
+function pantryGroupFor(category: string | null) {
+  return (
+    pantryGroups.find((group) => group.categories.some((item) => item === category)) ??
+    pantryGroups.at(-1)!
+  );
+}
 
 export function PantryPage() {
   const { accessToken } = useSession();
@@ -129,12 +180,11 @@ export function PantryPage() {
 
   return (
     <Page>
-      <PageHeader
-        title="Spiżarnia"
+      <FoodNavigation
         description="Zapasy, szybkie wyszukiwanie oraz kontrola terminów przydatności."
-        action={
+        actions={
           <PrimaryButton onClick={openCreate} disabled={!permission.canCreate}>
-            Dodaj zapas
+            Dodaj produkt
           </PrimaryButton>
         }
       />
@@ -193,11 +243,16 @@ export function PantryPage() {
               }}
             />
             {visibleItems.length === 0 ? (
-              <EmptyState text={search ? 'Brak produktów pasujących do wyszukiwania.' : 'Spiżarnia jest pusta.'} />
+              <EmptyState
+                text={
+                  search ? 'Brak produktów pasujących do wyszukiwania.' : 'Spiżarnia jest pusta.'
+                }
+              />
             ) : (
               <Stack divider={<Divider flexItem />}>
                 {visibleItems.map((item) => {
                   const expired = Boolean(item.expirationDate && item.expirationDate < todayIso());
+                  const group = pantryGroupFor(item.category);
                   return (
                     <Stack
                       key={item.id}
@@ -207,23 +262,35 @@ export function PantryPage() {
                     >
                       <Box
                         sx={{
-                          width: 44,
-                          height: 44,
+                          width: 58,
+                          height: 52,
                           flexShrink: 0,
                           borderRadius: 1.5,
                           bgcolor: expired ? 'error.lighter' : 'success.lighter',
-                          color: expired ? 'error.main' : 'success.main',
                           display: 'grid',
                           placeItems: 'center',
+                          overflow: 'hidden',
                         }}
                       >
-                        <Icon icon="solar:box-minimalistic-bold-duotone" width={24} />
+                        <Box
+                          component="img"
+                          src={group.image}
+                          alt=""
+                          sx={{ width: 52, height: 46, objectFit: 'contain' }}
+                        />
                       </Box>
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Box
+                        onClick={() => permission.canUpdate && openEdit(item)}
+                        sx={{
+                          flex: 1,
+                          minWidth: 0,
+                          cursor: permission.canUpdate ? 'pointer' : 'default',
+                        }}
+                      >
                         <Typography sx={{ fontWeight: 700 }}>{item.name}</Typography>
                         <Typography variant="body2" color="text.secondary">
                           {item.quantity || '1 szt.'}
-                          {item.category ? ` · ${item.category}` : ''}
+                          {item.category ? ` · ${group.emoji} ${group.label}` : ''}
                         </Typography>
                       </Box>
                       {item.expirationDate && (
@@ -263,6 +330,8 @@ export function PantryPage() {
       )}
       <FormDialog
         title={editing ? 'Edytuj produkt' : 'Dodaj do spiżarni'}
+        subtitle="Ilość, termin ważności i kategoria produktu."
+        icon="solar:box-bold-duotone"
         open={open}
         onClose={closeForm}
         onSubmit={() => save.mutate()}
@@ -283,17 +352,42 @@ export function PantryPage() {
           onChange={(event) => setDraft({ ...draft, quantity: event.target.value })}
         />
         <TextField
-          label="Kategoria"
-          value={draft.category ?? ''}
-          onChange={(event) => setDraft({ ...draft, category: event.target.value })}
-        />
-        <TextField
           label="Data przydatności"
           type="date"
           value={draft.expirationDate ?? ''}
           onChange={(event) => setDraft({ ...draft, expirationDate: event.target.value || null })}
           slotProps={{ inputLabel: { shrink: true } }}
         />
+        <Box>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+            Kategoria
+          </Typography>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+              gap: 1,
+            }}
+          >
+            {pantryGroups.map((group) => {
+              const selected = group.categories.some((category) => category === draft.category);
+              return (
+                <Button
+                  key={group.label}
+                  variant={selected ? 'soft' : 'outlined'}
+                  color={selected ? 'primary' : 'inherit'}
+                  onClick={() => setDraft({ ...draft, category: group.categories[0] })}
+                  sx={{ py: 1.15, justifyContent: 'flex-start', textAlign: 'left' }}
+                >
+                  <Box component="span" sx={{ mr: 1, fontSize: 20 }}>
+                    {group.emoji}
+                  </Box>
+                  {group.label}
+                </Button>
+              );
+            })}
+          </Box>
+        </Box>
         {editing && (
           <Button onClick={() => setDraft({ ...draft, quantity: '0' })}>Ustaw ilość na 0</Button>
         )}

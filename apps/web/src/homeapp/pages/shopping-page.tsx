@@ -1,12 +1,20 @@
 import type { ShoppingItem, ShoppingListType } from '../api';
 
 import { Icon } from '@iconify/react';
-import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router';
+import { useMemo, useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  SHOPPING_CATEGORIES,
+  getShoppingCategoryMeta,
+  categorizeShoppingProduct,
+  getShoppingProductSuggestions,
+} from '@homeapp/shared-types';
 
 import {
   Box,
   Tab,
+  Menu,
   Tabs,
   Alert,
   Stack,
@@ -21,12 +29,24 @@ import {
 
 import { useSession } from '../auth/session-context';
 import { usePermission } from '../auth/use-permission';
+import { useEncryption } from '../auth/encryption-context';
+import { FoodNavigation } from '../components/food-navigation';
+import meatImage from '../../../../mobile/assets/shopping-category-meat.png';
+import careImage from '../../../../mobile/assets/shopping-category-care.png';
+import dairyImage from '../../../../mobile/assets/shopping-category-dairy.png';
+import bakeryImage from '../../../../mobile/assets/shopping-category-bakery.png';
+import drinksImage from '../../../../mobile/assets/shopping-category-drinks.png';
+import snacksImage from '../../../../mobile/assets/shopping-category-snacks.png';
+import pantryImage from '../../../../mobile/assets/shopping-category-pantry.png';
+import familyImage from '../../../../mobile/assets/shopping-category-family.png';
+import produceImage from '../../../../mobile/assets/shopping-category-produce.png';
+import defaultImage from '../../../../mobile/assets/shopping-category-default.png';
+import cleaningImage from '../../../../mobile/assets/shopping-category-cleaning.png';
 import {
   Page,
   ErrorView,
   EmptyState,
   FormDialog,
-  PageHeader,
   LoadingView,
   SectionCard,
   errorMessage,
@@ -52,22 +72,36 @@ const listTypes: Array<{ label: string; value: ShoppingListType }> = [
   { label: 'Na później', value: 'long_term' },
 ];
 
-const categories: Record<string, { emoji: string; label: string }> = {
-  bakery: { emoji: '🥖', label: 'Pieczywo' },
-  dairy: { emoji: '🥛', label: 'Nabiał' },
-  drinks: { emoji: '🥤', label: 'Napoje' },
-  meat: { emoji: '🥩', label: 'Mięso' },
-  produce: { emoji: '🥬', label: 'Warzywa i owoce' },
-  pantry: { emoji: '🥫', label: 'Spiżarnia' },
-  cleaning: { emoji: '🧽', label: 'Chemia' },
-  care: { emoji: '🧴', label: 'Higiena' },
-  other: { emoji: '🛒', label: 'Inne' },
-};
+function categoryImage(category: string) {
+  if (/owoce|warzywa|zioła/i.test(category)) return produceImage;
+  if (/mięso|wędliny|ryby|owoce morza/i.test(category)) return meatImage;
+  if (/nabiał|jaja/i.test(category)) return dairyImage;
+  if (/pieczywo|pieczenie/i.test(category)) return bakeryImage;
+  if (/woda|napoje|kawa|herbata|alkohole/i.test(category)) return drinksImage;
+  if (/słodycze|przekąski/i.test(category)) return snacksImage;
+  if (/środki czystości|dom i ogród/i.test(category)) return cleaningImage;
+  if (/higiena|apteczka/i.test(category)) return careImage;
+  if (/dziecko|zwierząt|ubrania|papiernicze|elektronika/i.test(category)) return familyImage;
+  if (/sypkie|konserwy|przetwory|mrożonki|przyprawy|dania gotowe|wege/i.test(category)) {
+    return pantryImage;
+  }
+  return defaultImage;
+}
+
+function categoryPresentation(category: string) {
+  const meta = getShoppingCategoryMeta(category);
+  return {
+    color: meta.color,
+    emoji: meta.emoji,
+    image: categoryImage(meta.title),
+    label: meta.title,
+  };
+}
 
 type ItemDraft = Pick<ShoppingItem, 'category' | 'expirationDate' | 'name' | 'quantity'>;
 
 const emptyDraft: ItemDraft = {
-  category: 'other',
+  category: 'Inne',
   expirationDate: null,
   name: '',
   quantity: '1 szt.',
@@ -76,7 +110,9 @@ const emptyDraft: ItemDraft = {
 export function ShoppingPage() {
   const { accessToken } = useSession();
   const permission = usePermission('shopping');
+  const encryption = useEncryption();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeType, setActiveType] = useState<ShoppingListType>('daily');
   const [draft, setDraft] = useState<ItemDraft>(emptyDraft);
   const [editing, setEditing] = useState<ShoppingItem | null>(null);
@@ -84,6 +120,9 @@ export function ShoppingPage() {
   const [aiOpen, setAiOpen] = useState(false);
   const [aiMessage, setAiMessage] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  const [menuItem, setMenuItem] = useState<ShoppingItem | null>(null);
+  const [aiDisclosureOpen, setAiDisclosureOpen] = useState(false);
 
   const lists = useQuery({
     queryKey: ['shopping', 'lists'],
@@ -169,10 +208,14 @@ export function ShoppingPage() {
   const grouped = useMemo(
     () =>
       (items.data ?? []).reduce<Record<string, ShoppingItem[]>>((acc, item) => {
-        (acc[item.category ?? 'other'] ??= []).push(item);
+        (acc[getShoppingCategoryMeta(item.category).title] ??= []).push(item);
         return acc;
       }, {}),
     [items.data]
+  );
+  const productSuggestions = useMemo(
+    () => getShoppingProductSuggestions(draft.name, 8),
+    [draft.name]
   );
   const currentList = lists.data?.find((item) => item.type === activeType);
   const uncheckedCount = items.data?.filter((item) => !item.isChecked).length ?? 0;
@@ -186,7 +229,7 @@ export function ShoppingPage() {
   function openEdit(item: ShoppingItem) {
     setEditing(item);
     setDraft({
-      category: item.category ?? 'other',
+      category: item.category ?? 'Inne',
       expirationDate: item.expirationDate,
       name: item.name,
       quantity: item.quantity,
@@ -201,13 +244,41 @@ export function ShoppingPage() {
     save.reset();
   }
 
+  function closeItemMenu() {
+    setMenuAnchor(null);
+    setMenuItem(null);
+  }
+
+  function requestAiImport() {
+    if (encryption.settings?.enabledModules.includes('shopping')) {
+      setAiDisclosureOpen(true);
+      return;
+    }
+    aiImport.mutate();
+  }
+
+  const routeAction = searchParams.get('action');
+
+  useEffect(() => {
+    if (!permission.canCreate || (routeAction !== 'create' && routeAction !== 'ai')) return;
+    if (routeAction === 'ai') {
+      setAiOpen(true);
+    } else {
+      setEditing(null);
+      setDraft(emptyDraft);
+      setFormOpen(true);
+    }
+    const next = new URLSearchParams(searchParams);
+    next.delete('action');
+    setSearchParams(next, { replace: true });
+  }, [permission.canCreate, routeAction, searchParams, setSearchParams]);
+
   return (
     <Page>
-      <PageHeader
-        title="Zakupy"
-        description="Trzy listy, wspólne odhaczanie, przenoszenie produktów i import z AI."
-        action={
-          <Stack direction="row" spacing={1}>
+      <FoodNavigation
+        description="Wspólne zakupy, trzy terminy i szybkie dodawanie produktów."
+        actions={
+          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
             <Button
               variant="outlined"
               startIcon={<Icon icon="solar:magic-stick-3-bold-duotone" />}
@@ -229,18 +300,24 @@ export function ShoppingPage() {
         </Alert>
       )}
 
-      <SectionCard>
+      <SectionCard sx={{ p: 0 }}>
         <Stack
           direction={{ xs: 'column', md: 'row' }}
           spacing={2}
           sx={{ alignItems: { md: 'center' }, justifyContent: 'space-between' }}
         >
-          <Tabs value={activeType} onChange={(_, value) => setActiveType(value)}>
+          <Tabs
+            value={activeType}
+            onChange={(_, value) => setActiveType(value)}
+            variant="scrollable"
+            scrollButtons={false}
+            sx={{ minHeight: 42, '& .MuiTab-root': { minHeight: 42, borderRadius: 1.25 } }}
+          >
             {listTypes.map((item) => (
               <Tab key={item.value} value={item.value} label={item.label} />
             ))}
           </Tabs>
-          <Stack direction="row" spacing={1}>
+          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
             {activeType === 'daily' && (
               <Button
                 size="small"
@@ -254,9 +331,7 @@ export function ShoppingPage() {
             <Button
               size="small"
               color="error"
-              onClick={() =>
-                window.confirm('Wyczyścić całą aktualną listę?') && clear.mutate()
-              }
+              onClick={() => window.confirm('Wyczyścić całą aktualną listę?') && clear.mutate()}
               disabled={!permission.canDelete || !(items.data?.length ?? 0) || clear.isPending}
             >
               Wyczyść listę
@@ -285,9 +360,43 @@ export function ShoppingPage() {
           }}
         >
           {Object.entries(grouped).map(([key, groupItems]) => {
-            const meta = categories[key] ?? categories.other!;
+            const meta = categoryPresentation(key);
             return (
-              <SectionCard key={key} title={`${meta.emoji} ${meta.label}`}>
+              <SectionCard key={key} sx={{ position: 'relative', overflow: 'hidden' }}>
+                <Stack direction="row" spacing={1.25} sx={{ mb: 1.5, alignItems: 'center' }}>
+                  <Box
+                    sx={{
+                      width: 40,
+                      height: 40,
+                      display: 'grid',
+                      flexShrink: 0,
+                      placeItems: 'center',
+                      borderRadius: 1.4,
+                      bgcolor: `${meta.color}18`,
+                      fontSize: 21,
+                    }}
+                  >
+                    {meta.emoji}
+                  </Box>
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Typography variant="h5">{meta.label}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {groupItems.filter((item) => !item.isChecked).length} do kupienia
+                    </Typography>
+                  </Box>
+                  <Box
+                    component="img"
+                    src={meta.image}
+                    alt=""
+                    sx={{
+                      width: 72,
+                      height: 58,
+                      flexShrink: 0,
+                      objectFit: 'contain',
+                      filter: 'drop-shadow(0 8px 9px rgba(0,0,0,.16))',
+                    }}
+                  />
+                </Stack>
                 <Stack divider={<Divider flexItem />}>
                   {groupItems.map((item) => (
                     <Stack
@@ -303,9 +412,10 @@ export function ShoppingPage() {
                       />
                       <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Typography
-                          noWrap
+                          onClick={() => permission.canUpdate && openEdit(item)}
                           sx={{
                             fontWeight: 600,
+                            cursor: permission.canUpdate ? 'pointer' : 'default',
                             textDecoration: item.isChecked ? 'line-through' : 'none',
                             color: item.isChecked ? 'text.disabled' : 'text.primary',
                           }}
@@ -321,6 +431,7 @@ export function ShoppingPage() {
                           size="small"
                           aria-label="Przenieś na dzisiaj"
                           onClick={() => move.mutate({ id: item.id, targetType: 'daily' })}
+                          sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
                         >
                           <Icon icon="solar:calendar-mark-bold-duotone" />
                         </IconButton>
@@ -330,6 +441,7 @@ export function ShoppingPage() {
                           size="small"
                           aria-label="Przenieś na jutro"
                           onClick={() => move.mutate({ id: item.id, targetType: 'tomorrow' })}
+                          sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
                         >
                           <Icon icon="solar:forward-2-bold-duotone" />
                         </IconButton>
@@ -339,6 +451,7 @@ export function ShoppingPage() {
                         aria-label="Edytuj produkt"
                         onClick={() => openEdit(item)}
                         disabled={!permission.canUpdate}
+                        sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
                       >
                         <Icon icon="solar:pen-bold-duotone" />
                       </IconButton>
@@ -348,8 +461,20 @@ export function ShoppingPage() {
                         aria-label="Usuń produkt"
                         onClick={() => confirmDelete(item.name) && remove.mutate(item.id)}
                         disabled={!permission.canDelete}
+                        sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
                       >
                         <Icon icon="solar:trash-bin-trash-bold-duotone" />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        aria-label={`Akcje produktu ${item.name}`}
+                        onClick={(event) => {
+                          setMenuAnchor(event.currentTarget);
+                          setMenuItem(item);
+                        }}
+                        sx={{ display: { xs: 'inline-flex', sm: 'none' } }}
+                      >
+                        <Icon icon="solar:menu-dots-bold" />
                       </IconButton>
                     </Stack>
                   ))}
@@ -360,8 +485,67 @@ export function ShoppingPage() {
         </Box>
       )}
 
+      <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={closeItemMenu}>
+        <MenuItem
+          disabled={!permission.canUpdate}
+          sx={{ gap: 1 }}
+          onClick={() => {
+            const item = menuItem;
+            closeItemMenu();
+            if (item) openEdit(item);
+          }}
+        >
+          <Icon icon="solar:pen-bold-duotone" width={20} />
+          Edytuj
+        </MenuItem>
+        {activeType !== 'daily' && (
+          <MenuItem
+            disabled={!permission.canUpdate}
+            sx={{ gap: 1 }}
+            onClick={() => {
+              const item = menuItem;
+              closeItemMenu();
+              if (item) move.mutate({ id: item.id, targetType: 'daily' });
+            }}
+          >
+            <Icon icon="solar:calendar-mark-bold-duotone" width={20} />
+            Przenieś na dzisiaj
+          </MenuItem>
+        )}
+        {activeType === 'long_term' && (
+          <MenuItem
+            disabled={!permission.canUpdate}
+            sx={{ gap: 1 }}
+            onClick={() => {
+              const item = menuItem;
+              closeItemMenu();
+              if (item) move.mutate({ id: item.id, targetType: 'tomorrow' });
+            }}
+          >
+            <Icon icon="solar:forward-2-bold-duotone" width={20} />
+            Przenieś na jutro
+          </MenuItem>
+        )}
+        <MenuItem
+          disabled={!permission.canDelete}
+          onClick={() => {
+            const item = menuItem;
+            closeItemMenu();
+            if (item && confirmDelete(item.name)) remove.mutate(item.id);
+          }}
+          sx={{ gap: 1, color: 'error.main' }}
+        >
+          <Icon icon="solar:trash-bin-trash-bold-duotone" width={20} />
+          Usuń
+        </MenuItem>
+      </Menu>
+
       <FormDialog
         title={editing ? 'Edytuj produkt' : 'Dodaj produkt'}
+        subtitle={
+          editing ? 'Zmień nazwę, ilość lub kategorię.' : 'Dodaj produkt do wybranej listy.'
+        }
+        icon="solar:cart-plus-bold-duotone"
         open={formOpen}
         onClose={closeForm}
         onSubmit={() => save.mutate()}
@@ -372,10 +556,37 @@ export function ShoppingPage() {
         <TextField
           label="Produkt"
           value={draft.name}
-          onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+          onChange={(event) => {
+            const nextName = event.target.value;
+            setDraft({
+              ...draft,
+              name: nextName,
+              category: categorizeShoppingProduct(nextName),
+            });
+          }}
           required
           autoFocus
         />
+        {productSuggestions.length > 0 && (
+          <Stack direction="row" sx={{ gap: 0.75, flexWrap: 'wrap' }}>
+            {productSuggestions.map((suggestion) => (
+              <Button
+                key={suggestion.name}
+                size="small"
+                variant="soft"
+                onClick={() =>
+                  setDraft({
+                    ...draft,
+                    name: suggestion.name,
+                    category: suggestion.category,
+                  })
+                }
+              >
+                {suggestion.name}
+              </Button>
+            ))}
+          </Stack>
+        )}
         <TextField
           label="Ilość"
           value={draft.quantity}
@@ -384,22 +595,27 @@ export function ShoppingPage() {
         <TextField
           select
           label="Kategoria"
-          value={draft.category ?? 'other'}
+          value={draft.category ?? 'Inne'}
           onChange={(event) => setDraft({ ...draft, category: event.target.value })}
         >
-          {Object.entries(categories).map(([value, meta]) => (
-            <MenuItem key={value} value={value}>
-              {meta.emoji} {meta.label}
-            </MenuItem>
-          ))}
+          {SHOPPING_CATEGORIES.map((value) => {
+            const meta = getShoppingCategoryMeta(value);
+            return (
+              <MenuItem key={value} value={value}>
+                {meta.emoji} {meta.title}
+              </MenuItem>
+            );
+          })}
         </TextField>
       </FormDialog>
 
       <FormDialog
         title="AI lista zakupów"
+        subtitle="Opisz zakupy własnymi słowami, a asystent uporządkuje listę."
+        icon="solar:magic-stick-3-bold-duotone"
         open={aiOpen}
         onClose={() => setAiOpen(false)}
-        onSubmit={() => aiImport.mutate()}
+        onSubmit={requestAiImport}
         submitLabel="Dodaj produkty"
         loading={aiImport.isPending}
         submitDisabled={!aiMessage.trim()}
@@ -418,6 +634,23 @@ export function ShoppingPage() {
           onChange={(event) => setAiMessage(event.target.value)}
           autoFocus
         />
+      </FormDialog>
+      <FormDialog
+        title="Wysłać dane do AI?"
+        subtitle="Ta operacja wymaga jawnej zgody przy włączonym szyfrowaniu."
+        icon="solar:shield-warning-bold-duotone"
+        open={aiDisclosureOpen}
+        onClose={() => setAiDisclosureOpen(false)}
+        onSubmit={() => {
+          setAiDisclosureOpen(false);
+          aiImport.mutate();
+        }}
+        submitLabel="Zgadzam się i wyślij"
+      >
+        <Alert severity="warning">
+          Udostępniasz treść chronioną szyfrowaniem. Na potrzeby tej funkcji zostanie ona
+          odszyfrowana i wysłana do zewnętrznej usługi AI.
+        </Alert>
       </FormDialog>
     </Page>
   );

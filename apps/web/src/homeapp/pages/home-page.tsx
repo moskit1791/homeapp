@@ -1,7 +1,8 @@
-import type { Attachment, CleaningTask } from '../api';
+import type { DataEntry, Attachment, CleaningTask } from '../api';
 
 import { useState } from 'react';
 import { Icon } from '@iconify/react';
+import { Link as RouterLink } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import {
@@ -57,6 +58,13 @@ import {
 
 type HomeTab = 'cleaning' | 'costs' | 'data' | 'attachments';
 
+const homeTabs: Array<{ icon: string; label: string; value: HomeTab }> = [
+  { icon: 'solar:broom-bold-duotone', label: 'Sprzątanie', value: 'cleaning' },
+  { icon: 'solar:chart-2-bold-duotone', label: 'Koszty', value: 'costs' },
+  { icon: 'solar:database-bold-duotone', label: 'Dane', value: 'data' },
+  { icon: 'solar:folder-with-files-bold-duotone', label: 'Pliki', value: 'attachments' },
+];
+
 export function HomePage() {
   const { accessToken } = useSession();
   const cleaningPermission = usePermission('cleaning');
@@ -75,6 +83,7 @@ export function HomePage() {
   const [file, setFile] = useState<File | null>(null);
   const [editingCleaning, setEditingCleaning] = useState<CleaningTask | null>(null);
   const [editingAttachment, setEditingAttachment] = useState<Attachment | null>(null);
+  const [selectedDataEntry, setSelectedDataEntry] = useState<DataEntry | null>(null);
   const [historyYear, setHistoryYear] = useState(new Date().getFullYear());
   const [completionCostId, setCompletionCostId] = useState<string | null>(null);
   const cleaning = useQuery({
@@ -128,14 +137,17 @@ export function HomePage() {
               },
               { accessToken }
             )
-          : createCleaningTask({
-            name: name.trim(),
-            location: detail || undefined,
-            nextDueAt: date,
-            frequencyDays: Number(days),
-            frequencyMode: 'custom_days',
-            completionWindowDays: 1,
-          }, { accessToken });
+          : createCleaningTask(
+              {
+                name: name.trim(),
+                location: detail || undefined,
+                nextDueAt: date,
+                frequencyDays: Number(days),
+                frequencyMode: 'custom_days',
+                completionWindowDays: 1,
+              },
+              { accessToken }
+            );
       if (tab === 'costs')
         return createAnnualCost(
           {
@@ -145,7 +157,8 @@ export function HomePage() {
           },
           { accessToken }
         );
-      if (tab === 'data') return createDataEntry({ title: name.trim(), value: detail }, { accessToken });
+      if (tab === 'data')
+        return createDataEntry({ title: name.trim(), value: detail }, { accessToken });
       if (editingAttachment)
         return updateAttachment(
           editingAttachment.id,
@@ -169,22 +182,31 @@ export function HomePage() {
   const completeCleaning = useMutation({
     mutationFn: (id: string) =>
       completeCleaningTask(id, { completedAt: new Date().toISOString() }, { accessToken }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['cleaning'] }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['cleaning'] }),
+        queryClient.invalidateQueries({ queryKey: ['start'] }),
+      ]);
+    },
   });
   const removeCleaning = useMutation({
     mutationFn: (id: string) => deleteCleaningTask(id, { accessToken }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['cleaning'] }),
   });
   const completeCost = useMutation({
-    mutationFn: () => completeAnnualCost(
-      completionCostId!,
-      { executedAt: date, amount: amount ? Number(amount) : null },
-      { accessToken }
-    ),
+    mutationFn: () =>
+      completeAnnualCost(
+        completionCostId!,
+        { executedAt: date, amount: amount ? Number(amount) : null },
+        { accessToken }
+      ),
     onSuccess: async () => {
       setCompletionCostId(null);
       setAmount('');
-      await queryClient.invalidateQueries({ queryKey: ['annualCosts'] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['annualCosts'] }),
+        queryClient.invalidateQueries({ queryKey: ['start'] }),
+      ]);
     },
   });
   const removeData = useMutation({
@@ -206,6 +228,32 @@ export function HomePage() {
         : tab === 'data'
           ? dataPermission
           : attachmentsPermission;
+  const activeMeta = {
+    cleaning: {
+      color: '#6F8CFF',
+      count: cleaning.data?.length ?? 0,
+      icon: 'solar:broom-bold-duotone',
+      title: 'Sprzątanie',
+    },
+    costs: {
+      color: '#55D99B',
+      count: costs.data?.length ?? 0,
+      icon: 'solar:chart-2-bold-duotone',
+      title: 'Koszty roczne',
+    },
+    data: {
+      color: '#A879E8',
+      count: data.data?.length ?? 0,
+      icon: 'solar:database-bold-duotone',
+      title: 'Ważne dane',
+    },
+    attachments: {
+      color: '#F6B94D',
+      count: attachments.data?.length ?? 0,
+      icon: 'solar:folder-with-files-bold-duotone',
+      title: 'Pliki',
+    },
+  }[tab];
 
   async function uploadAttachment(selectedFile: File) {
     const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'] as const;
@@ -249,6 +297,15 @@ export function HomePage() {
     URL.revokeObjectURL(url);
   }
 
+  async function previewAttachment(attachment: Attachment) {
+    const request = getAttachmentFileRequest(attachment.id, { accessToken });
+    const response = await fetch(request.uri, { headers: request.headers });
+    if (!response.ok) throw new Error('Nie udało się otworzyć pliku.');
+    const url = URL.createObjectURL(await response.blob());
+    window.open(url, '_blank', 'noopener,noreferrer');
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }
+
   function openCleaningEdit(task: CleaningTask) {
     setEditingCleaning(task);
     setName(task.name);
@@ -269,29 +326,55 @@ export function HomePage() {
     <Page>
       <PageHeader
         title="Dom"
-        description="Sprzątanie, cykliczne koszty, ważne dane i dokumenty domu."
+        description="Zarządzaj swoim domem."
         action={
-          <PrimaryButton
-            disabled={!permission.canCreate}
-            onClick={() => {
-              setEditingCleaning(null);
-              setEditingAttachment(null);
-              setName('');
-              setDetail('');
-              setFile(null);
-              setOpen(true);
-            }}
-          >
-            Dodaj
-          </PrimaryButton>
+          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+            <Button
+              component={RouterLink}
+              to="/domownicy"
+              variant="outlined"
+              startIcon={<Icon icon="solar:settings-bold-duotone" />}
+            >
+              Ustawienia
+            </Button>
+            <PrimaryButton
+              disabled={!permission.canCreate}
+              onClick={() => {
+                setEditingCleaning(null);
+                setEditingAttachment(null);
+                setName('');
+                setDetail('');
+                setFile(null);
+                setOpen(true);
+              }}
+            >
+              Dodaj
+            </PrimaryButton>
+          </Stack>
         }
       />
-      <Tabs value={tab} onChange={(_, value) => setTab(value)}>
-        <Tab value="cleaning" label="Sprzątanie" />
-        <Tab value="costs" label="Koszty roczne" />
-        <Tab value="data" label="Ważne dane" />
-        <Tab value="attachments" label="Dokumenty" />
-      </Tabs>
+      <SectionCard>
+        <Tabs
+          value={tab}
+          onChange={(_, value) => setTab(value)}
+          variant="scrollable"
+          scrollButtons={false}
+          sx={{
+            '& .MuiTabs-flexContainer': { gap: 0.5 },
+            '& .MuiTab-root': { minHeight: 52, borderRadius: 1.5 },
+          }}
+        >
+          {homeTabs.map((item) => (
+            <Tab
+              key={item.value}
+              value={item.value}
+              icon={<Icon icon={item.icon} width={21} />}
+              iconPosition="start"
+              label={item.label}
+            />
+          ))}
+        </Tabs>
+      </SectionCard>
       {(tab === 'data' || tab === 'attachments') && (
         <TextField
           fullWidth
@@ -302,6 +385,28 @@ export function HomePage() {
         />
       )}
       <SectionCard>
+        <Stack direction="row" spacing={1.5} sx={{ mb: 2, alignItems: 'center' }}>
+          <Box
+            sx={{
+              width: 48,
+              height: 48,
+              display: 'grid',
+              flexShrink: 0,
+              placeItems: 'center',
+              borderRadius: 1.5,
+              color: activeMeta.color,
+              bgcolor: `${activeMeta.color}18`,
+            }}
+          >
+            <Icon icon={activeMeta.icon} width={27} />
+          </Box>
+          <Box sx={{ flex: 1 }}>
+            <Typography variant="h4">{activeMeta.title}</Typography>
+            <Typography variant="body2" color="text.secondary">
+              {activeMeta.count} {activeMeta.count === 1 ? 'wpis' : 'wpisów'}
+            </Typography>
+          </Box>
+        </Stack>
         {active.isLoading ? (
           <LoadingView />
         ) : active.error ? (
@@ -314,11 +419,24 @@ export function HomePage() {
               {cleaning.data?.map((task) => (
                 <Stack
                   key={task.id}
-                  direction={{ xs: 'column', sm: 'row' }}
-                  spacing={2}
-                  sx={{ py: 1.5, alignItems: { sm: 'center' } }}
+                  direction="row"
+                  spacing={1}
+                  sx={(theme) => ({
+                    p: 2,
+                    my: 0.75,
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                    border: '1px solid',
+                    borderLeft: '5px solid',
+                    borderColor: task.isOverdue ? 'error.main' : 'divider',
+                    borderRadius: 1.75,
+                    bgcolor: task.isOverdue ? 'rgba(255,86,109,.07)' : 'transparent',
+                    ...theme.applyStyles('dark', {
+                      bgcolor: task.isOverdue ? 'rgba(255,86,109,.10)' : 'rgba(255,255,255,.015)',
+                    }),
+                  })}
                 >
-                  <Box sx={{ flex: 1 }}>
+                  <Box sx={{ flex: '1 1 260px', minWidth: 0 }}>
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                       <Typography sx={{ fontWeight: 700 }}>{task.name}</Typography>
                       {task.isOverdue && <Chip size="small" color="error" label="Po terminie" />}
@@ -329,6 +447,7 @@ export function HomePage() {
                     </Typography>
                   </Box>
                   <Button
+                    variant="outlined"
                     startIcon={<Icon icon="solar:check-circle-bold" />}
                     onClick={() => completeCleaning.mutate(task.id)}
                     disabled={!cleaningPermission.canUpdate}
@@ -360,11 +479,20 @@ export function HomePage() {
               {costs.data?.map((cost) => (
                 <Stack
                   key={cost.id}
-                  direction={{ xs: 'column', sm: 'row' }}
-                  spacing={2}
-                  sx={{ py: 1.5, alignItems: { sm: 'center' } }}
+                  direction="row"
+                  spacing={1.5}
+                  sx={{
+                    p: 2,
+                    my: 0.75,
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    borderLeft: '5px solid #55D99B',
+                    borderRadius: 1.75,
+                  }}
                 >
-                  <Box sx={{ flex: 1 }}>
+                  <Box sx={{ flex: '1 1 240px' }}>
                     <Typography sx={{ fontWeight: 700 }}>{cost.name}</Typography>
                     <Typography variant="body2" color="text.secondary">
                       Termin {shortDate(cost.nextDueDate)}
@@ -374,6 +502,7 @@ export function HomePage() {
                     {cost.defaultAmount ? money(cost.defaultAmount, currency) : '—'}
                   </Typography>
                   <Button
+                    variant="outlined"
                     disabled={!costsPermission.canUpdate}
                     onClick={() => {
                       setCompletionCostId(cost.id);
@@ -387,8 +516,52 @@ export function HomePage() {
               ))}
             </Stack>
           )
-        ) : tab === 'data' ? (data.data?.length ?? 0) === 0 ? (
-          <EmptyState text="Brak zapisanych danych." />
+        ) : tab === 'data' ? (
+          (data.data?.length ?? 0) === 0 ? (
+            <EmptyState text="Brak zapisanych danych." />
+          ) : (
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+                gap: 2,
+              }}
+            >
+              {data.data?.map((entry) => (
+                <SectionCard
+                  key={entry.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setSelectedDataEntry(entry)}
+                  onKeyDown={(event) => event.key === 'Enter' && setSelectedDataEntry(entry)}
+                  sx={{ bgcolor: 'action.hover', cursor: 'pointer' }}
+                >
+                  <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+                    <Box>
+                      <Typography variant="overline" color="text.secondary">
+                        {entry.title}
+                      </Typography>
+                      <Typography variant="h3" sx={{ wordBreak: 'break-word' }}>
+                        {entry.value}
+                      </Typography>
+                    </Box>
+                    <IconButton
+                      color="error"
+                      disabled={!dataPermission.canDelete}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (confirmDelete(entry.title)) removeData.mutate(entry.id);
+                      }}
+                    >
+                      <Icon icon="solar:trash-bin-trash-bold-duotone" />
+                    </IconButton>
+                  </Stack>
+                </SectionCard>
+              ))}
+            </Box>
+          )
+        ) : (attachments.data?.length ?? 0) === 0 ? (
+          <EmptyState text="Brak dokumentów i zdjęć." />
         ) : (
           <Box
             sx={{
@@ -397,45 +570,73 @@ export function HomePage() {
               gap: 2,
             }}
           >
-            {data.data?.map((entry) => (
-              <SectionCard key={entry.id} sx={{ bgcolor: 'action.hover' }}>
-                <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
-                  <Box>
-                    <Typography variant="overline" color="text.secondary">
-                      {entry.title}
-                    </Typography>
-                    <Typography variant="h3" sx={{ wordBreak: 'break-word' }}>
-                      {entry.value}
-                    </Typography>
-                  </Box>
-                  <IconButton
-                    color="error"
-                    disabled={!dataPermission.canDelete}
-                    onClick={() => confirmDelete(entry.title) && removeData.mutate(entry.id)}
-                  >
-                    <Icon icon="solar:trash-bin-trash-bold-duotone" />
-                  </IconButton>
-                </Stack>
-              </SectionCard>
-            ))}
-          </Box>
-        ) : (attachments.data?.length ?? 0) === 0 ? (
-          <EmptyState text="Brak dokumentów i zdjęć." />
-        ) : (
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
             {attachments.data?.map((attachment) => (
               <SectionCard key={attachment.id} sx={{ bgcolor: 'action.hover' }}>
-                <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-                  <Box sx={{ width: 48, height: 48, borderRadius: 1.5, bgcolor: 'primary.lighter', display: 'grid', placeItems: 'center' }}>
-                    <Icon icon={attachment.mimeType === 'application/pdf' ? 'solar:file-text-bold-duotone' : 'solar:gallery-bold-duotone'} width={26} />
+                <Stack direction="row" sx={{ gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <Box
+                    sx={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: 1.5,
+                      bgcolor: 'primary.lighter',
+                      display: 'grid',
+                      placeItems: 'center',
+                    }}
+                  >
+                    <Icon
+                      icon={
+                        attachment.mimeType === 'application/pdf'
+                          ? 'solar:file-text-bold-duotone'
+                          : 'solar:gallery-bold-duotone'
+                      }
+                      width={26}
+                    />
                   </Box>
                   <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography sx={{ fontWeight: 700 }} noWrap>{attachment.fileName}</Typography>
-                    <Typography variant="body2" color="text.secondary">{attachment.caption || shortDate(attachment.createdAt)}</Typography>
+                    <Typography sx={{ fontWeight: 700 }} noWrap>
+                      {attachment.fileName}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {attachment.caption || shortDate(attachment.createdAt)}
+                    </Typography>
                   </Box>
-                  <IconButton onClick={() => void downloadAttachment(attachment)}><Icon icon="solar:download-bold-duotone" /></IconButton>
-                  <IconButton disabled={!attachmentsPermission.canUpdate} onClick={() => openAttachmentEdit(attachment)}><Icon icon="solar:pen-bold-duotone" /></IconButton>
-                  <IconButton color="error" disabled={!attachmentsPermission.canDelete} onClick={() => confirmDelete(attachment.fileName) && removeAttachment.mutate(attachment.id)}><Icon icon="solar:trash-bin-trash-bold-duotone" /></IconButton>
+                  <Stack
+                    direction="row"
+                    sx={{
+                      width: { xs: '100%', sm: 'auto' },
+                      justifyContent: { xs: 'flex-end', sm: 'initial' },
+                    }}
+                  >
+                    <IconButton
+                      aria-label="Otwórz podgląd"
+                      onClick={() => void previewAttachment(attachment)}
+                    >
+                      <Icon icon="solar:eye-bold-duotone" />
+                    </IconButton>
+                    <IconButton
+                      aria-label="Pobierz plik"
+                      onClick={() => void downloadAttachment(attachment)}
+                    >
+                      <Icon icon="solar:download-bold-duotone" />
+                    </IconButton>
+                    <IconButton
+                      aria-label="Edytuj opis pliku"
+                      disabled={!attachmentsPermission.canUpdate}
+                      onClick={() => openAttachmentEdit(attachment)}
+                    >
+                      <Icon icon="solar:pen-bold-duotone" />
+                    </IconButton>
+                    <IconButton
+                      color="error"
+                      aria-label="Usuń plik"
+                      disabled={!attachmentsPermission.canDelete}
+                      onClick={() =>
+                        confirmDelete(attachment.fileName) && removeAttachment.mutate(attachment.id)
+                      }
+                    >
+                      <Icon icon="solar:trash-bin-trash-bold-duotone" />
+                    </IconButton>
+                  </Stack>
                 </Stack>
               </SectionCard>
             ))}
@@ -445,15 +646,66 @@ export function HomePage() {
       {tab === 'costs' && (
         <SectionCard title="Historia opłat">
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mb: 2 }}>
-            <TextField label="Rok" type="number" value={historyYear} onChange={(event) => setHistoryYear(Number(event.target.value))} sx={{ width: 140 }} />
+            <TextField
+              label="Rok"
+              type="number"
+              value={historyYear}
+              onChange={(event) => setHistoryYear(Number(event.target.value))}
+              sx={{ width: 140 }}
+            />
           </Stack>
-          {costHistory.isLoading ? <LoadingView /> : (costHistory.data?.length ?? 0) === 0 ? <EmptyState text="Brak opłaconych kosztów w tym roku." /> : <Stack divider={<Divider flexItem />}>
-            {costHistory.data?.map((entry) => <Stack key={entry.id} direction="row" sx={{ py: 1.2 }}><Typography sx={{ flex: 1, fontWeight: 700 }}>{entry.annualCostName}</Typography><Typography color="text.secondary">{shortDate(entry.executedAt)}</Typography><Typography sx={{ ml: 2 }}>{entry.amount ? money(entry.amount, currency) : '—'}</Typography></Stack>)}
-          </Stack>}
+          {costHistory.isLoading ? (
+            <LoadingView />
+          ) : (costHistory.data?.length ?? 0) === 0 ? (
+            <EmptyState text="Brak opłaconych kosztów w tym roku." />
+          ) : (
+            <Stack divider={<Divider flexItem />}>
+              {costHistory.data?.map((entry) => (
+                <Stack key={entry.id} direction="row" sx={{ py: 1.2 }}>
+                  <Typography sx={{ flex: 1, fontWeight: 700 }}>{entry.annualCostName}</Typography>
+                  <Typography color="text.secondary">{shortDate(entry.executedAt)}</Typography>
+                  <Typography sx={{ ml: 2 }}>
+                    {entry.amount ? money(entry.amount, currency) : '—'}
+                  </Typography>
+                </Stack>
+              ))}
+            </Stack>
+          )}
         </SectionCard>
       )}
       <FormDialog
+        title={selectedDataEntry?.title ?? 'Ważne dane'}
+        subtitle="Wartość zapisana w domowej bazie danych."
+        icon="solar:database-bold-duotone"
+        open={Boolean(selectedDataEntry)}
+        onClose={() => setSelectedDataEntry(null)}
+        onSubmit={() => setSelectedDataEntry(null)}
+        cancelLabel="Zamknij"
+        hideSubmit
+      >
+        <Typography variant="h4" sx={{ py: 2, wordBreak: 'break-word' }}>
+          {selectedDataEntry?.value}
+        </Typography>
+        {selectedDataEntry && dataPermission.canDelete && (
+          <Button
+            color="error"
+            variant="outlined"
+            startIcon={<Icon icon="solar:trash-bin-trash-bold-duotone" />}
+            onClick={() => {
+              if (confirmDelete(selectedDataEntry.title)) {
+                removeData.mutate(selectedDataEntry.id);
+                setSelectedDataEntry(null);
+              }
+            }}
+          >
+            Usuń wpis
+          </Button>
+        )}
+      </FormDialog>
+      <FormDialog
         title="Zapisz opłacony koszt"
+        subtitle="Podaj faktyczną kwotę i datę płatności."
+        icon="solar:bill-check-bold-duotone"
         open={completionCostId !== null}
         onClose={() => setCompletionCostId(null)}
         onSubmit={() => completeCost.mutate()}
@@ -461,19 +713,45 @@ export function HomePage() {
         submitLabel="Zapisz płatność"
       >
         {completeCost.error && <Alert severity="error">{completeCost.error.message}</Alert>}
-        <TextField label="Faktyczna kwota" type="number" value={amount} onChange={(event) => setAmount(event.target.value)} slotProps={{ htmlInput: { min: 0, step: 0.01 } }} />
-        <TextField label="Data płatności" type="date" value={date} onChange={(event) => setDate(event.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
+        <TextField
+          label="Faktyczna kwota"
+          type="number"
+          value={amount}
+          onChange={(event) => setAmount(event.target.value)}
+          slotProps={{ htmlInput: { min: 0, step: 0.01 } }}
+        />
+        <TextField
+          label="Data płatności"
+          type="date"
+          value={date}
+          onChange={(event) => setDate(event.target.value)}
+          slotProps={{ inputLabel: { shrink: true } }}
+        />
       </FormDialog>
       <FormDialog
         title={
           tab === 'cleaning'
-            ? editingCleaning ? 'Edytuj zadanie domowe' : 'Nowe zadanie domowe'
+            ? editingCleaning
+              ? 'Edytuj zadanie domowe'
+              : 'Nowe zadanie domowe'
             : tab === 'costs'
               ? 'Nowy koszt roczny'
               : tab === 'data'
                 ? 'Nowy wpis'
-                : editingAttachment ? 'Edytuj dokument' : 'Dodaj dokument'
+                : editingAttachment
+                  ? 'Edytuj dokument'
+                  : 'Dodaj dokument'
         }
+        subtitle={
+          tab === 'cleaning'
+            ? 'Nazwa, miejsce i cykl wykonywania.'
+            : tab === 'costs'
+              ? 'Dodaj cykliczny koszt domu.'
+              : tab === 'data'
+                ? 'Zapisz ważną informację w bezpiecznym miejscu.'
+                : 'Dodaj zdjęcie lub dokument PDF.'
+        }
+        icon={activeMeta.icon}
         open={open}
         onClose={() => {
           setOpen(false);
@@ -511,14 +789,25 @@ export function HomePage() {
             {!editingAttachment && (
               <Button variant="outlined" component="label">
                 {file ? file.name : 'Wybierz JPG, PNG, WEBP lub PDF'}
-                <input hidden type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => {
-                  const selectedFile = event.target.files?.[0] ?? null;
-                  setFile(selectedFile);
-                  if (selectedFile && !name) setName(selectedFile.name);
-                }} />
+                <input
+                  hidden
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  onChange={(event) => {
+                    const selectedFile = event.target.files?.[0] ?? null;
+                    setFile(selectedFile);
+                    if (selectedFile && !name) setName(selectedFile.name);
+                  }}
+                />
               </Button>
             )}
-            <TextField label="Opis" value={detail} onChange={(event) => setDetail(event.target.value)} multiline minRows={2} />
+            <TextField
+              label="Opis"
+              value={detail}
+              onChange={(event) => setDetail(event.target.value)}
+              multiline
+              minRows={2}
+            />
           </>
         )}
         {tab === 'cleaning' && (
