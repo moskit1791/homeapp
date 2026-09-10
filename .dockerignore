@@ -10,7 +10,8 @@ coverage
 **/coverage
 *.log
 
-apps/mobile
+apps/mobile/*
+!apps/mobile/assets
 builds
 tmp-bundle-debug
 adb-*
@@ -25,3 +26,4 @@ adb-*
 **/.env.*
 !apps/web/public/**/*.png
 !apps/web/public/**/*.xml
+!apps/mobile/assets/**/*.png

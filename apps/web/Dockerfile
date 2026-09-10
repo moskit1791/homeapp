@@ -9,6 +9,7 @@ COPY packages packages
 RUN pnpm install --filter @homeapp/web... --frozen-lockfile
 COPY apps/web apps/web
 COPY tsconfig.base.json ./
+COPY apps/mobile/assets apps/mobile/assets
 ARG VITE_GOOGLE_CLIENT_ID=""
 ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
 ENV VITE_API_URL=/api
