@@ -1,5 +1,5 @@
 import { Icon } from '@iconify/react';
-import { useSearchParams } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { useRef, useState, useEffect, type FormEvent } from 'react';
 
 import { Box, Link, Alert, Stack, Button, Divider, Checkbox, TextField, IconButton, Typography, InputAdornment, FormControlLabel } from '@mui/material';
@@ -23,9 +23,10 @@ declare global { interface Window { google?: { accounts: GoogleAccounts } } }
 export function AuthPage() {
   const { registerAccount, signIn, signInWithGoogle } = useSession();
   const [params] = useSearchParams();
+  const navigate = useNavigate();
   const invitationToken = params.get('invitation') ?? (location.pathname.includes('invitation') ? params.get('token') : null);
   const resetToken = params.get('reset') ?? (location.pathname.includes('reset-password') ? params.get('token') : null);
-  const verifyToken = params.get('verify') ?? params.get('verificationToken');
+  const verifyToken = params.get('verify') ?? params.get('verificationToken') ?? (location.pathname.includes('verify-email') ? params.get('token') : null);
   const [mode, setMode] = useState<Mode>(invitationToken ? 'invitation' : resetToken ? 'reset' : 'login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -63,7 +64,7 @@ export function AuthPage() {
       if (!window.google || !googleButton.current) return;
       window.google.accounts.id.initialize({
         client_id: googleClientId,
-        callback: (response) => void signInWithGoogle(response.credential, remember).catch((caught) => setError(errorMessage(caught))),
+        callback: (response) => void signInWithGoogle(response.credential, remember).then(() => navigate('/', { replace: true })).catch((caught) => setError(errorMessage(caught))),
       });
       googleButton.current.replaceChildren();
       window.google.accounts.id.renderButton(googleButton.current, { theme: 'outline', size: 'large', width: 360, text: 'continue_with' });
@@ -75,7 +76,7 @@ export function AuthPage() {
     script.onload = render;
     document.head.appendChild(script);
     return () => { script.onload = null; };
-  }, [googleClientId, mode, remember, signInWithGoogle]);
+  }, [googleClientId, mode, remember, signInWithGoogle, navigate]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -100,6 +101,7 @@ export function AuthPage() {
       } else if (mode === 'login') {
         const token = await signIn({ email: email.trim(), password }, remember);
         if (invitationToken) await acceptInvitation({ token: invitationToken }, { accessToken: token });
+        navigate('/', { replace: true });
       } else {
         if (!acceptedTerms || !acceptedPrivacy) throw new Error('Zaakceptuj regulamin i politykę prywatności.');
         const result = await registerAccount({ displayName: displayName.trim(), email: email.trim(), password });

@@ -1,0 +1,42 @@
+name: Web production checks
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [webapp, codex/webapp-production]
+permissions:
+  contents: read
+jobs:
+  production:
+    runs-on: ubuntu-latest
+    env:
+      COMPOSE_PROJECT_NAME: homeapp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --filter @homeapp/web... --filter @homeapp/api... --frozen-lockfile
+      - run: pnpm --filter @homeapp/shared-types build && pnpm --filter @homeapp/shared-validation build
+      - run: pnpm --filter @homeapp/web lint && pnpm --filter @homeapp/web test
+      - run: pnpm --filter @homeapp/api typecheck && pnpm --filter @homeapp/api test
+      - name: Validate and build production containers
+        run: |
+          docker compose --env-file deploy/homeapp.env.example -f compose.prod.yml config --quiet
+          docker compose --env-file deploy/homeapp.env.example -f compose.prod.yml build
+      - name: Smoke test web routing and API proxy
+        run: |
+          docker network create homeapp-check
+          docker run -d --name api --network homeapp-check node:24-bookworm-slim node -e 'require("http").createServer((req,res)=>{res.setHeader("Content-Type","application/json");res.end(JSON.stringify({path:req.url}));}).listen(3000,"0.0.0.0")'
+          docker run -d --name web --network homeapp-check -p 8080:80 homeapp-web
+          docker exec web nginx -t
+          curl --retry 10 --retry-connrefused --retry-delay 1 -fsS http://localhost:8080/healthz
+          curl -fsS http://localhost:8080/ | grep 'id="root"'
+          curl -fsS http://localhost:8080/finanse | grep 'id="root"'
+          curl -fsS 'http://localhost:8080/auth/verify-email?token=test' | grep 'id="root"'
+          curl -fsS 'http://localhost:8080/api/health?probe=1' | grep '"path":"/api/health?probe=1"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/assets/missing.js)" = 404

@@ -32,7 +32,7 @@ services:
       JWT_ACCESS_TTL_SECONDS: ${JWT_ACCESS_TTL_SECONDS:-900}
       JWT_REFRESH_TTL_SECONDS: ${JWT_REFRESH_TTL_SECONDS:-2592000}
       APP_PUBLIC_URL: ${APP_PUBLIC_URL}
-      AUTH_LINK_BASE_URL: ${AUTH_LINK_BASE_URL:-homeapp://auth}
+      AUTH_LINK_BASE_URL: ${AUTH_LINK_BASE_URL:-https://app.porabkihome.pl/auth}
       AUTH_RATE_LIMIT_MAX: ${AUTH_RATE_LIMIT_MAX:-20}
       AUTH_RATE_LIMIT_WINDOW_SECONDS: ${AUTH_RATE_LIMIT_WINDOW_SECONDS:-60}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
@@ -53,10 +53,20 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       STORAGE_DRIVER: local
       LOCAL_STORAGE_ROOT: /app/storage
-    ports:
-      - "127.0.0.1:3003:3000"
     volumes:
       - api-storage:/app/storage
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:3003:80"
 
 volumes:
   postgres-data:

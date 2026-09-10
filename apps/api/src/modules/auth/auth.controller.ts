@@ -22,6 +22,7 @@ import {
   VerifyEmailDto
 } from './dto/auth.dto';
 import { AuthService } from './auth.service';
+import { loadEnv } from '../../shared/env';
 import { AuthRateLimitGuard } from './guards/auth-rate-limit.guard';
 
 @Controller('auth')
@@ -88,7 +89,7 @@ export class AuthController {
     const safeAction = ['invitation', 'reset-password', 'verify-email'].includes(action)
       ? action
       : 'invitation';
-    const url = new URL(`homeapp://auth/${safeAction}`);
+    const url = new URL(`${loadEnv().AUTH_LINK_BASE_URL.replace(/\/+$/, '')}/${safeAction}`);
 
     if (email) {
       url.searchParams.set('email', email);

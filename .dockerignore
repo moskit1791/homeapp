@@ -21,3 +21,7 @@ adb-*
 .env.*
 !.env.example
 !.env.*.example
+**/.env
+**/.env.*
+!apps/web/public/**/*.png
+!apps/web/public/**/*.xml

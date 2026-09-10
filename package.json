@@ -25,6 +25,7 @@
       "@mui/system": "9.0.1",
       "@mui/types": "9.0.0",
       "@mui/utils": "9.0.1",
+      "@mui/x-internals": "9.1.0",
       "minimatch@3>brace-expansion": "2.0.2",
       "nanoid@^3.0.0": "3.3.17",
       "postcss": "8.5.18",

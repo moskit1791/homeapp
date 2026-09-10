@@ -3,7 +3,9 @@ import type { RouteObject } from 'react-router';
 import { lazy, Suspense } from 'react';
 import { Navigate } from 'react-router';
 
+import { AuthPage } from 'src/homeapp/pages/auth-page';
 import { HomeAppShell } from 'src/homeapp/homeapp-shell';
+import { AuthCenteredLayout } from 'src/layouts/auth-centered';
 
 import { SplashScreen } from 'src/components/loading-screen';
 
@@ -48,6 +50,8 @@ const page = (element: React.ReactNode) => (
 );
 
 export const routesSection: RouteObject[] = [
+  { path: '/auth/reset-password', element: <AuthCenteredLayout><AuthPage /></AuthCenteredLayout> },
+  { path: '/auth/verify-email', element: <AuthCenteredLayout><AuthPage /></AuthCenteredLayout> },
   { path: '/prototype/web-mockups', element: page(<WebMockupsPrototype />) },
   {
     path: '/',

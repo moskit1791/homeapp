@@ -1,63 +1,121 @@
 # Production deploy
 
-Ta instrukcja opisuje standardowy deploy API HomeApp na lokalna produkcje.
-Nie commituj tu surowych hasel, tokenow Proxmox ani pliku `.env`; do deployu wystarcza lokalny klucz SSH i env na serwerze.
+Produkcja web i API działa pod **https://app.porabkihome.pl**.
+Frontend używa `/api` pod tą samą domeną. Cloudflare Tunnel kończy HTTPS i kieruje
+ruch do `http://127.0.0.1:3003`. Ten port publikuje teraz kontener `web` (Nginx),
+który serwuje SPA i przekazuje `/api` bez zmiany ścieżki do `api:3000`.
+Lokalny adres origin tunelu pozostaje wewnętrznym szczegółem infrastruktury.
+API oraz PostgreSQL nie publikują portów na zewnątrz Dockera.
 
-## Hosty i dostep
+## Dostęp i stan wyjściowy
 
-- Proxmox UI: `https://192.168.100.244:8006`
-- Produkcyjny kontener/VM z aplikacja: `192.168.100.246`
-- SSH user: `homeapp`
-- SSH auth: klucz lokalny `C:\Users\moski\.ssh\homeapp_prod_ed25519`
-- Katalog aplikacji na serwerze: `/opt/homeapp`
-- Env produkcyjny na serwerze: `/opt/homeapp/.env`
-- Docker Compose: `/opt/homeapp/compose.prod.yml`
+- SSH: `homeapp@192.168.100.246`, klucz `C:\Users\moski\.ssh\homeapp_prod_ed25519`.
+- Repo: `/opt/homeapp`; sekrety: `/opt/homeapp/.env`.
+- Przegląd przed wydaniem web potwierdził działające kontenery API/DB i usługę
+  `cloudflared`; repo serwera było na `forgravity`. Wydania web przechodzą na `main`.
+- Nie nadpisuj lokalnych plików serwera i nie commituj sekretów.
 
-Proxmox jest potrzebny tylko awaryjnie, gdy trzeba sprawdzic konfiguracje kontenera albo odzyskac dostep SSH.
-Zwykly deploy idzie bezposrednio po SSH na `homeapp@192.168.100.246`.
+## Przygotowanie merge do main
 
-Stan zweryfikowany 2026-06-01: `/opt/homeapp` na produkcji jest repozytorium git na galezi `forgravity`.
-Standardowy deploy idzie przez `git fetch` + `git pull --ff-only`; nie przerzucaj recznie plikow przez `scp`,
-chyba ze produkcyjne repo zostanie awaryjnie uszkodzone.
-
-## Szybki deploy z Windows
-
-Z katalogu repo na komputerze:
+1. W PR do `main` uruchom workflow `Web production checks`: lint i testy web,
+   typecheck i testy API, build obu obrazów, test Nginx, SPA i proxy `/api`.
+2. Lokalnie używaj Node >=22.12 (obrazy web/CI: Node 24) i pnpm 9.15.4:
 
 ```powershell
-pnpm.cmd typecheck
-pnpm.cmd test
-git status --short --branch
-git add .
-git commit -m "Opis zmian"
-git push origin forgravity
+pnpm.cmd install --filter @homeapp/web... --filter @homeapp/api... --frozen-lockfile
+pnpm.cmd --filter @homeapp/shared-types build
+pnpm.cmd --filter @homeapp/shared-validation build
+pnpm.cmd --filter @homeapp/web lint
+pnpm.cmd --filter @homeapp/web test
+pnpm.cmd --filter @homeapp/web build
+pnpm.cmd --filter @homeapp/api typecheck
+pnpm.cmd --filter @homeapp/api test
 ```
 
-Nastepnie na produkcji:
+## Konfiguracja pierwszego wydania web
 
-```powershell
-ssh -i "$env:USERPROFILE\.ssh\homeapp_prod_ed25519" homeapp@192.168.100.246
+W istniejącym `/opt/homeapp/.env` ustaw poniższe wartości, zachowując pozostałe
+sekrety i integracje. Nie zastępuj tego pliku przykładowym env.
+
+```dotenv
+APP_PUBLIC_URL=https://app.porabkihome.pl
+AUTH_LINK_BASE_URL=https://app.porabkihome.pl/auth
+VITE_GOOGLE_CLIENT_ID=<publiczny identyfikator klienta Google typu Web>
 ```
 
-Na serwerze:
+`AUTH_LINK_BASE_URL` trzeba zmienić również wtedy, gdy istniejący env zawiera
+`homeapp://auth`: jawna wartość ma pierwszeństwo przed domyślną z Compose.
+Linki z wiadomości (także wcześniej wysłanych) otworzą odtąd web: potwierdzenie
+adresu, reset hasła i zaproszenie. Ustawienie `homeapp://auth` przywraca otwieranie
+aplikacji mobilnej. Nie zmieniaj callbacku integracji Google Calendar.
+
+Dodaj publiczny web client ID do istniejącej listy `GOOGLE_OAUTH_CLIENT_IDS`,
+zachowując identyfikatory Android/iOS. W Google Cloud dla klienta Web dodaj
+Authorized JavaScript origin `https://app.porabkihome.pl` (bez `/api`).
+Puste `VITE_GOOGLE_CLIENT_ID` wyłącza przycisk Google w webie; logowanie hasłem
+pozostaje dostępne. Żadne sekrety OAuth nie mogą mieć prefiksu `VITE_`.
+Zmienne Vite są osadzane podczas budowania, więc zmiana client ID wymaga rebuild.
+
+Sprawdź w konfiguracji Cloudflare Tunnel, że **cały host** `app.porabkihome.pl`
+kieruje do `http://127.0.0.1:3003`, bez ograniczenia do `/api/*`.
+Zachowaj HTTPS i nie ustawiaj cache dla HTML, `/auth/*` ani `/api/*`.
+
+## Wydanie po scaleniu PR
+
+Wykonuj na serwerze po zatwierdzeniu wdrożenia. Przed pierwszym wydaniem zachowaj
+backup bazy, `.env` i identyfikatory poprzednich obrazów poza repozytorium.
 
 ```bash
 cd /opt/homeapp
+git status --short --branch
+git rev-parse HEAD  # zapisz jako PREVIOUS_COMMIT do rollbacku
+docker compose -f compose.prod.yml --env-file .env images
 git fetch origin
-git checkout forgravity
-git pull --ff-only origin forgravity
-docker compose -f compose.prod.yml --env-file .env up -d --build
+git switch main
+git pull --ff-only origin main
+docker compose -f compose.prod.yml --env-file .env config --quiet
+# Buduj przed zatrzymaniem starego API; błąd builda nie przerywa działania.
+docker compose -f compose.prod.yml --env-file .env build
+# Przy pierwszym wdrożeniu API zwalnia port 3003, który przejmuje web.
+docker compose -f compose.prod.yml --env-file .env up -d api
+docker compose -f compose.prod.yml --env-file .env up -d web
 docker compose -f compose.prod.yml --env-file .env ps
+curl -fsS http://127.0.0.1:3003/healthz
+curl -fsS http://127.0.0.1:3003/api/health
+curl -fsS https://app.porabkihome.pl/api/health
+curl -fsS https://app.porabkihome.pl/finanse
+```
+
+Jeśli lokalna gałąź `main` na serwerze nie istnieje, `git switch main` utworzy ją
+ze śledzeniem `origin/main`. Konflikt lub rozbieżna historia wymaga wyjaśnienia;
+nie używaj `reset --hard`. Migracje API uruchamiają się przy starcie kontenera.
+Pierwsze przełączenie portu może spowodować krótką przerwę w dostępności.
+
+W przeglądarce sprawdź HTTPS, odświeżenie `/finanse`, logowanie hasłem i Google,
+wylogowanie, zaproszenie, reset hasła, weryfikację e-mail, upload/download plików
+oraz odblokowanie i zapis finansów w domu z E2EE i bez E2EE. Zweryfikuj też
+logowanie i API dotychczasowej aplikacji mobilnej.
+
+## Rollback
+
+Zachowaj poprzednie obrazy do zakończenia testów odbiorowych. Jeśli wracasz do
+wydania sprzed weba, najpierw zatrzymaj web, aby zwolnić port 3003:
+
+```bash
+cd /opt/homeapp
+docker compose -f compose.prod.yml --env-file .env stop web
+git switch --detach PREVIOUS_COMMIT
+# Przywróć poprzedni .env z backupu.
+docker compose -f compose.prod.yml --env-file .env up -d --no-build --remove-orphans
 curl -fsS http://127.0.0.1:3003/api/health
 ```
 
-Kontener API odpala migracje DB przy starcie:
+Przed `up --no-build` przywróć tag obrazu API z zapisanego identyfikatora poprzedniego
+obrazu (`docker tag <poprzednie-id-api> homeapp-api`). Rollback kodu nie cofa migracji;
+jeśli wydanie zmienia schemat, oceniaj zgodność i odtworzenie backupu oddzielnie.
 
-```text
-pnpm --filter @homeapp/api db:migrate && node apps/api/dist/main.js
-```
-
-Dlatego przy deployu zmian backendu i SQL wystarczy przebudowac/restartowac Compose.
+Dokumentacja mechanizmów: [Vite env](https://vite.dev/guide/env-and-mode),
+[Nginx proxy](https://nginx.org/en/docs/http/ngx_http_proxy_module.html).
 
 ## APK build - zasady bez mielenia czasu
 

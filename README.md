@@ -31,6 +31,7 @@ Import bankowy nie łączy się z bankiem. Android przekazuje powiadomienie do l
 ```text
 apps/
   api/       API NestJS
+  web/       aplikacja przeglądarkowa React/Vite
   mobile/    aplikacja Expo/React Native i lokalne moduły Expo
 db/
   migrations/
@@ -44,6 +45,7 @@ scripts/
 ## Wymagania
 
 - Node.js co najmniej 20.11,
+- dla klienta web: Node.js >=22.12 (produkcja web i CI używają Node 24),
 - pnpm 9.15.4,
 - PostgreSQL,
 - dla Androida: Android Studio/JDK i skonfigurowany Android SDK.

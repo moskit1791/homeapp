@@ -1,4 +1,4 @@
-const DEFAULT_API_BASE_URL = 'https://app.porabkihome.pl/api';
+const DEFAULT_API_BASE_URL = import.meta.env.PROD ? '/api' : 'https://app.porabkihome.pl/api';
 
 function normalizeApiBaseUrl(url: string): string {
   const normalized = url.trim().replace(/\/+$/, '');
