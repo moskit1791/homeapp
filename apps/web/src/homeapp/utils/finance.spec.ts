@@ -1,6 +1,73 @@
+import type { FinanceDebt } from '../api';
+
 import { it, expect, describe } from 'vitest';
 
-import { summarizeBudgetCategories } from './finance';
+import { groupDebtsByLender, summarizeBudgetCategories } from './finance';
+
+function debt(
+  id: string,
+  lenderName: string,
+  remainingAmount: string,
+  extra: Partial<FinanceDebt> = {}
+): FinanceDebt {
+  return {
+    id,
+    lenderName,
+    remainingAmount,
+    amount: remainingAmount,
+    paidAmount: '0',
+    purpose: id,
+    isSettled: false,
+    dueDate: null,
+    note: null,
+    payments: [],
+    householdId: 'test-household',
+    createdAt: '',
+    updatedAt: '',
+    settledAt: null,
+    encryptedPayload: null,
+    encryptionVersion: null,
+    ...extra,
+  };
+}
+
+describe('pożyczki grupowane jak w aplikacji mobilnej', () => {
+  it('łączy pożyczki Dzieci w jeden box i sumuje pozostałe kwoty', () => {
+    const loans = [
+      debt('skarpetki', 'Dzieci', '410'),
+      debt('ciężary', 'Malwinka', '1100'),
+      debt('siłownia', ' dzieci ', '1450'),
+    ];
+    const groups = groupDebtsByLender(loans);
+    expect(
+      groups.map(({ label, totalOpen, activeCount }) => ({ label, totalOpen, activeCount }))
+    ).toEqual([
+      { label: 'Dzieci', totalOpen: 1860, activeCount: 2 },
+      { label: 'Malwinka', totalOpen: 1100, activeCount: 1 },
+    ]);
+    expect(groups[0].debts).toEqual([loans[2], loans[0]]);
+    expect(groups[0].debts[0]).toBe(loans[2]);
+  });
+
+  it('zachowuje spłacone pożyczki, ale nie dolicza ich do należności', () => {
+    const groups = groupDebtsByLender([
+      debt('spłacona', 'Dzieci', '500', { isSettled: true }),
+      debt('bez terminu', 'Dzieci', '80'),
+      debt('z terminem', 'Dzieci', '20', { dueDate: '2026-10-01' }),
+    ]);
+    expect(groups[0]).toMatchObject({ totalOpen: 100, activeCount: 2, settledCount: 1 });
+    expect(groups[0].debts.map(({ id }) => id)).toEqual(['z terminem', 'bez terminu', 'spłacona']);
+  });
+
+  it('obsługuje pustą listę i brak nazwy pożyczkodawcy', () => {
+    expect(groupDebtsByLender([])).toEqual([]);
+    expect(groupDebtsByLender([debt('a', '  ', '10'), debt('b', '', '20')])[0]).toMatchObject({
+      label: 'Bez nazwy',
+      activeCount: 2,
+      totalOpen: 30,
+    });
+  });
+});
 
 describe('podsumowanie przefiltrowanego budżetu', () => {
   it('liczy liczby wyłącznie z widocznych pozycji', () => {

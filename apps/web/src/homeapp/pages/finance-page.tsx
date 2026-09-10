@@ -34,10 +34,10 @@ import {
 import { useSession } from '../auth/session-context';
 import { usePermission } from '../auth/use-permission';
 import { money, todayIso, shortDate } from '../utils/format';
-import { summarizeBudgetCategories } from '../utils/finance';
 import savingsCarImage from '../../../../mobile/assets/savings-goal-car.png';
 import savingsHomeImage from '../../../../mobile/assets/savings-goal-home.png';
 import savingsGiftImage from '../../../../mobile/assets/savings-goal-gift.png';
+import { groupDebtsByLender, summarizeBudgetCategories } from '../utils/finance';
 import savingsPhoneImage from '../../../../mobile/assets/savings-goal-phone.png';
 import savingsTravelImage from '../../../../mobile/assets/savings-goal-travel.png';
 import savingsDefaultImage from '../../../../mobile/assets/savings-goal-default.png';
@@ -1366,146 +1366,132 @@ export function FinancePage() {
                 gap: 2,
               }}
             >
-              {debts.data?.map((debt, index) => {
-                const total = Number(debt.amount || 0);
-                const paid = Number(debt.paidAmount || 0);
-                const progress = total > 0 ? Math.min(Math.round((paid / total) * 100), 100) : 0;
+              {groupDebtsByLender(debts.data ?? []).map((group, index) => {
                 const accent = categoryAccents[index % categoryAccents.length];
-
                 return (
                   <Box
-                    key={debt.id}
+                    key={group.id}
                     sx={(theme) => ({
                       ...financeSurface(theme),
-                      p: 2.5,
-                      position: 'relative',
                       overflow: 'hidden',
-                      borderTop: `3px solid ${debt.isSettled ? '#52DA99' : accent}`,
+                      alignSelf: 'start',
+                      borderTop: `3px solid ${group.activeCount === 0 ? '#52DA99' : accent}`,
                     })}
                   >
-                    <Stack direction="row" spacing={1.25} sx={{ alignItems: 'flex-start' }}>
-                      <Box
-                        sx={{
-                          width: 46,
-                          height: 46,
-                          display: 'grid',
-                          placeItems: 'center',
-                          flexShrink: 0,
-                          borderRadius: 1.5,
-                          color: debt.isSettled ? '#52DA99' : accent,
-                          bgcolor: debt.isSettled ? 'rgba(82,218,153,.12)' : `${accent}1A`,
-                        }}
-                      >
-                        <Icon
-                          icon={
-                            debt.isSettled
-                              ? 'solar:check-circle-bold-duotone'
-                              : 'solar:bill-check-bold-duotone'
-                          }
-                          width={27}
-                        />
-                      </Box>
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                          <Typography variant="h5" noWrap>
-                            {debt.lenderName}
-                          </Typography>
-                          <Chip
-                            size="small"
-                            color={debt.isSettled ? 'success' : 'warning'}
-                            label={debt.isSettled ? 'Spłacone' : `${progress}%`}
-                          />
-                        </Stack>
-                        <Typography variant="body2" color="text.secondary" noWrap>
-                          {debt.purpose || 'Bez opisu celu'}
-                        </Typography>
-                      </Box>
-                      <Stack direction="row" spacing={0}>
-                        <IconButton
-                          size="small"
-                          aria-label={`Edytuj zobowiązanie ${debt.lenderName}`}
-                          disabled={!permission.canUpdate}
-                          onClick={() => {
-                            setEditingDebt(debt);
-                            setName(debt.lenderName);
-                            setTargetAmount(debt.purpose);
-                            setAmount(debt.amount);
-                            setDueDate(debt.dueDate ?? '');
-                            setNoteText(debt.note ?? '');
-                            setDebtIsSettled(debt.isSettled);
-                            setOpen(true);
-                          }}
-                        >
-                          <Icon icon="solar:pen-bold-duotone" />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          aria-label={`Usuń zobowiązanie ${debt.lenderName}`}
-                          color="error"
-                          disabled={!permission.canDelete}
-                          onClick={() =>
-                            confirmDelete(debt.lenderName) && removeDebt.mutate(debt.id)
-                          }
-                        >
-                          <Icon icon="solar:trash-bin-trash-bold-duotone" />
-                        </IconButton>
-                      </Stack>
-                    </Stack>
-
-                    <Stack direction="row" sx={{ mt: 2.5, alignItems: 'baseline' }}>
-                      <Typography variant="h3">{money(debt.remainingAmount, currency)}</Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
-                        pozostało
-                      </Typography>
-                    </Stack>
-                    <LinearProgress
-                      variant="determinate"
-                      value={progress}
-                      color={debt.isSettled ? 'success' : 'warning'}
-                      sx={{ mt: 1.25, height: 8, borderRadius: 4 }}
-                    />
-                    <Stack
-                      direction="row"
-                      sx={{ mt: 1, justifyContent: 'space-between', color: 'text.secondary' }}
-                    >
-                      <Typography variant="caption">Spłacono {money(paid, currency)}</Typography>
-                      <Typography variant="caption">z {money(total, currency)}</Typography>
-                    </Stack>
-
-                    <Stack spacing={0.8} sx={{ mt: 2 }}>
+                    <Stack spacing={1} sx={{ p: 2.5 }}>
                       <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                        <Icon icon="solar:calendar-minimalistic-bold-duotone" width={18} />
-                        <Typography variant="body2">Termin: {shortDate(debt.dueDate)}</Typography>
-                      </Stack>
-                      {debt.note && (
-                        <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
-                          <Icon icon="solar:notes-bold-duotone" width={18} />
-                          <Typography variant="body2" color="text.secondary" noWrap>
-                            {debt.note}
-                          </Typography>
-                        </Stack>
-                      )}
-                    </Stack>
-
-                    {debt.payments.length > 0 && (
-                      <Box sx={{ mt: 2, pt: 1.5, borderTop: '1px dashed', borderColor: 'divider' }}>
-                        <Typography variant="caption" color="text.secondary">
-                          Ostatnia spłata:{' '}
-                          {shortDate(debt.payments[0].paidAt ?? debt.payments[0].createdAt)} ·{' '}
-                          {money(debt.payments[0].amount, currency)}
+                        <Typography variant="h5" sx={{ flex: 1, overflowWrap: 'anywhere' }}>
+                          {group.label}
                         </Typography>
-                      </Box>
-                    )}
-                    <Button
-                      fullWidth
-                      variant="outlined"
-                      startIcon={<Icon icon="solar:hand-money-bold-duotone" />}
-                      sx={{ mt: 2 }}
-                      disabled={!permission.canUpdate || debt.isSettled}
-                      onClick={() => openManage('debt-payment', debt.id)}
-                    >
-                      {debt.isSettled ? 'Zobowiązanie spłacone' : 'Zapisz spłatę'}
-                    </Button>
+                        <Chip size="small" label={group.debts.length} />
+                      </Stack>
+                      <Typography variant="body2" color="text.secondary">
+                        {group.activeCount} aktywne / {group.settledCount} spłacone
+                      </Typography>
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        sx={{ alignItems: 'baseline', flexWrap: 'wrap' }}
+                      >
+                        <Typography variant="h3">{money(group.totalOpen, currency)}</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          pozostało łącznie
+                        </Typography>
+                      </Stack>
+                    </Stack>
+                    <Stack divider={<Divider />}>
+                      {group.debts.map((debt) => (
+                        <Stack
+                          key={debt.id}
+                          spacing={1}
+                          sx={{ p: 2.5, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}
+                        >
+                          <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
+                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                              <Typography variant="subtitle1" sx={{ overflowWrap: 'anywhere' }}>
+                                {debt.purpose || 'Bez opisu celu'}
+                              </Typography>
+                              <Typography variant="body2" color="text.secondary">
+                                Spłacono {money(debt.paidAmount, currency)} z{' '}
+                                {money(debt.amount, currency)}
+                              </Typography>
+                            </Box>
+                            <IconButton
+                              size="small"
+                              aria-label={`Edytuj zobowiązanie ${group.label}: ${debt.purpose}`}
+                              disabled={!permission.canUpdate}
+                              onClick={() => {
+                                setEditingDebt(debt);
+                                setName(debt.lenderName);
+                                setTargetAmount(debt.purpose);
+                                setAmount(debt.amount);
+                                setDueDate(debt.dueDate ?? '');
+                                setNoteText(debt.note ?? '');
+                                setDebtIsSettled(debt.isSettled);
+                                setOpen(true);
+                              }}
+                            >
+                              <Icon icon="solar:pen-bold-duotone" />
+                            </IconButton>
+                            <IconButton
+                              size="small"
+                              aria-label={`Usuń zobowiązanie ${group.label}: ${debt.purpose}`}
+                              color="error"
+                              disabled={!permission.canDelete}
+                              onClick={() =>
+                                confirmDelete(`${group.label}: ${debt.purpose}`) &&
+                                removeDebt.mutate(debt.id)
+                              }
+                            >
+                              <Icon icon="solar:trash-bin-trash-bold-duotone" />
+                            </IconButton>
+                          </Stack>
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            sx={{
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              flexWrap: 'wrap',
+                            }}
+                          >
+                            <Typography variant="subtitle1">
+                              {money(debt.remainingAmount, currency)}
+                            </Typography>
+                            {debt.isSettled && (
+                              <Chip size="small" color="success" label="Spłacone" />
+                            )}
+                            <Typography variant="caption" color="text.secondary">
+                              Termin: {shortDate(debt.dueDate)}
+                            </Typography>
+                          </Stack>
+                          {debt.note && (
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                              sx={{ overflowWrap: 'anywhere' }}
+                            >
+                              {debt.note}
+                            </Typography>
+                          )}
+                          {debt.payments.length > 0 && (
+                            <Typography variant="caption" color="text.secondary">
+                              Ostatnia spłata:{' '}
+                              {shortDate(debt.payments[0].paidAt ?? debt.payments[0].createdAt)} ·{' '}
+                              {money(debt.payments[0].amount, currency)}
+                            </Typography>
+                          )}
+                          <Button
+                            variant="outlined"
+                            startIcon={<Icon icon="solar:hand-money-bold-duotone" />}
+                            disabled={!permission.canUpdate || debt.isSettled}
+                            onClick={() => openManage('debt-payment', debt.id)}
+                          >
+                            {debt.isSettled ? 'Zobowiązanie spłacone' : 'Zapisz spłatę'}
+                          </Button>
+                        </Stack>
+                      ))}
+                    </Stack>
                   </Box>
                 );
               })}
