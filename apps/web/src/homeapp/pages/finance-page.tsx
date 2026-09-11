@@ -37,11 +37,15 @@ import { money, todayIso, shortDate } from '../utils/format';
 import savingsCarImage from '../../../../mobile/assets/savings-goal-car.png';
 import savingsHomeImage from '../../../../mobile/assets/savings-goal-home.png';
 import savingsGiftImage from '../../../../mobile/assets/savings-goal-gift.png';
-import { groupDebtsByLender, summarizeBudgetCategories } from '../utils/finance';
 import savingsPhoneImage from '../../../../mobile/assets/savings-goal-phone.png';
 import savingsTravelImage from '../../../../mobile/assets/savings-goal-travel.png';
 import savingsDefaultImage from '../../../../mobile/assets/savings-goal-default.png';
 import savingsEmergencyImage from '../../../../mobile/assets/savings-goal-emergency.png';
+import {
+  groupDebtsByLender,
+  summarizeBudgetCategories,
+  resolveBudgetItemCategories,
+} from '../utils/finance';
 import {
   Page,
   ErrorView,
@@ -405,8 +409,8 @@ export function FinancePage() {
       category.items.map((item) => ({ ...item, categoryName: category.name }))
     ) ?? [];
   const activeCategories = useMemo(
-    () => (categories.data ?? []).filter((category) => category.isActive),
-    [categories.data]
+    () => resolveBudgetItemCategories(budget.data?.categories ?? [], categories.data ?? []),
+    [budget.data?.categories, categories.data]
   );
 
   useEffect(() => {
@@ -463,6 +467,11 @@ export function FinancePage() {
     setEditingCategory(category);
     setName(category.name);
     setCopyToNextMonth(category.copyBudgetToNextMonth);
+  }
+
+  function openItemCreate(nextCategoryId?: string) {
+    openManage('item');
+    setCategoryId(nextCategoryId ?? activeCategories[0]?.id ?? '');
   }
 
   function openItemEdit(item: BudgetItemSummary) {
@@ -738,7 +747,7 @@ export function FinancePage() {
                       <IconButton
                         aria-label="Dodaj pozycję budżetu"
                         disabled={!permission.canCreate || activeCategories.length === 0}
-                        onClick={() => openManage('item')}
+                        onClick={() => openItemCreate()}
                       >
                         <Icon icon="solar:list-plus-bold-duotone" />
                       </IconButton>
@@ -996,6 +1005,18 @@ export function FinancePage() {
                             </Stack>
                           );
                         })}
+                        {permission.canCreate && (
+                          <Button
+                            fullWidth
+                            size="small"
+                            variant="text"
+                            startIcon={<Icon icon="solar:list-plus-bold-duotone" />}
+                            onClick={() => openItemCreate(category.id)}
+                            sx={{ mt: 0.75, justifyContent: 'flex-start' }}
+                          >
+                            Dodaj pozycję
+                          </Button>
+                        )}
                       </Stack>
                     )}
                   </SectionCard>
@@ -1244,6 +1265,20 @@ export function FinancePage() {
                               </TableRow>
                             );
                           })}
+                        {!collapsed && permission.canCreate && (
+                          <TableRow>
+                            <TableCell colSpan={7} sx={{ py: 0.75, pl: 10 }}>
+                              <Button
+                                size="small"
+                                variant="text"
+                                startIcon={<Icon icon="solar:list-plus-bold-duotone" />}
+                                onClick={() => openItemCreate(category.id)}
+                              >
+                                Dodaj pozycję w kategorii {category.name}
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        )}
                       </Fragment>
                     );
                   })}

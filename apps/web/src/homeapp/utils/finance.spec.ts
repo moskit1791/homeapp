@@ -2,7 +2,11 @@ import type { FinanceDebt } from '../api';
 
 import { it, expect, describe } from 'vitest';
 
-import { groupDebtsByLender, summarizeBudgetCategories } from './finance';
+import {
+  groupDebtsByLender,
+  summarizeBudgetCategories,
+  resolveBudgetItemCategories,
+} from './finance';
 
 function debt(
   id: string,
@@ -87,5 +91,30 @@ describe('podsumowanie przefiltrowanego budżetu', () => {
     expect(
       summarizeBudgetCategories([{ items: [{ budgetAmount: null, spentAmount: 'błąd' }] }])
     ).toEqual({ budget: 0, spent: 0, remaining: 0, usage: 0, itemCount: 1 });
+  });
+});
+
+describe('kategorie dostępne przy dodawaniu pozycji budżetu', () => {
+  it('udostępnia domyślne kategorie z bieżącego miesiąca w nowym domu', () => {
+    const defaultCategories = [
+      { id: 'fixed', isActive: true, name: 'Koszty stałe' },
+      { id: 'other', isActive: true, name: 'Pozostałe' },
+    ];
+
+    expect(resolveBudgetItemCategories(defaultCategories, [])).toEqual(defaultCategories);
+  });
+
+  it('łączy kategorie miesiąca z katalogiem bez duplikatów i pomija nieaktywne', () => {
+    const visible = [{ id: 'fixed', isActive: true, name: 'Koszty stałe' }];
+    const catalog = [
+      { id: 'fixed', isActive: true, name: 'Koszty stałe' },
+      { id: 'custom', isActive: true, name: 'Wakacje' },
+      { id: 'archived', isActive: false, name: 'Archiwum' },
+    ];
+
+    expect(resolveBudgetItemCategories(visible, catalog).map(({ id }) => id)).toEqual([
+      'fixed',
+      'custom',
+    ]);
   });
 });

@@ -4,9 +4,27 @@ type BudgetCategoryValues = {
   items: Array<{ budgetAmount: string | null; spentAmount: string }>;
 };
 
+type SelectableBudgetCategory = { id: string; isActive: boolean; name: string };
+
 function finiteAmount(value: string | null): number {
   const amount = Number(value ?? 0);
   return Number.isFinite(amount) ? amount : 0;
+}
+
+export function resolveBudgetItemCategories<
+  VisibleCategory extends SelectableBudgetCategory,
+  CatalogCategory extends SelectableBudgetCategory,
+>(
+  visibleMonthCategories: VisibleCategory[],
+  catalogCategories: CatalogCategory[]
+): Array<VisibleCategory | CatalogCategory> {
+  const categories = new Map<string, VisibleCategory | CatalogCategory>();
+
+  for (const category of [...visibleMonthCategories, ...catalogCategories]) {
+    if (category.isActive && !categories.has(category.id)) categories.set(category.id, category);
+  }
+
+  return [...categories.values()];
 }
 
 export function groupDebtsByLender(debts: FinanceDebt[]) {
