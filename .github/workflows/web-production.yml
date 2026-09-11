@@ -3,7 +3,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [webapp, codex/webapp-production]
+    branches: [main, webapp, 'codex/**']
 permissions:
   contents: read
 jobs:

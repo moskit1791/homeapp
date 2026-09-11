@@ -1,5 +1,8 @@
 # Production deploy
 
+Automatyczne wdrożenia po aktualizacji `main`:
+[konfiguracja, logi i rollback](automatic-deploy.md).
+
 Produkcja web i API działa pod **https://app.porabkihome.pl**.
 Frontend używa `/api` pod tą samą domeną. Cloudflare Tunnel kończy HTTPS i kieruje
 ruch do `http://127.0.0.1:3003`. Ten port publikuje teraz kontener `web` (Nginx),

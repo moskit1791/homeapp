@@ -14,7 +14,10 @@ ARG VITE_GOOGLE_CLIENT_ID=""
 ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
 ENV VITE_API_URL=/api
 ENV NODE_OPTIONS=--max-old-space-size=1536
-RUN pnpm --filter @homeapp/shared-types build && pnpm --filter @homeapp/web build
+RUN pnpm --filter @homeapp/shared-types build \
+  && pnpm --filter @homeapp/web lint \
+  && pnpm --filter @homeapp/web test --maxWorkers=1 --minWorkers=1 \
+  && pnpm --filter @homeapp/web build
 
 FROM nginx:stable-alpine
 COPY deploy/web.nginx.conf /etc/nginx/conf.d/default.conf
