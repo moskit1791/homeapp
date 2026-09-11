@@ -36,6 +36,11 @@ systemd wymaga ponownego wykonania powyższych komend instalacyjnych.
 
 ## Kontrola i odzyskiwanie
 
+Testy mechanizmu (izolowane repozytoria i atrapy Dockera; bez zmian na produkcji):
+`bash scripts/deploy-production.spec.sh "$PWD/scripts/deploy-production.sh"`.
+Uruchamia je również GitHub Actions. Obejmują udane wdrożenie, brak zmian,
+zatrzymanie po błędzie builda, rollback po błędzie healthchecka oraz sprzątanie.
+
 ```bash
 systemctl list-timers homeapp-deploy.timer
 systemctl status homeapp-deploy.service

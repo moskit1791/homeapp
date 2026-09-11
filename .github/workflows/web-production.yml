@@ -13,6 +13,8 @@ jobs:
       COMPOSE_PROJECT_NAME: homeapp
     steps:
       - uses: actions/checkout@v4
+      - name: Test deployment success and rollback paths
+        run: bash scripts/deploy-production.spec.sh "$PWD/scripts/deploy-production.sh"
       - uses: pnpm/action-setup@v4
         with:
           version: 9.15.4

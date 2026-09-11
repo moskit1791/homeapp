@@ -80,7 +80,7 @@ main() {
   # Sequential builds keep peak memory down on the 2 GB production host.
   if (( api_changed )); then
     "${compose[@]}" build api
-    docker run --rm homeapp-api pnpm --filter @homeapp/api test --maxWorkers=1 --minWorkers=1
+    docker run --rm homeapp-api pnpm --filter @homeapp/api run test --maxWorkers=1 --minWorkers=1
   fi
   if (( web_changed )); then
     # The Dockerfile runs lint, tests and typecheck before bundling.
