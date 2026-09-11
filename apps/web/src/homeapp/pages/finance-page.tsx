@@ -625,6 +625,16 @@ export function FinancePage() {
                 </IconButton>
               </Stack>
             )}
+            {tab === 'budget' && (
+              <Button
+                variant="outlined"
+                startIcon={<Icon icon="solar:list-plus-bold-duotone" />}
+                disabled={!permission.canCreate || activeCategories.length === 0}
+                onClick={() => openItemCreate()}
+              >
+                Dodaj pozycję
+              </Button>
+            )}
             <PrimaryButton
               onClick={() => openPrimaryCreate()}
               disabled={!permission.canCreate || (tab === 'budget' && budgetItems.length === 0)}
