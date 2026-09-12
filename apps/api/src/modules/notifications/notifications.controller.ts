@@ -6,6 +6,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { HouseholdContextGuard } from '../households/guards/household-context.guard';
 import {
   RegisterPushTokenDto,
+  RegisterWebPushSubscriptionDto,
   SendTestPushDto,
   UpdateNotificationPreferencesDto
 } from './dto/notifications.dto';
@@ -23,6 +24,19 @@ export class NotificationsController {
     @Body() dto: RegisterPushTokenDto
   ) {
     return this.notificationsService.registerExpoPushToken(
+      this.requireHousehold(household),
+      this.requireUser(user),
+      dto
+    );
+  }
+
+  @Post('web-push-subscriptions')
+  registerWebPushSubscription(
+    @CurrentHousehold() household: HouseholdContext | undefined,
+    @CurrentUser() user: UserContext | undefined,
+    @Body() dto: RegisterWebPushSubscriptionDto
+  ) {
+    return this.notificationsService.registerWebPushSubscription(
       this.requireHousehold(household),
       this.requireUser(user),
       dto

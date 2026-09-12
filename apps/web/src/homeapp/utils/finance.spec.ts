@@ -4,9 +4,34 @@ import { it, expect, describe } from 'vitest';
 
 import {
   groupDebtsByLender,
+  resolveBudgetItemIcon,
   summarizeBudgetCategories,
   resolveBudgetItemCategories,
 } from './finance';
+
+describe('automatyczny dobór ikon pozycji budżetu', () => {
+  it.each([
+    ['rata', 'solar:hand-money-bold-duotone'],
+    ['Woda', 'solar:waterdrops-bold-duotone'],
+    ['śmieci', 'solar:trash-bin-trash-bold-duotone'],
+    ['Przedszkole', 'solar:notebook-bold-duotone'],
+    ['Sanok prezent', 'solar:gift-bold-duotone'],
+    ['spłata auta', 'solar:hand-money-bold-duotone'],
+    ['kot', 'solar:heart-bold'],
+    ['Emerytura Rodziców', 'solar:piggy-bank-bold-duotone'],
+  ])('dobiera semantyczną ikonę dla „%s”', (name, expected) => {
+    expect(resolveBudgetItemIcon(name)).toBe(expected);
+  });
+
+  it('korzysta z nazwy kategorii i stabilnego fallbacku dla własnych nazw', () => {
+    expect(resolveBudgetItemIcon('Maja lutcza', 'Dzieci')).toBe(
+      'solar:users-group-rounded-bold-duotone'
+    );
+    expect(resolveBudgetItemIcon('Nietypowa pozycja')).toBe(
+      resolveBudgetItemIcon('Nietypowa pozycja')
+    );
+  });
+});
 
 function debt(
   id: string,

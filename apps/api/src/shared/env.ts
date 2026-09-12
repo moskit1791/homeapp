@@ -75,6 +75,9 @@ const envSchema = z.object({
   SMTP_PORT: z.coerce.number().int().positive().default(587),
   SMTP_SECURE: booleanEnv.default(false),
   SMTP_USER: optionalNonEmptyString,
+  WEB_PUSH_SUBJECT: z.string().default('mailto:noreply@homeapp.local'),
+  WEB_PUSH_VAPID_PRIVATE_KEY: optionalNonEmptyString,
+  WEB_PUSH_VAPID_PUBLIC_KEY: optionalNonEmptyString,
   STORAGE_DRIVER: z.enum(['local']).default('local')
 }).superRefine((env, context) => {
   if (Boolean(env.SMTP_USER) !== Boolean(env.SMTP_PASSWORD)) {
@@ -82,6 +85,14 @@ const envSchema = z.object({
       code: z.ZodIssueCode.custom,
       message: 'SMTP_USER and SMTP_PASSWORD must be configured together',
       path: ['SMTP_USER']
+    });
+  }
+
+  if (Boolean(env.WEB_PUSH_VAPID_PUBLIC_KEY) !== Boolean(env.WEB_PUSH_VAPID_PRIVATE_KEY)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'WEB_PUSH_VAPID_PUBLIC_KEY and WEB_PUSH_VAPID_PRIVATE_KEY must be configured together',
+      path: ['WEB_PUSH_VAPID_PUBLIC_KEY']
     });
   }
 

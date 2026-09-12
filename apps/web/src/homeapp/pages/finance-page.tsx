@@ -43,6 +43,7 @@ import savingsDefaultImage from '../../../../mobile/assets/savings-goal-default.
 import savingsEmergencyImage from '../../../../mobile/assets/savings-goal-emergency.png';
 import {
   groupDebtsByLender,
+  resolveBudgetItemIcon,
   summarizeBudgetCategories,
   resolveBudgetItemCategories,
 } from '../utils/finance';
@@ -102,29 +103,6 @@ const financeSurface = (theme: Theme) => ({
 });
 
 const categoryAccents = ['#FF9F43', '#55D99B', '#4C9AFF', '#A879E8'];
-
-function budgetItemIcon(name: string) {
-  const normalized = name
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .toLowerCase();
-  if (/jedz|spozy|zakup/.test(normalized)) return 'solar:chef-hat-heart-bold-duotone';
-  if (/prad|energi|elektr/.test(normalized)) return 'solar:bolt-bold-duotone';
-  if (/paliw/.test(normalized)) return 'solar:gas-station-bold-duotone';
-  if (/auto|samoch/.test(normalized)) return 'solar:wheel-bold-duotone';
-  if (/internet|wifi/.test(normalized)) return 'solar:wi-fi-router-bold-duotone';
-  if (/telefon/.test(normalized)) return 'solar:phone-calling-bold-duotone';
-  if (/gaz/.test(normalized)) return 'solar:fire-bold-duotone';
-  if (/wod/.test(normalized)) return 'solar:waterdrops-bold-duotone';
-  if (/dom|czynsz|mieszkan/.test(normalized)) return 'solar:home-smile-bold-duotone';
-  if (/fryz|urod/.test(normalized)) return 'solar:scissors-square-bold-duotone';
-  if (/lekar|zdrow|apte/.test(normalized)) return 'solar:medical-kit-bold-duotone';
-  if (/ubezpiecz/.test(normalized)) return 'solar:shield-check-bold-duotone';
-  if (/prezent/.test(normalized)) return 'solar:gift-bold-duotone';
-  if (/telewiz|netflix|subskry/.test(normalized)) return 'solar:tv-bold-duotone';
-  if (/poduszk|oszcz/.test(normalized)) return 'solar:wallet-money-bold-duotone';
-  return 'solar:bill-list-bold-duotone';
-}
 
 function savingsImage(name: string) {
   if (/auto|samoch/i.test(name)) return savingsCarImage;
@@ -634,6 +612,16 @@ export function FinancePage() {
                 </IconButton>
               </Stack>
             )}
+            {tab === 'budget' && budget.data && (
+              <Button
+                variant="outlined"
+                startIcon={<Icon icon="solar:add-square-bold-duotone" />}
+                onClick={() => openItemCreate()}
+                disabled={!permission.canCreate || activeCategories.length === 0}
+              >
+                Dodaj pozycję
+              </Button>
+            )}
             <PrimaryButton
               onClick={() => openPrimaryCreate()}
               disabled={!permission.canCreate || (tab === 'budget' && budgetItems.length === 0)}
@@ -973,7 +961,11 @@ export function FinancePage() {
                               spacing={1}
                               sx={{ py: 1.2, alignItems: 'center' }}
                             >
-                              <Icon icon={budgetItemIcon(item.name)} width={22} color={accent} />
+                              <Icon
+                                icon={resolveBudgetItemIcon(item.name, category.name)}
+                                width={22}
+                                color={accent}
+                              />
                               <Box
                                 role="button"
                                 tabIndex={0}
@@ -1190,7 +1182,7 @@ export function FinancePage() {
                                     sx={{ alignItems: 'center' }}
                                   >
                                     <Icon
-                                      icon={budgetItemIcon(item.name)}
+                                      icon={resolveBudgetItemIcon(item.name, category.name)}
                                       width={22}
                                       color={accent}
                                     />

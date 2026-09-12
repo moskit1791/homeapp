@@ -10,7 +10,7 @@ done
 asset=$(sed -n 's/.*src="\(\/assets\/[^" ]*\.js\)".*/\1/p' <<<"$html" | head -n 1)
 test -n "$asset"
 curl --max-time 10 -fsS "$base$asset" -o /dev/null
-for public_asset in /homeapp-icon.png /assets/background/background-3-blur.webp; do
+for public_asset in /homeapp-icon.png /push-service-worker.js /assets/background/background-3-blur.webp; do
   curl --max-time 10 -fsS "$base$public_asset" -o /dev/null
 done
 test "$(curl --max-time 10 -s -o /dev/null -w '%{http_code}' "$base/assets/deploy-probe-missing.js")" = 404

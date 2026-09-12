@@ -571,6 +571,14 @@ export class UsersService {
       );
       await client.query(
         `
+          update web_push_subscriptions
+          set enabled = false
+          where user_id = $1
+        `,
+        [userId]
+      );
+      await client.query(
+        `
           update users
           set
             auth_provider_user_id = gen_random_uuid(),

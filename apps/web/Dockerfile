@@ -11,7 +11,9 @@ COPY apps/web apps/web
 COPY tsconfig.base.json ./
 COPY apps/mobile/assets apps/mobile/assets
 ARG VITE_GOOGLE_CLIENT_ID=""
+ARG VITE_WEB_PUSH_VAPID_PUBLIC_KEY=""
 ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
+ENV VITE_WEB_PUSH_VAPID_PUBLIC_KEY=$VITE_WEB_PUSH_VAPID_PUBLIC_KEY
 ENV VITE_API_URL=/api
 ENV NODE_OPTIONS=--max-old-space-size=1536
 RUN pnpm --filter @homeapp/shared-types build \

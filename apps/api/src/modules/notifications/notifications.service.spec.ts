@@ -1,9 +1,59 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import webPush from "web-push";
 import { NotificationsService } from "./notifications.service";
+
+vi.mock("web-push", () => ({
+  default: {
+    sendNotification: vi.fn(),
+    setVapidDetails: vi.fn(),
+  },
+}));
 
 describe("NotificationsService", () => {
   afterEach(() => {
+    vi.clearAllMocks();
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  it("sends one notification through Expo and one through browser Web Push", async () => {
+    vi.stubEnv("WEB_PUSH_SUBJECT", "mailto:test@example.test");
+    vi.stubEnv("WEB_PUSH_VAPID_PUBLIC_KEY", "public-test-key");
+    vi.stubEnv("WEB_PUSH_VAPID_PRIVATE_KEY", "private-test-key");
+    const database = {
+      query: vi.fn().mockResolvedValue({
+        rows: [
+          pushTokenRow(),
+          {
+            auth: "browser-auth-key",
+            endpoint: "https://push.example.test/subscription",
+            p256dh: "browser-p256dh-key",
+            provider: "web_push",
+          },
+        ],
+      }),
+    };
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(okExpoResponse() as never);
+    vi.mocked(webPush.sendNotification).mockResolvedValue({} as never);
+    const service = new NotificationsService(database as never);
+
+    const result = await service.sendTestPush(
+      { householdId: "household", memberId: "member" } as never,
+      {},
+    );
+
+    expect(result.sent).toBe(2);
+    expect(result.tickets).toHaveLength(2);
+    expect(webPush.setVapidDetails).toHaveBeenCalledWith(
+      "mailto:test@example.test",
+      "public-test-key",
+      "private-test-key",
+    );
+    expect(webPush.sendNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ endpoint: "https://push.example.test/subscription" }),
+      expect.stringContaining('"title":"HomeApp"'),
+      { TTL: 3600 },
+    );
   });
 
   it("does not send a household change push when the event type is throttled", async () => {

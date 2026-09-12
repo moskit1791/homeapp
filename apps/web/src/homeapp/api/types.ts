@@ -1125,6 +1125,28 @@ export interface RegisterPushTokenRequest {
   platform: PushPlatform;
 }
 
+export interface RegisterWebPushSubscriptionRequest {
+  deviceName?: string;
+  endpoint: string;
+  keys: {
+    auth: string;
+    p256dh: string;
+  };
+}
+
+export interface WebPushSubscriptionRecord {
+  createdAt: string;
+  deviceName: string;
+  enabled: boolean;
+  householdId: string;
+  householdMemberId: string;
+  id: string;
+  lastRegisteredAt: string;
+  platform: 'web';
+  updatedAt: string;
+  userId: string;
+}
+
 export interface PushToken {
   createdAt: string;
   deviceName: string;

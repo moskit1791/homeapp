@@ -96,6 +96,7 @@ import type {
   ResendVerificationRequest,
   UpdateCleaningTaskRequest,
   UpdateShoppingItemRequest,
+  WebPushSubscriptionRecord,
   CreateCalendarEventRequest,
   GoogleCalendarSyncResponse,
   MealPlanAiFinalizeResponse,
@@ -117,6 +118,7 @@ import type {
   RemoveHouseholdEncryptionRequest,
   UpdateHouseholdEncryptionRequest,
   ImportShoppingItemsWithAiResponse,
+  RegisterWebPushSubscriptionRequest,
   CreateFinanceSavingsAccountRequest,
   UpdateNotificationPreferencesRequest,
   CompleteInvitationRegistrationRequest,
@@ -373,6 +375,23 @@ export function registerPushToken(
     method: 'POST',
     signal: requestOptions.signal,
   });
+}
+
+export function registerWebPushSubscription(
+  input: RegisterWebPushSubscriptionRequest,
+  options?: ApiCallOptionsInput
+): Promise<WebPushSubscriptionRecord> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<WebPushSubscriptionRecord, RegisterWebPushSubscriptionRequest>(
+    '/notifications/web-push-subscriptions',
+    {
+      accessToken: requestOptions.accessToken,
+      body: input,
+      method: 'POST',
+      signal: requestOptions.signal,
+    }
+  );
 }
 
 export function sendTestPush(

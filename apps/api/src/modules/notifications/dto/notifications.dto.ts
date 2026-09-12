@@ -20,6 +20,31 @@ export class RegisterPushTokenDto {
   deviceName?: string;
 }
 
+export class WebPushSubscriptionKeysDto {
+  @IsString()
+  @Length(20, 500)
+  p256dh!: string;
+
+  @IsString()
+  @Length(10, 500)
+  auth!: string;
+}
+
+export class RegisterWebPushSubscriptionDto {
+  @IsString()
+  @Length(10, 2048)
+  endpoint!: string;
+
+  @ValidateNested()
+  @Type(() => WebPushSubscriptionKeysDto)
+  keys!: WebPushSubscriptionKeysDto;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  deviceName?: string;
+}
+
 export class SendTestPushDto {
   @IsOptional()
   @IsString()

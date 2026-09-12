@@ -44,6 +44,9 @@ services:
       GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY: ${GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEY:-}
       GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
       GOOGLE_OAUTH_CLIENT_IDS: ${GOOGLE_OAUTH_CLIENT_IDS:-}
+      WEB_PUSH_SUBJECT: ${WEB_PUSH_SUBJECT:-mailto:noreply@app.porabkihome.pl}
+      WEB_PUSH_VAPID_PUBLIC_KEY: ${WEB_PUSH_VAPID_PUBLIC_KEY:-}
+      WEB_PUSH_VAPID_PRIVATE_KEY: ${WEB_PUSH_VAPID_PRIVATE_KEY:-}
       MAIL_DRIVER: ${MAIL_DRIVER:-smtp}
       SMTP_FROM: ${SMTP_FROM:-HomeApp <noreply@app.porabkihome.pl>}
       SMTP_HOST: ${SMTP_HOST:-}
@@ -62,6 +65,7 @@ services:
       dockerfile: apps/web/Dockerfile
       args:
         VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
+        VITE_WEB_PUSH_VAPID_PUBLIC_KEY: ${WEB_PUSH_VAPID_PUBLIC_KEY:-}
     restart: unless-stopped
     depends_on:
       - api

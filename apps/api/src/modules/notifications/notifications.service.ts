@@ -5,11 +5,14 @@ import {
   Logger,
 } from "@nestjs/common";
 import { REALTIME_EVENTS, RealtimeEventType } from "@homeapp/shared-types";
+import webPush from "web-push";
 import { HouseholdContext, UserContext } from "../../shared/request-context";
+import { loadEnv } from "../../shared/env";
 import { DatabaseService } from "../database/database.service";
 import {
   PushPlatform,
   RegisterPushTokenDto,
+  RegisterWebPushSubscriptionDto,
   SendTestPushDto,
   UpdateNotificationPreferencesDto,
 } from "./dto/notifications.dto";
@@ -84,43 +87,77 @@ export class NotificationsService {
     return this.mapPushToken(token);
   }
 
+  async registerWebPushSubscription(
+    household: HouseholdContext,
+    user: UserContext,
+    dto: RegisterWebPushSubscriptionDto,
+  ): Promise<WebPushSubscriptionRecord> {
+    const endpoint = this.normalizeWebPushEndpoint(dto.endpoint);
+    const deviceName = dto.deviceName?.trim() ?? "Przeglądarka";
+    const result = await this.database.query<WebPushSubscriptionRow>(
+      `
+        insert into web_push_subscriptions (
+          household_id,
+          household_member_id,
+          user_id,
+          endpoint,
+          p256dh,
+          auth,
+          device_name
+        )
+        values ($1, $2, $3, $4, $5, $6, $7)
+        on conflict (endpoint) do update
+        set
+          household_id = excluded.household_id,
+          household_member_id = excluded.household_member_id,
+          user_id = excluded.user_id,
+          p256dh = excluded.p256dh,
+          auth = excluded.auth,
+          device_name = excluded.device_name,
+          enabled = true,
+          last_registered_at = now()
+        returning *
+      `,
+      [
+        household.householdId,
+        household.memberId,
+        user.userId,
+        endpoint,
+        dto.keys.p256dh.trim(),
+        dto.keys.auth.trim(),
+        deviceName,
+      ],
+    );
+    const subscription = result.rows[0];
+
+    if (!subscription) {
+      throw new Error("Expected web push subscription record");
+    }
+
+    return this.mapWebPushSubscription(subscription);
+  }
+
   async sendTestPush(
     household: HouseholdContext,
     dto: SendTestPushDto,
   ): Promise<PushSendResult> {
-    const tokens = await this.listEnabledTokensForMember(
+    const recipients = await this.listEnabledTokensForMember(
       household.householdId,
       household.memberId,
     );
 
-    if (tokens.length === 0) {
+    if (recipients.length === 0) {
       return { sent: 0, tickets: [] };
     }
 
-    const messages = tokens.map((token) => ({
+    return this.deliverNotifications(recipients, {
       body: dto.body?.trim() || "Powiadomienia push w HomeApp działają.",
       data: {
         kind: "test",
+        url: "/",
       },
-      sound: "default" as const,
       title: dto.title?.trim() || "HomeApp",
-      to: token.expoPushToken,
-    }));
-    const tickets = await this.sendExpoMessages(messages);
-
-    await Promise.all(
-      tickets.map((ticket, index) =>
-        ticket.status === "error" &&
-        ticket.details?.error === "DeviceNotRegistered"
-          ? this.disableToken(tokens[index]!.expoPushToken)
-          : undefined,
-      ),
-    );
-
-    return {
-      sent: messages.length,
-      tickets,
-    };
+    });
   }
 
   async listPreferences(
@@ -213,34 +250,19 @@ export class NotificationsService {
 
     const actorName = await this.getMemberDisplayName(input.actorMemberId);
     const copy = buildNotificationCopy(input.eventType, actorName);
-    const messages = recipients.map((token) => ({
+    const notification = {
       body: copy.body,
       data: {
         eventType: input.eventType,
         kind: "household-change",
         resourceId: input.resourceId,
+        url: notificationUrl(input.eventType),
       },
-      sound: "default" as const,
       title: copy.title,
-      to: token.expoPushToken,
-    }));
+    };
 
     try {
-      const tickets = await this.sendExpoMessages(messages);
-
-      await Promise.all(
-        tickets.map((ticket, index) =>
-          ticket.status === "error" &&
-          ticket.details?.error === "DeviceNotRegistered"
-            ? this.disableToken(recipients[index]!.expoPushToken)
-            : undefined,
-        ),
-      );
-
-      return {
-        sent: messages.length,
-        tickets,
-      };
+      return await this.deliverNotifications(recipients, notification);
     } catch (error) {
       this.logger.warn(
         "Failed to send household change push notification",
@@ -274,7 +296,7 @@ export class NotificationsService {
       input.reminderOffsetMinutes,
       input.title,
     );
-    const messages = recipients.map((token) => ({
+    const notification = {
       body: startsAt,
       data: {
         eventDate: input.eventDate,
@@ -282,28 +304,13 @@ export class NotificationsService {
         eventType: "calendar.changed",
         kind: "calendar-reminder",
         reminderOffsetMinutes: String(input.reminderOffsetMinutes ?? ""),
+        url: "/kalendarz",
       },
-      sound: "default" as const,
       title: reminderTitle,
-      to: token.expoPushToken,
-    }));
+    };
 
     try {
-      const tickets = await this.sendExpoMessages(messages);
-
-      await Promise.all(
-        tickets.map((ticket, index) =>
-          ticket.status === "error" &&
-          ticket.details?.error === "DeviceNotRegistered"
-            ? this.disableToken(recipients[index]!.expoPushToken)
-            : undefined,
-        ),
-      );
-
-      return {
-        sent: messages.length,
-        tickets,
-      };
+      return await this.deliverNotifications(recipients, notification);
     } catch (error) {
       this.logger.warn(
         "Failed to send calendar reminder push notification",
@@ -331,34 +338,19 @@ export class NotificationsService {
     const taskLabel = input.location
       ? `${input.taskName} w ${input.location}`
       : input.taskName;
-    const messages = recipients.map((token) => ({
+    const notification = {
       body: taskLabel,
       data: {
         eventType: "cleaning.changed",
         kind: "cleaning-reminder",
         nextDueAt: input.nextDueAt,
+        url: "/dom",
       },
-      sound: "default" as const,
       title: "Mija termin sprzątania",
-      to: token.expoPushToken,
-    }));
+    };
 
     try {
-      const tickets = await this.sendExpoMessages(messages);
-
-      await Promise.all(
-        tickets.map((ticket, index) =>
-          ticket.status === "error" &&
-          ticket.details?.error === "DeviceNotRegistered"
-            ? this.disableToken(recipients[index]!.expoPushToken)
-            : undefined,
-        ),
-      );
-
-      return {
-        sent: messages.length,
-        tickets,
-      };
+      return await this.deliverNotifications(recipients, notification);
     } catch (error) {
       this.logger.warn(
         "Failed to send cleaning reminder push notification",
@@ -371,64 +363,72 @@ export class NotificationsService {
   private async listEnabledTokensForMember(
     householdId: string,
     householdMemberId: string,
-  ): Promise<PushTokenRecord[]> {
-    const result = await this.database.query<PushTokenRow>(
+  ): Promise<PushRecipient[]> {
+    const result = await this.database.query<PushRecipientRow>(
       `
-        select
-          id,
-          household_id,
-          household_member_id,
-          user_id,
-          expo_push_token,
-          platform,
-          device_name,
-          enabled,
-          last_registered_at,
-          created_at,
-          updated_at
+        select 'expo'::text as provider,
+          expo_push_token as endpoint,
+          null::text as p256dh,
+          null::text as auth
         from push_tokens
-        where household_id = $1
-          and household_member_id = $2
-          and enabled = true
+        where household_id = $1 and household_member_id = $2 and enabled = true
+        union all
+        select 'web_push'::text as provider,
+          endpoint,
+          p256dh,
+          auth
+        from web_push_subscriptions
+        where household_id = $1 and household_member_id = $2 and enabled = true
       `,
       [householdId, householdMemberId],
     );
 
-    return result.rows.map((row) => this.mapPushToken(row));
+    return result.rows.map((row) => this.mapPushRecipient(row));
   }
 
   private async listEnabledTokensForHouseholdEvent(
     householdId: string,
     eventType: RealtimeEventType,
     actorMemberId?: string,
-  ): Promise<PushTokenRecord[]> {
-    const result = await this.database.query<PushTokenRow>(
+  ): Promise<PushRecipient[]> {
+    const result = await this.database.query<PushRecipientRow>(
       `
-        select distinct on (pt.expo_push_token)
-          pt.id,
-          pt.household_id,
-          pt.household_member_id,
-          pt.user_id,
-          pt.expo_push_token,
-          pt.platform,
-          pt.device_name,
-          pt.enabled,
-          pt.last_registered_at,
-          pt.created_at,
-          pt.updated_at
-        from push_tokens pt
-        left join notification_preferences np
-          on np.household_member_id = pt.household_member_id
-          and np.event_type = $2
-        where pt.household_id = $1
-          and ($3::uuid is null or pt.household_member_id <> $3)
-          and pt.enabled = true
-          and coalesce(np.enabled, true) = true
+        select distinct on (recipient.provider, recipient.endpoint)
+          recipient.provider,
+          recipient.endpoint,
+          recipient.p256dh,
+          recipient.auth
+        from (
+          select 'expo'::text as provider,
+            pt.expo_push_token as endpoint,
+            null::text as p256dh,
+            null::text as auth
+          from push_tokens pt
+          left join notification_preferences np
+            on np.household_member_id = pt.household_member_id and np.event_type = $2
+          where pt.household_id = $1
+            and ($3::uuid is null or pt.household_member_id <> $3)
+            and pt.enabled = true
+            and coalesce(np.enabled, true) = true
+          union all
+          select 'web_push'::text as provider,
+            wp.endpoint,
+            wp.p256dh,
+            wp.auth
+          from web_push_subscriptions wp
+          left join notification_preferences np
+            on np.household_member_id = wp.household_member_id and np.event_type = $2
+          where wp.household_id = $1
+            and ($3::uuid is null or wp.household_member_id <> $3)
+            and wp.enabled = true
+            and coalesce(np.enabled, true) = true
+        ) recipient
+        order by recipient.provider, recipient.endpoint
       `,
       [householdId, eventType, actorMemberId ?? null],
     );
 
-    return result.rows.map((row) => this.mapPushToken(row));
+    return result.rows.map((row) => this.mapPushRecipient(row));
   }
 
   private async claimHouseholdNotificationWindow(
@@ -469,6 +469,88 @@ export class NotificationsService {
     return result.rows[0]?.display_name?.trim() || "Domownik";
   }
 
+  private async deliverNotifications(
+    recipients: PushRecipient[],
+    notification: PushNotification,
+  ): Promise<PushSendResult> {
+    const expoRecipients = recipients.filter(
+      (recipient) => recipient.provider === "expo",
+    );
+    const webRecipients = recipients.filter(
+      (recipient) => recipient.provider === "web_push",
+    );
+    const tickets: ExpoPushTicket[] = [];
+
+    if (expoRecipients.length > 0) {
+      const expoTickets = await this.sendExpoMessages(
+        expoRecipients.map((recipient) => ({
+          ...notification,
+          sound: "default" as const,
+          to: recipient.endpoint,
+        })),
+      );
+      await Promise.all(
+        expoTickets.map((ticket, index) =>
+          ticket.status === "error" &&
+          ticket.details?.error === "DeviceNotRegistered"
+            ? this.disableToken(expoRecipients[index]!.endpoint)
+            : undefined,
+        ),
+      );
+      tickets.push(...expoTickets);
+    }
+
+    const webTickets = await Promise.all(
+      webRecipients.map(async (recipient): Promise<ExpoPushTicket> => {
+        try {
+          await this.sendWebPushNotification(recipient, notification);
+          return { status: "ok" };
+        } catch (error) {
+          if (isExpiredWebPushSubscription(error)) {
+            await this.disableWebPushSubscription(recipient.endpoint);
+          }
+          this.logger.warn("Failed to send browser push notification", error);
+          return {
+            details: { error: isExpiredWebPushSubscription(error) ? "DeviceNotRegistered" : "WebPushError" },
+            message: error instanceof Error ? error.message : "Web push failed",
+            status: "error",
+          };
+        }
+      }),
+    );
+    tickets.push(...webTickets);
+
+    return { sent: recipients.length, tickets };
+  }
+
+  private async sendWebPushNotification(
+    recipient: PushRecipient,
+    notification: PushNotification,
+  ): Promise<void> {
+    const env = loadEnv();
+
+    if (!env.WEB_PUSH_VAPID_PUBLIC_KEY || !env.WEB_PUSH_VAPID_PRIVATE_KEY) {
+      throw new BadGatewayException("Web push is not configured");
+    }
+    if (!recipient.p256dh || !recipient.auth) {
+      throw new BadRequestException("Web push subscription is incomplete");
+    }
+
+    webPush.setVapidDetails(
+      env.WEB_PUSH_SUBJECT,
+      env.WEB_PUSH_VAPID_PUBLIC_KEY,
+      env.WEB_PUSH_VAPID_PRIVATE_KEY,
+    );
+    await webPush.sendNotification(
+      {
+        endpoint: recipient.endpoint,
+        keys: { auth: recipient.auth, p256dh: recipient.p256dh },
+      },
+      JSON.stringify({ ...notification, icon: "/homeapp-icon.png" }),
+      { TTL: 60 * 60 },
+    );
+  }
+
   private async sendExpoMessages(
     messages: ExpoPushMessage[],
   ): Promise<ExpoPushTicket[]> {
@@ -507,6 +589,13 @@ export class NotificationsService {
     );
   }
 
+  private async disableWebPushSubscription(endpoint: string): Promise<void> {
+    await this.database.query(
+      `update web_push_subscriptions set enabled = false where endpoint = $1`,
+      [endpoint],
+    );
+  }
+
   private normalizeExpoPushToken(expoPushToken: string): string {
     const normalized = expoPushToken.trim();
 
@@ -515,6 +604,29 @@ export class NotificationsService {
     }
 
     return normalized;
+  }
+
+  private normalizeWebPushEndpoint(endpoint: string): string {
+    const normalized = endpoint.trim();
+
+    try {
+      if (new URL(normalized).protocol !== "https:") {
+        throw new Error("Web push endpoint must use HTTPS");
+      }
+    } catch {
+      throw new BadRequestException("Invalid web push endpoint");
+    }
+
+    return normalized;
+  }
+
+  private mapPushRecipient(row: PushRecipientRow): PushRecipient {
+    return {
+      auth: row.auth,
+      endpoint: row.endpoint ?? row.expo_push_token ?? "",
+      p256dh: row.p256dh,
+      provider: row.provider === "web_push" ? "web_push" : "expo",
+    };
   }
 
   private mapPushToken(row: PushTokenRow): PushTokenRecord {
@@ -528,6 +640,21 @@ export class NotificationsService {
       id: row.id,
       lastRegisteredAt: row.last_registered_at,
       platform: row.platform,
+      updatedAt: row.updated_at,
+      userId: row.user_id,
+    };
+  }
+
+  private mapWebPushSubscription(row: WebPushSubscriptionRow): WebPushSubscriptionRecord {
+    return {
+      createdAt: row.created_at,
+      deviceName: row.device_name,
+      enabled: row.enabled,
+      householdId: row.household_id,
+      householdMemberId: row.household_member_id,
+      id: row.id,
+      lastRegisteredAt: row.last_registered_at,
+      platform: "web",
       updatedAt: row.updated_at,
       userId: row.user_id,
     };
@@ -604,6 +731,25 @@ function buildNotificationCopy(
   );
 }
 
+function notificationUrl(eventType: RealtimeEventType): string {
+  if (eventType.startsWith("finance.")) return "/finanse";
+  if (eventType === "calendar.changed") return "/kalendarz";
+  if (eventType === "cleaning.changed") return "/dom";
+  if (eventType === "meal.changed") return "/posilki";
+  if (eventType === "shopping.changed") return "/zakupy";
+  if (eventType === "todo.changed") return "/zadania";
+  if (eventType === "household.changed" || eventType === "permissions.changed") {
+    return "/domownicy";
+  }
+  return "/";
+}
+
+function isExpiredWebPushSubscription(error: unknown): boolean {
+  if (!error || typeof error !== "object" || !("statusCode" in error)) return false;
+  const statusCode = (error as { statusCode?: unknown }).statusCode;
+  return statusCode === 404 || statusCode === 410;
+}
+
 function formatCalendarReminderStart(
   eventDate: string,
   eventTime: string | null,
@@ -664,6 +810,27 @@ interface ExpoPushTicket {
   status: "ok" | "error";
 }
 
+interface PushNotification {
+  body: string;
+  data?: Record<string, unknown>;
+  title: string;
+}
+
+interface PushRecipientRow {
+  auth?: string | null;
+  endpoint?: string;
+  expo_push_token?: string;
+  p256dh?: string | null;
+  provider?: string;
+}
+
+interface PushRecipient {
+  auth?: string | null;
+  endpoint: string;
+  p256dh?: string | null;
+  provider: "expo" | "web_push";
+}
+
 interface PushTokenRow {
   created_at: string;
   device_name: string;
@@ -674,6 +841,21 @@ interface PushTokenRow {
   id: string;
   last_registered_at: string;
   platform: PushPlatform;
+  updated_at: string;
+  user_id: string;
+}
+
+interface WebPushSubscriptionRow {
+  auth: string;
+  created_at: string;
+  device_name: string;
+  enabled: boolean;
+  endpoint: string;
+  household_id: string;
+  household_member_id: string;
+  id: string;
+  last_registered_at: string;
+  p256dh: string;
   updated_at: string;
   user_id: string;
 }
@@ -696,6 +878,8 @@ export interface PushTokenRecord {
   updatedAt: string;
   userId: string;
 }
+
+export type WebPushSubscriptionRecord = Omit<PushTokenRecord, "expoPushToken">;
 
 interface NotificationPreferenceRow {
   enabled: boolean;
