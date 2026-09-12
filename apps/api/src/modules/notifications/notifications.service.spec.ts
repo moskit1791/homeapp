@@ -27,6 +27,8 @@ describe("NotificationsService", () => {
           {
             auth: "browser-auth-key",
             endpoint: "https://push.example.test/subscription",
+            household_id: "22222222-2222-2222-2222-222222222222",
+            household_member_id: "33333333-3333-3333-3333-333333333333",
             p256dh: "browser-p256dh-key",
             provider: "web_push",
           },
@@ -50,10 +52,17 @@ describe("NotificationsService", () => {
       "private-test-key",
     );
     expect(webPush.sendNotification).toHaveBeenCalledWith(
-      expect.objectContaining({ endpoint: "https://push.example.test/subscription" }),
+      expect.objectContaining({
+        endpoint: "https://push.example.test/subscription",
+      }),
       expect.stringContaining('"title":"HomeApp"'),
       { TTL: 3600 },
     );
+    expect(
+      database.query.mock.calls.filter(([sql]) =>
+        String(sql).includes("insert into notification_inbox"),
+      ),
+    ).toHaveLength(1);
   });
 
   it("does not send a household change push when the event type is throttled", async () => {
@@ -102,7 +111,47 @@ describe("NotificationsService", () => {
 
     expect(result.sent).toBe(1);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(database.query).toHaveBeenCalledTimes(3);
+    expect(database.query).toHaveBeenCalledTimes(4);
+  });
+
+  it("lists only the current member inbox and maps read state", async () => {
+    const database = {
+      query: vi.fn().mockResolvedValue({
+        rows: [
+          {
+            body: "Damian zmienił listę zakupów.",
+            created_at: "2026-09-12T15:00:00.000Z",
+            data: { eventType: "shopping.changed", url: "/zakupy" },
+            household_id: "22222222-2222-2222-2222-222222222222",
+            household_member_id: "33333333-3333-3333-3333-333333333333",
+            id: "66666666-6666-6666-6666-666666666666",
+            read_at: null,
+            title: "Zakupy",
+          },
+        ],
+      }),
+    };
+    const service = new NotificationsService(database as never);
+
+    const result = await service.listInbox({
+      householdId: "22222222-2222-2222-2222-222222222222",
+      memberId: "33333333-3333-3333-3333-333333333333",
+    } as never);
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        body: "Damian zmienił listę zakupów.",
+        readAt: null,
+        title: "Zakupy",
+      }),
+    ]);
+    expect(database.query).toHaveBeenCalledWith(
+      expect.stringContaining("from notification_inbox"),
+      [
+        "22222222-2222-2222-2222-222222222222",
+        "33333333-3333-3333-3333-333333333333",
+      ],
+    );
   });
 
   it.each([

@@ -20,8 +20,8 @@ import IconButton, { iconButtonClasses } from '@mui/material/IconButton';
 import { usePathname } from 'src/routes/hooks';
 
 import { useSession } from 'src/homeapp/auth/session-context';
+import { getMyHousehold, listHouseholdMembers } from 'src/homeapp/api';
 import { NotificationsDrawer } from 'src/homeapp/components/notifications-drawer';
-import { getMyHousehold, getStartDashboard, listHouseholdMembers } from 'src/homeapp/api';
 
 import { Logo } from 'src/components/logo';
 import { useSettingsContext } from 'src/components/settings';
@@ -66,10 +66,6 @@ export function DashboardLayout({
   const members = useQuery({
     queryKey: ['household', 'members'],
     queryFn: () => listHouseholdMembers({ accessToken }),
-  });
-  const dashboard = useQuery({
-    queryKey: ['start', 'dashboard'],
-    queryFn: () => getStartDashboard({ accessToken }),
   });
   const navVars = dashboardNavColorVars(theme, settings.state.navColor, settings.state.navLayout);
   const { value: open, onFalse: onClose, onTrue: onOpen } = useBoolean();
@@ -159,11 +155,7 @@ export function DashboardLayout({
       rightArea: (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.25, sm: 0.75 } }}>
           <Searchbar data={navData} />
-          <NotificationsDrawer
-            accessToken={accessToken}
-            dashboard={dashboard.data}
-            onOpen={() => void dashboard.refetch()}
-          />
+          <NotificationsDrawer accessToken={accessToken} />
           <Divider orientation="vertical" flexItem sx={{ mx: 0.5, my: 1.25 }} />
           <Tooltip title={isDark ? 'Włącz tryb jasny' : 'Włącz tryb ciemny'}>
             <IconButton

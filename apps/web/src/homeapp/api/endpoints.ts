@@ -68,6 +68,7 @@ import type {
   ResetPasswordResponse,
   UpdateMealPlanRequest,
   UpdateTodoItemRequest,
+  NotificationInboxItem,
   CreateDataEntryRequest,
   CreateHouseholdRequest,
   ForgotPasswordResponse,
@@ -404,6 +405,42 @@ export function sendTestPush(
     accessToken: requestOptions.accessToken,
     body: input,
     method: 'POST',
+    signal: requestOptions.signal,
+  });
+}
+
+export function listNotificationInbox(
+  options?: ApiCallOptionsInput
+): Promise<NotificationInboxItem[]> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<NotificationInboxItem[]>('/notifications/inbox', {
+    accessToken: requestOptions.accessToken,
+    signal: requestOptions.signal,
+  });
+}
+
+export function markNotificationInboxItemRead(
+  notificationId: string,
+  options?: ApiCallOptionsInput
+): Promise<NotificationInboxItem> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<NotificationInboxItem>(`/notifications/inbox/${notificationId}/read`, {
+    accessToken: requestOptions.accessToken,
+    method: 'PATCH',
+    signal: requestOptions.signal,
+  });
+}
+
+export function markAllNotificationInboxItemsRead(
+  options?: ApiCallOptionsInput
+): Promise<OkResponse> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<OkResponse>('/notifications/inbox/read-all', {
+    accessToken: requestOptions.accessToken,
+    method: 'PATCH',
     signal: requestOptions.signal,
   });
 }
@@ -1571,7 +1608,9 @@ export async function uploadAttachmentFile(
 ): Promise<LocalAttachmentUploadResponse> {
   const requestOptions = normalizeApiCallOptions(options);
   const formData = new FormData();
-  const file = input.file ?? (input.fileUri ? await fetch(input.fileUri).then((result) => result.blob()) : null);
+  const file =
+    input.file ??
+    (input.fileUri ? await fetch(input.fileUri).then((result) => result.blob()) : null);
 
   if (!file) {
     throw new Error('Missing attachment file');

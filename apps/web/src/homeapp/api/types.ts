@@ -1166,6 +1166,17 @@ export interface SendTestPushRequest {
   title?: string;
 }
 
+export interface NotificationInboxItem {
+  body: string;
+  createdAt: string;
+  data: Record<string, unknown>;
+  householdId: string;
+  householdMemberId: string;
+  id: string;
+  readAt: string | null;
+  title: string;
+}
+
 export interface PushSendResult {
   sent: number;
   tickets: Array<{

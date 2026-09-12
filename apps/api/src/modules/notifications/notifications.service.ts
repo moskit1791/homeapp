@@ -160,6 +160,54 @@ export class NotificationsService {
     });
   }
 
+  async listInbox(
+    household: HouseholdContext,
+  ): Promise<NotificationInboxRecord[]> {
+    const result = await this.database.query<NotificationInboxRow>(
+      `
+        select id, household_id, household_member_id, title, body, data, read_at, created_at
+        from notification_inbox
+        where household_id = $1 and household_member_id = $2
+        order by created_at desc
+        limit 100
+      `,
+      [household.householdId, household.memberId],
+    );
+
+    return result.rows.map((row) => this.mapInboxNotification(row));
+  }
+
+  async markInboxRead(
+    household: HouseholdContext,
+    notificationId: string,
+  ): Promise<NotificationInboxRecord | null> {
+    const result = await this.database.query<NotificationInboxRow>(
+      `
+        update notification_inbox
+        set read_at = coalesce(read_at, now())
+        where id = $1 and household_id = $2 and household_member_id = $3
+        returning id, household_id, household_member_id, title, body, data, read_at, created_at
+      `,
+      [notificationId, household.householdId, household.memberId],
+    );
+
+    const row = result.rows[0];
+    return row ? this.mapInboxNotification(row) : null;
+  }
+
+  async markAllInboxRead(household: HouseholdContext): Promise<{ ok: true }> {
+    await this.database.query(
+      `
+        update notification_inbox
+        set read_at = now()
+        where household_id = $1 and household_member_id = $2 and read_at is null
+      `,
+      [household.householdId, household.memberId],
+    );
+
+    return { ok: true };
+  }
+
   async listPreferences(
     household: HouseholdContext,
   ): Promise<NotificationPreferenceRecord[]> {
@@ -369,14 +417,18 @@ export class NotificationsService {
         select 'expo'::text as provider,
           expo_push_token as endpoint,
           null::text as p256dh,
-          null::text as auth
+          null::text as auth,
+          household_id,
+          household_member_id
         from push_tokens
         where household_id = $1 and household_member_id = $2 and enabled = true
         union all
         select 'web_push'::text as provider,
           endpoint,
           p256dh,
-          auth
+          auth,
+          household_id,
+          household_member_id
         from web_push_subscriptions
         where household_id = $1 and household_member_id = $2 and enabled = true
       `,
@@ -397,12 +449,16 @@ export class NotificationsService {
           recipient.provider,
           recipient.endpoint,
           recipient.p256dh,
-          recipient.auth
+          recipient.auth,
+          recipient.household_id,
+          recipient.household_member_id
         from (
           select 'expo'::text as provider,
             pt.expo_push_token as endpoint,
             null::text as p256dh,
-            null::text as auth
+            null::text as auth,
+            pt.household_id,
+            pt.household_member_id
           from push_tokens pt
           left join notification_preferences np
             on np.household_member_id = pt.household_member_id and np.event_type = $2
@@ -414,7 +470,9 @@ export class NotificationsService {
           select 'web_push'::text as provider,
             wp.endpoint,
             wp.p256dh,
-            wp.auth
+            wp.auth,
+            wp.household_id,
+            wp.household_member_id
           from web_push_subscriptions wp
           left join notification_preferences np
             on np.household_member_id = wp.household_member_id and np.event_type = $2
@@ -481,6 +539,8 @@ export class NotificationsService {
     );
     const tickets: ExpoPushTicket[] = [];
 
+    await this.storeInboxNotifications(recipients, notification);
+
     if (expoRecipients.length > 0) {
       const expoTickets = await this.sendExpoMessages(
         expoRecipients.map((recipient) => ({
@@ -511,7 +571,11 @@ export class NotificationsService {
           }
           this.logger.warn("Failed to send browser push notification", error);
           return {
-            details: { error: isExpiredWebPushSubscription(error) ? "DeviceNotRegistered" : "WebPushError" },
+            details: {
+              error: isExpiredWebPushSubscription(error)
+                ? "DeviceNotRegistered"
+                : "WebPushError",
+            },
             message: error instanceof Error ? error.message : "Web push failed",
             status: "error",
           };
@@ -521,6 +585,44 @@ export class NotificationsService {
     tickets.push(...webTickets);
 
     return { sent: recipients.length, tickets };
+  }
+
+  private async storeInboxNotifications(
+    recipients: PushRecipient[],
+    notification: PushNotification,
+  ): Promise<void> {
+    const members = [
+      ...new Map(
+        recipients.map((recipient) => [
+          `${recipient.householdId}:${recipient.householdMemberId}`,
+          recipient,
+        ]),
+      ).values(),
+    ];
+
+    await Promise.all(
+      members.map((recipient) =>
+        this.database.query(
+          `
+            insert into notification_inbox (
+              household_id,
+              household_member_id,
+              title,
+              body,
+              data
+            )
+            values ($1, $2, $3, $4, $5::jsonb)
+          `,
+          [
+            recipient.householdId,
+            recipient.householdMemberId,
+            notification.title,
+            notification.body,
+            JSON.stringify(notification.data ?? {}),
+          ],
+        ),
+      ),
+    );
   }
 
   private async sendWebPushNotification(
@@ -624,8 +726,25 @@ export class NotificationsService {
     return {
       auth: row.auth,
       endpoint: row.endpoint ?? row.expo_push_token ?? "",
+      householdId: row.household_id,
+      householdMemberId: row.household_member_id,
       p256dh: row.p256dh,
       provider: row.provider === "web_push" ? "web_push" : "expo",
+    };
+  }
+
+  private mapInboxNotification(
+    row: NotificationInboxRow,
+  ): NotificationInboxRecord {
+    return {
+      body: row.body,
+      createdAt: row.created_at,
+      data: row.data ?? {},
+      householdId: row.household_id,
+      householdMemberId: row.household_member_id,
+      id: row.id,
+      readAt: row.read_at,
+      title: row.title,
     };
   }
 
@@ -645,7 +764,9 @@ export class NotificationsService {
     };
   }
 
-  private mapWebPushSubscription(row: WebPushSubscriptionRow): WebPushSubscriptionRecord {
+  private mapWebPushSubscription(
+    row: WebPushSubscriptionRow,
+  ): WebPushSubscriptionRecord {
     return {
       createdAt: row.created_at,
       deviceName: row.device_name,
@@ -738,14 +859,18 @@ function notificationUrl(eventType: RealtimeEventType): string {
   if (eventType === "meal.changed") return "/posilki";
   if (eventType === "shopping.changed") return "/zakupy";
   if (eventType === "todo.changed") return "/zadania";
-  if (eventType === "household.changed" || eventType === "permissions.changed") {
+  if (
+    eventType === "household.changed" ||
+    eventType === "permissions.changed"
+  ) {
     return "/domownicy";
   }
   return "/";
 }
 
 function isExpiredWebPushSubscription(error: unknown): boolean {
-  if (!error || typeof error !== "object" || !("statusCode" in error)) return false;
+  if (!error || typeof error !== "object" || !("statusCode" in error))
+    return false;
   const statusCode = (error as { statusCode?: unknown }).statusCode;
   return statusCode === 404 || statusCode === 410;
 }
@@ -820,6 +945,8 @@ interface PushRecipientRow {
   auth?: string | null;
   endpoint?: string;
   expo_push_token?: string;
+  household_id: string;
+  household_member_id: string;
   p256dh?: string | null;
   provider?: string;
 }
@@ -827,8 +954,32 @@ interface PushRecipientRow {
 interface PushRecipient {
   auth?: string | null;
   endpoint: string;
+  householdId: string;
+  householdMemberId: string;
   p256dh?: string | null;
   provider: "expo" | "web_push";
+}
+
+interface NotificationInboxRow {
+  body: string;
+  created_at: string;
+  data: Record<string, unknown> | null;
+  household_id: string;
+  household_member_id: string;
+  id: string;
+  read_at: string | null;
+  title: string;
+}
+
+export interface NotificationInboxRecord {
+  body: string;
+  createdAt: string;
+  data: Record<string, unknown>;
+  householdId: string;
+  householdMemberId: string;
+  id: string;
+  readAt: string | null;
+  title: string;
 }
 
 interface PushTokenRow {
