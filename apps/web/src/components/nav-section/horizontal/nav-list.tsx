@@ -2,7 +2,7 @@ import type { NavListProps, NavSubListProps } from '../types';
 
 import { useEffect, useCallback } from 'react';
 import { usePopoverHover } from 'minimal-shared/hooks';
-import { isActiveLink, isExternalLink } from 'minimal-shared/utils';
+import { isExternalLink } from 'minimal-shared/utils';
 
 import { useTheme } from '@mui/material/styles';
 import { popoverClasses } from '@mui/material/Popover';
@@ -11,6 +11,7 @@ import { usePathname } from 'src/routes/hooks';
 
 import { NavItem } from './nav-item';
 import { navSectionClasses } from '../styles';
+import { isNavItemActive } from '../utils';
 import { NavUl, NavLi, NavDropdown, NavDropdownPaper } from '../components';
 
 // ----------------------------------------------------------------------
@@ -28,7 +29,7 @@ export function NavList({
 
   const pathname = usePathname();
 
-  const isActive = isActiveLink(pathname, data.path, data.deepMatch ?? !!data.children);
+  const isActive = isNavItemActive(pathname, data);
 
   const {
     open,

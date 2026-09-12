@@ -328,279 +328,287 @@ export function HouseholdPage() {
           alignItems: 'start',
         }}
       >
-        <SectionCard title="Dom" sx={{ borderTop: '3px solid #5B8DEF' }}>
-          <Stack spacing={2}>
-            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-              <Box
-                sx={{
-                  width: 48,
-                  height: 48,
-                  display: 'grid',
-                  placeItems: 'center',
-                  borderRadius: 1.5,
-                  color: 'primary.main',
-                  bgcolor: 'primary.lighter',
+        <Stack spacing={3} sx={{ display: { xs: 'contents', lg: 'flex' } }}>
+          <SectionCard title="Dom" sx={{ order: 1, borderTop: '3px solid #5B8DEF' }}>
+            <Stack spacing={2}>
+              <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+                <Box
+                  sx={{
+                    width: 48,
+                    height: 48,
+                    display: 'grid',
+                    placeItems: 'center',
+                    borderRadius: 1.5,
+                    color: 'primary.main',
+                    bgcolor: 'primary.lighter',
+                  }}
+                >
+                  <Icon icon="solar:home-smile-bold-duotone" width={27} />
+                </Box>
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="h5">{household.data.name}</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {household.data.currencyCode} · {household.data.mealSlotsPerDay} posiłki
+                    dziennie
+                  </Typography>
+                </Box>
+              </Stack>
+              <PrimaryButton
+                icon="solar:settings-bold-duotone"
+                variant="outlined"
+                onClick={() => {
+                  setHouseName(household.data.name);
+                  setCurrencyCode(household.data.currencyCode);
+                  setMealSlotsPerDay(String(household.data.mealSlotsPerDay));
+                  setSettingsOpen(true);
                 }}
               >
-                <Icon icon="solar:home-smile-bold-duotone" width={27} />
-              </Box>
-              <Box sx={{ flex: 1 }}>
-                <Typography variant="h5">{household.data.name}</Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {household.data.currencyCode} · {household.data.mealSlotsPerDay} posiłki dziennie
-                </Typography>
-              </Box>
+                Zmień ustawienia domu
+              </PrimaryButton>
             </Stack>
-            <PrimaryButton
-              icon="solar:settings-bold-duotone"
-              variant="outlined"
-              onClick={() => {
-                setHouseName(household.data.name);
-                setCurrencyCode(household.data.currencyCode);
-                setMealSlotsPerDay(String(household.data.mealSlotsPerDay));
-                setSettingsOpen(true);
-              }}
-            >
-              Zmień ustawienia domu
-            </PrimaryButton>
-          </Stack>
-        </SectionCard>
-        <SectionCard title="Domownicy" sx={{ borderTop: '3px solid #A879E8' }}>
-          <Stack direction="row" sx={{ mb: 1.5, justifyContent: 'flex-end' }}>
-            <PrimaryButton size="small" onClick={() => setInviteOpen(true)}>
-              Zaproś domownika
-            </PrimaryButton>
-          </Stack>
-          <Stack divider={<Divider flexItem />}>
-            {members.data?.map((member) => (
-              <Stack
-                key={member.id}
-                direction={{ xs: 'column', sm: 'row' }}
-                sx={{ py: 1.5, gap: 1.25, alignItems: { sm: 'center' } }}
-              >
-                <Stack
-                  direction="row"
-                  sx={{ flex: 1, minWidth: 0, gap: 1.5, alignItems: 'center' }}
-                >
-                  <Avatar
-                    sx={{
-                      bgcolor: member.role === 'owner' ? 'primary.main' : 'secondary.main',
+          </SectionCard>
+          <SectionCard title="Wygląd aplikacji" sx={{ order: 3, borderTop: '3px solid #F6B94D' }}>
+            <Stack spacing={1.5}>
+              <Typography color="text.secondary">
+                Wybierz wygląd zgodny z systemem, jasny albo ciemny.
+              </Typography>
+              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+                {(['system', 'light', 'dark'] as const).map((themeMode) => (
+                  <Button
+                    key={themeMode}
+                    variant={mode === themeMode ? 'contained' : 'outlined'}
+                    startIcon={
+                      <Icon
+                        icon={
+                          themeMode === 'system'
+                            ? 'solar:monitor-smartphone-bold-duotone'
+                            : themeMode === 'light'
+                              ? 'solar:sun-2-bold-duotone'
+                              : 'solar:moon-bold-duotone'
+                        }
+                      />
+                    }
+                    onClick={() => {
+                      setMode(themeMode);
+                      settings.setState({ mode: themeMode });
                     }}
                   >
-                    {member.displayName.slice(0, 1).toUpperCase()}
-                  </Avatar>
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography sx={{ fontWeight: 700 }}>{member.displayName}</Typography>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ wordBreak: 'break-word' }}
-                    >
-                      {member.email}
-                    </Typography>
-                  </Box>
-                </Stack>
-                <Stack
-                  direction="row"
-                  sx={{
-                    gap: 0.5,
-                    alignItems: 'center',
-                    justifyContent: { xs: 'space-between', sm: 'flex-end' },
-                  }}
-                >
-                  <Chip
-                    label={member.role === 'owner' ? 'Właściciel' : 'Domownik'}
-                    color={member.role === 'owner' ? 'primary' : 'default'}
-                    variant="outlined"
-                  />
-                  {member.role !== 'owner' && (
-                    <Stack direction="row">
-                      <IconButton
-                        aria-label={`Uprawnienia: ${member.displayName}`}
-                        onClick={() => {
-                          setSelectedMember(member);
-                          setPermissionDraft([]);
-                          setPermissionsOpen(true);
-                        }}
-                      >
-                        <Icon icon="solar:shield-user-bold-duotone" />
-                      </IconButton>
-                      <IconButton
-                        color="error"
-                        aria-label={`Usuń domownika: ${member.displayName}`}
-                        onClick={() =>
-                          confirmDelete(member.displayName) && remove.mutate(member.id)
-                        }
-                      >
-                        <Icon icon="solar:user-minus-bold-duotone" />
-                      </IconButton>
-                    </Stack>
-                  )}
-                </Stack>
+                    {themeMode === 'system' ? 'System' : themeMode === 'light' ? 'Jasny' : 'Ciemny'}
+                  </Button>
+                ))}
               </Stack>
-            ))}
-          </Stack>
-        </SectionCard>
-        <SectionCard title="Wygląd aplikacji" sx={{ borderTop: '3px solid #F6B94D' }}>
-          <Stack spacing={1.5}>
-            <Typography color="text.secondary">
-              Wybierz wygląd zgodny z systemem, jasny albo ciemny.
-            </Typography>
-            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
-              {(['system', 'light', 'dark'] as const).map((themeMode) => (
-                <Button
-                  key={themeMode}
-                  variant={mode === themeMode ? 'contained' : 'outlined'}
-                  startIcon={
-                    <Icon
-                      icon={
-                        themeMode === 'system'
-                          ? 'solar:monitor-smartphone-bold-duotone'
-                          : themeMode === 'light'
-                            ? 'solar:sun-2-bold-duotone'
-                            : 'solar:moon-bold-duotone'
-                      }
-                    />
-                  }
-                  onClick={() => {
-                    setMode(themeMode);
-                    settings.setState({ mode: themeMode });
-                  }}
-                >
-                  {themeMode === 'system' ? 'System' : themeMode === 'light' ? 'Jasny' : 'Ciemny'}
+              <Box sx={{ pt: 1 }}>
+                <Stack direction="row" sx={{ mb: 1, justifyContent: 'space-between' }}>
+                  <Typography variant="subtitle2">Rozmiar tekstu</Typography>
+                  <Typography variant="subtitle2" color="primary.main">
+                    {Math.round((settings.state.fontSize / 16) * 100)}%
+                  </Typography>
+                </Stack>
+                <Slider
+                  marks
+                  min={12}
+                  max={20}
+                  step={1}
+                  value={settings.state.fontSize}
+                  valueLabelDisplay="auto"
+                  valueLabelFormat={(value) => `${Math.round((value / 16) * 100)}%`}
+                  onChange={(_, value) => settings.setState({ fontSize: value as number })}
+                  aria-label="Rozmiar tekstu"
+                />
+              </Box>
+            </Stack>
+          </SectionCard>
+          <SectionCard
+            title="Szyfrowanie end-to-end"
+            sx={{ order: 5, borderTop: '3px solid #4C9AFF' }}
+          >
+            <Stack spacing={1.5}>
+              <Typography color="text.secondary">
+                {encryption.lockState === 'not-configured'
+                  ? 'Włącz E2EE dla wybranych modułów. Serwer nie otrzyma ich czytelnej treści.'
+                  : `Aktywne moduły: ${encryption.settings?.enabledModules.length ?? 0}. Klucz jest odblokowany tylko w tej karcie.`}
+              </Typography>
+              <Alert severity="info">
+                Zaszyfrowane treści nie są wysyłane do AI automatycznie. Aplikacja poprosi o osobną
+                zgodę przed ich odszyfrowaniem i przekazaniem do zewnętrznej usługi.
+              </Alert>
+              <PrimaryButton
+                variant="outlined"
+                icon="solar:lock-keyhole-bold-duotone"
+                disabled={!encryption.settings?.canManage}
+                onClick={() => {
+                  setEncryptionModules(encryption.settings?.enabledModules ?? []);
+                  setRecoveryCode(null);
+                  setEncryptionOpen(true);
+                }}
+              >
+                {encryption.lockState === 'not-configured'
+                  ? 'Włącz szyfrowanie'
+                  : 'Zarządzaj szyfrowaniem'}
+              </PrimaryButton>
+              {encryption.lockState === 'unlocked' && (
+                <Button variant="text" onClick={encryption.lock}>
+                  Zablokuj teraz
                 </Button>
+              )}
+            </Stack>
+          </SectionCard>
+          <SectionCard title="Usuwanie konta" sx={{ order: 7, borderColor: 'error.main' }}>
+            <Stack spacing={1.5}>
+              <Typography color="text.secondary">
+                Konto zostanie wylogowane, a adres e-mail odłączony od profilu.
+              </Typography>
+              <Button
+                color="error"
+                variant="contained"
+                startIcon={<Icon icon="solar:trash-bin-trash-bold-duotone" />}
+                disabled={deleteAccount.isPending}
+                onClick={() => {
+                  setDeleteConfirmation('');
+                  setDeleteOpen(true);
+                }}
+              >
+                Usuń moje konto
+              </Button>
+              {deleteAccount.error && <Alert severity="error">{deleteAccount.error.message}</Alert>}
+            </Stack>
+          </SectionCard>
+        </Stack>
+        <Stack spacing={3} sx={{ display: { xs: 'contents', lg: 'flex' } }}>
+          <SectionCard title="Domownicy" sx={{ order: 2, borderTop: '3px solid #A879E8' }}>
+            <Stack direction="row" sx={{ mb: 1.5, justifyContent: 'flex-end' }}>
+              <PrimaryButton size="small" onClick={() => setInviteOpen(true)}>
+                Zaproś domownika
+              </PrimaryButton>
+            </Stack>
+            <Stack divider={<Divider flexItem />}>
+              {members.data?.map((member) => (
+                <Stack
+                  key={member.id}
+                  direction={{ xs: 'column', sm: 'row' }}
+                  sx={{ py: 1.5, gap: 1.25, alignItems: { sm: 'center' } }}
+                >
+                  <Stack
+                    direction="row"
+                    sx={{ flex: 1, minWidth: 0, gap: 1.5, alignItems: 'center' }}
+                  >
+                    <Avatar
+                      sx={{
+                        bgcolor: member.role === 'owner' ? 'primary.main' : 'secondary.main',
+                      }}
+                    >
+                      {member.displayName.slice(0, 1).toUpperCase()}
+                    </Avatar>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography sx={{ fontWeight: 700 }}>{member.displayName}</Typography>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ wordBreak: 'break-word' }}
+                      >
+                        {member.email}
+                      </Typography>
+                    </Box>
+                  </Stack>
+                  <Stack
+                    direction="row"
+                    sx={{
+                      gap: 0.5,
+                      alignItems: 'center',
+                      justifyContent: { xs: 'space-between', sm: 'flex-end' },
+                    }}
+                  >
+                    <Chip
+                      label={member.role === 'owner' ? 'Właściciel' : 'Domownik'}
+                      color={member.role === 'owner' ? 'primary' : 'default'}
+                      variant="outlined"
+                    />
+                    {member.role !== 'owner' && (
+                      <Stack direction="row">
+                        <IconButton
+                          aria-label={`Uprawnienia: ${member.displayName}`}
+                          onClick={() => {
+                            setSelectedMember(member);
+                            setPermissionDraft([]);
+                            setPermissionsOpen(true);
+                          }}
+                        >
+                          <Icon icon="solar:shield-user-bold-duotone" />
+                        </IconButton>
+                        <IconButton
+                          color="error"
+                          aria-label={`Usuń domownika: ${member.displayName}`}
+                          onClick={() =>
+                            confirmDelete(member.displayName) && remove.mutate(member.id)
+                          }
+                        >
+                          <Icon icon="solar:user-minus-bold-duotone" />
+                        </IconButton>
+                      </Stack>
+                    )}
+                  </Stack>
+                </Stack>
               ))}
             </Stack>
-            <Box sx={{ pt: 1 }}>
-              <Stack direction="row" sx={{ mb: 1, justifyContent: 'space-between' }}>
-                <Typography variant="subtitle2">Rozmiar tekstu</Typography>
-                <Typography variant="subtitle2" color="primary.main">
-                  {Math.round((settings.state.fontSize / 16) * 100)}%
-                </Typography>
-              </Stack>
-              <Slider
-                marks
-                min={12}
-                max={20}
-                step={1}
-                value={settings.state.fontSize}
-                valueLabelDisplay="auto"
-                valueLabelFormat={(value) => `${Math.round((value / 16) * 100)}%`}
-                onChange={(_, value) => settings.setState({ fontSize: value as number })}
-                aria-label="Rozmiar tekstu"
-              />
-            </Box>
-          </Stack>
-        </SectionCard>
-        <SectionCard title="Powiadomienia" sx={{ borderTop: '3px solid #55D99B' }}>
-          <Stack spacing={1.5}>
-            <Typography color="text.secondary">
-              Wybierz, o jakich zmianach w domu chcesz otrzymywać powiadomienia.
-            </Typography>
-            <PrimaryButton
-              variant="outlined"
-              icon="solar:bell-bold-duotone"
-              onClick={() => setNotificationsOpen(true)}
-            >
-              Ustaw powiadomienia
-            </PrimaryButton>
-          </Stack>
-        </SectionCard>
-        <SectionCard title="Szyfrowanie end-to-end" sx={{ borderTop: '3px solid #4C9AFF' }}>
-          <Stack spacing={1.5}>
-            <Typography color="text.secondary">
-              {encryption.lockState === 'not-configured'
-                ? 'Włącz E2EE dla wybranych modułów. Serwer nie otrzyma ich czytelnej treści.'
-                : `Aktywne moduły: ${encryption.settings?.enabledModules.length ?? 0}. Klucz jest odblokowany tylko w tej karcie.`}
-            </Typography>
-            <Alert severity="info">
-              Zaszyfrowane treści nie są wysyłane do AI automatycznie. Aplikacja poprosi o osobną
-              zgodę przed ich odszyfrowaniem i przekazaniem do zewnętrznej usługi.
-            </Alert>
-            <PrimaryButton
-              variant="outlined"
-              icon="solar:lock-keyhole-bold-duotone"
-              disabled={!encryption.settings?.canManage}
-              onClick={() => {
-                setEncryptionModules(encryption.settings?.enabledModules ?? []);
-                setRecoveryCode(null);
-                setEncryptionOpen(true);
-              }}
-            >
-              {encryption.lockState === 'not-configured'
-                ? 'Włącz szyfrowanie'
-                : 'Zarządzaj szyfrowaniem'}
-            </PrimaryButton>
-            {encryption.lockState === 'unlocked' && (
-              <Button variant="text" onClick={encryption.lock}>
-                Zablokuj teraz
-              </Button>
+          </SectionCard>
+          <SectionCard title="Powiadomienia" sx={{ order: 4, borderTop: '3px solid #55D99B' }}>
+            <Stack spacing={1.5}>
+              <Typography color="text.secondary">
+                Wybierz, o jakich zmianach w domu chcesz otrzymywać powiadomienia.
+              </Typography>
+              <PrimaryButton
+                variant="outlined"
+                icon="solar:bell-bold-duotone"
+                onClick={() => setNotificationsOpen(true)}
+              >
+                Ustaw powiadomienia
+              </PrimaryButton>
+            </Stack>
+          </SectionCard>
+          <SectionCard title="Twoje uprawnienia" sx={{ order: 6, borderTop: '3px solid #7C6CE7' }}>
+            {permissions.error ? (
+              <ErrorView error={permissions.error} />
+            ) : (
+              <Box
+                sx={{
+                  display: 'grid',
+                  gap: 1,
+                  gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: '1fr' },
+                }}
+              >
+                {permissions.data?.map((permission) => (
+                  <Stack
+                    key={permission.moduleKey}
+                    direction="row"
+                    sx={{
+                      px: 1.25,
+                      py: 0.8,
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      borderRadius: 1.25,
+                      bgcolor: 'action.hover',
+                    }}
+                  >
+                    <Typography>
+                      {moduleNames[permission.moduleKey] ?? permission.moduleKey}
+                    </Typography>
+                    <Chip
+                      size="small"
+                      label={
+                        permission.canCreate && permission.canUpdate && permission.canDelete
+                          ? 'Pełne'
+                          : permission.canRead
+                            ? 'Odczyt'
+                            : 'Brak'
+                      }
+                      color={permission.canRead ? 'success' : 'default'}
+                    />
+                  </Stack>
+                ))}
+              </Box>
             )}
-          </Stack>
-        </SectionCard>
-        <SectionCard title="Twoje uprawnienia" sx={{ borderTop: '3px solid #7C6CE7' }}>
-          {permissions.error ? (
-            <ErrorView error={permissions.error} />
-          ) : (
-            <Box
-              sx={{
-                display: 'grid',
-                gap: 1,
-                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: '1fr' },
-              }}
-            >
-              {permissions.data?.map((permission) => (
-                <Stack
-                  key={permission.moduleKey}
-                  direction="row"
-                  sx={{
-                    px: 1.25,
-                    py: 0.8,
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    borderRadius: 1.25,
-                    bgcolor: 'action.hover',
-                  }}
-                >
-                  <Typography>
-                    {moduleNames[permission.moduleKey] ?? permission.moduleKey}
-                  </Typography>
-                  <Chip
-                    size="small"
-                    label={
-                      permission.canCreate && permission.canUpdate && permission.canDelete
-                        ? 'Pełne'
-                        : permission.canRead
-                          ? 'Odczyt'
-                          : 'Brak'
-                    }
-                    color={permission.canRead ? 'success' : 'default'}
-                  />
-                </Stack>
-              ))}
-            </Box>
-          )}
-        </SectionCard>
-        <SectionCard title="Usuwanie konta" sx={{ borderColor: 'error.main' }}>
-          <Stack spacing={1.5}>
-            <Typography color="text.secondary">
-              Konto zostanie wylogowane, a adres e-mail odłączony od profilu.
-            </Typography>
-            <Button
-              color="error"
-              variant="contained"
-              startIcon={<Icon icon="solar:trash-bin-trash-bold-duotone" />}
-              disabled={deleteAccount.isPending}
-              onClick={() => {
-                setDeleteConfirmation('');
-                setDeleteOpen(true);
-              }}
-            >
-              Usuń moje konto
-            </Button>
-            {deleteAccount.error && <Alert severity="error">{deleteAccount.error.message}</Alert>}
-          </Stack>
-        </SectionCard>
+          </SectionCard>
+        </Stack>
       </Box>
       <FormDialog
         title="Zaproś domownika"

@@ -266,25 +266,6 @@ export function DashboardLayout({
           </AvatarGroup>
         </Box>
       )}
-      <Box
-        component={RouterLink}
-        to="/domownicy"
-        sx={{
-          px: isNavMini ? 0 : 1.25,
-          py: 1,
-          gap: 1.5,
-          display: 'flex',
-          color: 'text.secondary',
-          justifyContent: isNavMini ? 'center' : 'flex-start',
-          alignItems: 'center',
-          borderRadius: 1.5,
-          textDecoration: 'none',
-          '&:hover': { color: 'text.primary', bgcolor: 'action.hover' },
-        }}
-      >
-        <Icon icon="solar:settings-bold-duotone" width={22} />
-        {!isNavMini && <Typography variant="body2">Ustawienia</Typography>}
-      </Box>
     </Box>
   );
 
