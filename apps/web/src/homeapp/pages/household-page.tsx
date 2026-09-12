@@ -26,6 +26,7 @@ import { useSettingsContext } from 'src/components/settings';
 
 import { useSession } from '../auth/session-context';
 import { useEncryption } from '../auth/encryption-context';
+import { WebPushButton } from '../components/web-push-button';
 import {
   Page,
   ErrorView,
@@ -563,6 +564,7 @@ export function HouseholdPage() {
               >
                 Ustaw powiadomienia
               </PrimaryButton>
+              <WebPushButton accessToken={accessToken} variant="button" />
             </Stack>
           </SectionCard>
           <SectionCard title="Twoje uprawnienia" sx={{ order: 6, borderTop: '3px solid #7C6CE7' }}>

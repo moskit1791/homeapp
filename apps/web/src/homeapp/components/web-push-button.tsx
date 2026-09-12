@@ -3,12 +3,10 @@ import { useRef, useState, useEffect } from 'react';
 
 import Alert from '@mui/material/Alert';
 import Badge from '@mui/material/Badge';
+import Button from '@mui/material/Button';
 import Tooltip from '@mui/material/Tooltip';
 import Snackbar from '@mui/material/Snackbar';
 import IconButton from '@mui/material/IconButton';
-import ListItemText from '@mui/material/ListItemText';
-import ListItemIcon from '@mui/material/ListItemIcon';
-import ListItemButton from '@mui/material/ListItemButton';
 
 import { registerWebPushSubscription } from '../api';
 
@@ -18,7 +16,7 @@ type PushState = NotificationPermission | 'unsupported';
 
 interface WebPushButtonProps {
   accessToken: string | null;
-  variant?: 'icon' | 'list-item';
+  variant?: 'button' | 'hidden' | 'icon';
 }
 
 export function WebPushButton({ accessToken, variant = 'icon' }: WebPushButtonProps) {
@@ -80,21 +78,19 @@ export function WebPushButton({ accessToken, variant = 'icon' }: WebPushButtonPr
         : 'Włącz powiadomienia push';
 
   const button =
-    variant === 'list-item' ? (
-      <ListItemButton onClick={() => void enablePush()}>
-        <ListItemIcon sx={{ minWidth: 42 }}>
-          <Badge color="warning" variant="dot" invisible={state !== 'default'}>
-            <Icon
-              icon={state === 'denied' ? 'solar:bell-off-bold-duotone' : 'solar:bell-bold-duotone'}
-              width={22}
-            />
-          </Badge>
-        </ListItemIcon>
-        <ListItemText
-          primary={label}
-          secondary={state === 'granted' ? 'Ta przeglądarka odbiera powiadomienia.' : undefined}
-        />
-      </ListItemButton>
+    variant === 'hidden' ? null : variant === 'button' ? (
+      <Button
+        fullWidth
+        variant="outlined"
+        startIcon={
+          <Icon
+            icon={state === 'denied' ? 'solar:bell-off-bold-duotone' : 'solar:bell-bold-duotone'}
+          />
+        }
+        onClick={() => void enablePush()}
+      >
+        {label}
+      </Button>
     ) : (
       <Tooltip title={label}>
         <IconButton aria-label={label} onClick={() => void enablePush()}>

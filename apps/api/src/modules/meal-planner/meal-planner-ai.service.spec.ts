@@ -18,7 +18,7 @@ describe('MealPlannerAiService', () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(geminiTextResponse('Jasne, dopracujmy ten plan.'));
     vi.stubGlobal('fetch', fetchMock);
 
-    const service = new MealPlannerAiService(createDatabase() as never);
+    const service = new MealPlannerAiService(createHistoryDatabase() as never);
 
     const result = await service.chat('household-id', {
       messages: [
@@ -48,6 +48,8 @@ describe('MealPlannerAiService', () => {
     expect(body.contents[0]?.parts[0]?.text).toContain(
       'W domu skonfigurowano 2 posiłków dziennie'
     );
+    expect(body.contents[0]?.parts[0]?.text).toContain('Historia posiłków domu');
+    expect(body.contents[0]?.parts[0]?.text).toContain('dorsz z batatami');
   });
 
   it('finalizes the chat into a draft and uses a separate Search pass for missing recipe links', async () => {

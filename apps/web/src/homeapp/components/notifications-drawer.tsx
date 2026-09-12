@@ -14,11 +14,9 @@ import Tooltip from '@mui/material/Tooltip';
 import Divider from '@mui/material/Divider';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
-import ListItemText from '@mui/material/ListItemText';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemButton from '@mui/material/ListItemButton';
 
-import { WebPushButton } from './web-push-button';
 import {
   listNotificationInbox,
   markNotificationInboxItemRead,
@@ -188,15 +186,6 @@ export function NotificationsDrawer({ accessToken }: NotificationsDrawerProps) {
               );
             })}
           </Box>
-
-          <Divider />
-          <WebPushButton accessToken={accessToken} variant="list-item" />
-          <ListItemButton component={RouterLink} to="/domownicy" onClick={() => setOpen(false)}>
-            <ListItemIcon sx={{ minWidth: 42 }}>
-              <Icon icon="solar:settings-bold-duotone" width={22} />
-            </ListItemIcon>
-            <ListItemText primary="Ustawienia powiadomień" />
-          </ListItemButton>
         </Box>
       </Drawer>
     </>

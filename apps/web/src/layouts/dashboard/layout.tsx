@@ -21,6 +21,7 @@ import { usePathname } from 'src/routes/hooks';
 
 import { useSession } from 'src/homeapp/auth/session-context';
 import { getMyHousehold, listHouseholdMembers } from 'src/homeapp/api';
+import { WebPushButton } from 'src/homeapp/components/web-push-button';
 import { NotificationsDrawer } from 'src/homeapp/components/notifications-drawer';
 
 import { Logo } from 'src/components/logo';
@@ -156,6 +157,7 @@ export function DashboardLayout({
         <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.25, sm: 0.75 } }}>
           <Searchbar data={navData} />
           <NotificationsDrawer accessToken={accessToken} />
+          <WebPushButton accessToken={accessToken} variant="hidden" />
           <Divider orientation="vertical" flexItem sx={{ mx: 0.5, my: 1.25 }} />
           <Tooltip title={isDark ? 'Włącz tryb jasny' : 'Włącz tryb ciemny'}>
             <IconButton

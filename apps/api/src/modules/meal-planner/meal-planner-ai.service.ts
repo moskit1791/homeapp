@@ -157,9 +157,10 @@ export class MealPlannerAiService {
       throw new BadRequestException('Meal plan AI chat needs a user message');
     }
 
-    const [mealSlotsPerDay, knownRecipes] = await Promise.all([
+    const [mealSlotsPerDay, knownRecipes, history] = await Promise.all([
       this.getMealSlotsPerDay(householdId),
-      this.listKnownRecipes(householdId)
+      this.listKnownRecipes(householdId),
+      this.listMealHistory(householdId)
     ]);
 
     if (!isMondayDateOnly(dto.targetWeekStartDate)) {
@@ -172,6 +173,7 @@ export class MealPlannerAiService {
     try {
       const assistantMessage = await this.callGeminiContents(
         this.buildChatContents({
+          history,
           knownRecipes,
           mealSlotsPerDay,
           messages,
@@ -207,9 +209,10 @@ export class MealPlannerAiService {
       throw new BadRequestException('Meal plan AI finalize needs a user message');
     }
 
-    const [mealSlotsPerDay, knownRecipes] = await Promise.all([
+    const [mealSlotsPerDay, knownRecipes, history] = await Promise.all([
       this.getMealSlotsPerDay(householdId),
-      this.listKnownRecipes(householdId)
+      this.listKnownRecipes(householdId),
+      this.listMealHistory(householdId)
     ]);
 
     if (!isMondayDateOnly(dto.targetWeekStartDate)) {
@@ -224,6 +227,7 @@ export class MealPlannerAiService {
       const responseText = await this.callGemini(
         this.buildFinalizePrompt({
           currentDraft,
+          history,
           knownRecipes,
           mealSlotsPerDay,
           messages,
@@ -293,7 +297,7 @@ export class MealPlannerAiService {
     const [mealSlotsPerDay, knownRecipes, history] = await Promise.all([
       this.getMealSlotsPerDay(householdId),
       this.listKnownRecipes(householdId),
-      this.listMealHistoryForSuggestions(householdId)
+      this.listMealHistory(householdId)
     ]);
 
     try {
@@ -362,6 +366,7 @@ export class MealPlannerAiService {
   }
 
   private buildChatContents(input: {
+    history: MealHistoryEntry[];
     knownRecipes: KnownMealRecipe[];
     mealSlotsPerDay: number;
     messages: MealPlanAiMessage[];
@@ -384,6 +389,7 @@ export class MealPlannerAiService {
   }
 
   private buildChatSystemPrompt(input: {
+    history: MealHistoryEntry[];
     knownRecipes: KnownMealRecipe[];
     mealSlotsPerDay: number;
     targetWeekStartDate: string;
@@ -400,12 +406,16 @@ export class MealPlannerAiService {
       'Oznaczenia źródła: C=Cookidoo, KS=Kwestia Smaku, I/IG=Instagram, AG=AniaGotuje, Knorr=Knorr, MW=Moje Wypieki.',
       '',
       'Znane przepisy z domu:',
-      input.knownRecipes.length > 0 ? JSON.stringify(input.knownRecipes) : '[]'
+      input.knownRecipes.length > 0 ? JSON.stringify(input.knownRecipes) : '[]',
+      '',
+      'Historia posiłków domu (maksymalnie 500 ostatnich wpisów; korzystaj z niej do rozpoznania preferencji, rytmu dni i slotów):',
+      JSON.stringify(buildHistoryPromptPayload(input.history))
     ].join('\n');
   }
 
   private buildFinalizePrompt(input: {
     currentDraft: MealPlanAiDraftEntry[];
+    history: MealHistoryEntry[];
     knownRecipes: KnownMealRecipe[];
     mealSlotsPerDay: number;
     messages: MealPlanAiMessage[];
@@ -839,7 +849,7 @@ export class MealPlannerAiService {
     }));
   }
 
-  private async listMealHistoryForSuggestions(householdId: string): Promise<MealHistoryEntry[]> {
+  private async listMealHistory(householdId: string): Promise<MealHistoryEntry[]> {
     const result = await this.database.query<MealHistoryRow>(
       `
         select
@@ -1005,6 +1015,7 @@ export class MealPlannerAiService {
 
   private buildPrompt(input: {
     currentDraft: MealPlanAiDraftEntry[];
+    history: MealHistoryEntry[];
     knownRecipes: KnownMealRecipe[];
     mealSlotsPerDay: number;
     messages: MealPlanAiMessage[];
@@ -1067,6 +1078,9 @@ export class MealPlannerAiService {
       input.knownRecipes.length > 0
         ? JSON.stringify(input.knownRecipes)
         : '[]',
+      '',
+      'Historia posiłków domu (maksymalnie 500 ostatnich wpisów):',
+      JSON.stringify(buildHistoryPromptPayload(input.history)),
       '',
       'Rozmowa:',
       JSON.stringify(input.messages)
@@ -1216,6 +1230,12 @@ function buildHistoryPromptPayload(history: MealHistoryEntry[]): {
   frequentMeals: MealHistoryFrequency[];
   olderMeals: MealHistoryPromptMeal[];
   recentMeals: MealHistoryPromptMeal[];
+  summary: {
+    entriesCount: number;
+    firstServedOn: string | null;
+    lastServedOn: string | null;
+    weeksCount: number;
+  };
 } {
   const recentMeals = history
     .filter((entry) => entry.isRecent)
@@ -1229,7 +1249,13 @@ function buildHistoryPromptPayload(history: MealHistoryEntry[]): {
   return {
     frequentMeals: buildMealFrequency(history.filter((entry) => !entry.isRecent)).slice(0, 80),
     olderMeals,
-    recentMeals
+    recentMeals,
+    summary: {
+      entriesCount: history.length,
+      firstServedOn: history.at(-1)?.servedOn ?? null,
+      lastServedOn: history[0]?.servedOn ?? null,
+      weeksCount: new Set(history.map((entry) => entry.weekStartDate)).size
+    }
   };
 }
 

@@ -18,6 +18,7 @@ import {
 } from '@mui/material';
 
 import { useSession } from '../auth/session-context';
+import { Markdown } from '../../components/markdown';
 import { usePermission } from '../auth/use-permission';
 import { shortDate, weekStartIso } from '../utils/format';
 import { useEncryption } from '../auth/encryption-context';
@@ -43,7 +44,6 @@ import {
   deleteMealPlanWeek,
   chatMealPlanWithAi,
   listMealPlanHistory,
-  drawMealInspirations,
   getCurrentMealPlanWeek,
   finalizeMealPlanWithAi,
 } from '../api';
@@ -181,26 +181,6 @@ export function MealsPage() {
       await queryClient.invalidateQueries({ queryKey: ['meal', 'ideas'] });
     },
   });
-  const inspire = useMutation({
-    mutationFn: () =>
-      drawMealInspirations(
-        { targetWeekStartDate: plan?.week.weekStartDate ?? targetWeek },
-        { accessToken }
-      ),
-    onSuccess: (result) => {
-      setAiDraft(
-        result.suggestions.map((item) => ({ ...item, sourceHint: item.sourceWeekStartDate }))
-      );
-      setAiMessages([
-        {
-          role: 'assistant',
-          content: `Znalazłem ${result.suggestions.length} propozycji z wcześniejszych tygodni.`,
-        },
-      ]);
-      setAiDisclosureAccepted(false);
-      setAiOpen(true);
-    },
-  });
   const aiChat = useMutation({
     mutationFn: async () => {
       const messages: MealPlanAiMessage[] = [
@@ -335,7 +315,7 @@ export function MealsPage() {
         description={
           plan
             ? `Plan posiłków · tydzień od ${shortDate(plan.week.weekStartDate)}`
-            : 'Planowanie, inspiracje i historia tygodni.'
+            : 'Planowanie i historia tygodni.'
         }
         actions={
           <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
@@ -420,14 +400,6 @@ export function MealsPage() {
           >
             Kopiuj tydzień
           </Button>
-          <Button
-            variant="outlined"
-            disabled={!permission.canCreate || inspire.isPending}
-            onClick={() => inspire.mutate()}
-            startIcon={<Icon icon="solar:magic-stick-3-bold-duotone" />}
-          >
-            Inspiracje
-          </Button>
           <Button variant="text" disabled={!permission.canCreate} onClick={() => setIdeaOpen(true)}>
             Dodaj pomysł
           </Button>
@@ -442,9 +414,9 @@ export function MealsPage() {
             </IconButton>
           )}
         </Stack>
-        {(copy.error || inspire.error || removeWeek.error) && (
+        {(copy.error || removeWeek.error) && (
           <Alert severity="error" sx={{ mt: 2 }}>
-            {(copy.error ?? inspire.error ?? removeWeek.error)?.message}
+            {(copy.error ?? removeWeek.error)?.message}
           </Alert>
         )}
       </SectionCard>
@@ -771,7 +743,21 @@ export function MealsPage() {
                 alignSelf: message.role === 'user' ? 'flex-end' : 'stretch',
               }}
             >
-              <Typography variant="body2">{message.content}</Typography>
+              {message.role === 'assistant' ? (
+                <Markdown
+                  skipHtml
+                  sx={{
+                    typography: 'body2',
+                    '& p': { m: 0 },
+                    '& p + p, & ul, & ol': { mt: 1 },
+                    '& li': { lineHeight: 1.6 },
+                  }}
+                >
+                  {message.content}
+                </Markdown>
+              ) : (
+                <Typography variant="body2">{message.content}</Typography>
+              )}
             </Box>
           ))}
         </Stack>
@@ -786,6 +772,18 @@ export function MealsPage() {
             label="Napisz, czego potrzebujesz"
             value={aiInput}
             onChange={(event) => setAiInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (
+                event.key === 'Enter' &&
+                !event.shiftKey &&
+                !event.nativeEvent.isComposing &&
+                aiInput.trim() &&
+                !aiChat.isPending
+              ) {
+                event.preventDefault();
+                requestAiAction('chat');
+              }
+            }}
             placeholder="Np. szybkie obiady, bez ryb, dla 4 osób"
           />
           <Button
