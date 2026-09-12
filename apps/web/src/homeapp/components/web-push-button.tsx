@@ -6,6 +6,9 @@ import Badge from '@mui/material/Badge';
 import Tooltip from '@mui/material/Tooltip';
 import Snackbar from '@mui/material/Snackbar';
 import IconButton from '@mui/material/IconButton';
+import ListItemText from '@mui/material/ListItemText';
+import ListItemIcon from '@mui/material/ListItemIcon';
+import ListItemButton from '@mui/material/ListItemButton';
 
 import { registerWebPushSubscription } from '../api';
 
@@ -13,7 +16,12 @@ const vapidPublicKey = import.meta.env.VITE_WEB_PUSH_VAPID_PUBLIC_KEY ?? '';
 
 type PushState = NotificationPermission | 'unsupported';
 
-export function WebPushButton({ accessToken }: { accessToken: string | null }) {
+interface WebPushButtonProps {
+  accessToken: string | null;
+  variant?: 'icon' | 'list-item';
+}
+
+export function WebPushButton({ accessToken, variant = 'icon' }: WebPushButtonProps) {
   const [state, setState] = useState<PushState>(() => readPushState());
   const [message, setMessage] = useState<string | null>(null);
   const registrationRef = useRef<Promise<void> | null>(null);
@@ -29,7 +37,7 @@ export function WebPushButton({ accessToken }: { accessToken: string | null }) {
       .then(() => setState('granted'))
       .finally(() => {
         registrationRef.current = null;
-    });
+      });
     registrationRef.current = pending;
     await pending;
   };
@@ -71,8 +79,23 @@ export function WebPushButton({ accessToken }: { accessToken: string | null }) {
         ? 'Powiadomienia push są zablokowane'
         : 'Włącz powiadomienia push';
 
-  return (
-    <>
+  const button =
+    variant === 'list-item' ? (
+      <ListItemButton onClick={() => void enablePush()}>
+        <ListItemIcon sx={{ minWidth: 42 }}>
+          <Badge color="warning" variant="dot" invisible={state !== 'default'}>
+            <Icon
+              icon={state === 'denied' ? 'solar:bell-off-bold-duotone' : 'solar:bell-bold-duotone'}
+              width={22}
+            />
+          </Badge>
+        </ListItemIcon>
+        <ListItemText
+          primary={label}
+          secondary={state === 'granted' ? 'Ta przeglądarka odbiera powiadomienia.' : undefined}
+        />
+      </ListItemButton>
+    ) : (
       <Tooltip title={label}>
         <IconButton aria-label={label} onClick={() => void enablePush()}>
           <Badge color="warning" variant="dot" invisible={state !== 'default'}>
@@ -88,8 +111,21 @@ export function WebPushButton({ accessToken }: { accessToken: string | null }) {
           </Badge>
         </IconButton>
       </Tooltip>
-      <Snackbar open={Boolean(message)} autoHideDuration={5000} onClose={() => setMessage(null)}>
-        <Alert severity={state === 'granted' ? 'success' : 'warning'} onClose={() => setMessage(null)}>
+    );
+
+  return (
+    <>
+      {button}
+      <Snackbar
+        open={Boolean(message)}
+        autoHideDuration={5000}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        onClose={() => setMessage(null)}
+      >
+        <Alert
+          severity={state === 'granted' ? 'success' : 'warning'}
+          onClose={() => setMessage(null)}
+        >
           {message}
         </Alert>
       </Snackbar>
