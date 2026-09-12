@@ -36,6 +36,7 @@ import {
 import {
   listMealIdeas,
   createMealIdea,
+  deleteMealIdea,
   createMealPlan,
   updateMealPlan,
   deleteMealSlot,
@@ -180,6 +181,10 @@ export function MealsPage() {
       resetFields();
       await queryClient.invalidateQueries({ queryKey: ['meal', 'ideas'] });
     },
+  });
+  const removeIdea = useMutation({
+    mutationFn: (ideaId: string) => deleteMealIdea(ideaId, { accessToken }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['meal', 'ideas'] }),
   });
   const aiChat = useMutation({
     mutationFn: async () => {
@@ -587,26 +592,116 @@ export function MealsPage() {
             </Box>
           )}
         </Box>
-        <SectionCard title="Pomysły na posiłki">
+        <SectionCard sx={{ alignSelf: 'start', overflow: 'hidden' }}>
+          <Stack direction="row" spacing={1.5} sx={{ mb: 2.25, alignItems: 'center' }}>
+            <Box
+              sx={{
+                width: 42,
+                height: 42,
+                display: 'grid',
+                flexShrink: 0,
+                placeItems: 'center',
+                borderRadius: 1.5,
+                color: 'warning.dark',
+                bgcolor: 'warning.lighter',
+              }}
+            >
+              <Icon icon="solar:lightbulb-bolt-bold-duotone" width={24} />
+            </Box>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography variant="h5">Pomysły na posiłki</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Twoja podręczna lista dań do wykorzystania
+              </Typography>
+            </Box>
+            <Chip size="small" label={ideas.data?.length ?? 0} />
+          </Stack>
+          {removeIdea.error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {removeIdea.error.message}
+            </Alert>
+          )}
           {ideas.isLoading ? (
             <LoadingView />
           ) : (ideas.data?.length ?? 0) === 0 ? (
             <EmptyState text="Dodaj bazę ulubionych dań." />
           ) : (
-            <Stack divider={<Divider flexItem />}>
+            <Stack spacing={1.25}>
               {ideas.data?.map((idea) => (
-                <Box key={idea.id} sx={{ py: 1.2 }}>
-                  <Typography sx={{ fontWeight: 700 }}>{idea.title}</Typography>
-                  {idea.note && (
-                    <Typography variant="body2" color="text.secondary">
-                      {idea.note}
-                    </Typography>
-                  )}
-                  {idea.linkUrl && (
-                    <Button size="small" component="a" href={idea.linkUrl} target="_blank">
-                      Przepis
-                    </Button>
-                  )}
+                <Box
+                  key={idea.id}
+                  sx={(theme) => ({
+                    p: 1.5,
+                    border: '1px solid rgba(62,82,112,.16)',
+                    borderRadius: 1.75,
+                    bgcolor: 'rgba(248,250,253,.8)',
+                    transition: 'border-color 160ms ease, background-color 160ms ease',
+                    '&:hover': {
+                      borderColor: 'primary.main',
+                      bgcolor: 'primary.lighter',
+                    },
+                    ...theme.applyStyles('dark', {
+                      borderColor: 'rgba(255,255,255,.14)',
+                      bgcolor: 'rgba(255,255,255,.035)',
+                      '&:hover': {
+                        borderColor: 'rgba(255,255,255,.28)',
+                        bgcolor: 'rgba(255,255,255,.06)',
+                      },
+                    }),
+                  })}
+                >
+                  <Stack direction="row" spacing={1.25} sx={{ alignItems: 'flex-start' }}>
+                    <Box
+                      sx={{
+                        width: 34,
+                        height: 34,
+                        display: 'grid',
+                        flexShrink: 0,
+                        placeItems: 'center',
+                        borderRadius: 1.2,
+                        color: 'primary.main',
+                        bgcolor: 'primary.lighter',
+                      }}
+                    >
+                      <Icon icon="solar:chef-hat-heart-bold-duotone" width={20} />
+                    </Box>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
+                        {idea.title}
+                      </Typography>
+                      {idea.note && (
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+                          {idea.note}
+                        </Typography>
+                      )}
+                      {idea.linkUrl && (
+                        <Button
+                          size="small"
+                          component="a"
+                          href={idea.linkUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          startIcon={<Icon icon="solar:book-bookmark-bold-duotone" />}
+                          sx={{ mt: 0.75, px: 0.5 }}
+                        >
+                          Otwórz przepis
+                        </Button>
+                      )}
+                    </Box>
+                    <IconButton
+                      color="error"
+                      size="small"
+                      title="Usuń pomysł"
+                      aria-label={`Usuń pomysł ${idea.title}`}
+                      disabled={
+                        !permission.canDelete ||
+                        (removeIdea.isPending && removeIdea.variables === idea.id)
+                      }
+                      onClick={() => confirmDelete(idea.title) && removeIdea.mutate(idea.id)}
+                    >
+                      <Icon icon="solar:trash-bin-trash-bold-duotone" />
+                    </IconButton>
+                  </Stack>
                 </Box>
               ))}
             </Stack>

@@ -84,12 +84,12 @@ export function SectionCard({
       {...props}
       sx={[
         (theme) => ({
-          border: '1px solid rgba(62,82,112,.18)',
+          border: '1px solid rgba(55,75,105,.24)',
           borderRadius: 2.5,
           bgcolor: 'rgba(255,255,255,.92)',
           boxShadow: '0 10px 34px rgba(34,51,84,.055)',
           ...theme.applyStyles('dark', {
-            borderColor: 'rgba(139,166,206,.25)',
+            borderColor: 'rgba(255,255,255,.18)',
             bgcolor: 'rgba(14,28,46,.84)',
             boxShadow: '0 14px 42px rgba(0,0,0,.22)',
           }),
@@ -124,12 +124,12 @@ export function MetricCard({
     <Card
       sx={(theme) => ({
         height: '100%',
-        border: '1px solid rgba(62,82,112,.16)',
+        border: '1px solid rgba(55,75,105,.22)',
         borderRadius: 2.25,
         bgcolor: 'rgba(255,255,255,.92)',
         boxShadow: '0 8px 28px rgba(34,51,84,.05)',
         ...theme.applyStyles('dark', {
-          borderColor: 'rgba(139,166,206,.22)',
+          borderColor: 'rgba(255,255,255,.16)',
           bgcolor: 'rgba(14,28,46,.82)',
           boxShadow: '0 12px 34px rgba(0,0,0,.2)',
         }),

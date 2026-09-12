@@ -1146,6 +1146,16 @@ export function createMealIdea(
   });
 }
 
+export function deleteMealIdea(ideaId: string, options?: ApiCallOptionsInput): Promise<OkResponse> {
+  const requestOptions = normalizeApiCallOptions(options);
+
+  return apiRequest<OkResponse>(`/meal-ideas/${ideaId}`, {
+    accessToken: requestOptions.accessToken,
+    method: 'DELETE',
+    signal: requestOptions.signal,
+  });
+}
+
 export function listCalendarUpcoming(
   limit = 8,
   options?: ApiCallOptionsInput
