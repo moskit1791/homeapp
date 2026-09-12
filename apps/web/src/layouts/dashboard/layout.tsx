@@ -4,9 +4,9 @@ import type { MainSectionProps, HeaderSectionProps, LayoutSectionProps } from '.
 
 import { merge } from 'es-toolkit';
 import { Icon } from '@iconify/react';
-import { useQuery } from '@tanstack/react-query';
 import { useBoolean } from 'minimal-shared/hooks';
 import { Link as RouterLink } from 'react-router';
+import { useQuery, useIsFetching, useIsMutating } from '@tanstack/react-query';
 
 import Box from '@mui/material/Box';
 import Avatar from '@mui/material/Avatar';
@@ -14,6 +14,7 @@ import Divider from '@mui/material/Divider';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import AvatarGroup from '@mui/material/AvatarGroup';
+import LinearProgress from '@mui/material/LinearProgress';
 import { useTheme, useColorScheme } from '@mui/material/styles';
 import IconButton, { iconButtonClasses } from '@mui/material/IconButton';
 
@@ -60,6 +61,8 @@ export function DashboardLayout({
   const pathname = usePathname();
   const { colorScheme, setMode } = useColorScheme();
   const { accessToken, logout } = useSession();
+  const activeFetches = useIsFetching();
+  const activeMutations = useIsMutating();
   const household = useQuery({
     queryKey: ['household'],
     queryFn: () => getMyHousehold({ accessToken }),
@@ -295,40 +298,65 @@ export function DashboardLayout({
   );
 
   return (
-    <LayoutSection
-      headerSection={renderHeader()}
-      sidebarSection={isNavHorizontal ? null : renderSidebar()}
-      footerSection={null}
-      cssVars={{ ...dashboardLayoutVars(theme), ...navVars.layout, ...cssVars }}
-      sx={[
-        (currentTheme) => ({
-          bgcolor: '#F7F9FC',
-          ...currentTheme.applyStyles('dark', { bgcolor: '#07111F' }),
-          [`& .${layoutClasses.sidebarContainer}`]: {
-            [theme.breakpoints.up(layoutQuery)]: {
-              pl: isNavMini ? 'var(--layout-nav-mini-width)' : 'var(--layout-nav-vertical-width)',
-              transition: theme.transitions.create(['padding-left'], {
-                easing: 'var(--layout-transition-easing)',
-                duration: 'var(--layout-transition-duration)',
-              }),
+    <>
+      <Box
+        component="a"
+        href="#main-content"
+        sx={{
+          position: 'fixed',
+          top: 8,
+          left: 8,
+          zIndex: 2000,
+          px: 2,
+          py: 1,
+          borderRadius: 1,
+          color: 'common.white',
+          bgcolor: 'primary.dark',
+          transform: 'translateY(-160%)',
+          '&:focus': { transform: 'translateY(0)' },
+        }}
+      >
+        Przejdź do treści
+      </Box>
+      {activeFetches + activeMutations > 0 && (
+        <LinearProgress
+          aria-label="Ładowanie danych"
+          sx={{ position: 'fixed', inset: '0 0 auto', zIndex: 1900, height: 3 }}
+        />
+      )}
+      <LayoutSection
+        headerSection={renderHeader()}
+        sidebarSection={isNavHorizontal ? null : renderSidebar()}
+        footerSection={null}
+        cssVars={{ ...dashboardLayoutVars(theme), ...navVars.layout, ...cssVars }}
+        sx={[
+          {
+            bgcolor: 'background.default',
+            [`& .${layoutClasses.sidebarContainer}`]: {
+              [theme.breakpoints.up(layoutQuery)]: {
+                pl: isNavMini ? 'var(--layout-nav-mini-width)' : 'var(--layout-nav-vertical-width)',
+                transition: theme.transitions.create(['padding-left'], {
+                  easing: 'var(--layout-transition-easing)',
+                  duration: 'var(--layout-transition-duration)',
+                }),
+              },
             },
           },
-        }),
-        ...(Array.isArray(sx) ? sx : [sx]),
-      ]}
-    >
-      <MainSection
-        {...slotProps?.main}
-        sx={[
-          (currentTheme) => ({
-            bgcolor: '#F7F9FC',
-            ...currentTheme.applyStyles('dark', { bgcolor: '#07111F' }),
-          }),
-          ...(Array.isArray(slotProps?.main?.sx) ? slotProps.main.sx : [slotProps?.main?.sx]),
+          ...(Array.isArray(sx) ? sx : [sx]),
         ]}
       >
-        {children}
-      </MainSection>
-    </LayoutSection>
+        <MainSection
+          {...slotProps?.main}
+          id="main-content"
+          tabIndex={-1}
+          sx={[
+            { bgcolor: 'background.default' },
+            ...(Array.isArray(slotProps?.main?.sx) ? slotProps.main.sx : [slotProps?.main?.sx]),
+          ]}
+        >
+          {children}
+        </MainSection>
+      </LayoutSection>
+    </>
   );
 }

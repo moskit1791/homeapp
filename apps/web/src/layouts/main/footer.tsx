@@ -99,7 +99,7 @@ export function Footer({
               })}
             >
               {_socials.map((social) => (
-                <IconButton key={social.label}>
+                <IconButton key={social.label} aria-label={social.label}>
                   {social.value === 'twitter' && <Iconify icon="socials:twitter" />}
                   {social.value === 'facebook' && <Iconify icon="socials:facebook" />}
                   {social.value === 'instagram' && <Iconify icon="socials:instagram" />}

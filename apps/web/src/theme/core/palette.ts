@@ -97,13 +97,13 @@ export const grey = createPaletteChannel(themeConfig.palette.grey);
  * ➤
  */
 export const text = {
-  light: createPaletteChannel({ primary: grey[800], secondary: grey[600], disabled: grey[500] }),
-  dark: createPaletteChannel({ primary: '#FFFFFF', secondary: grey[500], disabled: grey[600] }),
+  light: createPaletteChannel({ primary: grey[800], secondary: '#475467', disabled: grey[500] }),
+  dark: createPaletteChannel({ primary: '#FFFFFF', secondary: '#B8C4D3', disabled: '#8D9AAF' }),
 };
 
 export const background = {
-  light: createPaletteChannel({ paper: '#FFFFFF', default: '#FFFFFF', neutral: grey[200] }),
-  dark: createPaletteChannel({ paper: grey[800], default: grey[900], neutral: '#28323D' }),
+  light: createPaletteChannel({ paper: '#FFFFFF', default: '#F3F6FA', neutral: grey[200] }),
+  dark: createPaletteChannel({ paper: '#102238', default: '#07111F', neutral: '#28323D' }),
 };
 
 export const action = (mode: 'light' | 'dark'): Partial<TypeAction> => ({
@@ -128,9 +128,9 @@ export const action = (mode: 'light' | 'dark'): Partial<TypeAction> => ({
 export const extendPalette: PaletteExtend = {
   shared: {
     inputUnderline: varAlpha(grey['500Channel'], opacity.inputUnderline),
-    inputOutlined: varAlpha(grey['500Channel'], 0.2),
-    paperOutlined: varAlpha(grey['500Channel'], 0.16),
-    buttonOutlined: varAlpha(grey['500Channel'], 0.32),
+    inputOutlined: '#8190A5',
+    paperOutlined: '#8190A5',
+    buttonOutlined: '#8190A5',
   },
 };
 

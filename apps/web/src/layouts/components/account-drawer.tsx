@@ -136,6 +136,7 @@ export function AccountDrawer({ data = [], sx, ...other }: AccountDrawerProps) {
         }}
       >
         <IconButton
+          aria-label="Zamknij panel konta"
           onClick={onClose}
           sx={{
             top: 12,
@@ -191,6 +192,7 @@ export function AccountDrawer({ data = [], sx, ...other }: AccountDrawerProps) {
 
             <Tooltip title="Add account">
               <IconButton
+                aria-label="Dodaj konto"
                 sx={[
                   (theme) => ({
                     bgcolor: varAlpha(theme.vars.palette.grey['500Channel'], 0.08),

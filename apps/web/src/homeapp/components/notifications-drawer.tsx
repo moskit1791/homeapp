@@ -17,6 +17,7 @@ import IconButton from '@mui/material/IconButton';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemButton from '@mui/material/ListItemButton';
 
+import { LoadingView } from './ui';
 import {
   listNotificationInbox,
   markNotificationInboxItemRead,
@@ -116,6 +117,7 @@ export function NotificationsDrawer({ accessToken }: NotificationsDrawerProps) {
           <Divider />
 
           <Box sx={{ flex: 1, overflowY: 'auto' }}>
+            {inbox.isLoading && <LoadingView />}
             {inbox.error && (
               <Alert severity="error" sx={{ m: 2 }}>
                 Nie udało się pobrać powiadomień.

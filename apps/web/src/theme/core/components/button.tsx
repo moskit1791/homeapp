@@ -181,6 +181,10 @@ const MuiButtonBase: Components<Theme>['MuiButtonBase'] = {
   styleOverrides: {
     root: ({ theme }) => ({
       fontFamily: theme.typography.fontFamily,
+      '&.Mui-focusVisible': {
+        outline: `3px solid ${theme.vars.palette.primary.main}`,
+        outlineOffset: 2,
+      },
     }),
   },
 };

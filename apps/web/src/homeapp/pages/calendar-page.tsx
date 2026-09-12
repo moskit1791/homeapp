@@ -737,9 +737,6 @@ export function CalendarPage() {
           <Card variant="outlined" sx={{ p: 2.25, borderRadius: 2.5 }}>
             <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
               <Typography variant="h5">{dateLabel(selectedDate)}</Typography>
-              <IconButton size="small" aria-label="Więcej opcji dnia">
-                <Icon icon="solar:menu-dots-bold" />
-              </IconButton>
             </Stack>
             <Stack spacing={0.25} divider={<Divider flexItem />} sx={{ mt: 1.25 }}>
               {selectedEvents.length === 0 ? (

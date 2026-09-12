@@ -5,18 +5,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
-import {
-  Box,
-  Tab,
-  Tabs,
-  Chip,
-  Alert,
-  Stack,
-  Checkbox,
-  TextField,
-  IconButton,
-  Typography,
-} from '@mui/material';
+import { Box, Tab, Tabs, Chip, Alert, Stack, Checkbox, TextField, Typography } from '@mui/material';
 
 import { shortDate } from '../utils/format';
 import { useSession } from '../auth/session-context';
@@ -25,6 +14,7 @@ import { todoMovePlan, reorderTodosAfterDrop } from '../utils/todo-order';
 import {
   Page,
   ErrorView,
+  ActionMenu,
   EmptyState,
   FormDialog,
   PageHeader,
@@ -351,20 +341,24 @@ export function TasksPage() {
                       </Typography>
                     )}
                   </Box>
-                  <IconButton
-                    aria-label="Edytuj zadanie"
-                    onClick={() => openTodo(todo)}
-                    disabled={!todoPermission.canUpdate}
-                  >
-                    <Icon icon="solar:alt-arrow-right-linear" />
-                  </IconButton>
-                  <IconButton
-                    color="error"
-                    onClick={() => confirmDelete(todo.title) && removeTodo.mutate(todo.id)}
-                    disabled={!todoPermission.canDelete}
-                  >
-                    <Icon icon="solar:trash-bin-trash-bold-duotone" />
-                  </IconButton>
+                  <ActionMenu
+                    label={`Akcje zadania ${todo.title}`}
+                    actions={[
+                      {
+                        label: 'Edytuj',
+                        icon: 'solar:pen-bold-duotone',
+                        disabled: !todoPermission.canUpdate,
+                        onClick: () => openTodo(todo),
+                      },
+                      {
+                        label: 'Usuń',
+                        icon: 'solar:trash-bin-trash-bold-duotone',
+                        tone: 'danger',
+                        disabled: !todoPermission.canDelete,
+                        onClick: () => confirmDelete(todo.title) && removeTodo.mutate(todo.id),
+                      },
+                    ]}
+                  />
                 </Stack>
               ))}
             </Stack>
@@ -453,22 +447,24 @@ export function TasksPage() {
                       </Typography>
                       <Chip size="small" label="Prywatna" sx={{ mt: 0.5, height: 22 }} />
                     </Box>
-                    <IconButton
-                      size="small"
-                      aria-label="Edytuj notatkę"
-                      onClick={() => openNote(note)}
-                      disabled={!notesPermission.canUpdate}
-                    >
-                      <Icon icon="solar:pen-bold-duotone" />
-                    </IconButton>
-                    <IconButton
-                      color="error"
-                      size="small"
-                      onClick={() => confirmDelete(note.title) && removeNote.mutate(note.id)}
-                      disabled={!notesPermission.canDelete}
-                    >
-                      <Icon icon="solar:trash-bin-trash-bold-duotone" />
-                    </IconButton>
+                    <ActionMenu
+                      label={`Akcje notatki ${note.title}`}
+                      actions={[
+                        {
+                          label: 'Edytuj',
+                          icon: 'solar:pen-bold-duotone',
+                          disabled: !notesPermission.canUpdate,
+                          onClick: () => openNote(note),
+                        },
+                        {
+                          label: 'Usuń',
+                          icon: 'solar:trash-bin-trash-bold-duotone',
+                          tone: 'danger',
+                          disabled: !notesPermission.canDelete,
+                          onClick: () => confirmDelete(note.title) && removeNote.mutate(note.id),
+                        },
+                      ]}
+                    />
                   </Stack>
                   {note.description && (
                     <Typography

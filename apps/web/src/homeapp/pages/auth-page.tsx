@@ -2,7 +2,7 @@ import { Icon } from '@iconify/react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useRef, useState, useEffect, type FormEvent } from 'react';
 
-import { Box, Link, Alert, Stack, Button, Divider, Checkbox, TextField, IconButton, Typography, InputAdornment, FormControlLabel } from '@mui/material';
+import { Box, Link, Alert, Stack, Button, Divider, Checkbox, TextField, IconButton, Typography, InputAdornment, FormControlLabel, CircularProgress } from '@mui/material';
 
 import { errorMessage } from '../components/ui';
 import { useSession } from '../auth/session-context';
@@ -126,11 +126,11 @@ export function AuthPage() {
       {message && <Alert severity="success">{message}</Alert>}
       {needsProfile && <TextField label="Imię i nazwisko" value={displayName} onChange={(event) => setDisplayName(event.target.value)} required autoFocus />}
       {mode !== 'reset' && <TextField label="E-mail" type="email" value={email} onChange={(event) => setEmail(event.target.value)} disabled={mode === 'invitation'} required />}
-      {mode !== 'forgot' && <TextField label="Hasło" type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} required slotProps={{ input: { endAdornment: <InputAdornment position="end"><IconButton onClick={() => setShowPassword((value) => !value)} edge="end"><Icon icon={showPassword ? 'solar:eye-closed-bold' : 'solar:eye-bold'} /></IconButton></InputAdornment> } }} />}
+      {mode !== 'forgot' && <TextField label="Hasło" type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => setPassword(event.target.value)} required slotProps={{ input: { endAdornment: <InputAdornment position="end"><IconButton aria-label={showPassword ? 'Ukryj hasło' : 'Pokaż hasło'} onClick={() => setShowPassword((value) => !value)} edge="end"><Icon icon={showPassword ? 'solar:eye-closed-bold' : 'solar:eye-bold'} /></IconButton></InputAdornment> } }} />}
       {mode === 'reset' && <TextField label="Powtórz hasło" type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} required />}
       {(mode === 'login' || needsProfile) && <FormControlLabel control={<Checkbox checked={remember} onChange={(event) => setRemember(event.target.checked)} />} label="Zapamiętaj mnie" />}
       {needsProfile && <Stack spacing={0}><FormControlLabel control={<Checkbox checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} />} label="Akceptuję regulamin" /><FormControlLabel control={<Checkbox checked={acceptedPrivacy} onChange={(event) => setAcceptedPrivacy(event.target.checked)} />} label="Akceptuję politykę prywatności" /></Stack>}
-      <Button type="submit" variant="contained" size="large" disabled={loading}>{loading ? 'Proszę czekać…' : mode === 'login' ? 'Zaloguj się' : mode === 'register' ? 'Utwórz konto' : mode === 'forgot' ? 'Wyślij link' : mode === 'reset' ? 'Zmień hasło' : 'Dołącz do domu'}</Button>
+      <Button type="submit" variant="contained" size="large" disabled={loading} aria-busy={loading || undefined} startIcon={loading ? <CircularProgress color="inherit" size={18} /> : undefined}>{loading ? 'Proszę czekać…' : mode === 'login' ? 'Zaloguj się' : mode === 'register' ? 'Utwórz konto' : mode === 'forgot' ? 'Wyślij link' : mode === 'reset' ? 'Zmień hasło' : 'Dołącz do domu'}</Button>
       {mode === 'login' && googleClientId && <><Divider>lub</Divider><Box ref={googleButton} sx={{ display: 'flex', justifyContent: 'center', minHeight: 44 }} /></>}
       {mode === 'login' && <Stack direction="row" sx={{ justifyContent: 'center' }}><Link component="button" type="button" onClick={() => setMode('forgot')}>Nie pamiętam hasła</Link><Typography sx={{ mx: 1 }}>·</Typography><Link component="button" type="button" onClick={() => void resend()} disabled={!email}>Wyślij ponownie weryfikację</Link></Stack>}
       {(mode === 'login' || mode === 'register') && <Typography color="text.secondary" sx={{ textAlign: 'center' }}>{mode === 'login' ? 'Nie masz konta? ' : 'Masz już konto? '}<Link component="button" type="button" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(null); }}>{mode === 'login' ? 'Zarejestruj się' : 'Zaloguj się'}</Link></Typography>}

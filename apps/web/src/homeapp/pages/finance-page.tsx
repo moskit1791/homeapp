@@ -50,6 +50,7 @@ import {
 import {
   Page,
   ErrorView,
+  ActionMenu,
   EmptyState,
   FormDialog,
   PageHeader,
@@ -705,58 +706,40 @@ export function FinancePage() {
                   Podział na osoby
                 </Button>
                 <Box sx={{ flexGrow: 1 }} />
-                <Stack direction="row" spacing={0.5}>
-                  <Tooltip title="Generuj kolejny miesiąc">
-                    <span>
-                      <IconButton
-                        aria-label="Generuj kolejny miesiąc"
-                        disabled={!permission.canCreate || generateMonth.isPending}
-                        onClick={openGenerateMonth}
-                      >
-                        <Icon icon="solar:calendar-add-bold-duotone" />
-                      </IconButton>
-                    </span>
-                  </Tooltip>
-                  <Tooltip title="Ustaw dochód">
-                    <span>
-                      <IconButton
-                        aria-label="Ustaw dochód"
-                        disabled={!permission.canUpdate}
-                        onClick={() => openManage('income')}
-                      >
-                        <Icon icon="solar:wad-of-money-bold-duotone" />
-                      </IconButton>
-                    </span>
-                  </Tooltip>
-                  <Tooltip title="Dodaj kategorię">
-                    <span>
-                      <IconButton
-                        aria-label="Dodaj kategorię"
-                        disabled={!permission.canCreate}
-                        onClick={() => openManage('category')}
-                      >
-                        <Icon icon="solar:folder-add-bold-duotone" />
-                      </IconButton>
-                    </span>
-                  </Tooltip>
-                  {selectedMonthId && (
-                    <Tooltip title="Usuń miesiąc">
-                      <span>
-                        <IconButton
-                          aria-label="Usuń miesiąc"
-                          color="error"
-                          disabled={!permission.canDelete}
-                          onClick={() =>
-                            confirmDelete('ten miesiąc budżetowy') &&
-                            removeMonth.mutate(selectedMonthId)
-                          }
-                        >
-                          <Icon icon="solar:trash-bin-trash-bold-duotone" />
-                        </IconButton>
-                      </span>
-                    </Tooltip>
-                  )}
-                </Stack>
+                <ActionMenu
+                  label="Akcje budżetu"
+                  actions={[
+                    {
+                      label: 'Generuj kolejny miesiąc',
+                      icon: 'solar:calendar-add-bold-duotone',
+                      disabled: !permission.canCreate || generateMonth.isPending,
+                      onClick: openGenerateMonth,
+                    },
+                    {
+                      label: 'Ustaw dochód',
+                      icon: 'solar:wad-of-money-bold-duotone',
+                      disabled: !permission.canUpdate,
+                      onClick: () => openManage('income'),
+                    },
+                    {
+                      label: 'Dodaj kategorię',
+                      icon: 'solar:folder-add-bold-duotone',
+                      disabled: !permission.canCreate,
+                      onClick: () => openManage('category'),
+                    },
+                    {
+                      label: 'Usuń miesiąc',
+                      icon: 'solar:trash-bin-trash-bold-duotone',
+                      tone: 'danger',
+                      hidden: !selectedMonthId,
+                      disabled: !permission.canDelete,
+                      onClick: () =>
+                        selectedMonthId &&
+                        confirmDelete('ten miesiąc budżetowy') &&
+                        removeMonth.mutate(selectedMonthId),
+                    },
+                  ]}
+                />
               </Stack>
               {(generateMonth.error || removeMonth.error) && (
                 <Alert severity="error" sx={{ mt: 2 }}>
@@ -857,17 +840,21 @@ export function FinancePage() {
                         </Typography>
                       </Box>
                       <Typography variant="h6">{money(income.amount, currency)}</Typography>
-                      <IconButton
-                        aria-label={`Edytuj dochód: ${income.displayName}`}
-                        disabled={!permission.canUpdate}
-                        onClick={() => {
-                          openManage('income');
-                          setMemberId(income.ownerMemberId);
-                          setAmount(income.amount);
-                        }}
-                      >
-                        <Icon icon="solar:pen-bold-duotone" />
-                      </IconButton>
+                      <ActionMenu
+                        label={`Akcje dochodu ${income.displayName}`}
+                        actions={[
+                          {
+                            label: 'Edytuj dochód',
+                            icon: 'solar:pen-bold-duotone',
+                            disabled: !permission.canUpdate,
+                            onClick: () => {
+                              openManage('income');
+                              setMemberId(income.ownerMemberId);
+                              setAmount(income.amount);
+                            },
+                          },
+                        ]}
+                      />
                     </Stack>
                   ))}
                 </Stack>
@@ -924,18 +911,42 @@ export function FinancePage() {
                           {money(categoryRemaining, currency)}
                         </Typography>
                       </Box>
-                      {permission.canCreate && (
-                        <Tooltip title={`Dodaj pozycję do kategorii ${category.name}`}>
-                          <IconButton
-                            size="small"
-                            aria-label={`Dodaj pozycję do kategorii ${category.name}`}
-                            onClick={() => openItemCreate(category.id)}
-                          >
-                            <Icon icon="solar:add-square-bold-duotone" width={21} />
-                          </IconButton>
-                        </Tooltip>
-                      )}
-                      <IconButton size="small" onClick={() => toggleCategory(category.id)}>
+                      <ActionMenu
+                        label={`Akcje kategorii ${category.name}`}
+                        actions={[
+                          {
+                            label: 'Dodaj pozycję',
+                            icon: 'solar:add-square-bold-duotone',
+                            disabled: !permission.canCreate,
+                            onClick: () => openItemCreate(category.id),
+                          },
+                          {
+                            label: 'Edytuj kategorię',
+                            icon: 'solar:pen-bold-duotone',
+                            disabled: !permission.canUpdate,
+                            onClick: () =>
+                              openCategoryEdit({ ...category, createdAt: '', updatedAt: '' }),
+                          },
+                          {
+                            label: 'Usuń kategorię',
+                            icon: 'solar:trash-bin-trash-bold-duotone',
+                            tone: 'danger',
+                            disabled: !permission.canDelete,
+                            onClick: () =>
+                              confirmDelete(category.name) &&
+                              updateBudgetCategory(
+                                category.id,
+                                { isActive: false },
+                                { accessToken }
+                              ).then(invalidate),
+                          },
+                        ]}
+                      />
+                      <IconButton
+                        size="small"
+                        aria-label={`${collapsed ? 'Rozwiń' : 'Zwiń'} kategorię ${category.name}`}
+                        onClick={() => toggleCategory(category.id)}
+                      >
                         <Icon
                           icon={
                             collapsed ? 'solar:alt-arrow-down-linear' : 'solar:alt-arrow-up-linear'
@@ -995,14 +1006,26 @@ export function FinancePage() {
                                   {remaining === null ? '—' : money(remaining, currency)}
                                 </Typography>
                               </Box>
-                              <IconButton
-                                size="small"
-                                aria-label={`Edytuj ${item.name}`}
-                                disabled={!permission.canUpdate}
-                                onClick={() => openItemEdit(item)}
-                              >
-                                <Icon icon="solar:pen-bold-duotone" />
-                              </IconButton>
+                              <ActionMenu
+                                label={`Akcje pozycji ${item.name}`}
+                                actions={[
+                                  {
+                                    label: 'Edytuj',
+                                    icon: 'solar:pen-bold-duotone',
+                                    disabled: !permission.canUpdate,
+                                    onClick: () => openItemEdit(item),
+                                  },
+                                  {
+                                    label: 'Usuń',
+                                    icon: 'solar:trash-bin-trash-bold-duotone',
+                                    tone: 'danger',
+                                    disabled: !permission.canDelete,
+                                    onClick: () =>
+                                      confirmDelete(item.name) &&
+                                      deleteBudgetItem(item.id, { accessToken }).then(invalidate),
+                                  },
+                                ]}
+                              />
                             </Stack>
                           );
                         })}
@@ -1127,41 +1150,41 @@ export function FinancePage() {
                             </Stack>
                           </TableCell>
                           <TableCell align="right">
-                            <Tooltip title={`Dodaj pozycję do kategorii ${category.name}`}>
-                              <span>
-                                <IconButton
-                                  aria-label={`Dodaj pozycję do kategorii ${category.name}`}
-                                  disabled={!permission.canCreate}
-                                  onClick={() => openItemCreate(category.id)}
-                                >
-                                  <Icon icon="solar:add-square-bold-duotone" width={20} />
-                                </IconButton>
-                              </span>
-                            </Tooltip>
-                            <IconButton
-                              aria-label={`Edytuj kategorię ${category.name}`}
-                              disabled={!permission.canUpdate}
-                              onClick={() =>
-                                openCategoryEdit({ ...category, createdAt: '', updatedAt: '' })
-                              }
-                            >
-                              <Icon icon="solar:pen-bold-duotone" width={19} />
-                            </IconButton>
-                            <IconButton
-                              aria-label={`Usuń kategorię ${category.name}`}
-                              color="error"
-                              disabled={!permission.canDelete}
-                              onClick={() =>
-                                confirmDelete(category.name) &&
-                                updateBudgetCategory(
-                                  category.id,
-                                  { isActive: false },
-                                  { accessToken }
-                                ).then(invalidate)
-                              }
-                            >
-                              <Icon icon="solar:trash-bin-trash-bold-duotone" width={19} />
-                            </IconButton>
+                            <ActionMenu
+                              label={`Akcje kategorii ${category.name}`}
+                              actions={[
+                                {
+                                  label: 'Dodaj pozycję',
+                                  icon: 'solar:add-square-bold-duotone',
+                                  disabled: !permission.canCreate,
+                                  onClick: () => openItemCreate(category.id),
+                                },
+                                {
+                                  label: 'Edytuj kategorię',
+                                  icon: 'solar:pen-bold-duotone',
+                                  disabled: !permission.canUpdate,
+                                  onClick: () =>
+                                    openCategoryEdit({
+                                      ...category,
+                                      createdAt: '',
+                                      updatedAt: '',
+                                    }),
+                                },
+                                {
+                                  label: 'Usuń kategorię',
+                                  icon: 'solar:trash-bin-trash-bold-duotone',
+                                  tone: 'danger',
+                                  disabled: !permission.canDelete,
+                                  onClick: () =>
+                                    confirmDelete(category.name) &&
+                                    updateBudgetCategory(
+                                      category.id,
+                                      { isActive: false },
+                                      { accessToken }
+                                    ).then(invalidate),
+                                },
+                              ]}
+                            />
                           </TableCell>
                         </TableRow>
                         {!collapsed &&
@@ -1241,26 +1264,28 @@ export function FinancePage() {
                                   </Stack>
                                 </TableCell>
                                 <TableCell align="right">
-                                  <IconButton
-                                    size="small"
-                                    aria-label={`Edytuj pozycję ${item.name}`}
-                                    disabled={!permission.canUpdate}
-                                    onClick={() => openItemEdit(item)}
-                                  >
-                                    <Icon icon="solar:pen-bold-duotone" width={18} />
-                                  </IconButton>
-                                  <IconButton
-                                    size="small"
-                                    aria-label={`Usuń pozycję ${item.name}`}
-                                    color="error"
-                                    disabled={!permission.canDelete}
-                                    onClick={() =>
-                                      confirmDelete(item.name) &&
-                                      deleteBudgetItem(item.id, { accessToken }).then(invalidate)
-                                    }
-                                  >
-                                    <Icon icon="solar:trash-bin-trash-bold-duotone" width={18} />
-                                  </IconButton>
+                                  <ActionMenu
+                                    label={`Akcje pozycji ${item.name}`}
+                                    actions={[
+                                      {
+                                        label: 'Edytuj',
+                                        icon: 'solar:pen-bold-duotone',
+                                        disabled: !permission.canUpdate,
+                                        onClick: () => openItemEdit(item),
+                                      },
+                                      {
+                                        label: 'Usuń',
+                                        icon: 'solar:trash-bin-trash-bold-duotone',
+                                        tone: 'danger',
+                                        disabled: !permission.canDelete,
+                                        onClick: () =>
+                                          confirmDelete(item.name) &&
+                                          deleteBudgetItem(item.id, { accessToken }).then(
+                                            invalidate
+                                          ),
+                                      },
+                                    ]}
+                                  />
                                 </TableCell>
                               </TableRow>
                             );
@@ -1437,35 +1462,41 @@ export function FinancePage() {
                                 {money(debt.amount, currency)}
                               </Typography>
                             </Box>
-                            <IconButton
-                              size="small"
-                              aria-label={`Edytuj zobowiązanie ${group.label}: ${debt.purpose}`}
-                              disabled={!permission.canUpdate}
-                              onClick={() => {
-                                setEditingDebt(debt);
-                                setName(debt.lenderName);
-                                setTargetAmount(debt.purpose);
-                                setAmount(debt.amount);
-                                setDueDate(debt.dueDate ?? '');
-                                setNoteText(debt.note ?? '');
-                                setDebtIsSettled(debt.isSettled);
-                                setOpen(true);
-                              }}
-                            >
-                              <Icon icon="solar:pen-bold-duotone" />
-                            </IconButton>
-                            <IconButton
-                              size="small"
-                              aria-label={`Usuń zobowiązanie ${group.label}: ${debt.purpose}`}
-                              color="error"
-                              disabled={!permission.canDelete}
-                              onClick={() =>
-                                confirmDelete(`${group.label}: ${debt.purpose}`) &&
-                                removeDebt.mutate(debt.id)
-                              }
-                            >
-                              <Icon icon="solar:trash-bin-trash-bold-duotone" />
-                            </IconButton>
+                            <ActionMenu
+                              label={`Akcje zobowiązania ${group.label}: ${debt.purpose}`}
+                              actions={[
+                                {
+                                  label: 'Edytuj',
+                                  icon: 'solar:pen-bold-duotone',
+                                  disabled: !permission.canUpdate,
+                                  onClick: () => {
+                                    setEditingDebt(debt);
+                                    setName(debt.lenderName);
+                                    setTargetAmount(debt.purpose);
+                                    setAmount(debt.amount);
+                                    setDueDate(debt.dueDate ?? '');
+                                    setNoteText(debt.note ?? '');
+                                    setDebtIsSettled(debt.isSettled);
+                                    setOpen(true);
+                                  },
+                                },
+                                {
+                                  label: 'Zapisz spłatę',
+                                  icon: 'solar:hand-money-bold-duotone',
+                                  disabled: !permission.canUpdate || debt.isSettled,
+                                  onClick: () => openManage('debt-payment', debt.id),
+                                },
+                                {
+                                  label: 'Usuń',
+                                  icon: 'solar:trash-bin-trash-bold-duotone',
+                                  tone: 'danger',
+                                  disabled: !permission.canDelete,
+                                  onClick: () =>
+                                    confirmDelete(`${group.label}: ${debt.purpose}`) &&
+                                    removeDebt.mutate(debt.id),
+                                },
+                              ]}
+                            />
                           </Stack>
                           <Stack
                             direction="row"
@@ -1502,14 +1533,6 @@ export function FinancePage() {
                               {money(debt.payments[0].amount, currency)}
                             </Typography>
                           )}
-                          <Button
-                            variant="outlined"
-                            startIcon={<Icon icon="solar:hand-money-bold-duotone" />}
-                            disabled={!permission.canUpdate || debt.isSettled}
-                            onClick={() => openManage('debt-payment', debt.id)}
-                          >
-                            {debt.isSettled ? 'Zobowiązanie spłacone' : 'Zapisz spłatę'}
-                          </Button>
                         </Stack>
                       ))}
                     </Stack>
@@ -1555,14 +1578,27 @@ export function FinancePage() {
                         {account.targetDate ? ` · do ${shortDate(account.targetDate)}` : ''}
                       </Typography>
                     </Box>
-                    <IconButton
-                      color="error"
-                      disabled={!permission.canDelete}
-                      onClick={() => confirmDelete(account.name) && removeSaving.mutate(account.id)}
-                      sx={{ position: 'relative', zIndex: 2 }}
-                    >
-                      <Icon icon="solar:trash-bin-trash-bold-duotone" />
-                    </IconButton>
+                    <Box sx={{ position: 'relative', zIndex: 2 }}>
+                      <ActionMenu
+                        label={`Akcje celu ${account.name}`}
+                        actions={[
+                          {
+                            label: 'Dodaj lub odejmij środki',
+                            icon: 'solar:wallet-money-bold-duotone',
+                            disabled: !permission.canUpdate,
+                            onClick: () => openManage('saving-transaction', account.id),
+                          },
+                          {
+                            label: 'Usuń cel',
+                            icon: 'solar:trash-bin-trash-bold-duotone',
+                            tone: 'danger',
+                            disabled: !permission.canDelete,
+                            onClick: () =>
+                              confirmDelete(account.name) && removeSaving.mutate(account.id),
+                          },
+                        ]}
+                      />
+                    </Box>
                   </Stack>
                   <Typography
                     variant="h2"
@@ -1603,16 +1639,6 @@ export function FinancePage() {
                       filter: 'drop-shadow(0 10px 12px rgba(0,0,0,.18))',
                     }}
                   />
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    startIcon={<Icon icon="solar:wallet-money-bold-duotone" />}
-                    sx={{ mt: 2, position: 'relative', zIndex: 1 }}
-                    disabled={!permission.canUpdate}
-                    onClick={() => openManage('saving-transaction', account.id)}
-                  >
-                    Dodaj lub odejmij środki
-                  </Button>
                   {account.transactions.length > 0 && (
                     <Stack spacing={0.5} sx={{ mt: 1.5, position: 'relative', zIndex: 1 }}>
                       {account.transactions.slice(0, 3).map((transaction) => (

@@ -15,6 +15,7 @@ export type NavToggleButtonProps = IconButtonProps & {
 export function NavToggleButton({ isNavMini, sx, ...other }: NavToggleButtonProps) {
   return (
     <IconButton
+      aria-label={isNavMini ? 'Rozwiń nawigację' : 'Zwiń nawigację'}
       size="small"
       sx={[
         (theme) => ({

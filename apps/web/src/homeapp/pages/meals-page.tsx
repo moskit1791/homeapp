@@ -26,6 +26,7 @@ import { FoodNavigation } from '../components/food-navigation';
 import {
   Page,
   ErrorView,
+  ActionMenu,
   EmptyState,
   FormDialog,
   LoadingView,
@@ -410,13 +411,18 @@ export function MealsPage() {
           </Button>
           <Box sx={{ flex: 1 }} />
           {plan && (
-            <IconButton
-              color="error"
-              disabled={!permission.canDelete}
-              onClick={() => confirmDelete('cały plan tygodnia') && removeWeek.mutate()}
-            >
-              <Icon icon="solar:trash-bin-trash-bold-duotone" />
-            </IconButton>
+            <ActionMenu
+              label="Akcje planu tygodnia"
+              actions={[
+                {
+                  label: 'Usuń plan tygodnia',
+                  icon: 'solar:trash-bin-trash-bold-duotone',
+                  tone: 'danger',
+                  disabled: !permission.canDelete,
+                  onClick: () => confirmDelete('cały plan tygodnia') && removeWeek.mutate(),
+                },
+              ]}
+            />
           )}
         </Stack>
         {(copy.error || removeWeek.error) && (
@@ -539,39 +545,38 @@ export function MealsPage() {
                                 </Typography>
                               )}
                             </Box>
-                            {meal.linkUrl && (
-                              <IconButton
-                                component="a"
-                                href={meal.linkUrl}
-                                target="_blank"
-                                size="small"
-                              >
-                                <Icon icon="solar:link-bold" />
-                              </IconButton>
-                            )}
-                            <IconButton
-                              size="small"
-                              disabled={!permission.canUpdate}
-                              onClick={() => openEdit(meal)}
-                              sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
-                            >
-                              <Icon icon="solar:pen-bold-duotone" />
-                            </IconButton>
-                            <IconButton
-                              color="error"
-                              size="small"
-                              disabled={!permission.canDelete}
-                              onClick={() =>
-                                confirmDelete(meal.mealName) &&
-                                remove.mutate({
-                                  planId: plan.week.id,
-                                  day: meal.weekday,
-                                  slot: meal.slotIndex,
-                                })
-                              }
-                            >
-                              <Icon icon="solar:trash-bin-trash-bold-duotone" />
-                            </IconButton>
+                            <ActionMenu
+                              label={`Akcje posiłku ${meal.mealName}`}
+                              actions={[
+                                {
+                                  label: 'Otwórz przepis',
+                                  icon: 'solar:link-bold',
+                                  hidden: !meal.linkUrl,
+                                  onClick: () =>
+                                    meal.linkUrl &&
+                                    window.open(meal.linkUrl, '_blank', 'noopener,noreferrer'),
+                                },
+                                {
+                                  label: 'Edytuj',
+                                  icon: 'solar:pen-bold-duotone',
+                                  disabled: !permission.canUpdate,
+                                  onClick: () => openEdit(meal),
+                                },
+                                {
+                                  label: 'Usuń',
+                                  icon: 'solar:trash-bin-trash-bold-duotone',
+                                  tone: 'danger',
+                                  disabled: !permission.canDelete,
+                                  onClick: () =>
+                                    confirmDelete(meal.mealName) &&
+                                    remove.mutate({
+                                      planId: plan.week.id,
+                                      day: meal.weekday,
+                                      slot: meal.slotIndex,
+                                    }),
+                                },
+                              ]}
+                            />
                           </Stack>
                         ))}
                       </Stack>
@@ -674,33 +679,29 @@ export function MealsPage() {
                           {idea.note}
                         </Typography>
                       )}
-                      {idea.linkUrl && (
-                        <Button
-                          size="small"
-                          component="a"
-                          href={idea.linkUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          startIcon={<Icon icon="solar:book-bookmark-bold-duotone" />}
-                          sx={{ mt: 0.75, px: 0.5 }}
-                        >
-                          Otwórz przepis
-                        </Button>
-                      )}
                     </Box>
-                    <IconButton
-                      color="error"
-                      size="small"
-                      title="Usuń pomysł"
-                      aria-label={`Usuń pomysł ${idea.title}`}
-                      disabled={
-                        !permission.canDelete ||
-                        (removeIdea.isPending && removeIdea.variables === idea.id)
-                      }
-                      onClick={() => confirmDelete(idea.title) && removeIdea.mutate(idea.id)}
-                    >
-                      <Icon icon="solar:trash-bin-trash-bold-duotone" />
-                    </IconButton>
+                    <ActionMenu
+                      label={`Akcje pomysłu ${idea.title}`}
+                      actions={[
+                        {
+                          label: 'Otwórz przepis',
+                          icon: 'solar:book-bookmark-bold-duotone',
+                          hidden: !idea.linkUrl,
+                          onClick: () =>
+                            idea.linkUrl &&
+                            window.open(idea.linkUrl, '_blank', 'noopener,noreferrer'),
+                        },
+                        {
+                          label: 'Usuń',
+                          icon: 'solar:trash-bin-trash-bold-duotone',
+                          tone: 'danger',
+                          disabled:
+                            !permission.canDelete ||
+                            (removeIdea.isPending && removeIdea.variables === idea.id),
+                          onClick: () => confirmDelete(idea.title) && removeIdea.mutate(idea.id),
+                        },
+                      ]}
+                    />
                   </Stack>
                 </Box>
               ))}

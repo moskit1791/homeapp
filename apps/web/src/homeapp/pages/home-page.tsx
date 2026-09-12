@@ -15,7 +15,6 @@ import {
   Button,
   Divider,
   TextField,
-  IconButton,
   Typography,
 } from '@mui/material';
 
@@ -25,6 +24,7 @@ import { money, todayIso, shortDate } from '../utils/format';
 import {
   Page,
   ErrorView,
+  ActionMenu,
   EmptyState,
   FormDialog,
   PageHeader,
@@ -560,27 +560,30 @@ export function HomePage() {
                       {shortDate(task.nextDueAt)}
                     </Typography>
                   </Box>
-                  <Button
-                    variant="outlined"
-                    startIcon={<Icon icon="solar:check-circle-bold" />}
-                    onClick={() => completeCleaning.mutate(task.id)}
-                    disabled={!cleaningPermission.canUpdate}
-                  >
-                    Wykonane
-                  </Button>
-                  <IconButton
-                    disabled={!cleaningPermission.canUpdate}
-                    onClick={() => openCleaningEdit(task)}
-                  >
-                    <Icon icon="solar:pen-bold-duotone" />
-                  </IconButton>
-                  <IconButton
-                    color="error"
-                    disabled={!cleaningPermission.canDelete}
-                    onClick={() => confirmDelete(task.name) && removeCleaning.mutate(task.id)}
-                  >
-                    <Icon icon="solar:trash-bin-trash-bold-duotone" />
-                  </IconButton>
+                  <ActionMenu
+                    label={`Akcje pozycji ${task.name}`}
+                    actions={[
+                      {
+                        label: 'Oznacz jako wykonane',
+                        icon: 'solar:check-circle-bold',
+                        disabled: !cleaningPermission.canUpdate,
+                        onClick: () => completeCleaning.mutate(task.id),
+                      },
+                      {
+                        label: 'Edytuj',
+                        icon: 'solar:pen-bold-duotone',
+                        disabled: !cleaningPermission.canUpdate,
+                        onClick: () => openCleaningEdit(task),
+                      },
+                      {
+                        label: 'Usuń',
+                        icon: 'solar:trash-bin-trash-bold-duotone',
+                        tone: 'danger',
+                        disabled: !cleaningPermission.canDelete,
+                        onClick: () => confirmDelete(task.name) && removeCleaning.mutate(task.id),
+                      },
+                    ]}
+                  />
                 </Stack>
               ))}
             </Stack>
@@ -615,17 +618,21 @@ export function HomePage() {
                   <Typography variant="h3">
                     {cost.defaultAmount ? money(cost.defaultAmount, currency) : '—'}
                   </Typography>
-                  <Button
-                    variant="outlined"
-                    disabled={!costsPermission.canUpdate}
-                    onClick={() => {
-                      setCompletionCostId(cost.id);
-                      setDate(todayIso());
-                      setAmount(cost.defaultAmount ?? '');
-                    }}
-                  >
-                    Opłacone
-                  </Button>
+                  <ActionMenu
+                    label={`Akcje kosztu ${cost.name}`}
+                    actions={[
+                      {
+                        label: 'Oznacz jako opłacone',
+                        icon: 'solar:check-circle-bold',
+                        disabled: !costsPermission.canUpdate,
+                        onClick: () => {
+                          setCompletionCostId(cost.id);
+                          setDate(todayIso());
+                          setAmount(cost.defaultAmount ?? '');
+                        },
+                      },
+                    ]}
+                  />
                 </Stack>
               ))}
             </Stack>
@@ -659,16 +666,26 @@ export function HomePage() {
                         {entry.value}
                       </Typography>
                     </Box>
-                    <IconButton
-                      color="error"
-                      disabled={!dataPermission.canDelete}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        if (confirmDelete(entry.title)) removeData.mutate(entry.id);
-                      }}
-                    >
-                      <Icon icon="solar:trash-bin-trash-bold-duotone" />
-                    </IconButton>
+                    <Box onClick={(event) => event.stopPropagation()}>
+                      <ActionMenu
+                        label={`Akcje danych ${entry.title}`}
+                        actions={[
+                          {
+                            label: 'Wyświetl',
+                            icon: 'solar:eye-bold-duotone',
+                            onClick: () => setSelectedDataEntry(entry),
+                          },
+                          {
+                            label: 'Usuń',
+                            icon: 'solar:trash-bin-trash-bold-duotone',
+                            tone: 'danger',
+                            disabled: !dataPermission.canDelete,
+                            onClick: () =>
+                              confirmDelete(entry.title) && removeData.mutate(entry.id),
+                          },
+                        ]}
+                      />
+                    </Box>
                   </Stack>
                 </SectionCard>
               ))}
@@ -696,43 +713,36 @@ export function HomePage() {
                       {attachment.caption || shortDate(attachment.createdAt)}
                     </Typography>
                   </Box>
-                  <Stack
-                    direction="row"
-                    sx={{
-                      width: { xs: '100%', sm: 'auto' },
-                      justifyContent: { xs: 'flex-end', sm: 'initial' },
-                    }}
-                  >
-                    <IconButton
-                      aria-label="Otwórz podgląd"
-                      onClick={() => void previewAttachment(attachment)}
-                    >
-                      <Icon icon="solar:eye-bold-duotone" />
-                    </IconButton>
-                    <IconButton
-                      aria-label="Pobierz plik"
-                      onClick={() => void downloadAttachment(attachment)}
-                    >
-                      <Icon icon="solar:download-bold-duotone" />
-                    </IconButton>
-                    <IconButton
-                      aria-label="Edytuj opis pliku"
-                      disabled={!attachmentsPermission.canUpdate}
-                      onClick={() => openAttachmentEdit(attachment)}
-                    >
-                      <Icon icon="solar:pen-bold-duotone" />
-                    </IconButton>
-                    <IconButton
-                      color="error"
-                      aria-label="Usuń plik"
-                      disabled={!attachmentsPermission.canDelete}
-                      onClick={() =>
-                        confirmDelete(attachment.fileName) && removeAttachment.mutate(attachment.id)
-                      }
-                    >
-                      <Icon icon="solar:trash-bin-trash-bold-duotone" />
-                    </IconButton>
-                  </Stack>
+                  <ActionMenu
+                    label={`Akcje pliku ${attachment.fileName}`}
+                    actions={[
+                      {
+                        label: 'Wyświetl',
+                        icon: 'solar:eye-bold-duotone',
+                        onClick: () => void previewAttachment(attachment),
+                      },
+                      {
+                        label: 'Pobierz',
+                        icon: 'solar:download-bold-duotone',
+                        onClick: () => void downloadAttachment(attachment),
+                      },
+                      {
+                        label: 'Edytuj opis',
+                        icon: 'solar:pen-bold-duotone',
+                        disabled: !attachmentsPermission.canUpdate,
+                        onClick: () => openAttachmentEdit(attachment),
+                      },
+                      {
+                        label: 'Usuń',
+                        icon: 'solar:trash-bin-trash-bold-duotone',
+                        tone: 'danger',
+                        disabled: !attachmentsPermission.canDelete,
+                        onClick: () =>
+                          confirmDelete(attachment.fileName) &&
+                          removeAttachment.mutate(attachment.id),
+                      },
+                    ]}
+                  />
                 </Stack>
               </SectionCard>
             ))}

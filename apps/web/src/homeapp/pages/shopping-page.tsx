@@ -426,45 +426,6 @@ export function ShoppingPage() {
                           {item.quantity || '1 szt.'}
                         </Typography>
                       </Box>
-                      {activeType !== 'daily' && permission.canUpdate && (
-                        <IconButton
-                          size="small"
-                          aria-label="Przenieś na dzisiaj"
-                          onClick={() => move.mutate({ id: item.id, targetType: 'daily' })}
-                          sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
-                        >
-                          <Icon icon="solar:calendar-mark-bold-duotone" />
-                        </IconButton>
-                      )}
-                      {activeType === 'long_term' && permission.canUpdate && (
-                        <IconButton
-                          size="small"
-                          aria-label="Przenieś na jutro"
-                          onClick={() => move.mutate({ id: item.id, targetType: 'tomorrow' })}
-                          sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
-                        >
-                          <Icon icon="solar:forward-2-bold-duotone" />
-                        </IconButton>
-                      )}
-                      <IconButton
-                        size="small"
-                        aria-label="Edytuj produkt"
-                        onClick={() => openEdit(item)}
-                        disabled={!permission.canUpdate}
-                        sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
-                      >
-                        <Icon icon="solar:pen-bold-duotone" />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        color="error"
-                        aria-label="Usuń produkt"
-                        onClick={() => confirmDelete(item.name) && remove.mutate(item.id)}
-                        disabled={!permission.canDelete}
-                        sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
-                      >
-                        <Icon icon="solar:trash-bin-trash-bold-duotone" />
-                      </IconButton>
                       <IconButton
                         size="small"
                         aria-label={`Akcje produktu ${item.name}`}
@@ -472,9 +433,20 @@ export function ShoppingPage() {
                           setMenuAnchor(event.currentTarget);
                           setMenuItem(item);
                         }}
-                        sx={{ display: { xs: 'inline-flex', sm: 'none' } }}
+                        aria-haspopup="menu"
+                        aria-expanded={menuItem?.id === item.id ? 'true' : undefined}
+                        sx={(theme) => ({
+                          width: 40,
+                          height: 40,
+                          border: '1px solid rgba(55,75,105,.24)',
+                          bgcolor: 'background.paper',
+                          ...theme.applyStyles('dark', {
+                            borderColor: 'rgba(255,255,255,.2)',
+                            bgcolor: 'rgba(255,255,255,.055)',
+                          }),
+                        })}
                       >
-                        <Icon icon="solar:menu-dots-bold" />
+                        <Icon icon="solar:alt-arrow-right-linear" />
                       </IconButton>
                     </Stack>
                   ))}

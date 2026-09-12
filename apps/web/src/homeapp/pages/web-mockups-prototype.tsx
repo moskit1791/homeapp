@@ -195,7 +195,7 @@ function PrototypeShell({
               </Stack>
               <Stack direction="row" spacing={1} alignItems="center">
                 <TextField size="small" placeholder="Szukaj w HomeApp…" sx={{ width: 260, display: { xs: 'none', md: 'block' } }} slotProps={{ input: { startAdornment: <InputAdornment position="start"><Icon icon="solar:magnifer-linear" /></InputAdornment> } }} />
-                <IconButton><Icon icon="solar:bell-bing-bold-duotone" /></IconButton>
+                <IconButton aria-label="Powiadomienia"><Icon icon="solar:bell-bing-bold-duotone" /></IconButton>
                 <Avatar src="/assets/images/mock/avatar/avatar-4.webp" sx={{ width: 36, height: 36 }} />
               </Stack>
             </Stack>
@@ -272,8 +272,8 @@ function PrototypeShell({
         <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 3 }}>
           <Chip size="small" color="warning" label="PROTOTYP • TYLKO PODGLĄD" />
           <Stack direction="row" spacing={1}>
-            <IconButton><Icon icon="solar:magnifer-linear" /></IconButton>
-            <IconButton><Icon icon="solar:bell-bing-bold-duotone" /></IconButton>
+            <IconButton aria-label="Szukaj"><Icon icon="solar:magnifer-linear" /></IconButton>
+            <IconButton aria-label="Powiadomienia"><Icon icon="solar:bell-bing-bold-duotone" /></IconButton>
           </Stack>
         </Stack>
         <ScreenHeader currentView={currentView} onAdd={onAdd} />
@@ -423,7 +423,7 @@ function CalendarMockup({ variant }: { variant: VariantKey }) {
       <Card sx={{ p: 2 }}>
         <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ sm: 'center' }} spacing={2}>
           <Tabs value={variant === 'B' ? 'week' : 'month'}><Tab value="month" label="Miesiąc" /><Tab value="week" label="Tydzień" /><Tab value="agenda" label="Agenda" /></Tabs>
-          <Stack direction="row" alignItems="center" spacing={1}><IconButton><Icon icon="solar:alt-arrow-left-linear" /></IconButton><Typography variant="h6">Wrzesień 2026</Typography><IconButton><Icon icon="solar:alt-arrow-right-linear" /></IconButton></Stack>
+          <Stack direction="row" alignItems="center" spacing={1}><IconButton aria-label="Poprzedni miesiąc"><Icon icon="solar:alt-arrow-left-linear" /></IconButton><Typography variant="h6">Wrzesień 2026</Typography><IconButton aria-label="Następny miesiąc"><Icon icon="solar:alt-arrow-right-linear" /></IconButton></Stack>
         </Stack>
       </Card>
       <Box sx={{ display: 'grid', gridTemplateColumns: variant === 'C' ? 'minmax(650px, 1fr) 360px' : { xs: '1fr', xl: 'minmax(560px, 1.4fr) minmax(300px, .6fr)' }, gap: 3, overflowX: 'auto' }}>
@@ -472,7 +472,7 @@ function FinanceMockup({ variant }: { variant: VariantKey }) {
           <MetricCard icon="solar:piggy-bank-bold-duotone" color={palette.purple} label="Oszczędności" value="18 400 zł" note="3 cele" />
         </Box>
       </Stack>
-      <Card sx={{ p: 2 }}><Stack direction="row" justifyContent="space-between" alignItems="center"><Tabs value="budget"><Tab value="budget" label="Budżet" /><Tab value="debts" label="Pożyczki" /><Tab value="savings" label="Oszczędności" /></Tabs><Stack direction="row" spacing={1} alignItems="center"><IconButton><Icon icon="solar:alt-arrow-left-linear" /></IconButton><Typography variant="subtitle1">Wrzesień 2026</Typography><IconButton><Icon icon="solar:alt-arrow-right-linear" /></IconButton></Stack></Stack></Card>
+      <Card sx={{ p: 2 }}><Stack direction="row" justifyContent="space-between" alignItems="center"><Tabs value="budget"><Tab value="budget" label="Budżet" /><Tab value="debts" label="Pożyczki" /><Tab value="savings" label="Oszczędności" /></Tabs><Stack direction="row" spacing={1} alignItems="center"><IconButton aria-label="Poprzedni miesiąc"><Icon icon="solar:alt-arrow-left-linear" /></IconButton><Typography variant="subtitle1">Wrzesień 2026</Typography><IconButton aria-label="Następny miesiąc"><Icon icon="solar:alt-arrow-right-linear" /></IconButton></Stack></Stack></Card>
       {variant === 'A' ? (
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(3, 1fr)' }, gap: 2 }}>
           {categories.map(([name, spent, budget, progress, color]) => <BudgetCategory key={name} name={name} spent={spent} budget={budget} progress={progress} color={color} />)}
@@ -678,7 +678,7 @@ function MaintenanceCard({ title, location, date, overdue = false }: { title: st
 }
 
 function MemberRow({ name, role, image }: { name: string; role: string; image: string }) {
-  return <Stack direction="row" spacing={1.5} alignItems="center"><Avatar src={image} /><Box sx={{ flex: 1 }}><Typography variant="subtitle2">{name}</Typography><Typography variant="caption" color="text.secondary">{role}</Typography></Box><IconButton size="small"><Icon icon="solar:menu-dots-bold" /></IconButton></Stack>;
+  return <Stack direction="row" spacing={1.5} alignItems="center"><Avatar src={image} /><Box sx={{ flex: 1 }}><Typography variant="subtitle2">{name}</Typography><Typography variant="caption" color="text.secondary">{role}</Typography></Box><IconButton size="small" aria-label={`Akcje użytkownika ${name}`}><Icon icon="solar:menu-dots-bold" /></IconButton></Stack>;
 }
 
 function PrototypeFormDialog({ view, open, onClose }: { view: ViewKey; open: boolean; onClose: () => void }) {

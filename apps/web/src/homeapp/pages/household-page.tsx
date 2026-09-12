@@ -17,7 +17,6 @@ import {
   Divider,
   Checkbox,
   TextField,
-  IconButton,
   Typography,
   FormControlLabel,
 } from '@mui/material';
@@ -30,6 +29,7 @@ import { WebPushButton } from '../components/web-push-button';
 import {
   Page,
   ErrorView,
+  ActionMenu,
   FormDialog,
   PageHeader,
   LoadingView,
@@ -525,27 +525,27 @@ export function HouseholdPage() {
                       variant="outlined"
                     />
                     {member.role !== 'owner' && (
-                      <Stack direction="row">
-                        <IconButton
-                          aria-label={`Uprawnienia: ${member.displayName}`}
-                          onClick={() => {
-                            setSelectedMember(member);
-                            setPermissionDraft([]);
-                            setPermissionsOpen(true);
-                          }}
-                        >
-                          <Icon icon="solar:shield-user-bold-duotone" />
-                        </IconButton>
-                        <IconButton
-                          color="error"
-                          aria-label={`Usuń domownika: ${member.displayName}`}
-                          onClick={() =>
-                            confirmDelete(member.displayName) && remove.mutate(member.id)
-                          }
-                        >
-                          <Icon icon="solar:user-minus-bold-duotone" />
-                        </IconButton>
-                      </Stack>
+                      <ActionMenu
+                        label={`Akcje domownika ${member.displayName}`}
+                        actions={[
+                          {
+                            label: 'Zmień uprawnienia',
+                            icon: 'solar:shield-user-bold-duotone',
+                            onClick: () => {
+                              setSelectedMember(member);
+                              setPermissionDraft([]);
+                              setPermissionsOpen(true);
+                            },
+                          },
+                          {
+                            label: 'Usuń domownika',
+                            icon: 'solar:user-minus-bold-duotone',
+                            tone: 'danger',
+                            onClick: () =>
+                              confirmDelete(member.displayName) && remove.mutate(member.id),
+                          },
+                        ]}
+                      />
                     )}
                   </Stack>
                 </Stack>

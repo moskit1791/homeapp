@@ -12,7 +12,6 @@ import {
   Button,
   Divider,
   TextField,
-  IconButton,
   Typography,
   InputAdornment,
 } from '@mui/material';
@@ -38,6 +37,7 @@ import {
 import {
   Page,
   ErrorView,
+  ActionMenu,
   EmptyState,
   FormDialog,
   MetricCard,
@@ -300,21 +300,24 @@ export function PantryPage() {
                           label={`do ${shortDate(item.expirationDate)}`}
                         />
                       )}
-                      <IconButton
-                        aria-label="Edytuj produkt"
-                        onClick={() => openEdit(item)}
-                        disabled={!permission.canUpdate}
-                      >
-                        <Icon icon="solar:pen-bold-duotone" />
-                      </IconButton>
-                      <IconButton
-                        color="error"
-                        aria-label="Usuń produkt"
-                        onClick={() => confirmDelete(item.name) && remove.mutate(item.id)}
-                        disabled={!permission.canDelete}
-                      >
-                        <Icon icon="solar:trash-bin-trash-bold-duotone" />
-                      </IconButton>
+                      <ActionMenu
+                        label={`Akcje produktu ${item.name}`}
+                        actions={[
+                          {
+                            label: 'Edytuj',
+                            icon: 'solar:pen-bold-duotone',
+                            disabled: !permission.canUpdate,
+                            onClick: () => openEdit(item),
+                          },
+                          {
+                            label: 'Usuń',
+                            icon: 'solar:trash-bin-trash-bold-duotone',
+                            tone: 'danger',
+                            disabled: !permission.canDelete,
+                            onClick: () => confirmDelete(item.name) && remove.mutate(item.id),
+                          },
+                        ]}
+                      />
                     </Stack>
                   );
                 })}

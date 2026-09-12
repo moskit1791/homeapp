@@ -1,18 +1,24 @@
-import type { ReactNode, PropsWithChildren } from 'react';
+import type { ReactNode, MouseEvent, PropsWithChildren } from 'react';
 
 import { Icon } from '@iconify/react';
+import { useId, useState } from 'react';
 
 import {
   Box,
   Card,
+  Menu,
   Alert,
   Stack,
   Button,
   Dialog,
+  Tooltip,
+  MenuItem,
   IconButton,
   Typography,
   CardContent,
   DialogTitle,
+  ListItemIcon,
+  ListItemText,
   DialogActions,
   DialogContent,
   type CardProps,
@@ -84,13 +90,13 @@ export function SectionCard({
       {...props}
       sx={[
         (theme) => ({
-          border: '1px solid rgba(55,75,105,.24)',
+          border: '1px solid #8190A5',
           borderRadius: 2.5,
-          bgcolor: 'rgba(255,255,255,.92)',
+          bgcolor: 'background.paper',
           boxShadow: '0 10px 34px rgba(34,51,84,.055)',
           ...theme.applyStyles('dark', {
-            borderColor: 'rgba(255,255,255,.18)',
-            bgcolor: 'rgba(14,28,46,.84)',
+            borderColor: '#8190A5',
+            bgcolor: 'background.paper',
             boxShadow: '0 14px 42px rgba(0,0,0,.22)',
           }),
         }),
@@ -124,13 +130,13 @@ export function MetricCard({
     <Card
       sx={(theme) => ({
         height: '100%',
-        border: '1px solid rgba(55,75,105,.22)',
+        border: '1px solid #8190A5',
         borderRadius: 2.25,
-        bgcolor: 'rgba(255,255,255,.92)',
+        bgcolor: 'background.paper',
         boxShadow: '0 8px 28px rgba(34,51,84,.05)',
         ...theme.applyStyles('dark', {
-          borderColor: 'rgba(255,255,255,.16)',
-          bgcolor: 'rgba(14,28,46,.82)',
+          borderColor: '#8190A5',
+          bgcolor: 'background.paper',
           boxShadow: '0 12px 34px rgba(0,0,0,.2)',
         }),
       })}
@@ -170,9 +176,119 @@ export function MetricCard({
 
 export function LoadingView() {
   return (
-    <Box sx={{ display: 'grid', placeItems: 'center', minHeight: 240 }}>
-      <CircularProgress />
+    <Box
+      role="status"
+      aria-live="polite"
+      aria-label="Ładowanie danych"
+      sx={{ display: 'grid', placeItems: 'center', minHeight: 240 }}
+    >
+      <Stack spacing={1.5} sx={{ alignItems: 'center', color: 'text.secondary' }}>
+        <CircularProgress aria-hidden="true" />
+        <Typography variant="body2">Ładowanie danych…</Typography>
+      </Stack>
     </Box>
+  );
+}
+
+export interface ActionMenuItem {
+  disabled?: boolean;
+  hidden?: boolean;
+  icon: string;
+  label: string;
+  onClick: () => void;
+  tone?: 'default' | 'danger';
+}
+
+export function ActionMenu({
+  actions,
+  label = 'Akcje',
+}: {
+  actions: ActionMenuItem[];
+  label?: string;
+}) {
+  const menuId = useId();
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const visibleActions = actions.filter((action) => !action.hidden);
+  const open = Boolean(anchor);
+
+  if (visibleActions.length === 0) return null;
+
+  const showMenu = (event: MouseEvent<HTMLButtonElement>) => setAnchor(event.currentTarget);
+  const closeMenu = () => setAnchor(null);
+
+  return (
+    <>
+      <Tooltip title={label}>
+        <IconButton
+          aria-label={label}
+          aria-controls={open ? menuId : undefined}
+          aria-expanded={open ? 'true' : undefined}
+          aria-haspopup="menu"
+          onClick={showMenu}
+          size="small"
+          sx={(theme) => ({
+            width: 40,
+            height: 40,
+            flexShrink: 0,
+            border: '1px solid #8190A5',
+            bgcolor: 'background.paper',
+            '&:hover': { borderColor: 'primary.main', bgcolor: 'primary.lighter' },
+            ...theme.applyStyles('dark', {
+              borderColor: '#8190A5',
+              bgcolor: 'rgba(255,255,255,.055)',
+              '&:hover': {
+                borderColor: 'rgba(255,255,255,.38)',
+                bgcolor: 'rgba(255,255,255,.1)',
+              },
+            }),
+          })}
+        >
+          <Icon
+            icon="solar:alt-arrow-right-linear"
+            width={20}
+            style={{ transform: open ? 'rotate(90deg)' : undefined, transition: 'transform 150ms' }}
+          />
+        </IconButton>
+      </Tooltip>
+      <Menu
+        id={menuId}
+        anchorEl={anchor}
+        open={open}
+        onClose={closeMenu}
+        anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+        transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+        slotProps={{
+          list: { 'aria-label': label },
+          paper: {
+            sx: (theme) => ({
+              mt: 0.75,
+              border: '1px solid #8190A5',
+              boxShadow: theme.vars.customShadows.dropdown,
+            }),
+          },
+        }}
+      >
+        {visibleActions.map((action) => (
+          <MenuItem
+            key={action.label}
+            disabled={action.disabled}
+            onClick={() => {
+              closeMenu();
+              action.onClick();
+            }}
+            sx={{
+              minWidth: 180,
+              color: action.tone === 'danger' ? 'error.main' : 'text.primary',
+            }}
+          >
+            <ListItemIcon sx={{ color: 'inherit' }}>
+              <Icon icon={action.icon} width={20} />
+            </ListItemIcon>
+            <ListItemText primary={action.label} />
+          </MenuItem>
+        ))}
+      </Menu>
+    </>
   );
 }
 
@@ -341,6 +457,8 @@ export function FormDialog({
             variant="contained"
             onClick={onSubmit}
             disabled={loading || submitDisabled}
+            aria-busy={loading || undefined}
+            startIcon={loading ? <CircularProgress color="inherit" size={17} /> : undefined}
             sx={{ minWidth: 132 }}
           >
             {loading ? 'Zapisywanie…' : submitLabel}
