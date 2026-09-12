@@ -3,7 +3,7 @@ import type { FinanceDebt, BudgetCategory, BudgetItemSummary } from '../api';
 
 import { Icon } from '@iconify/react';
 import { useSearchParams } from 'react-router';
-import { useMemo, useState, Fragment, useEffect } from 'react';
+import { useRef, useMemo, useState, Fragment, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import {
@@ -14,6 +14,7 @@ import {
   Alert,
   Table,
   Stack,
+  Avatar,
   Button,
   Divider,
   Tooltip,
@@ -28,6 +29,7 @@ import {
   Typography,
   LinearProgress,
   TableContainer,
+  InputAdornment,
   FormControlLabel,
 } from '@mui/material';
 
@@ -176,7 +178,7 @@ export function FinancePage() {
   const [memberId, setMemberId] = useState('');
   const [direction, setDirection] = useState<'add' | 'subtract'>('add');
   const [ownerFilter, setOwnerFilter] = useState('all');
-  const [showIncomes, setShowIncomes] = useState(false);
+  const [showIncomes, setShowIncomes] = useState(true);
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const [editingCategory, setEditingCategory] = useState<BudgetCategory | null>(null);
   const [editingItem, setEditingItem] = useState<BudgetItemSummary | null>(null);
@@ -187,6 +189,9 @@ export function FinancePage() {
   const [generateOpen, setGenerateOpen] = useState(false);
   const [generateItemIds, setGenerateItemIds] = useState<Set<string>>(new Set());
   const [generateAmounts, setGenerateAmounts] = useState<Record<string, string>>({});
+  const [generateReviewedItemIds, setGenerateReviewedItemIds] = useState<Set<string>>(new Set());
+  const [resumeGenerateAfterManage, setResumeGenerateAfterManage] = useState(false);
+  const generateAmountRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const household = useQuery({
     queryKey: ['household'],
     queryFn: () => getMyHousehold({ accessToken }),
@@ -365,9 +370,22 @@ export function FinancePage() {
       }
       throw new Error('Nie wybrano operacji.');
     },
-    onSuccess: async () => {
+    onSuccess: async (result) => {
+      const resumeGenerator = resumeGenerateAfterManage;
+      const generatedItemId =
+        manageKind === 'item' && result && typeof result === 'object' && 'id' in result
+          ? String(result.id)
+          : null;
+      const generatedItemAmount = amount;
       closeManage();
       await invalidate();
+      if (resumeGenerator && generatedItemId) {
+        setGenerateItemIds((current) => new Set(current).add(generatedItemId));
+        setGenerateAmounts((current) => ({
+          ...current,
+          [generatedItemId]: generatedItemAmount,
+        }));
+      }
     },
   });
   const saveDebt = useMutation({
@@ -442,12 +460,15 @@ export function FinancePage() {
   }
 
   function closeManage() {
+    const reopenGenerator = resumeGenerateAfterManage;
     setManageKind(null);
     setSelectedId('');
     setEditingCategory(null);
     setEditingItem(null);
     setName('');
     setAmount('');
+    setResumeGenerateAfterManage(false);
+    if (reopenGenerator) setGenerateOpen(true);
   }
 
   function openCategoryEdit(category: BudgetCategory) {
@@ -498,7 +519,33 @@ export function FinancePage() {
     setGenerateAmounts(
       Object.fromEntries(budgetItems.map((item) => [item.id, item.budgetAmount ?? '']))
     );
+    setGenerateReviewedItemIds(new Set());
+    setResumeGenerateAfterManage(false);
+    generateAmountRefs.current = {};
     setGenerateOpen(true);
+  }
+
+  function manageItemFromGenerator(item?: BudgetItemSummary, nextCategoryId?: string) {
+    setGenerateOpen(false);
+    setResumeGenerateAfterManage(true);
+    if (item) openItemEdit(item);
+    else openItemCreate(nextCategoryId);
+  }
+
+  function markGenerateItemReviewed(itemId: string) {
+    setGenerateReviewedItemIds((current) => {
+      if (current.has(itemId)) return current;
+      return new Set(current).add(itemId);
+    });
+  }
+
+  function focusNextGenerateAmount(itemId: string) {
+    const selectedItems = budgetItems.filter((item) => generateItemIds.has(item.id));
+    const currentIndex = selectedItems.findIndex((item) => item.id === itemId);
+    const nextItem = selectedItems[currentIndex + 1];
+    const nextInput = nextItem ? generateAmountRefs.current[nextItem.id] : null;
+    nextInput?.focus();
+    nextInput?.select();
   }
 
   const orderedMonths = [...(months.data ?? [])].sort(
@@ -703,7 +750,7 @@ export function FinancePage() {
                   startIcon={<Icon icon="solar:users-group-rounded-bold-duotone" />}
                   onClick={() => setShowIncomes((value) => !value)}
                 >
-                  Podział na osoby
+                  {showIncomes ? 'Ukryj bilans osób' : 'Pokaż bilans osób'}
                 </Button>
                 <Box sx={{ flexGrow: 1 }} />
                 <ActionMenu
@@ -823,41 +870,100 @@ export function FinancePage() {
             {showIncomes && (
               <Box sx={(theme) => ({ ...financeSurface(theme), p: 2.5 })}>
                 <Typography variant="h6" sx={{ mb: 1 }}>
-                  Dochody domowników
+                  Bilans dochodów i budżetu
                 </Typography>
-                <Stack divider={<Divider flexItem />}>
-                  {budget.data.incomes.map((income) => (
-                    <Stack
-                      key={income.ownerMemberId}
-                      direction="row"
-                      spacing={2}
-                      sx={{ py: 1.2, alignItems: 'center' }}
-                    >
-                      <Box sx={{ flex: 1 }}>
-                        <Typography sx={{ fontWeight: 700 }}>{income.displayName}</Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {income.email}
-                        </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  Różnica pokazuje, ile zostaje po odjęciu całego zaplanowanego budżetu danej osoby
+                  od jej dochodu.
+                </Typography>
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, minmax(0, 1fr))' },
+                    gap: 1.5,
+                  }}
+                >
+                  {budget.data.personSummary.map((person) => {
+                    const difference =
+                      Number(person.incomeAmount) - Number(person.totalBudgetAmount);
+
+                    return (
+                      <Box
+                        key={person.ownerMemberId}
+                        sx={(theme) => ({
+                          p: 2,
+                          border: '1px solid #8190A5',
+                          borderRadius: 2,
+                          bgcolor: 'background.default',
+                          ...theme.applyStyles('dark', { bgcolor: 'rgba(7,17,31,.48)' }),
+                        })}
+                      >
+                        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+                          <Avatar sx={{ bgcolor: 'primary.main', fontWeight: 800 }}>
+                            {person.displayName.slice(0, 1).toUpperCase()}
+                          </Avatar>
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Typography sx={{ fontWeight: 750 }}>{person.displayName}</Typography>
+                            <Typography variant="caption" color="text.secondary" noWrap>
+                              {person.email}
+                            </Typography>
+                          </Box>
+                          <ActionMenu
+                            label={`Akcje dochodu ${person.displayName}`}
+                            actions={[
+                              {
+                                label: 'Edytuj dochód',
+                                icon: 'solar:pen-bold-duotone',
+                                disabled: !permission.canUpdate,
+                                onClick: () => {
+                                  openManage('income');
+                                  setMemberId(person.ownerMemberId);
+                                  setAmount(person.incomeAmount);
+                                },
+                              },
+                            ]}
+                          />
+                        </Stack>
+                        <Box
+                          sx={{
+                            mt: 2,
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+                            gap: 1,
+                          }}
+                        >
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">
+                              Dochód
+                            </Typography>
+                            <Typography variant="subtitle1">
+                              {money(person.incomeAmount, currency)}
+                            </Typography>
+                          </Box>
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">
+                              Budżet
+                            </Typography>
+                            <Typography variant="subtitle1">
+                              {money(person.totalBudgetAmount, currency)}
+                            </Typography>
+                          </Box>
+                          <Box>
+                            <Typography variant="caption" color="text.secondary">
+                              Różnica
+                            </Typography>
+                            <Typography
+                              variant="subtitle1"
+                              color={difference >= 0 ? 'success.main' : 'error.main'}
+                            >
+                              {money(difference, currency)}
+                            </Typography>
+                          </Box>
+                        </Box>
                       </Box>
-                      <Typography variant="h6">{money(income.amount, currency)}</Typography>
-                      <ActionMenu
-                        label={`Akcje dochodu ${income.displayName}`}
-                        actions={[
-                          {
-                            label: 'Edytuj dochód',
-                            icon: 'solar:pen-bold-duotone',
-                            disabled: !permission.canUpdate,
-                            onClick: () => {
-                              openManage('income');
-                              setMemberId(income.ownerMemberId);
-                              setAmount(income.amount);
-                            },
-                          },
-                        ]}
-                      />
-                    </Stack>
-                  ))}
-                </Stack>
+                    );
+                  })}
+                </Box>
               </Box>
             )}
 
@@ -2100,70 +2206,266 @@ export function FinancePage() {
         maxWidth="md"
       >
         {generateMonth.error && <Alert severity="error">{generateMonth.error.message}</Alert>}
-        <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
-          <Button
-            size="small"
-            variant="outlined"
-            onClick={() => setGenerateItemIds(new Set(budgetItems.map((item) => item.id)))}
+        <Box
+          sx={(theme) => ({
+            p: 2,
+            border: '1px solid #8190A5',
+            borderRadius: 2,
+            bgcolor: 'background.default',
+            ...theme.applyStyles('dark', { bgcolor: 'rgba(7,17,31,.48)' }),
+          })}
+        >
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1}
+            sx={{ alignItems: { sm: 'center' } }}
           >
-            Zaznacz wszystkie
-          </Button>
-          <Button size="small" onClick={() => setGenerateItemIds(new Set())}>
-            Wyczyść wybór
-          </Button>
-          <Typography variant="body2" color="text.secondary" sx={{ alignSelf: 'center' }}>
-            Wybrano {generateItemIds.size} z {budgetItems.length}
-          </Typography>
-        </Stack>
-        <Stack divider={<Divider flexItem />}>
+            <Button
+              variant="contained"
+              startIcon={<Icon icon="solar:add-square-bold-duotone" />}
+              onClick={() => manageItemFromGenerator()}
+              disabled={!permission.canCreate || activeCategories.length === 0}
+            >
+              Dodaj pozycję
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => setGenerateItemIds(new Set(budgetItems.map((item) => item.id)))}
+            >
+              Zaznacz wszystkie
+            </Button>
+            <Button size="small" onClick={() => setGenerateItemIds(new Set())}>
+              Wyczyść wybór
+            </Button>
+            <Box sx={{ flexGrow: 1 }} />
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+              <Chip
+                size="small"
+                variant="soft"
+                color="primary"
+                label={`Wybrano ${generateItemIds.size} z ${budgetItems.length}`}
+              />
+              <Chip
+                size="small"
+                variant="soft"
+                color="success"
+                icon={<Icon icon="solar:check-circle-bold" />}
+                label={`Sprawdzono ${generateReviewedItemIds.size}`}
+              />
+            </Stack>
+          </Stack>
+        </Box>
+
+        <Alert severity="info" variant="outlined">
+          Wejdź w pole kwoty, aby oznaczyć pozycję jako sprawdzoną. Enter przechodzi do kolejnej
+          wybranej pozycji.
+        </Alert>
+
+        <Stack spacing={2}>
           {(budget.data?.categories ?? []).map((category) => (
-            <Box key={category.id} sx={{ py: 1 }}>
-              <Typography variant="subtitle1" sx={{ mb: 0.75 }}>
-                {category.name}
-              </Typography>
-              <Stack spacing={1}>
-                {category.items.map((item) => (
+            <Box
+              key={category.id}
+              component="section"
+              sx={(theme) => ({
+                p: { xs: 1.25, sm: 2 },
+                border: '1px solid #8190A5',
+                borderRadius: 2.25,
+                bgcolor: 'background.paper',
+                boxShadow: '0 8px 24px rgba(34,51,84,.05)',
+                ...theme.applyStyles('dark', { boxShadow: '0 10px 28px rgba(0,0,0,.18)' }),
+              })}
+            >
+              <Stack
+                direction="row"
+                spacing={1.25}
+                sx={{ mb: 1.25, alignItems: 'center', justifyContent: 'space-between' }}
+              >
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                   <Box
-                    key={item.id}
                     sx={{
+                      width: 36,
+                      height: 36,
                       display: 'grid',
-                      gap: 1,
-                      alignItems: 'center',
-                      gridTemplateColumns: {
-                        xs: 'auto minmax(0, 1fr)',
-                        sm: 'auto minmax(0, 1fr) 140px',
-                      },
+                      placeItems: 'center',
+                      borderRadius: 1.25,
+                      color: 'primary.main',
+                      bgcolor: 'primary.lighter',
                     }}
                   >
-                    <Checkbox
-                      checked={generateItemIds.has(item.id)}
-                      onChange={(event) =>
-                        setGenerateItemIds((current) => {
-                          const next = new Set(current);
-                          if (event.target.checked) next.add(item.id);
-                          else next.delete(item.id);
-                          return next;
-                        })
-                      }
-                    />
-                    <Typography sx={{ minWidth: 0 }}>{item.name}</Typography>
-                    <TextField
-                      size="small"
-                      label="Limit"
-                      type="number"
-                      value={generateAmounts[item.id] ?? ''}
-                      onChange={(event) =>
-                        setGenerateAmounts((current) => ({
-                          ...current,
-                          [item.id]: event.target.value,
-                        }))
-                      }
-                      disabled={!generateItemIds.has(item.id)}
-                      sx={{ width: 1, gridColumn: { xs: '2', sm: 'auto' } }}
-                      slotProps={{ htmlInput: { min: 0, step: 0.01 } }}
-                    />
+                    <Icon icon="solar:folder-with-files-bold-duotone" width={21} />
                   </Box>
-                ))}
+                  <Box>
+                    <Typography component="h3" variant="subtitle1">
+                      {category.name}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {category.items.length} pozycji
+                    </Typography>
+                  </Box>
+                </Stack>
+                <Button
+                  size="small"
+                  startIcon={<Icon icon="solar:add-circle-linear" />}
+                  onClick={() => manageItemFromGenerator(undefined, category.id)}
+                  disabled={!permission.canCreate}
+                >
+                  Dodaj
+                </Button>
+              </Stack>
+              <Stack spacing={1}>
+                {category.items.map((item) => {
+                  const selected = generateItemIds.has(item.id);
+                  const reviewed = generateReviewedItemIds.has(item.id);
+                  const ownerInitial = item.owner.displayName.slice(0, 1).toUpperCase();
+
+                  return (
+                    <Box
+                      key={item.id}
+                      sx={(theme) => ({
+                        p: 1,
+                        display: 'grid',
+                        gap: 1,
+                        alignItems: 'center',
+                        border: '1px solid',
+                        borderColor: reviewed ? 'success.main' : 'divider',
+                        borderRadius: 1.75,
+                        bgcolor: reviewed ? 'rgba(34,197,94,.08)' : 'background.default',
+                        opacity: selected ? 1 : 0.62,
+                        gridTemplateColumns: {
+                          xs: 'auto 40px minmax(0, 1fr) auto',
+                          sm: 'auto 40px minmax(180px, 1fr) auto 160px auto',
+                        },
+                        transition: theme.transitions.create([
+                          'background-color',
+                          'border-color',
+                          'opacity',
+                        ]),
+                        ...theme.applyStyles('dark', {
+                          bgcolor: reviewed ? 'rgba(34,197,94,.11)' : 'rgba(7,17,31,.4)',
+                        }),
+                      })}
+                    >
+                      <Checkbox
+                        checked={selected}
+                        slotProps={{
+                          input: { 'aria-label': `Uwzględnij pozycję ${item.name}` },
+                        }}
+                        onChange={(event) =>
+                          setGenerateItemIds((current) => {
+                            const next = new Set(current);
+                            if (event.target.checked) next.add(item.id);
+                            else next.delete(item.id);
+                            return next;
+                          })
+                        }
+                      />
+                      <Box
+                        sx={{
+                          width: 40,
+                          height: 40,
+                          display: 'grid',
+                          placeItems: 'center',
+                          borderRadius: 1.25,
+                          color: 'primary.main',
+                          bgcolor: 'primary.lighter',
+                        }}
+                      >
+                        <Icon icon={resolveBudgetItemIcon(item.name, category.name)} width={22} />
+                      </Box>
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography sx={{ fontWeight: 700 }} noWrap>
+                          {item.name}
+                        </Typography>
+                        <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+                          <Avatar
+                            sx={{
+                              width: 22,
+                              height: 22,
+                              fontSize: 11,
+                              fontWeight: 800,
+                              bgcolor: 'secondary.main',
+                            }}
+                          >
+                            {ownerInitial}
+                          </Avatar>
+                          <Typography variant="caption" color="text.secondary" noWrap>
+                            {item.owner.displayName}
+                          </Typography>
+                        </Stack>
+                      </Box>
+                      {reviewed ? (
+                        <Chip
+                          size="small"
+                          color="success"
+                          variant="soft"
+                          icon={<Icon icon="solar:check-circle-bold" />}
+                          label="Sprawdzone"
+                          sx={{ gridColumn: { xs: '3', sm: 'auto' }, justifySelf: 'start' }}
+                        />
+                      ) : (
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ gridColumn: { xs: '3', sm: 'auto' } }}
+                        >
+                          Do sprawdzenia
+                        </Typography>
+                      )}
+                      <TextField
+                        size="small"
+                        label="Limit"
+                        type="number"
+                        value={generateAmounts[item.id] ?? ''}
+                        inputRef={(node) => {
+                          generateAmountRefs.current[item.id] = node;
+                        }}
+                        onFocus={() => markGenerateItemReviewed(item.id)}
+                        onChange={(event) => {
+                          markGenerateItemReviewed(item.id);
+                          setGenerateAmounts((current) => ({
+                            ...current,
+                            [item.id]: event.target.value,
+                          }));
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key !== 'Enter') return;
+                          event.preventDefault();
+                          markGenerateItemReviewed(item.id);
+                          focusNextGenerateAmount(item.id);
+                        }}
+                        disabled={!selected}
+                        sx={{ width: 1, gridColumn: { xs: '2 / 5', sm: 'auto' } }}
+                        slotProps={{
+                          htmlInput: { min: 0, step: 0.01 },
+                          input: {
+                            endAdornment: (
+                              <InputAdornment position="end">{currency}</InputAdornment>
+                            ),
+                          },
+                        }}
+                      />
+                      <Box
+                        sx={{
+                          gridColumn: { xs: '4', sm: 'auto' },
+                          gridRow: { xs: '1', sm: 'auto' },
+                        }}
+                      >
+                        <ActionMenu
+                          label={`Akcje pozycji ${item.name}`}
+                          actions={[
+                            {
+                              label: 'Edytuj pozycję',
+                              icon: 'solar:pen-bold-duotone',
+                              disabled: !permission.canUpdate,
+                              onClick: () => manageItemFromGenerator(item),
+                            },
+                          ]}
+                        />
+                      </Box>
+                    </Box>
+                  );
+                })}
               </Stack>
             </Box>
           ))}
