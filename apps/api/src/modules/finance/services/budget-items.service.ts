@@ -292,7 +292,7 @@ export class BudgetItemsService {
   }
 
   private normalizeName(name: string): string {
-    const normalized = name.trim();
+    const normalized = name.trim().normalize('NFC');
 
     if (!normalized) {
       throw new BadRequestException('Budget item name is required');

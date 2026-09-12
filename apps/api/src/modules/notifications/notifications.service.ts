@@ -563,8 +563,8 @@ function buildNotificationCopy(
       title: "Kalendarz",
     },
     "cleaning.changed": {
-      body: `${actor} zmienił sprzątanie.`,
-      title: "Sprzątanie",
+      body: `${actor} zmienił pozycje cykliczne.`,
+      title: "Cykliczne",
     },
     "data.changed": {
       body: `${actor} zmienił dane domowe.`,

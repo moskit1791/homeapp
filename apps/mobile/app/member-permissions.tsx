@@ -41,8 +41,8 @@ const moduleCopy: Record<ModuleKey, { label: string; meta: string }> = {
     meta: "Wydarzenia domowe i osobiste.",
   },
   cleaning: {
-    label: "Sprzątanie",
-    meta: "Zadania i harmonogram porządków.",
+    label: "Cykliczne",
+    meta: "Obowiązki, opłaty i przypomnienia o terminach.",
   },
   data_entries: {
     label: "Dane",

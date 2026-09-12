@@ -51,16 +51,19 @@ import {
 } from '../api';
 
 const moduleNames: Record<string, string> = {
+  start: 'Dzisiaj',
   calendar: 'Kalendarz',
   finances: 'Finanse',
   meal_planner: 'Posiłki',
   shopping: 'Zakupy',
   todo: 'Zadania',
   notes: 'Notatki',
-  cleaning: 'Sprzątanie',
+  cleaning: 'Cykliczne',
   annual_costs: 'Koszty roczne',
   data_entries: 'Ważne dane',
   attachments: 'Załączniki',
+  household_members: 'Domownicy',
+  permissions: 'Uprawnienia',
 };
 
 const notificationLabels: Record<string, { label: string; meta: string }> = {
@@ -70,7 +73,10 @@ const notificationLabels: Record<string, { label: string; meta: string }> = {
     label: 'Kalendarz',
     meta: 'Wydarzenia dodane lub zmienione przez domowników.',
   },
-  'cleaning.changed': { label: 'Sprzątanie', meta: 'Zadania sprzątania i oznaczenia wykonania.' },
+  'cleaning.changed': {
+    label: 'Cykliczne',
+    meta: 'Cykliczne obowiązki, opłaty i przypomnienia o terminach.',
+  },
   'data.changed': { label: 'Dane', meta: 'Wpisy w domowym sejfie danych.' },
   'finance.changed': { label: 'Finanse', meta: 'Kategorie, budżety, wydatki i dochody.' },
   'finance.month.deleted': {

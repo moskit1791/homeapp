@@ -35,7 +35,7 @@ const moduleOptions: Array<{
   },
   {
     description:
-      "Sprzątanie, koszty roczne, dane domowe oraz opisy załączników.",
+      "Pozycje cykliczne, koszty roczne, dane domowe oraz opisy załączników.",
     keys: ["cleaning", "annual_costs", "data_entries", "attachments"],
     label: "Dom",
   },

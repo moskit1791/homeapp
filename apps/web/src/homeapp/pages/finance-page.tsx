@@ -104,17 +104,26 @@ const financeSurface = (theme: Theme) => ({
 const categoryAccents = ['#FF9F43', '#55D99B', '#4C9AFF', '#A879E8'];
 
 function budgetItemIcon(name: string) {
-  if (/jedz|spoży|zakup/i.test(name)) return 'solar:chef-hat-heart-bold-duotone';
-  if (/paliw/i.test(name)) return 'solar:gas-station-bold-duotone';
-  if (/auto|samoch/i.test(name)) return 'solar:wheel-bold-duotone';
-  if (/internet|wifi/i.test(name)) return 'solar:wi-fi-router-bold-duotone';
-  if (/telefon/i.test(name)) return 'solar:phone-calling-bold-duotone';
-  if (/gaz/i.test(name)) return 'solar:fire-bold-duotone';
-  if (/wod/i.test(name)) return 'solar:waterdrops-bold-duotone';
-  if (/dom/i.test(name)) return 'solar:home-smile-bold-duotone';
-  if (/fryz/i.test(name)) return 'solar:scissors-square-bold-duotone';
-  if (/poduszk|oszcz/i.test(name)) return 'solar:piggy-bank-bold-duotone';
-  return 'solar:receipt-bold-duotone';
+  const normalized = name
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase();
+  if (/jedz|spozy|zakup/.test(normalized)) return 'solar:chef-hat-heart-bold-duotone';
+  if (/prad|energi|elektr/.test(normalized)) return 'solar:bolt-bold-duotone';
+  if (/paliw/.test(normalized)) return 'solar:gas-station-bold-duotone';
+  if (/auto|samoch/.test(normalized)) return 'solar:wheel-bold-duotone';
+  if (/internet|wifi/.test(normalized)) return 'solar:wi-fi-router-bold-duotone';
+  if (/telefon/.test(normalized)) return 'solar:phone-calling-bold-duotone';
+  if (/gaz/.test(normalized)) return 'solar:fire-bold-duotone';
+  if (/wod/.test(normalized)) return 'solar:waterdrops-bold-duotone';
+  if (/dom|czynsz|mieszkan/.test(normalized)) return 'solar:home-smile-bold-duotone';
+  if (/fryz|urod/.test(normalized)) return 'solar:scissors-square-bold-duotone';
+  if (/lekar|zdrow|apte/.test(normalized)) return 'solar:medical-kit-bold-duotone';
+  if (/ubezpiecz/.test(normalized)) return 'solar:shield-check-bold-duotone';
+  if (/prezent/.test(normalized)) return 'solar:gift-bold-duotone';
+  if (/telewiz|netflix|subskry/.test(normalized)) return 'solar:tv-bold-duotone';
+  if (/poduszk|oszcz/.test(normalized)) return 'solar:wallet-money-bold-duotone';
+  return 'solar:bill-list-bold-duotone';
 }
 
 function savingsImage(name: string) {
@@ -294,7 +303,7 @@ export function FinancePage() {
       return createFinanceSavingsAccount(
         {
           amount: Number(amount || 0),
-          name: name.trim(),
+          name: name.trim().normalize('NFC'),
           note: noteText.trim() || null,
           ownerMemberId: memberId || null,
           targetAmount: targetAmount ? Number(targetAmount) : null,
@@ -330,17 +339,17 @@ export function FinancePage() {
         return editingCategory
           ? updateBudgetCategory(
               editingCategory.id,
-              { name: name.trim(), copyBudgetToNextMonth: copyToNextMonth },
+              { name: name.trim().normalize('NFC'), copyBudgetToNextMonth: copyToNextMonth },
               { accessToken }
             )
           : createBudgetCategory(
-              { name: name.trim(), copyBudgetToNextMonth: copyToNextMonth },
+              { name: name.trim().normalize('NFC'), copyBudgetToNextMonth: copyToNextMonth },
               { accessToken }
             );
       }
       if (manageKind === 'item') {
         const input = {
-          name: name.trim(),
+          name: name.trim().normalize('NFC'),
           categoryId,
           ownerMemberId: memberId,
           budgetAmount: amount ? Number(amount) : null,
@@ -625,16 +634,6 @@ export function FinancePage() {
                 </IconButton>
               </Stack>
             )}
-            {tab === 'budget' && (
-              <Button
-                variant="outlined"
-                startIcon={<Icon icon="solar:list-plus-bold-duotone" />}
-                disabled={!permission.canCreate || activeCategories.length === 0}
-                onClick={() => openItemCreate()}
-              >
-                Dodaj pozycję
-              </Button>
-            )}
             <PrimaryButton
               onClick={() => openPrimaryCreate()}
               disabled={!permission.canCreate || (tab === 'budget' && budgetItems.length === 0)}
@@ -752,17 +751,6 @@ export function FinancePage() {
                       </IconButton>
                     </span>
                   </Tooltip>
-                  <Tooltip title="Dodaj pozycję budżetu">
-                    <span>
-                      <IconButton
-                        aria-label="Dodaj pozycję budżetu"
-                        disabled={!permission.canCreate || activeCategories.length === 0}
-                        onClick={() => openItemCreate()}
-                      >
-                        <Icon icon="solar:list-plus-bold-duotone" />
-                      </IconButton>
-                    </span>
-                  </Tooltip>
                   {selectedMonthId && (
                     <Tooltip title="Usuń miesiąc">
                       <span>
@@ -847,7 +835,7 @@ export function FinancePage() {
                     bgcolor: 'rgba(255,173,50,.12)',
                   }}
                 >
-                  <Icon icon="solar:receipt-bold-duotone" width={27} />
+                  <Icon icon="solar:bill-list-bold-duotone" width={27} />
                 </Box>
                 <Box>
                   <Typography variant="subtitle2" sx={{ color: '#FFAD32' }}>
@@ -948,6 +936,17 @@ export function FinancePage() {
                           {money(categoryRemaining, currency)}
                         </Typography>
                       </Box>
+                      {permission.canCreate && (
+                        <Tooltip title={`Dodaj pozycję do kategorii ${category.name}`}>
+                          <IconButton
+                            size="small"
+                            aria-label={`Dodaj pozycję do kategorii ${category.name}`}
+                            onClick={() => openItemCreate(category.id)}
+                          >
+                            <Icon icon="solar:add-square-bold-duotone" width={21} />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                       <IconButton size="small" onClick={() => toggleCategory(category.id)}>
                         <Icon
                           icon={
@@ -1015,18 +1014,6 @@ export function FinancePage() {
                             </Stack>
                           );
                         })}
-                        {permission.canCreate && (
-                          <Button
-                            fullWidth
-                            size="small"
-                            variant="text"
-                            startIcon={<Icon icon="solar:list-plus-bold-duotone" />}
-                            onClick={() => openItemCreate(category.id)}
-                            sx={{ mt: 0.75, justifyContent: 'flex-start' }}
-                          >
-                            Dodaj pozycję
-                          </Button>
-                        )}
                       </Stack>
                     )}
                   </SectionCard>
@@ -1148,6 +1135,17 @@ export function FinancePage() {
                             </Stack>
                           </TableCell>
                           <TableCell align="right">
+                            <Tooltip title={`Dodaj pozycję do kategorii ${category.name}`}>
+                              <span>
+                                <IconButton
+                                  aria-label={`Dodaj pozycję do kategorii ${category.name}`}
+                                  disabled={!permission.canCreate}
+                                  onClick={() => openItemCreate(category.id)}
+                                >
+                                  <Icon icon="solar:add-square-bold-duotone" width={20} />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
                             <IconButton
                               aria-label={`Edytuj kategorię ${category.name}`}
                               disabled={!permission.canUpdate}
@@ -1275,20 +1273,6 @@ export function FinancePage() {
                               </TableRow>
                             );
                           })}
-                        {!collapsed && permission.canCreate && (
-                          <TableRow>
-                            <TableCell colSpan={7} sx={{ py: 0.75, pl: 10 }}>
-                              <Button
-                                size="small"
-                                variant="text"
-                                startIcon={<Icon icon="solar:list-plus-bold-duotone" />}
-                                onClick={() => openItemCreate(category.id)}
-                              >
-                                Dodaj pozycję w kategorii {category.name}
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        )}
                       </Fragment>
                     );
                   })}
@@ -1678,7 +1662,7 @@ export function FinancePage() {
             ? 'solar:bill-list-bold-duotone'
             : tab === 'debts'
               ? 'solar:hand-money-bold-duotone'
-              : 'solar:piggy-bank-bold-duotone'
+              : 'solar:wallet-money-bold-duotone'
         }
         open={open}
         onClose={() => {
@@ -1897,7 +1881,7 @@ export function FinancePage() {
           manageKind === 'category'
             ? 'solar:folder-add-bold-duotone'
             : manageKind === 'item'
-              ? 'solar:list-plus-bold-duotone'
+              ? 'solar:add-square-bold-duotone'
               : manageKind === 'income'
                 ? 'solar:wad-of-money-bold-duotone'
                 : 'solar:wallet-money-bold-duotone'

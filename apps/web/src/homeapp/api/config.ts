@@ -4,7 +4,10 @@ function normalizeApiBaseUrl(url: string): string {
   const normalized = url.trim().replace(/\/+$/, '');
 
   try {
-    new URL(normalized, window.location.origin);
+    new URL(
+      normalized,
+      typeof window === 'undefined' ? 'http://localhost' : window.location.origin
+    );
   } catch {
     throw new Error(`Nieprawidłowy adres API: ${normalized}`);
   }

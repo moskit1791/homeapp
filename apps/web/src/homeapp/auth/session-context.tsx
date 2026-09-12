@@ -1,9 +1,11 @@
 import { useQueryClient } from '@tanstack/react-query';
 import {
+  useRef,
   useMemo,
   useState,
   useEffect,
   useContext,
+  useCallback,
   createContext,
   type PropsWithChildren,
 } from 'react';
@@ -21,6 +23,7 @@ import {
   type LoginRequest,
   type LoginResponse,
   type RegisterRequest,
+  setApiAuthRefreshHandler,
   type EffectivePermission,
   type CreateHouseholdRequest,
 } from '../api';
@@ -75,6 +78,11 @@ function storeSession(session: Session, remember: boolean) {
   (remember ? localStorage : sessionStorage).setItem(storageKey, JSON.stringify(session));
 }
 
+function removeStoredSession() {
+  localStorage.removeItem(storageKey);
+  sessionStorage.removeItem(storageKey);
+}
+
 function isNoHousehold(error: unknown) {
   return (
     error instanceof ApiError &&
@@ -86,11 +94,30 @@ function isNoHousehold(error: unknown) {
 export function SessionProvider({ children }: PropsWithChildren) {
   const queryClient = useQueryClient();
   const [session, setSession] = useState<Session | null>(null);
-  const [remember, setRemember] = useState(false);
   const [permissions, setPermissions] = useState<EffectivePermission[]>([]);
   const [status, setStatus] = useState<SessionStatus>('checking');
+  const sessionRef = useRef<Session | null>(null);
+  const rememberRef = useRef(false);
+  const refreshInFlightRef = useRef<Promise<string | null> | null>(null);
 
-  async function verifyHousehold(next: Session) {
+  const commitSession = useCallback((next: Session, persistent: boolean) => {
+    sessionRef.current = next;
+    rememberRef.current = persistent;
+    setSession(next);
+    storeSession(next, persistent);
+  }, []);
+
+  const clearSession = useCallback(() => {
+    removeStoredSession();
+    sessionRef.current = null;
+    refreshInFlightRef.current = null;
+    setSession(null);
+    setPermissions([]);
+    setStatus('signed-out');
+    queryClient.clear();
+  }, [queryClient]);
+
+  const verifyHousehold = useCallback(async (next: Session) => {
     try {
       const nextPermissions = await getMyPermissions({ accessToken: next.accessToken });
       setPermissions(nextPermissions);
@@ -101,7 +128,42 @@ export function SessionProvider({ children }: PropsWithChildren) {
         setStatus('needs-household');
       } else throw error;
     }
-  }
+  }, []);
+
+  const refreshAccessToken = useCallback(
+    async (failedAccessToken: string): Promise<string | null> => {
+      const current = sessionRef.current;
+      if (!current) return null;
+      if (current.accessToken !== failedAccessToken) return current.accessToken;
+      if (refreshInFlightRef.current) return refreshInFlightRef.current;
+
+      const pending = refreshSession({ refreshToken: current.refreshToken })
+        .then((result) => {
+          if (sessionRef.current?.refreshToken !== current.refreshToken) {
+            return sessionRef.current?.accessToken ?? null;
+          }
+          const next = toSession(result);
+          commitSession(next, rememberRef.current);
+          return next.accessToken;
+        })
+        .catch((error: unknown) => {
+          clearSession();
+          throw error;
+        })
+        .finally(() => {
+          refreshInFlightRef.current = null;
+        });
+
+      refreshInFlightRef.current = pending;
+      return pending;
+    },
+    [clearSession, commitSession]
+  );
+
+  useEffect(() => {
+    setApiAuthRefreshHandler(refreshAccessToken);
+    return () => setApiAuthRefreshHandler(null);
+  }, [refreshAccessToken]);
 
   useEffect(() => {
     const stored = readStoredSession();
@@ -111,46 +173,29 @@ export function SessionProvider({ children }: PropsWithChildren) {
     }
 
     const persistent = Boolean(localStorage.getItem(storageKey));
-    setRemember(persistent);
+    commitSession(stored, persistent);
     void (async () => {
       try {
-        const next =
-          Date.parse(stored.accessTokenExpiresAt) - Date.now() < 60_000
-            ? toSession(await refreshSession({ refreshToken: stored.refreshToken }))
-            : stored;
-        setSession(next);
-        storeSession(next, persistent);
+        if (Date.parse(stored.accessTokenExpiresAt) - Date.now() < 60_000) {
+          await refreshAccessToken(stored.accessToken);
+        }
+        const next = sessionRef.current;
+        if (!next) return;
         await verifyHousehold(next);
       } catch {
-        localStorage.removeItem(storageKey);
-        sessionStorage.removeItem(storageKey);
-        setSession(null);
-        setPermissions([]);
-        setStatus('signed-out');
+        clearSession();
       }
     })();
-  }, []);
+  }, [clearSession, commitSession, refreshAccessToken, verifyHousehold]);
 
   useEffect(() => {
     if (!session) return undefined;
     const delay = Math.max(Date.parse(session.accessTokenExpiresAt) - Date.now() - 60_000, 1_000);
     const timer = window.setTimeout(() => {
-      void refreshSession({ refreshToken: session.refreshToken })
-        .then((result) => {
-          const next = toSession(result);
-          setSession(next);
-          storeSession(next, remember);
-        })
-        .catch(() => {
-          localStorage.removeItem(storageKey);
-          sessionStorage.removeItem(storageKey);
-          setSession(null);
-          setPermissions([]);
-          setStatus('signed-out');
-        });
+      void refreshAccessToken(session.accessToken).catch(() => undefined);
     }, delay);
     return () => window.clearTimeout(timer);
-  }, [remember, session]);
+  }, [refreshAccessToken, session]);
 
   const value = useMemo<SessionContextValue>(
     () => ({
@@ -163,12 +208,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
       logout: async () => {
         if (session)
           await logoutSession({ accessToken: session.accessToken }).catch(() => undefined);
-        localStorage.removeItem(storageKey);
-        sessionStorage.removeItem(storageKey);
-        queryClient.clear();
-        setSession(null);
-        setPermissions([]);
-        setStatus('signed-out');
+        clearSession();
       },
       registerAccount: async (input) => {
         const result = await register(input);
@@ -178,32 +218,26 @@ export function SessionProvider({ children }: PropsWithChildren) {
           token: result.devVerificationToken,
         });
         const next = toSession(await login({ email: input.email, password: input.password }));
-        setSession(next);
-        setRemember(true);
-        storeSession(next, true);
+        commitSession(next, true);
         setStatus('needs-household');
         return 'signed-in';
       },
       signIn: async (input, shouldRemember) => {
         const next = toSession(await login(input));
-        setSession(next);
-        setRemember(shouldRemember);
-        storeSession(next, shouldRemember);
+        commitSession(next, shouldRemember);
         await verifyHousehold(next);
         return next.accessToken;
       },
       signInWithGoogle: async (idToken, shouldRemember) => {
         const next = toSession(await loginWithGoogle({ idToken }));
-        setSession(next);
-        setRemember(shouldRemember);
-        storeSession(next, shouldRemember);
+        commitSession(next, shouldRemember);
         await verifyHousehold(next);
         return next.accessToken;
       },
       permissions,
       status,
     }),
-    [permissions, queryClient, session, status]
+    [clearSession, commitSession, permissions, session, status, verifyHousehold]
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

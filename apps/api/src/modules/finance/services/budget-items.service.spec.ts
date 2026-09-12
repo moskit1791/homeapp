@@ -94,4 +94,22 @@ describe('BudgetItemsService', () => {
       'active-category-id'
     ]);
   });
+
+  it('accepts Polish characters and stores the name in canonical Unicode form', async () => {
+    const database = {
+      query: vi
+        .fn()
+        .mockResolvedValueOnce(queryResult([budgetItemRow()]))
+        .mockResolvedValueOnce(queryResult([budgetItemRow({ name: 'Żywność i prąd' })]))
+    };
+    const service = new BudgetItemsService(database as never, {
+      publish: vi.fn()
+    } as never);
+
+    await service.updateBudgetItem('household-id', 'budget-item-id', {
+      name: '  Z\u0307ywność i prąd  '
+    });
+
+    expect(database.query.mock.calls[1]?.[1]?.[4]).toBe('Żywność i prąd');
+  });
 });

@@ -9,7 +9,6 @@ import { useBoolean } from 'minimal-shared/hooks';
 import { Link as RouterLink } from 'react-router';
 
 import Box from '@mui/material/Box';
-import Badge from '@mui/material/Badge';
 import Avatar from '@mui/material/Avatar';
 import Divider from '@mui/material/Divider';
 import Tooltip from '@mui/material/Tooltip';
@@ -21,6 +20,7 @@ import IconButton, { iconButtonClasses } from '@mui/material/IconButton';
 import { usePathname } from 'src/routes/hooks';
 
 import { useSession } from 'src/homeapp/auth/session-context';
+import { NotificationsDrawer } from 'src/homeapp/components/notifications-drawer';
 import { getMyHousehold, getStartDashboard, listHouseholdMembers } from 'src/homeapp/api';
 
 import { Logo } from 'src/components/logo';
@@ -144,7 +144,11 @@ export function DashboardLayout({
             />
           )}
           {isNavHorizontal && <VerticalDivider />}
-          <Typography variant="body2" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' } }}>
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ display: { xs: 'none', sm: 'block' } }}
+          >
             HomeApp&nbsp;&nbsp;/&nbsp;&nbsp;
             <Box component="span" sx={{ color: 'text.primary', fontWeight: 600 }}>
               {currentLabel}
@@ -155,20 +159,13 @@ export function DashboardLayout({
       rightArea: (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.25, sm: 0.75 } }}>
           <Searchbar data={navData} />
-          <Tooltip title="Powiadomienia">
-            <IconButton aria-label="Powiadomienia">
-              <Badge
-                color="primary"
-                badgeContent={dashboard.data?.upcomingEvents.length ?? 0}
-                max={9}
-              >
-                <Icon icon="solar:bell-bing-bold-duotone" />
-              </Badge>
-            </IconButton>
-          </Tooltip>
+          <NotificationsDrawer dashboard={dashboard.data} onOpen={() => void dashboard.refetch()} />
           <Divider orientation="vertical" flexItem sx={{ mx: 0.5, my: 1.25 }} />
           <Tooltip title={isDark ? 'Włącz tryb jasny' : 'Włącz tryb ciemny'}>
-            <IconButton aria-label={isDark ? 'Włącz tryb jasny' : 'Włącz tryb ciemny'} onClick={toggleMode}>
+            <IconButton
+              aria-label={isDark ? 'Włącz tryb jasny' : 'Włącz tryb ciemny'}
+              onClick={toggleMode}
+            >
               <Icon icon={isDark ? 'solar:sun-2-bold-duotone' : 'solar:moon-bold-duotone'} />
             </IconButton>
           </Tooltip>
@@ -203,7 +200,11 @@ export function DashboardLayout({
     ) : (
       <Box sx={{ px: 3, pt: 3, pb: 2 }}>
         <Logo />
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25, ml: 6.25 }}>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ display: 'block', mt: 0.25, ml: 6.25 }}
+        >
           Twój dom w jednym miejscu
         </Typography>
       </Box>

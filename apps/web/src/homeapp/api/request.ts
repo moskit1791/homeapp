@@ -12,6 +12,14 @@ export interface ApiRequestOptions<TBody = unknown> {
   signal?: AbortSignal;
 }
 
+type ApiAuthRefreshHandler = (failedAccessToken: string) => Promise<string | null>;
+
+let authRefreshHandler: ApiAuthRefreshHandler | null = null;
+
+export function setApiAuthRefreshHandler(handler: ApiAuthRefreshHandler | null) {
+  authRefreshHandler = handler;
+}
+
 export async function apiRequest<TResponse, TBody = unknown>(
   path: string,
   options: ApiRequestOptions<TBody> = {}
@@ -21,12 +29,10 @@ export async function apiRequest<TResponse, TBody = unknown>(
     ...options.headers,
   };
   const request: RequestInit = {
-    headers,
     method: options.method ?? 'GET',
     signal: options.signal,
   };
 
-  if (options.accessToken) headers.Authorization = `Bearer ${options.accessToken}`;
   if (options.body !== undefined) {
     headers['Content-Type'] = headers['Content-Type'] ?? 'application/json';
     request.body = JSON.stringify(
@@ -34,15 +40,28 @@ export async function apiRequest<TResponse, TBody = unknown>(
     );
   }
 
-  let response: Response;
-  try {
-    response = await fetch(buildApiUrl(path), request);
-  } catch (cause) {
-    throw new ApiNetworkError({
-      apiBaseUrl: getApiBaseUrl(),
-      cause,
-      url: buildApiUrl(path),
-    });
+  const send = async (accessToken?: string | null) => {
+    try {
+      return await fetch(buildApiUrl(path), {
+        ...request,
+        headers: {
+          ...headers,
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+      });
+    } catch (cause) {
+      throw new ApiNetworkError({
+        apiBaseUrl: getApiBaseUrl(),
+        cause,
+        url: buildApiUrl(path),
+      });
+    }
+  };
+
+  let response = await send(options.accessToken);
+  if (response.status === 401 && options.accessToken && authRefreshHandler) {
+    const refreshedAccessToken = await authRefreshHandler(options.accessToken);
+    if (refreshedAccessToken) response = await send(refreshedAccessToken);
   }
 
   if (!response.ok) throw await createApiErrorFromResponse(response);

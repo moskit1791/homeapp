@@ -11,6 +11,16 @@ import { EncryptionProvider } from './homeapp/auth/encryption-context';
 
 // ----------------------------------------------------------------------
 
+const preloadReloadKey = 'homeapp.web.preload-reload-at';
+
+window.addEventListener('vite:preloadError', (event) => {
+  event.preventDefault();
+  const previousReload = Number(sessionStorage.getItem(preloadReloadKey) ?? 0);
+  if (Date.now() - previousReload < 10_000) return;
+  sessionStorage.setItem(preloadReloadKey, String(Date.now()));
+  window.location.reload();
+});
+
 const router = createBrowserRouter([
   {
     Component: () => (

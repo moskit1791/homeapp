@@ -59,7 +59,7 @@ import {
 type HomeTab = 'cleaning' | 'costs' | 'data' | 'attachments';
 
 const homeTabs: Array<{ icon: string; label: string; value: HomeTab }> = [
-  { icon: 'solar:broom-bold-duotone', label: 'Sprzątanie', value: 'cleaning' },
+  { icon: 'solar:refresh-circle-bold-duotone', label: 'Cykliczne', value: 'cleaning' },
   { icon: 'solar:chart-2-bold-duotone', label: 'Koszty', value: 'costs' },
   { icon: 'solar:database-bold-duotone', label: 'Dane', value: 'data' },
   { icon: 'solar:folder-with-files-bold-duotone', label: 'Pliki', value: 'attachments' },
@@ -313,24 +313,29 @@ export function HomePage() {
     cleaning: {
       color: '#6F8CFF',
       count: cleaning.data?.length ?? 0,
-      icon: 'solar:broom-bold-duotone',
-      title: 'Sprzątanie',
+      description:
+        'Dodaj pozycje, które występują cyklicznie w Twoim domu, np. sprzątanie, ubezpieczenie lub przegląd auta. Przypomnimy Ci o zbliżającym się terminie.',
+      icon: 'solar:refresh-circle-bold-duotone',
+      title: 'Cykliczne',
     },
     costs: {
       color: '#55D99B',
       count: costs.data?.length ?? 0,
+      description: 'Zaplanuj opłaty, które ponosisz raz lub kilka razy w roku.',
       icon: 'solar:chart-2-bold-duotone',
       title: 'Koszty roczne',
     },
     data: {
       color: '#A879E8',
       count: data.data?.length ?? 0,
+      description: 'Przechowuj ważne informacje dotyczące domu.',
       icon: 'solar:database-bold-duotone',
       title: 'Ważne dane',
     },
     attachments: {
       color: '#F6B94D',
       count: attachments.data?.length ?? 0,
+      description: 'Przechowuj dokumenty i zdjęcia związane z domem.',
       icon: 'solar:folder-with-files-bold-duotone',
       title: 'Pliki',
     },
@@ -511,6 +516,9 @@ export function HomePage() {
             <Typography variant="body2" color="text.secondary">
               {activeMeta.count} {activeMeta.count === 1 ? 'wpis' : 'wpisów'}
             </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, maxWidth: 760 }}>
+              {activeMeta.description}
+            </Typography>
           </Box>
         </Stack>
         {active.isLoading ? (
@@ -519,7 +527,7 @@ export function HomePage() {
           <ErrorView error={active.error} retry={() => void active.refetch()} />
         ) : tab === 'cleaning' ? (
           (cleaning.data?.length ?? 0) === 0 ? (
-            <EmptyState text="Brak zaplanowanych prac." />
+            <EmptyState text="Brak pozycji cyklicznych." />
           ) : (
             <Stack divider={<Divider flexItem />}>
               {cleaning.data?.map((task) => (
@@ -850,8 +858,8 @@ export function HomePage() {
         title={
           tab === 'cleaning'
             ? editingCleaning
-              ? 'Edytuj zadanie domowe'
-              : 'Nowe zadanie domowe'
+              ? 'Edytuj pozycję cykliczną'
+              : 'Nowa pozycja cykliczna'
             : tab === 'costs'
               ? 'Nowy koszt roczny'
               : tab === 'data'
@@ -862,7 +870,7 @@ export function HomePage() {
         }
         subtitle={
           tab === 'cleaning'
-            ? 'Nazwa, miejsce i cykl wykonywania.'
+            ? 'Nazwa, szczegóły i termin kolejnego przypomnienia.'
             : tab === 'costs'
               ? 'Dodaj cykliczny koszt domu.'
               : tab === 'data'
@@ -896,7 +904,7 @@ export function HomePage() {
         />
         {tab !== 'costs' && tab !== 'attachments' && (
           <TextField
-            label={tab === 'cleaning' ? 'Pomieszczenie' : 'Wartość'}
+            label={tab === 'cleaning' ? 'Miejsce lub szczegóły' : 'Wartość'}
             value={detail}
             onChange={(e) => setDetail(e.target.value)}
             required={tab === 'data'}

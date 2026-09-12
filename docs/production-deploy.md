@@ -59,6 +59,31 @@ Puste `VITE_GOOGLE_CLIENT_ID` wyłącza przycisk Google w webie; logowanie hasł
 pozostaje dostępne. Żadne sekrety OAuth nie mogą mieć prefiksu `VITE_`.
 Zmienne Vite są osadzane podczas budowania, więc zmiana client ID wymaga rebuild.
 
+### Utworzenie klienta Google dla webu
+
+1. Otwórz Google Cloud Console, wybierz projekt HomeApp i przejdź do
+   **Google Auth Platform → Clients**.
+2. Wybierz **Create client**, typ **Web application**, a jako nazwę wpisz np.
+   `HomeApp Web Production`.
+3. W **Authorized JavaScript origins** dodaj dokładnie
+   `https://app.porabkihome.pl`. Ta implementacja używa callbacku JavaScript,
+   dlatego nie wymaga wpisu w **Authorized redirect URIs**.
+4. Skopiuj wartość **Client ID** kończącą się na `.apps.googleusercontent.com`.
+   Do logowania w przeglądarce nie kopiuj i nie publikuj **Client secret**.
+5. W `/opt/homeapp/.env` ustaw client ID dla budowanego webu oraz dopisz go po
+   przecinku do listy akceptowanej przez API, pozostawiając klienta mobilnego:
+
+   ```dotenv
+   VITE_GOOGLE_CLIENT_ID=<WEB_CLIENT_ID>.apps.googleusercontent.com
+   GOOGLE_OAUTH_CLIENT_IDS=<ANDROID_CLIENT_ID>.apps.googleusercontent.com,<WEB_CLIENT_ID>.apps.googleusercontent.com
+   ```
+
+6. W **Google Auth Platform → Audience** dodaj konta testowe albo opublikuj
+   aplikację dla użytkowników produkcyjnych. Do zwykłego logowania wystarczają
+   zakresy `openid`, `email` i `profile`.
+7. Przebuduj kontenery `api` i `web`, ponieważ `VITE_GOOGLE_CLIENT_ID` trafia do
+   statycznych plików podczas budowania obrazu.
+
 Sprawdź w konfiguracji Cloudflare Tunnel, że **cały host** `app.porabkihome.pl`
 kieruje do `http://127.0.0.1:3003`, bez ograniczenia do `/api/*`.
 Zachowaj HTTPS i nie ustawiaj cache dla HTML, `/auth/*` ani `/api/*`.

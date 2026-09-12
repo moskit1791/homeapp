@@ -525,7 +525,7 @@ function moduleLabel(moduleKey: ModuleKey): string {
     annual_costs: "Koszty roczne",
     attachments: "Załączniki",
     calendar: "Kalendarz",
-    cleaning: "Sprzątanie",
+    cleaning: "Cykliczne",
     data_entries: "Dane",
     finances: "Finanse",
     household_members: "Członkowie",

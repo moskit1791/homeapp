@@ -170,10 +170,10 @@ const moduleTiles: Array<{
   value: HomeSegment;
 }> = [
   {
-    description: "Plan zadań i harmonogram sprzątania",
-    label: "Sprzątanie",
+    description: "Sprzątanie, ubezpieczenia, przeglądy i inne terminy",
+    label: "Cykliczne",
     moduleKey: "cleaning",
-    title: "Sprzątanie",
+    title: "Cykliczne",
     value: "cleaning",
   },
   {
@@ -216,8 +216,8 @@ const notificationPreferenceLabels: Record<
     meta: "Wydarzenia dodane lub zmienione przez domowników.",
   },
   "cleaning.changed": {
-    label: "Sprzątanie",
-    meta: "Zadania sprzątania i oznaczenia wykonania.",
+    label: "Cykliczne",
+    meta: "Cykliczne obowiązki, opłaty i przypomnienia o terminach.",
   },
   "data.changed": {
     label: "Dane",
@@ -595,7 +595,7 @@ function CleaningPanel() {
       action={
         permission.canCreate ? (
           <IconButton
-            accessibilityLabel="Dodaj zadanie sprzątania"
+            accessibilityLabel="Dodaj pozycję cykliczną"
             onPress={openCreateTask}
             style={styles.homeHeaderButton}
           >
@@ -604,12 +604,12 @@ function CleaningPanel() {
         ) : undefined
       }
       icon={<Broom color={accent.color} size={18} />}
-      subtitle={`${tasks.length} zadań / ${overdue} po terminie`}
-      title="Sprzątanie"
+      subtitle={`${tasks.length} pozycji, ${overdue} po terminie. Dodaj pozycje, które występują cyklicznie w Twoim domu, np. sprzątanie, ubezpieczenie lub przegląd auta. Przypomnimy Ci o zbliżającym się terminie.`}
+      title="Cykliczne"
     >
       {completionNotice ? <InlineAlert text={completionNotice} /> : null}
       <QueryState
-        emptyText="Brak zadań sprzątania."
+        emptyText="Brak pozycji cyklicznych."
         error={tasksQuery.error}
         isEmpty={!tasksQuery.isLoading && tasks.length === 0}
         isLoading={tasksQuery.isLoading}
@@ -665,8 +665,10 @@ function CleaningPanel() {
           </View>
         }
         onClose={closeTaskModal}
-        subtitle="Dodajesz cykliczne zadanie domowe z następnym terminem."
-        title="Nowe zadanie sprzątania"
+        subtitle="Dodajesz cykliczną pozycję z następnym terminem."
+        title={
+          editingTask ? "Edytuj pozycję cykliczną" : "Nowa pozycja cykliczna"
+        }
         visible={modalVisible}
       >
         <TextInput
