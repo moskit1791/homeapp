@@ -435,16 +435,13 @@ export function ShoppingPage() {
                         }}
                         aria-haspopup="menu"
                         aria-expanded={menuItem?.id === item.id ? 'true' : undefined}
-                        sx={(theme) => ({
+                        sx={{
                           width: 40,
                           height: 40,
-                          border: '1px solid rgba(55,75,105,.24)',
-                          bgcolor: 'background.paper',
-                          ...theme.applyStyles('dark', {
-                            borderColor: 'rgba(255,255,255,.2)',
-                            bgcolor: 'rgba(255,255,255,.055)',
-                          }),
-                        })}
+                          color: 'text.secondary',
+                          bgcolor: 'transparent',
+                          '&:hover': { color: 'primary.main', bgcolor: 'transparent' },
+                        }}
                       >
                         <Icon icon="solar:alt-arrow-right-linear" />
                       </IconButton>

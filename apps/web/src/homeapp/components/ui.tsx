@@ -226,22 +226,14 @@ export function ActionMenu({
           aria-haspopup="menu"
           onClick={showMenu}
           size="small"
-          sx={(theme) => ({
+          sx={{
             width: 40,
             height: 40,
             flexShrink: 0,
-            border: '1px solid #8190A5',
-            bgcolor: 'background.paper',
-            '&:hover': { borderColor: 'primary.main', bgcolor: 'primary.lighter' },
-            ...theme.applyStyles('dark', {
-              borderColor: '#8190A5',
-              bgcolor: 'rgba(255,255,255,.055)',
-              '&:hover': {
-                borderColor: 'rgba(255,255,255,.38)',
-                bgcolor: 'rgba(255,255,255,.1)',
-              },
-            }),
-          })}
+            color: 'text.secondary',
+            bgcolor: 'transparent',
+            '&:hover': { color: 'primary.main', bgcolor: 'transparent' },
+          }}
         >
           <Icon
             icon="solar:alt-arrow-right-linear"
