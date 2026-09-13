@@ -32,7 +32,6 @@ import { NavMobile } from './nav-mobile';
 import { VerticalDivider } from './content';
 import { NavVertical } from './nav-vertical';
 import { NavHorizontal } from './nav-horizontal';
-import { Searchbar } from '../components/searchbar';
 import { MenuButton } from '../components/menu-button';
 import { navData as dashboardNavData } from '../nav-config-dashboard';
 import { dashboardLayoutVars, dashboardNavColorVars } from './css-vars';
@@ -158,7 +157,6 @@ export function DashboardLayout({
       ),
       rightArea: (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.25, sm: 0.75 } }}>
-          <Searchbar data={navData} />
           <NotificationsDrawer accessToken={accessToken} />
           <WebPushButton accessToken={accessToken} variant="hidden" />
           <Divider orientation="vertical" flexItem sx={{ mx: 0.5, my: 1.25 }} />
@@ -171,7 +169,6 @@ export function DashboardLayout({
             </IconButton>
           </Tooltip>
           <Divider orientation="vertical" flexItem sx={{ mx: 0.5, my: 1.25 }} />
-          <Avatar src="/homeapp-icon.png" alt="HomeApp" sx={{ width: 36, height: 36 }} />
           <Tooltip title="Wyloguj się">
             <IconButton aria-label="Wyloguj się" onClick={() => void logout()}>
               <Icon icon="solar:logout-2-bold-duotone" />
