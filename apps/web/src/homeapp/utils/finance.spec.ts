@@ -7,7 +7,23 @@ import {
   resolveBudgetItemIcon,
   summarizeBudgetCategories,
   resolveBudgetItemCategories,
+  resolveBudgetMonthNavigation,
 } from './finance';
+
+describe('nawigacja między miesiącami budżetu', () => {
+  it('dołącza bieżący miesiąc do archiwum i układa miesiące chronologicznie', () => {
+    const august = { id: 'august', month: 8, year: 2026 };
+    const september = { id: 'september', month: 9, year: 2026 };
+
+    expect(resolveBudgetMonthNavigation([august], september)).toEqual([august, september]);
+  });
+
+  it('nie powiela miesiąca już obecnego na liście', () => {
+    const september = { id: 'september', month: 9, year: 2026 };
+
+    expect(resolveBudgetMonthNavigation([september], september)).toEqual([september]);
+  });
+});
 
 describe('automatyczny dobór ikon pozycji budżetu', () => {
   it.each([

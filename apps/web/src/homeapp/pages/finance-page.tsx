@@ -1,5 +1,5 @@
 import type { Theme } from '@mui/material/styles';
-import type { FinanceDebt, BudgetCategory, BudgetItemSummary } from '../api';
+import type { FinanceDebt, BudgetMonth, BudgetCategory, BudgetItemSummary } from '../api';
 
 import { Icon } from '@iconify/react';
 import { useSearchParams } from 'react-router';
@@ -48,6 +48,7 @@ import {
   resolveBudgetItemIcon,
   summarizeBudgetCategories,
   resolveBudgetItemCategories,
+  resolveBudgetMonthNavigation,
 } from '../utils/finance';
 import {
   Page,
@@ -106,6 +107,24 @@ const financeSurface = (theme: Theme) => ({
 });
 
 const categoryAccents = ['#FF9F43', '#55D99B', '#4C9AFF', '#A879E8'];
+const ownerFilterStorageKey = 'homeapp.finance.owner-filter';
+
+function loadOwnerFilter() {
+  if (typeof window === 'undefined') return 'all';
+  try {
+    return window.localStorage.getItem(ownerFilterStorageKey) || 'all';
+  } catch {
+    return 'all';
+  }
+}
+
+function persistOwnerFilter(value: string) {
+  try {
+    window.localStorage.setItem(ownerFilterStorageKey, value);
+  } catch {
+    // The filter still works for the current session when storage is unavailable.
+  }
+}
 
 function savingsImage(name: string) {
   if (/auto|samoch/i.test(name)) return savingsCarImage;
@@ -172,12 +191,13 @@ export function FinancePage() {
   const [budgetItemId, setBudgetItemId] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [selectedMonthId, setSelectedMonthId] = useState<string | null>(null);
+  const [currentBudgetMonth, setCurrentBudgetMonth] = useState<BudgetMonth | null>(null);
   const [manageKind, setManageKind] = useState<ManageKind | null>(null);
   const [selectedId, setSelectedId] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [memberId, setMemberId] = useState('');
   const [direction, setDirection] = useState<'add' | 'subtract'>('add');
-  const [ownerFilter, setOwnerFilter] = useState('all');
+  const [ownerFilter, setOwnerFilter] = useState(loadOwnerFilter);
   const [showIncomes, setShowIncomes] = useState(true);
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const [editingCategory, setEditingCategory] = useState<BudgetCategory | null>(null);
@@ -224,6 +244,22 @@ export function FinancePage() {
     queryKey: ['finances', 'savings'],
     queryFn: () => listFinanceSavings({ accessToken }),
   });
+
+  useEffect(() => {
+    if (!members.data || ownerFilter === 'all') return;
+    const savedMemberIsActive = members.data.some(
+      (member) => member.id === ownerFilter && member.isActive
+    );
+    if (!savedMemberIsActive) {
+      setOwnerFilter('all');
+      persistOwnerFilter('all');
+    }
+  }, [members.data, ownerFilter]);
+
+  useEffect(() => {
+    if (budget.data?.month.isCurrent) setCurrentBudgetMonth(budget.data.month);
+  }, [budget.data?.month]);
+
   const currency = household.data?.currencyCode ?? 'PLN';
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['finances'] });
   const createMonth = useMutation({
@@ -548,8 +584,9 @@ export function FinancePage() {
     nextInput?.select();
   }
 
-  const orderedMonths = [...(months.data ?? [])].sort(
-    (left, right) => left.year - right.year || left.month - right.month
+  const orderedMonths = resolveBudgetMonthNavigation(
+    months.data ?? [],
+    currentBudgetMonth ?? budget.data?.month
   );
   const currentMonthIndex = budget.data
     ? orderedMonths.findIndex((item) => item.id === budget.data.month.id)
@@ -594,7 +631,7 @@ export function FinancePage() {
 
   function selectAdjacentMonth(offset: number) {
     const next = orderedMonths[currentMonthIndex + offset];
-    if (next) setSelectedMonthId(next.id);
+    if (next) setSelectedMonthId(next.isCurrent ? null : next.id);
   }
 
   function toggleCategory(categoryIdToToggle: string) {
@@ -604,6 +641,11 @@ export function FinancePage() {
       else next.add(categoryIdToToggle);
       return next;
     });
+  }
+
+  function selectOwnerFilter(value: string) {
+    setOwnerFilter(value);
+    persistOwnerFilter(value);
   }
 
   return (
@@ -719,7 +761,7 @@ export function FinancePage() {
                   <Button
                     size="small"
                     variant={ownerFilter === 'all' ? 'contained' : 'outlined'}
-                    onClick={() => setOwnerFilter('all')}
+                    onClick={() => selectOwnerFilter('all')}
                     sx={{ minWidth: 98 }}
                   >
                     Wszyscy
@@ -731,7 +773,7 @@ export function FinancePage() {
                         <Button
                           size="small"
                           variant={ownerFilter === member.id ? 'contained' : 'outlined'}
-                          onClick={() => setOwnerFilter(member.id)}
+                          onClick={() => selectOwnerFilter(member.id)}
                           sx={{ minWidth: 54 }}
                         >
                           {member.displayName.slice(0, 1).toUpperCase()}
@@ -750,7 +792,7 @@ export function FinancePage() {
                   startIcon={<Icon icon="solar:users-group-rounded-bold-duotone" />}
                   onClick={() => setShowIncomes((value) => !value)}
                 >
-                  {showIncomes ? 'Ukryj bilans osób' : 'Pokaż bilans osób'}
+                  {showIncomes ? 'Ukryj dochody' : 'Pokaż dochody'}
                 </Button>
                 <Box sx={{ flexGrow: 1 }} />
                 <ActionMenu

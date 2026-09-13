@@ -5,6 +5,7 @@ type BudgetCategoryValues = {
 };
 
 type SelectableBudgetCategory = { id: string; isActive: boolean; name: string };
+type NavigableBudgetMonth = { id: string; month: number; year: number };
 
 const fallbackBudgetIcons = [
   'solar:bill-list-bold-duotone',
@@ -23,14 +24,29 @@ const budgetIconRules: Array<{ icon: string; pattern: RegExp }> = [
   { icon: 'solar:fire-bold-duotone', pattern: /\b(gaz|opal|ogrzew|wegiel|pellet)\b/ },
   { icon: 'solar:bolt-bold-duotone', pattern: /prad|energi|elektr/ },
   { icon: 'solar:gas-station-bold-duotone', pattern: /paliw|benzyn|diesel|tankowan/ },
-  { icon: 'solar:chef-hat-heart-bold-duotone', pattern: /jedz|zywn|spozyw|obiad|lunch|restaur|zakup.*dom/ },
+  {
+    icon: 'solar:chef-hat-heart-bold-duotone',
+    pattern: /jedz|zywn|spozyw|obiad|lunch|restaur|zakup.*dom/,
+  },
   { icon: 'solar:trash-bin-trash-bold-duotone', pattern: /smiec|odpady|wywoz/ },
-  { icon: 'solar:medical-kit-bold-duotone', pattern: /lekar|zdrow|apte|lek\b|dent|terap|rehab|weteryn/ },
+  {
+    icon: 'solar:medical-kit-bold-duotone',
+    pattern: /lekar|zdrow|apte|lek\b|dent|terap|rehab|weteryn/,
+  },
   { icon: 'solar:scissors-square-bold-duotone', pattern: /fryz|urod|kosmet|paznok|barber/ },
-  { icon: 'solar:home-smile-bold-duotone', pattern: /mieszkan|czynsz|hipotek|nieruchom|remont|mebl|\bdom\b/ },
-  { icon: 'solar:wheel-bold-duotone', pattern: /\b(auto|samochod|motocykl|rower|transport|parking|opony|mechanik)\b/ },
+  {
+    icon: 'solar:home-smile-bold-duotone',
+    pattern: /mieszkan|czynsz|hipotek|nieruchom|remont|mebl|\bdom\b/,
+  },
+  {
+    icon: 'solar:wheel-bold-duotone',
+    pattern: /\b(auto|samochod|motocykl|rower|transport|parking|opony|mechanik)\b/,
+  },
   { icon: 'solar:tv-bold-duotone', pattern: /netflix|telewiz|subskry|stream|spotify|hbo|disney/ },
-  { icon: 'solar:gift-bold-duotone', pattern: /prezent|urodzin|swiet|boze narodzenie|mikolaj|komuni/ },
+  {
+    icon: 'solar:gift-bold-duotone',
+    pattern: /prezent|urodzin|swiet|boze narodzenie|mikolaj|komuni/,
+  },
   { icon: 'solar:notebook-bold-duotone', pattern: /przedszkol|szkol|nauk|kurs|ksiazk|studia/ },
   { icon: 'solar:piggy-bank-bold-duotone', pattern: /emerytur|oszcz|poduszk|rezerw|inwest/ },
   { icon: 'solar:users-group-rounded-bold-duotone', pattern: /dziec|rodzic|rodzin|kieszonkow/ },
@@ -40,7 +56,10 @@ const budgetIconRules: Array<{ icon: string; pattern: RegExp }> = [
   { icon: 'solar:shield-check-bold-duotone', pattern: /ubezpiecz|polisa/ },
   { icon: 'solar:box-bold-duotone', pattern: /chemia|sprzatan|detergent|higien|zabaw/ },
   { icon: 'solar:heart-bold', pattern: /\b(kot|pies|zwierz|karma)\b/ },
-  { icon: 'solar:bill-check-bold-duotone', pattern: /podatek|oplata|rachunek|skladk|izba|koszt.*rocz/ },
+  {
+    icon: 'solar:bill-check-bold-duotone',
+    pattern: /podatek|oplata|rachunek|skladk|izba|koszt.*rocz/,
+  },
 ];
 
 function finiteAmount(value: string | null): number {
@@ -87,6 +106,18 @@ export function resolveBudgetItemCategories<
   }
 
   return [...categories.values()];
+}
+
+export function resolveBudgetMonthNavigation<Month extends NavigableBudgetMonth>(
+  archivedMonths: Month[],
+  displayedMonth?: Month
+): Month[] {
+  const monthsById = new Map(archivedMonths.map((month) => [month.id, month]));
+  if (displayedMonth) monthsById.set(displayedMonth.id, displayedMonth);
+
+  return [...monthsById.values()].sort(
+    (left, right) => left.year - right.year || left.month - right.month
+  );
 }
 
 export function groupDebtsByLender(debts: FinanceDebt[]) {
