@@ -101,7 +101,7 @@ const financeSurface = (theme: Theme) => ({
   boxShadow: '0 10px 34px rgba(34,51,84,.05)',
   ...theme.applyStyles('dark', {
     borderColor: 'rgba(139,166,206,.24)',
-    bgcolor: 'rgba(12,27,45,.86)',
+    bgcolor: 'rgba(26,47,71,.92)',
     boxShadow: '0 14px 38px rgba(0,0,0,.2)',
   }),
 });
@@ -668,7 +668,7 @@ export function FinancePage() {
                   borderColor: 'divider',
                   borderRadius: 1.5,
                   bgcolor: 'background.paper',
-                  ...theme.applyStyles('dark', { bgcolor: 'rgba(16,31,50,.82)' }),
+                  ...theme.applyStyles('dark', { bgcolor: 'rgba(28,50,75,.92)' }),
                 })}
               >
                 <IconButton
@@ -937,7 +937,7 @@ export function FinancePage() {
                           border: '1px solid #8190A5',
                           borderRadius: 2,
                           bgcolor: 'background.default',
-                          ...theme.applyStyles('dark', { bgcolor: 'rgba(7,17,31,.48)' }),
+                          ...theme.applyStyles('dark', { bgcolor: 'rgba(22,42,64,.62)' }),
                         })}
                       >
                         <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
@@ -1227,7 +1227,7 @@ export function FinancePage() {
                         <TableRow
                           sx={(theme) => ({
                             bgcolor: 'rgba(226,233,243,.48)',
-                            ...theme.applyStyles('dark', { bgcolor: 'rgba(32,52,76,.64)' }),
+                            ...theme.applyStyles('dark', { bgcolor: 'rgba(48,73,101,.72)' }),
                           })}
                         >
                           <TableCell>
@@ -1444,7 +1444,7 @@ export function FinancePage() {
                   <TableRow
                     sx={(theme) => ({
                       bgcolor: 'rgba(226,233,243,.4)',
-                      ...theme.applyStyles('dark', { bgcolor: 'rgba(32,52,76,.55)' }),
+                      ...theme.applyStyles('dark', { bgcolor: 'rgba(48,73,101,.66)' }),
                     })}
                   >
                     <TableCell>
@@ -2254,7 +2254,7 @@ export function FinancePage() {
             border: '1px solid #8190A5',
             borderRadius: 2,
             bgcolor: 'background.default',
-            ...theme.applyStyles('dark', { bgcolor: 'rgba(7,17,31,.48)' }),
+            ...theme.applyStyles('dark', { bgcolor: 'rgba(22,42,64,.62)' }),
           })}
         >
           <Stack
@@ -2384,7 +2384,7 @@ export function FinancePage() {
                           'opacity',
                         ]),
                         ...theme.applyStyles('dark', {
-                          bgcolor: reviewed ? 'rgba(34,197,94,.11)' : 'rgba(7,17,31,.4)',
+                          bgcolor: reviewed ? 'rgba(34,197,94,.16)' : 'rgba(22,42,64,.56)',
                         }),
                       })}
                     >

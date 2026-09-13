@@ -23,7 +23,7 @@ const customTabsIndicatorStyles = {
       '--indicator-shadow': theme.vars.customShadows.z1,
       '--indicator-bg': theme.vars.palette.common.white,
       ...theme.applyStyles('dark', {
-        '--indicator-bg': theme.vars.palette.grey[900],
+        '--indicator-bg': theme.vars.palette.background.paper,
       }),
     };
 

@@ -13,7 +13,7 @@ const MuiCard: Components<Theme>['MuiCard'] = {
       borderRadius: `var(--card-radius, ${Number(theme.shape.borderRadius) * 2}px)`,
       zIndex: 0, // Fix Safari overflow: hidden with border radius
       ...theme.applyStyles('dark', {
-        backgroundColor: '#102238',
+        backgroundColor: theme.vars.palette.background.paper,
         borderColor: '#8190A5',
       }),
     }),

@@ -103,7 +103,7 @@ export const text = {
 
 export const background = {
   light: createPaletteChannel({ paper: '#FFFFFF', default: '#F3F6FA', neutral: grey[200] }),
-  dark: createPaletteChannel({ paper: '#102238', default: '#07111F', neutral: '#28323D' }),
+  dark: createPaletteChannel({ paper: '#1A3048', default: '#101E30', neutral: '#34485E' }),
 };
 
 export const action = (mode: 'light' | 'dark'): Partial<TypeAction> => ({

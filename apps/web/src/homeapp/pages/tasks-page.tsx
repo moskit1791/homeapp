@@ -478,8 +478,8 @@ export function TasksPage() {
                     },
                     ...theme.applyStyles('dark', {
                       backgroundImage: isDone
-                        ? 'linear-gradient(90deg, rgba(34,197,94,.16), rgba(18,34,54,.38) 72%)'
-                        : `linear-gradient(90deg, ${accent}20, rgba(18,34,54,.38) 66%)`,
+                        ? 'linear-gradient(90deg, rgba(34,197,94,.2), rgba(30,53,79,.54) 72%)'
+                        : `linear-gradient(90deg, ${accent}26, rgba(30,53,79,.54) 66%)`,
                       boxShadow: '0 8px 22px rgba(0,0,0,.14)',
                     }),
                   })}
@@ -613,7 +613,7 @@ export function TasksPage() {
                       boxShadow: `0 16px 38px ${visual.accent}20`,
                     },
                     ...theme.applyStyles('dark', {
-                      backgroundImage: `linear-gradient(135deg, ${visual.accent}22 0%, rgba(18,34,54,.5) 72%)`,
+                      backgroundImage: `linear-gradient(135deg, ${visual.accent}29 0%, rgba(30,53,79,.62) 72%)`,
                       boxShadow: '0 12px 30px rgba(0,0,0,.18)',
                     }),
                   })}

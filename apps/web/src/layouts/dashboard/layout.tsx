@@ -282,7 +282,7 @@ export function DashboardLayout({
       sx={(currentTheme) => ({
         background: 'linear-gradient(180deg, #FFFFFF 0%, #F7F9FC 100%)',
         ...currentTheme.applyStyles('dark', {
-          background: 'linear-gradient(180deg, #0B1728 0%, #08111E 100%)',
+          background: 'linear-gradient(180deg, #1B334C 0%, #14283E 100%)',
         }),
       })}
       onToggleNav={() =>

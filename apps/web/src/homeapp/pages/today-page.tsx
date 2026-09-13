@@ -92,7 +92,7 @@ const dashboardCard = (theme: Theme) => ({
   boxShadow: '0 10px 34px rgba(34, 51, 84, .06)',
   ...theme.applyStyles('dark', {
     borderColor: 'rgba(139, 166, 206, .28)',
-    bgcolor: 'rgba(14, 28, 46, .84)',
+    bgcolor: 'rgba(27, 49, 73, .92)',
     boxShadow: '0 14px 42px rgba(0, 0, 0, .24)',
   }),
 });
@@ -613,7 +613,7 @@ export function TodayPage() {
                 'radial-gradient(circle at 78% 28%, rgba(86,135,245,.12), transparent 38%), rgba(255,255,255,.94)',
               ...theme.applyStyles('dark', {
                 background:
-                  'radial-gradient(circle at 78% 28%, rgba(86,135,245,.16), transparent 42%), linear-gradient(145deg, rgba(18,34,54,.96), rgba(12,25,42,.96))',
+                  'radial-gradient(circle at 78% 28%, rgba(110,154,255,.2), transparent 42%), linear-gradient(145deg, rgba(31,55,81,.97), rgba(22,42,64,.97))',
               }),
             })}
           >

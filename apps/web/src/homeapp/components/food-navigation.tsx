@@ -38,7 +38,7 @@ export function FoodNavigation({
           boxShadow: '0 8px 28px rgba(34,51,84,.045)',
           ...theme.applyStyles('dark', {
             borderColor: 'rgba(139,166,206,.25)',
-            bgcolor: 'rgba(14,28,46,.78)',
+            bgcolor: 'rgba(27,49,73,.9)',
             boxShadow: '0 12px 34px rgba(0,0,0,.18)',
           }),
         })}
