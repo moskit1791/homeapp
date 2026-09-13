@@ -21,10 +21,20 @@ export type SplashScreenProps = React.ComponentProps<'div'> & {
 };
 
 export function SplashScreen({ portal = true, slots, slotProps, sx, ...other }: SplashScreenProps) {
+  const animateLogoProps = slotProps?.logo;
+
   const renderContent = (
     <LoadingWrapper {...slotProps?.wrapper}>
       <LoadingContent sx={sx} {...other}>
-        {slots?.logo ?? <AnimateLogoZoom {...slotProps?.logo} />}
+        {slots?.logo ?? (
+          <AnimateLogoZoom
+            {...animateLogoProps}
+            slotProps={{
+              ...animateLogoProps?.slotProps,
+              logo: { isSingle: true, ...animateLogoProps?.slotProps?.logo },
+            }}
+          />
+        )}
       </LoadingContent>
     </LoadingWrapper>
   );
