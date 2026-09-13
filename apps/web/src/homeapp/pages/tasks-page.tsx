@@ -56,6 +56,7 @@ type NoteSort = 'updated' | 'title';
 type NoteView = 'grid' | 'list';
 
 const NOTE_VIEW_STORAGE_KEY = 'homeapp.tasks.note-view';
+const TODO_ACCENTS = ['#4F7DF3', '#8B5CF6', '#16A978', '#E99619', '#E6678A'] as const;
 
 const NOTE_VISUALS = [
   {
@@ -109,6 +110,13 @@ function noteVisual(note: Note) {
       accent: '#647DFF',
     }
   );
+}
+
+function todoAccent(todo: TodoItem) {
+  const seed = `${todo.id}${todo.title}`;
+  const hash = Array.from(seed).reduce((value, character) => value + character.charCodeAt(0), 0);
+
+  return TODO_ACCENTS[hash % TODO_ACCENTS.length];
 }
 
 export function TasksPage() {
@@ -408,8 +416,12 @@ export function TasksPage() {
             <EmptyState text="Brak zadań." />
           ) : (
             <Stack spacing={1}>
-              {todos.data?.map((todo) => (
-                <Stack
+              {todos.data?.map((todo) => {
+                const accent = todoAccent(todo);
+                const isDone = todo.status === 'done';
+
+                return (
+                  <Stack
                   key={todo.id}
                   onDragEnter={() => todo.status !== 'done' && setDragOverTodoId(todo.id)}
                   onDragOver={(event) => {
@@ -433,21 +445,43 @@ export function TasksPage() {
                   direction="row"
                   spacing={1}
                   sx={(theme) => ({
-                    px: 1.25,
-                    py: 1,
+                    px: { xs: 1, sm: 1.25 },
+                    py: 1.15,
                     alignItems: 'center',
                     border: '1px solid',
                     borderColor:
                       dragOverTodoId === todo.id && draggedTodoId !== todo.id
                         ? 'primary.main'
-                        : 'divider',
-                    borderRadius: 1.75,
-                    bgcolor:
+                        : isDone
+                          ? 'success.main'
+                          : `${accent}52`,
+                    borderRadius: 2,
+                    bgcolor: 'background.paper',
+                    backgroundImage:
                       dragOverTodoId === todo.id && draggedTodoId !== todo.id
-                        ? 'primary.lighter'
-                        : 'transparent',
-                    opacity: draggedTodoId === todo.id ? 0.55 : 1,
-                    transition: theme.transitions.create(['border-color', 'background-color']),
+                        ? 'linear-gradient(90deg, rgba(99,102,241,.15), transparent)'
+                        : isDone
+                          ? 'linear-gradient(90deg, rgba(34,197,94,.1), transparent 70%)'
+                          : `linear-gradient(90deg, ${accent}14, transparent 58%)`,
+                    boxShadow: '0 6px 18px rgba(38,54,82,.04)',
+                    opacity: draggedTodoId === todo.id ? 0.55 : isDone ? 0.78 : 1,
+                    transition: theme.transitions.create([
+                      'border-color',
+                      'background-color',
+                      'box-shadow',
+                      'transform',
+                    ]),
+                    '&:hover': {
+                      borderColor: isDone ? 'success.main' : accent,
+                      boxShadow: `0 10px 26px ${isDone ? 'rgba(34,197,94,.12)' : `${accent}1A`}`,
+                      transform: 'translateY(-1px)',
+                    },
+                    ...theme.applyStyles('dark', {
+                      backgroundImage: isDone
+                        ? 'linear-gradient(90deg, rgba(34,197,94,.16), rgba(18,34,54,.38) 72%)'
+                        : `linear-gradient(90deg, ${accent}20, rgba(18,34,54,.38) 66%)`,
+                      boxShadow: '0 8px 22px rgba(0,0,0,.14)',
+                    }),
                   })}
                 >
                   <Box
@@ -461,7 +495,12 @@ export function TasksPage() {
                     sx={{
                       display: todo.status === 'done' ? 'none' : 'grid',
                       placeItems: 'center',
-                      color: 'text.disabled',
+                      width: 32,
+                      height: 32,
+                      flexShrink: 0,
+                      borderRadius: 1.25,
+                      color: accent,
+                      bgcolor: `${accent}18`,
                       cursor: todoPermission.canUpdate ? 'grab' : 'default',
                     }}
                   >
@@ -476,6 +515,10 @@ export function TasksPage() {
                       })
                     }
                     disabled={!todoPermission.canUpdate}
+                    sx={{
+                      color: accent,
+                      '&.Mui-checked': { color: 'success.main' },
+                    }}
                   />
                   <Box
                     role="button"
@@ -522,8 +565,9 @@ export function TasksPage() {
                       },
                     ]}
                   />
-                </Stack>
-              ))}
+                  </Stack>
+                );
+              })}
             </Stack>
           )
         ) : (notes.data?.length ?? 0) === 0 ? (
