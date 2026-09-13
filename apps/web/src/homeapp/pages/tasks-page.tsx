@@ -1,11 +1,26 @@
 import type { Note, TodoItem } from '../api';
 
 import { Icon } from '@iconify/react';
-import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router';
+import { useMemo, useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { Box, Tab, Tabs, Chip, Alert, Stack, Checkbox, TextField, Typography } from '@mui/material';
+import {
+  Box,
+  Tab,
+  Tabs,
+  Chip,
+  Alert,
+  Stack,
+  Tooltip,
+  MenuItem,
+  Checkbox,
+  TextField,
+  Typography,
+  IconButton,
+  ToggleButton,
+  ToggleButtonGroup,
+} from '@mui/material';
 
 import { shortDate } from '../utils/format';
 import { useSession } from '../auth/session-context';
@@ -37,6 +52,65 @@ import {
   completeTodoItem,
 } from '../api';
 
+type NoteSort = 'updated' | 'title';
+type NoteView = 'grid' | 'list';
+
+const NOTE_VIEW_STORAGE_KEY = 'homeapp.tasks.note-view';
+
+const NOTE_VISUALS = [
+  {
+    keywords: ['paliw', 'tankow', 'benzyn', 'diesel', 'auto', 'samoch'],
+    icon: 'solar:gas-station-bold-duotone',
+    accent: '#22B573',
+  },
+  {
+    keywords: ['okular', 'wzrok', 'optyk'],
+    icon: 'solar:glasses-bold-duotone',
+    accent: '#8B5CF6',
+  },
+  {
+    keywords: ['książ', 'ksiaz', 'czyta', 'lektur'],
+    icon: 'solar:notebook-bold-duotone',
+    accent: '#3B82F6',
+  },
+  {
+    keywords: ['prezent', 'urodzin', 'święt', 'swiet'],
+    icon: 'solar:gift-bold-duotone',
+    accent: '#8B5CF6',
+  },
+  {
+    keywords: ['pienią', 'pienia', 'zł', ' rata', 'spłat', 'koszt', 'odda'],
+    icon: 'solar:money-bag-bold-duotone',
+    accent: '#F59E0B',
+  },
+  {
+    keywords: ['jedzen', 'obiad', 'przepis', 'kuch', 'kolac'],
+    icon: 'solar:chef-hat-bold-duotone',
+    accent: '#F97316',
+  },
+  {
+    keywords: ['dom', 'mieszkan', 'remont'],
+    icon: 'solar:home-2-bold-duotone',
+    accent: '#06B6D4',
+  },
+  {
+    keywords: ['todo', 'to do', 'lista', 'zrobi'],
+    icon: 'solar:list-check-bold-duotone',
+    accent: '#F59E0B',
+  },
+] as const;
+
+function noteVisual(note: Note) {
+  const content = `${note.title} ${note.description ?? ''}`.toLocaleLowerCase('pl');
+
+  return (
+    NOTE_VISUALS.find((visual) => visual.keywords.some((keyword) => content.includes(keyword))) ?? {
+      icon: 'solar:notes-bold-duotone',
+      accent: '#647DFF',
+    }
+  );
+}
+
 export function TasksPage() {
   const { accessToken } = useSession();
   const todoPermission = usePermission('todo');
@@ -47,6 +121,13 @@ export function TasksPage() {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [quickNote, setQuickNote] = useState('');
+  const [noteSort, setNoteSort] = useState<NoteSort>('updated');
+  const [noteView, setNoteView] = useState<NoteView>(() =>
+    typeof window !== 'undefined' && window.localStorage.getItem(NOTE_VIEW_STORAGE_KEY) === 'list'
+      ? 'list'
+      : 'grid'
+  );
   const [editingTodo, setEditingTodo] = useState<TodoItem | null>(null);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [draggedTodoId, setDraggedTodoId] = useState<string | null>(null);
@@ -110,6 +191,16 @@ export function TasksPage() {
       ]);
     },
   });
+  const createQuickNote = useMutation({
+    mutationFn: () => createNote({ title: quickNote.trim(), description: '' }, { accessToken }),
+    onSuccess: async () => {
+      setQuickNote('');
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['notes'] }),
+        queryClient.invalidateQueries({ queryKey: ['start'] }),
+      ]);
+    },
+  });
   const moveTodo = useMutation({
     mutationFn: async ({ id, targetId }: { id: string; targetId: string }) => {
       const plan = todoMovePlan(todos.data ?? [], id, targetId);
@@ -138,6 +229,19 @@ export function TasksPage() {
   });
   const active = tab === 'todo' ? todos : notes;
   const activePermission = tab === 'todo' ? todoPermission : notesPermission;
+  const sortedNotes = useMemo(() => {
+    const nextNotes = [...(notes.data ?? [])];
+
+    return nextNotes.sort((left, right) =>
+      noteSort === 'title'
+        ? left.title.localeCompare(right.title, 'pl', { sensitivity: 'base' })
+        : new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
+    );
+  }, [noteSort, notes.data]);
+
+  useEffect(() => {
+    window.localStorage.setItem(NOTE_VIEW_STORAGE_KEY, noteView);
+  }, [noteView]);
 
   function openCreate() {
     setEditingTodo(null);
@@ -211,25 +315,84 @@ export function TasksPage() {
           </PrimaryButton>
         }
       />
-      <SectionCard>
+      <SectionCard sx={{ overflow: 'visible' }}>
+        <Stack
+          direction={{ xs: 'column', md: 'row' }}
+          spacing={2}
+          sx={{ mb: 2.5, alignItems: { md: 'center' }, justifyContent: 'space-between' }}
+        >
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+            <Box
+              sx={{
+                width: 44,
+                height: 44,
+                display: 'grid',
+                placeItems: 'center',
+                flexShrink: 0,
+                borderRadius: 1.5,
+                color: tab === 'notes' ? 'primary.main' : 'success.main',
+                bgcolor: tab === 'notes' ? 'primary.lighter' : 'success.lighter',
+              }}
+            >
+              <Icon
+                icon={tab === 'notes' ? 'solar:notebook-bold-duotone' : 'solar:check-square-bold-duotone'}
+                width={25}
+              />
+            </Box>
+            <Box>
+              <Typography variant="h5">{tab === 'notes' ? 'Notatki' : 'Do zrobienia'}</Typography>
+              <Typography variant="body2" color="text.secondary">
+                {tab === 'notes'
+                  ? 'Twoje prywatne notatki w jednym miejscu'
+                  : 'Wspólne zadania wszystkich domowników'}
+              </Typography>
+            </Box>
+          </Stack>
+
+          {tab === 'notes' && (
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+              <TextField
+                select
+                size="small"
+                label="Sortuj"
+                value={noteSort}
+                onChange={(event) => setNoteSort(event.target.value as NoteSort)}
+                sx={{ minWidth: { xs: 0, sm: 190 }, flex: { xs: 1, sm: 'initial' } }}
+              >
+                <MenuItem value="updated">Ostatnio edytowane</MenuItem>
+                <MenuItem value="title">Nazwa A–Z</MenuItem>
+              </TextField>
+              <ToggleButtonGroup
+                exclusive
+                size="small"
+                value={noteView}
+                onChange={(_, value: NoteView | null) => value && setNoteView(value)}
+                aria-label="Sposób wyświetlania notatek"
+              >
+                <ToggleButton value="grid" aria-label="Widok siatki">
+                  <Icon icon="solar:widget-2-bold-duotone" width={20} />
+                </ToggleButton>
+                <ToggleButton value="list" aria-label="Widok listy">
+                  <Icon icon="solar:list-bold-duotone" width={20} />
+                </ToggleButton>
+              </ToggleButtonGroup>
+            </Stack>
+          )}
+        </Stack>
+
         <Tabs
           value={tab}
           onChange={(_, value) => setTab(value)}
-          variant="fullWidth"
-          sx={{ mb: 2.5, '& .MuiTab-root': { minHeight: 54, borderRadius: 1.5 } }}
+          sx={{
+            mb: 2.5,
+            minHeight: 42,
+            borderBottom: '1px solid',
+            borderColor: 'divider',
+            '& .MuiTab-root': { minHeight: 42, px: { xs: 1.25, sm: 2.25 } },
+          }}
         >
-          <Tab
-            icon={<Icon icon="solar:notebook-bold-duotone" />}
-            iconPosition="start"
-            value="notes"
-            label={`Notatki (${notes.data?.length ?? 0})`}
-          />
-          <Tab
-            icon={<Icon icon="solar:check-square-bold-duotone" />}
-            iconPosition="start"
-            value="todo"
-            label={`Do zrobienia (${todos.data?.length ?? 0})`}
-          />
+          <Tab value="notes" label={`Notatki (${notes.data?.length ?? 0})`} />
+          <Tab value="todo" label={`Do zrobienia (${todos.data?.length ?? 0})`} />
         </Tabs>
         {moveTodo.error && (
           <Alert severity="error" sx={{ mb: 2 }}>
@@ -369,35 +532,32 @@ export function TasksPage() {
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', xl: 'repeat(3, 1fr)' },
+              gridTemplateColumns:
+                noteView === 'grid'
+                  ? { xs: '1fr', sm: 'repeat(2, 1fr)', xl: 'repeat(3, 1fr)' }
+                  : '1fr',
               gap: 1.75,
             }}
           >
-            {notes.data?.map((note, index) => {
-              const accents = ['#F6B94D', '#A879E8', '#55D99B', '#5B8DEF'];
-              const accent = accents[index % accents.length];
+            {sortedNotes.map((note) => {
+              const visual = noteVisual(note);
+
               return (
                 <Box
                   key={note.id}
                   sx={(theme) => ({
-                    p: 2,
-                    minHeight: 210,
+                    p: { xs: 2, sm: 2.25 },
+                    minHeight: noteView === 'grid' ? 196 : 150,
                     display: 'flex',
                     flexDirection: 'column',
                     position: 'relative',
                     overflow: 'hidden',
                     border: '1px solid',
                     borderColor: 'divider',
-                    borderRadius: 2,
+                    borderRadius: 2.25,
                     bgcolor: 'background.paper',
-                    boxShadow: '0 10px 28px rgba(38,54,82,.06)',
-                    '&::before': {
-                      content: '""',
-                      position: 'absolute',
-                      inset: '0 0 auto',
-                      height: 4,
-                      bgcolor: accent,
-                    },
+                    backgroundImage: `linear-gradient(135deg, ${visual.accent}18 0%, transparent 68%)`,
+                    boxShadow: '0 10px 28px rgba(38,54,82,.055)',
                     transition: theme.transitions.create([
                       'transform',
                       'box-shadow',
@@ -405,29 +565,30 @@ export function TasksPage() {
                     ]),
                     '&:hover': {
                       transform: 'translateY(-2px)',
-                      borderColor: accent,
-                      boxShadow: '0 16px 38px rgba(38,54,82,.12)',
+                      borderColor: visual.accent,
+                      boxShadow: `0 16px 38px ${visual.accent}20`,
                     },
                     ...theme.applyStyles('dark', {
-                      bgcolor: 'rgba(18,34,54,.86)',
+                      backgroundImage: `linear-gradient(135deg, ${visual.accent}22 0%, rgba(18,34,54,.5) 72%)`,
                       boxShadow: '0 12px 30px rgba(0,0,0,.18)',
                     }),
                   })}
                 >
-                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                  <Stack direction="row" spacing={1.25} sx={{ alignItems: 'flex-start' }}>
                     <Box
                       sx={{
-                        width: 42,
-                        height: 42,
+                        width: 52,
+                        height: 52,
                         display: 'grid',
                         placeItems: 'center',
                         flexShrink: 0,
-                        borderRadius: 1.5,
-                        color: accent,
-                        bgcolor: `${accent}18`,
+                        borderRadius: 1.75,
+                        color: visual.accent,
+                        bgcolor: `${visual.accent}1F`,
+                        boxShadow: `inset 0 0 0 1px ${visual.accent}18`,
                       }}
                     >
-                      <Icon icon="solar:notes-bold-duotone" width={24} />
+                      <Icon icon={visual.icon} width={29} />
                     </Box>
                     <Box
                       role="button"
@@ -442,10 +603,20 @@ export function TasksPage() {
                         cursor: notesPermission.canUpdate ? 'pointer' : 'default',
                       }}
                     >
-                      <Typography variant="h6" noWrap>
+                      <Typography variant="h6" sx={{ lineHeight: 1.25 }}>
                         {note.title}
                       </Typography>
-                      <Chip size="small" label="Prywatna" sx={{ mt: 0.5, height: 22 }} />
+                      <Chip
+                        size="small"
+                        label="Prywatna"
+                        sx={{
+                          mt: 0.65,
+                          height: 22,
+                          bgcolor: 'background.paper',
+                          border: '1px solid',
+                          borderColor: 'divider',
+                        }}
+                      />
                     </Box>
                     <ActionMenu
                       label={`Akcje notatki ${note.title}`}
@@ -468,13 +639,13 @@ export function TasksPage() {
                   </Stack>
                   {note.description && (
                     <Typography
-                      color="text.secondary"
                       sx={{
-                        mt: 2,
+                        mt: 1.75,
+                        lineHeight: 1.5,
                         whiteSpace: 'pre-wrap',
                         display: '-webkit-box',
                         overflow: 'hidden',
-                        WebkitLineClamp: 5,
+                        WebkitLineClamp: noteView === 'grid' ? 5 : 3,
                         WebkitBoxOrient: 'vertical',
                       }}
                     >
@@ -484,7 +655,7 @@ export function TasksPage() {
                   <Stack
                     direction="row"
                     spacing={0.75}
-                    sx={{ mt: 'auto', pt: 2, alignItems: 'center', color: 'text.disabled' }}
+                    sx={{ mt: 'auto', pt: 2.25, alignItems: 'center', color: 'text.secondary' }}
                   >
                     <Icon icon="solar:clock-circle-linear" width={16} />
                     <Typography variant="caption">Edytowano {shortDate(note.updatedAt)}</Typography>
@@ -495,6 +666,81 @@ export function TasksPage() {
           </Box>
         )}
       </SectionCard>
+      {tab === 'notes' && notesPermission.canCreate && (
+        <SectionCard sx={{ '& .MuiCardContent-root': { p: { xs: 1.5, sm: 1.75 } } }}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1.5}
+            sx={{ alignItems: { sm: 'center' } }}
+          >
+            <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', minWidth: 245 }}>
+              <Box
+                sx={{
+                  width: 44,
+                  height: 44,
+                  display: 'grid',
+                  placeItems: 'center',
+                  flexShrink: 0,
+                  borderRadius: 1.5,
+                  color: 'warning.dark',
+                  bgcolor: 'warning.lighter',
+                }}
+              >
+                <Icon icon="solar:lightbulb-bolt-bold-duotone" width={26} />
+              </Box>
+              <Box>
+                <Typography sx={{ fontWeight: 750 }}>Szybka notatka</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Zapisz pomysł, zanim ucieknie.
+                </Typography>
+              </Box>
+            </Stack>
+            <TextField
+              fullWidth
+              size="small"
+              value={quickNote}
+              placeholder="O czym chcesz zapisać?"
+              onChange={(event) => setQuickNote(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && quickNote.trim() && !createQuickNote.isPending) {
+                  event.preventDefault();
+                  createQuickNote.mutate();
+                }
+              }}
+              error={Boolean(createQuickNote.error)}
+              helperText={createQuickNote.error?.message}
+              slotProps={{ htmlInput: { 'aria-label': 'Treść szybkiej notatki' } }}
+            />
+            <Tooltip title="Zapisz szybką notatkę">
+              <span>
+                <IconButton
+                  color="primary"
+                  aria-label="Zapisz szybką notatkę"
+                  disabled={!quickNote.trim() || createQuickNote.isPending}
+                  onClick={() => createQuickNote.mutate()}
+                  sx={{
+                    width: 44,
+                    height: 44,
+                    color: 'primary.contrastText',
+                    bgcolor: 'primary.main',
+                    '&:hover': { bgcolor: 'primary.dark' },
+                    '&.Mui-disabled': { color: 'text.disabled', bgcolor: 'action.disabledBackground' },
+                  }}
+                >
+                  <Icon
+                    icon={
+                      createQuickNote.isPending
+                        ? 'solar:refresh-circle-linear'
+                        : 'solar:arrow-right-linear'
+                    }
+                    width={22}
+                  />
+                </IconButton>
+              </span>
+            </Tooltip>
+          </Stack>
+        </SectionCard>
+      )}
       <FormDialog
         title={
           editingTodo || editingNote
